@@ -8,7 +8,11 @@ OBJS = 	colibri.o \
 	colPlatform.o \
 	colRope.o \
 	colWord.o \
-	colList.o
+	colVector.o \
+	colList.o \
+	colMap.o \
+	colHash.o \
+	colTrie.o
 
 libcolibri.so: $(OBJS)
 	gcc -pthread -shared -o libcolibri.so $(OBJS)

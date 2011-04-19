@@ -1,46 +1,22 @@
 #ifndef _COLIBRI_INTERNAL
 #define _COLIBRI_INTERNAL
 
+/* TODO replace char/short by (u)int(8|16)_t */
+
 #include "colConf.h"
-
-/*
- * Ensure COL_BIGENDIAN is defined correcly:
- * Needs to happen here in addition to configure to work with fat compiles on
- * Darwin (where configure runs only once for multiple architectures).
- */
-
-#ifdef HAVE_SYS_TYPES_H
-#    include <sys/types.h>
-#endif
-#ifdef HAVE_SYS_PARAM_H
-#    include <sys/param.h>
-#endif
-#ifdef BYTE_ORDER
-#    ifdef BIG_ENDIAN
-#	 if BYTE_ORDER == BIG_ENDIAN
-#	     undef COL_BIGENDIAN
-#	     define COL_BIGENDIAN 1
-#	 endif
-#    endif
-#    ifdef LITTLE_ENDIAN
-#	 if BYTE_ORDER == LITTLE_ENDIAN
-#	     undef COL_BIGENDIAN
-#	 endif
-#    endif
-#endif
 
 #ifdef _DEBUG
 #   define DO_TRACE
 #   define ASSERT(x) {if (!(x)) Col_Error(COL_FATAL, "%s(%d) : assertion failed! (%s)", __FILE__, __LINE__, #x);}
 #else
-#   define ASSERT
+#   define ASSERT(x)
 #endif
 
 #ifdef DO_TRACE
 #   include <stdio.h>
 #   define TRACE(format, ...) (fprintf(stderr, format, __VA_ARGS__), fflush(stderr))
 #else
-#   define TRACE
+#   define TRACE(format, ...)
 #endif
 
 /*
@@ -67,21 +43,26 @@
  *
  *  - bytes 0-3:	link to next page in pool.
  *  - byte 4:		generation.
- *  - byte 5:		flags.
- *  - bytes 6-7:	reserved.
+ *  - byte 5:		lowest child generation from page.
+ *  - byte 6:		size of system page containing this page.
+ *  - byte 7:		1 if page is last in system page, else 0.
  *  - bytes 8-15:	bitmask for allocated cells (64 bits).
  */
 
-#define CELLS_PER_PAGE		(PAGE_SIZE/CELL_SIZE)
-#define RESERVED_CELLS		1	/* 2*32 bits + 64 bits */
+extern const char firstZeroBitSequence[7][256];
+extern const char longestLeadingZeroBitSequence[256];
+extern const char nbBitsSet[256];
+
+#define RESERVED_CELLS		1
 #define AVAILABLE_CELLS		(CELLS_PER_PAGE-RESERVED_CELLS)
 #define NB_CELLS(size)		(((size)+CELL_SIZE-1)/CELL_SIZE)
 
 #define PAGE_NEXT(page)		(*(Page **)(page))
 #define PAGE_GENERATION(page)	(*((unsigned char *)(page)+sizeof(void *)))
-#define PAGE_FLAGS(page)	(*((unsigned char *)(page)+sizeof(void *)+1))
-#define PAGE_RESERVED(page)	(*(unsigned short *)((char *)(page)+sizeof(void *)+2))
-#define PAGE_BITMASK(page)	((unsigned char *)(page)+sizeof(void *)+2+sizeof(unsigned short))
+#define PAGE_CHILDGENERATION(page) (*((unsigned char *)(page)+sizeof(void *)+1))
+#define PAGE_SYSTEMSIZE(page)	(*((unsigned char *)(page)+sizeof(void *)+2))
+#define PAGE_LAST(page)		(*((unsigned char *)(page)+sizeof(void *)+3))
+#define PAGE_BITMASK(page)	((unsigned char *)(page)+sizeof(void *)+4)
 #define PAGE_CELL(page, index)	((Cell *)(page)+(index))
 
 #define CELL_PAGE(cell)		((Page *)((uintptr_t)(cell) & ~(PAGE_SIZE-1)))
@@ -95,15 +76,14 @@
 typedef struct MemoryPool {
     unsigned int generation;	/* Generation level; 0 = younger. */
     Page *pages;		/* Pages form a singly-linked list. */
-    Page *lastFreePage[AVAILABLE_CELLS]; 
-				/* Last page where a cell sequence of a given 
-				 * size was found. */
+    Page *lastPage;		/* Last page in pool. */
+    Cell *lastFreeCell[AVAILABLE_CELLS]; 
+				/* Last cell sequence of a given size found. */
     size_t nbPages;		/* Number of pages in pool. */
     size_t nbAlloc;		/* Number of pages alloc'd since last GC. */
     size_t nbSetCells;		/* Number of set cells in pool. */
     size_t gc;			/* GC counter. Used for generational GC. */
-    Cell *roots, *parents;	/* List of roots for each source or parent in
-				 * pool. */
+    Cell *parents;		/* List of parents in pool. */
     Cell *sweepables;		/* List of cells that need sweeping when 
 				 * unreachable after a GC. */
     Col_ClientData data;	/* Opaque token for system-specific data. */
@@ -120,15 +100,14 @@ void			PoolCleanup(MemoryPool *pool);
  * Allocation/deallocation of pool pages.
  */
 
-void			PoolAllocPages(MemoryPool *pool, Page **nextPtr);
-void			PoolFreePages(MemoryPool *pool);
+void			PoolAllocPages(MemoryPool *pool, size_t number);
+void			PoolFreeEmptyPages(MemoryPool *pool);
 
 /*
- * Allocation of cells in pages.
+ * Allocation of cells in pool.
  */
 
-Cell *			PageAllocCells(size_t number, Page *firstPage, 
-			    Page **tailPtr);
+Cell *			PoolAllocCells(MemoryPool *pool, size_t number);
 
 /*
  * Allocation bitmask handling.
@@ -172,6 +151,12 @@ typedef struct GcMemInfo {
 
     unsigned int maxCollectedGeneration;
 
+    /* 
+     * Roots are stored in a trie indexed by the root source addresses.
+     */
+
+    Cell *roots;
+
     /*
      * Whether to promote individual cells when promoting the oldest collected 
      * generation, instead of promoting whole pages. In practice this performs a 
@@ -206,6 +191,135 @@ void			DeclareWord(Col_Word word);
 
 /*
  *----------------------------------------------------------------
+ * Roots and parents.
+ *----------------------------------------------------------------
+ */
+
+/*
+ * Roots are explicitly preserved ropes or words, using a reference count.
+ *
+ * Roots are stored in a trie indexed by the root source addresses. This forms 
+ * an ordered collection that is traversed upon GC and is indexable and 
+ * modifiable in O(log(k)) worst-case, k being the bit size of a cell pointer.
+ *
+ * On 32-bit architectures the single-cell layout is as follows:
+ *
+ * - Nodes:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Parent                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Mask                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Left                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Right                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Parent : 32-bit node
+ *
+ *	Mask : 32-bit unsigned
+ *	    Bitmask where only the critical bit is set, i.e. the highest bit
+ *	    where left and right nodes differ.
+ *
+ *	Left, Right : 32-bit nodes or leaves
+ *	    Leave pointers have their LSB set so that they can be distinguished 
+ *	    from nodes.
+ *
+ *
+ * - Leaves:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Parent                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                          Generation                           |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                        Reference count                        |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Source                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Parent : 32-bit node
+ *
+ *	Generation : 32-bit unsigned
+ *	    Generation of the source page.
+ *
+ *	Reference count : 32-bit unsigned
+ *	    Once the refcount drops to zero the root is removed, however the
+ *	    source may survive if it is referenced elsewhere.
+ *
+ *	Source : 32-bit word
+ */
+
+#define ROOT_PARENT(cell)		(((Cell **)(cell))[0])
+#define ROOT_IS_LEAF(cell)		((uintptr_t)(cell) & 1)
+#define ROOT_GET_NODE(cell)		((Cell *)((uintptr_t)(cell) & ~1))
+#define ROOT_GET_LEAF(cell)		((Cell *)((uintptr_t)(cell) | 1))
+
+#define ROOT_NODE_MASK(cell)		(((uintptr_t *)(cell))[1])
+#define ROOT_NODE_LEFT(cell)		(((Cell **)(cell))[2])
+#define ROOT_NODE_RIGHT(cell)		(((Cell **)(cell))[3])
+
+#define ROOT_NODE_INIT(cell, parent, mask, left, right) \
+    ROOT_PARENT(cell) = parent; \
+    ROOT_NODE_MASK(cell) = mask; \
+    ROOT_NODE_LEFT(cell) = left; \
+    ROOT_NODE_RIGHT(cell) = right;
+
+#define ROOT_LEAF_GENERATION(cell)	(((size_t *)(cell))[1])
+#define ROOT_LEAF_REFCOUNT(cell)	(((size_t *)(cell))[2])
+#define ROOT_LEAF_SOURCE(cell)		(((Cell **)(cell))[3])
+
+#define ROOT_LEAF_INIT(cell, parent, generation, refcount, source) \
+    ROOT_PARENT(cell) = parent; \
+    ROOT_LEAF_GENERATION(cell) = generation; \
+    ROOT_LEAF_REFCOUNT(cell) = refcount; \
+    ROOT_LEAF_SOURCE(cell) = source;
+
+/*
+ * Parents.
+ *
+ * Parent roots are like automatic roots: they point to pages whose cells 
+ * potentially have children in newer generations.
+ *
+ * On 32-bit architectures the single-cell layout is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Next                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Page                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                                                               |
+ *   |                            Unused                             |
+ *   |                                                               |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Next : 32-bit rope or word
+ *	    Parents are linked together in a singly-linked list for traversal
+ *	    during GC.
+ *
+ *	Page : 32-bit pointer to page
+ *
+ *	Generation : 32-bit unsigned
+ *	    Generation of the page.
+ */
+
+#define PARENT_NEXT(cell)	(((Cell **)(cell))[0])
+#define PARENT_PAGE(cell)	(((Page **)(cell))[1])
+
+#define PARENT_INIT(cell, next, page) \
+    PARENT_NEXT(cell) = next; \
+    PARENT_PAGE(cell) = page;
+
+
+/*
+ *----------------------------------------------------------------
  * Rope structures.
  *----------------------------------------------------------------
  */
@@ -221,14 +335,16 @@ void			DeclareWord(Col_Word word);
  * which is the string constant "\0", i.e. a byte array of two consecutive NUL
  * chars.
  *
- * The lead bit of the type field indicates parenthood. When set, this means 
- * that the rope has children in youngest generations.
+ * The lead bit of the type field is the pinned flag. When set, this means 
+ * that the rope isn't movable; its address remains fixed as long as this flag 
+ * is set. Ropes can be moved to the upper generation pool during the compaction
+ * phase of the GC.
  *
- * ROPE_SET_TYPE also clears the parent flag.
+ * ROPE_SET_TYPE also clears the pinned flag.
  *
  * On 32-bit architectures the layout is as follows:
  *
- *  - C string "ABC"
+ *  - C string "ABC":
  *
  *    0                   1                   2                   3
  *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -237,7 +353,7 @@ void			DeclareWord(Col_Word word);
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *
  *
- *  - Empty string
+ *  - Empty string:
  *
  *    0                   1                   2                   3
  *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -246,7 +362,7 @@ void			DeclareWord(Col_Word word);
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *
  *
- *  - Ropes
+ *  - Ropes:
  *
  *    0                   1                   2                   3
  *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -257,7 +373,7 @@ void			DeclareWord(Col_Word word);
  *   .                      Type-specific data                       .
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *
- *	Parent flag (P) : 1 bit
+ *	Pinned flag (P) : 1 bit
  *	Type : 7 bits
  */
 
@@ -269,9 +385,9 @@ void			DeclareWord(Col_Word word);
     :						ROPE_TYPE_NULL)
 #define ROPE_SET_TYPE(rope, type) (((unsigned char *)(rope))[0] = 0, ((unsigned char *)(rope))[1] = (type))
 
-#define ROPE_PARENT(rope)	(((unsigned char *)(rope))[1] & 0x80)
-#define ROPE_SET_PARENT(rope)	(((unsigned char *)(rope))[1] |= 0x80)
-#define ROPE_CLEAR_PARENT(rope)	(((unsigned char *)(rope))[1] &= ~0x80)
+#define ROPE_PINNED(rope)	(((unsigned char *)(rope))[1] & 0x80)
+#define ROPE_SET_PINNED(rope)	(((unsigned char *)(rope))[1] |= 0x80)
+#define ROPE_CLEAR_PINNED(rope)	(((unsigned char *)(rope))[1] &= ~0x80)
 
 
 /* 
@@ -282,6 +398,14 @@ void			DeclareWord(Col_Word word);
 #define ROPE_TYPE_EMPTY		0
 #define ROPE_TYPE_NULL		-1
 #define ROPE_TYPE_C		-2
+
+#define ROPE_TYPE_UCS1		1
+#define ROPE_TYPE_UCS2		2
+#define ROPE_TYPE_UCS4		3
+#define ROPE_TYPE_UTF8		4
+#define ROPE_TYPE_SUBROPE	5
+#define ROPE_TYPE_CONCAT	6
+#define ROPE_TYPE_CUSTOM	7
 
 /*
  * ROPE_TYPE_UNKNOWN is used as a tag in the source code to mark places where
@@ -316,10 +440,6 @@ void			DeclareWord(Col_Word word);
  *	    size fits the length field width.
  */
 
-#define ROPE_TYPE_UCS1		1
-#define ROPE_TYPE_UCS2		2
-#define ROPE_TYPE_UCS4		3
-
 #define ROPE_UCS_LENGTH(rope)	(((unsigned short *)(rope))[1])
 #define ROPE_UCS_HEADER_SIZE	(sizeof(Col_Char4))
 #define ROPE_UCS_DATA(rope)	((const Col_Char1 *)(rope)+ROPE_UCS_HEADER_SIZE)
@@ -328,6 +448,7 @@ void			DeclareWord(Col_Word word);
 #define ROPE_UCS4_DATA(rope)	((const Col_Char4 *) ROPE_UCS_DATA(rope))
 
 #define UCS_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-ROPE_UCS_HEADER_SIZE)
+#define UCS_SIZE(byteLength)	(NB_CELLS(ROPE_UCS_HEADER_SIZE+(byteLength)))
 
 /*
  * Variable-width UTF-8 ropes.
@@ -353,14 +474,13 @@ void			DeclareWord(Col_Word word);
  *	    size fits the length field width.
  */
 
-#define ROPE_TYPE_UTF8			4
-
 #define ROPE_UTF8_LENGTH(rope)		(((unsigned short *)(rope))[1])
 #define ROPE_UTF8_BYTELENGTH(rope)	(((unsigned short *)(rope))[2])
 #define ROPE_UTF8_HEADER_SIZE		(sizeof(short)*3)
 #define ROPE_UTF8_DATA(rope)		((const Col_Char1 *)(rope)+ROPE_UTF8_HEADER_SIZE)
 
 #define UTF8_MAX_SIZE			(AVAILABLE_CELLS*CELL_SIZE-ROPE_UTF8_HEADER_SIZE)
+#define UTF8_SIZE(byteLength)		(NB_CELLS(ROPE_UTF8_HEADER_SIZE+(byteLength)))
 
 /*
  * Subropes.
@@ -387,8 +507,6 @@ void			DeclareWord(Col_Word word);
  *
  *	First, Last : 32-bit unsigned
  */
-
-#define ROPE_TYPE_SUBROPE		5
 
 #define ROPE_SUBROPE_DEPTH(rope)	(((unsigned char *)(rope))[2]) 
 #define ROPE_SUBROPE_SOURCE(rope)	(((Col_Rope *)(rope))[1])
@@ -431,8 +549,6 @@ void			DeclareWord(Col_Word word);
  *
  *	Left, Right : 32-bit ropes
  */
-
-#define ROPE_TYPE_CONCAT		6
 
 #define ROPE_CONCAT_DEPTH(rope)		(((unsigned char *)(rope))[2])
 #define ROPE_CONCAT_LEFT_LENGTH(rope)	(((unsigned char *)(rope))[3])
@@ -477,8 +593,6 @@ void			DeclareWord(Col_Word word);
  *	    Custom ropes with a freeProc are singly-linked together using this 
  *	    field, so that unreachable ropes get swept properly upon GC.
  */
-
-#define ROPE_TYPE_CUSTOM		7
 
 #define ROPE_CUSTOM_HEADER_SIZE		(sizeof(void *) + sizeof(Col_RopeCustomType))
 #define ROPE_CUSTOM_SIZE(rope)		(((unsigned short *)(rope))[1])
@@ -528,19 +642,38 @@ void			DeclareWord(Col_Word word);
  *	P..			  ..P|1000 	rope pointer (not including C strings)
  */
 
-#define WORD_TYPE_REGULAR	0
-
 /* Careful: IS_IMMEDIATE returns false on nil! Nil needs explicit handling. */
 #define IS_IMMEDIATE(word)	(((uintptr_t)(word))&7)
+#define IS_ROPE(word)		((((uintptr_t)(word))&0xF) == 8)
+
 #define WORD_TYPE_NIL		-1
 #define WORD_TYPE_SMALL_INT	-2
 #define WORD_TYPE_CHAR		-3
 #define WORD_TYPE_SMALL_STRING	-4
 #define WORD_TYPE_VOID_LIST	-5
-
-#define IS_ROPE(word)		((((uintptr_t)(word))&0xF) == 8)
 #define WORD_TYPE_ROPE		-6
 
+#define WORD_TYPE_REGULAR	0
+
+#define WORD_TYPE_INT		4
+#define WORD_TYPE_STRING	8
+#define WORD_TYPE_REFERENCE	12
+#define WORD_TYPE_VECTOR	16
+#define WORD_TYPE_MVECTOR	20
+#define WORD_TYPE_LIST		24
+#define WORD_TYPE_MLIST		28
+#define WORD_TYPE_SUBLIST	32
+#define WORD_TYPE_CONCATLIST	36
+#define WORD_TYPE_MCONCATLIST	40
+/*#define WORD_TYPE_HASHMAP	44*/
+#define WORD_TYPE_INTHASHMAP	48
+/*#define WORD_TYPE_HASHENTRY	52*/
+#define WORD_TYPE_INTHASHENTRY	56
+/*#define WORD_TYPE_TRIEMAP	60*/
+#define WORD_TYPE_INTTRIEMAP	64
+#define WORD_TYPE_TRIENODE	68
+/*#define WORD_TYPE_TRIELEAF	72*/
+#define WORD_TYPE_INTTRIELEAF	76
 
 /*
  * WORD_TYPE_UNKNOWN is used as a tag in the source code to mark places where
@@ -572,11 +705,13 @@ void			DeclareWord(Col_Word word);
  * takes byte 0, the rest of the word being free to use. This gives up to 63
  * predefined type IDs (4-252 with steps of 4).
  *
- * We use bit 0 of the type field as a parenthood indicator for both predefined
- * type IDs and type pointers. Given the above, this bit is always on byte 0. 
- * When set, this means that the word has children in youngest generations.
+ * We use bit 0 of the type field as the pinned flag for both predefined type 
+ * IDs and type pointers. Given the above, this bit is always on byte 0. 
+ * When set, this means that the word isn't movable; its address remains fixed 
+ * as long as this flag is set. Words can be moved to the upper generation pool 
+ * during the compaction phase of the GC.
  *
- * WORD_SET_TYPE_(ID|ADDR) also clears the parent flag.
+ * WORD_SET_TYPE_(ID|ADDR) also clears the pinned flag.
  *
  * On 32-bit architectures the cell layout is as follows:
  *
@@ -589,9 +724,10 @@ void			DeclareWord(Col_Word word);
  *   +-+-+-+-+-+-+-+-+                                               +
  *   .                                                               .
  *   .                      Type-specific data                       .
+ *   .                                                               .
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *
- *	Parent flag (P) : 1 bit
+ *	Pinned flag (P) : 1 bit
  *	Type : 6 bits
  *
  *
@@ -604,10 +740,11 @@ void			DeclareWord(Col_Word word);
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   .                                                               .
  *   .                      Type-specific data                       .
+ *   .                                                               .
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *
- *	Parent flag (P) : 1 bit
- *	Type :  32-bit pointer (with 2 lsbs cleared)
+ *	Pinned flag (P) : 1 bit
+ *	Type : 32-bit pointer (with 2 lsbs cleared)
  */
 
 #define CELL_TYPE(cell)		(((unsigned char *)(cell))[0])
@@ -615,16 +752,15 @@ void			DeclareWord(Col_Word word);
 /* Careful: don't give arguments with side effects! */
 #define WORD_TYPE(word) \
     ((word)?								\
-	IS_IMMEDIATE(word)?						\
+	 (((uintptr_t)(word))&0xF)?					\
 	    /* Immediate values */					\
 	     (((uintptr_t)(word))&1)?		WORD_TYPE_SMALL_INT	\
 	    :(((uintptr_t)(word))&2)?					\
 		 (((uintptr_t)(word))&0x80)?	WORD_TYPE_CHAR		\
 		:				WORD_TYPE_SMALL_STRING	\
 	    :(((uintptr_t)(word))&4)?		WORD_TYPE_VOID_LIST	\
-	    /* Unknown format */					\
-	    :					WORD_TYPE_NIL		\
-	:IS_ROPE(word)?				WORD_TYPE_ROPE		\
+	    /* Ropes */							\
+	    :					WORD_TYPE_ROPE		\
 	/* Pointer or predefined */					\
 	:(CELL_TYPE(word)&2)?			WORD_TYPE_REGULAR	\
 	:(CELL_TYPE(word)&~3)			/* Type ID */		\
@@ -643,9 +779,9 @@ void			DeclareWord(Col_Word word);
 #endif
 #define WORD_SET_TYPE_ID(word, type) (((unsigned char *)(word))[0] = (type))
 
-#define WORD_PARENT(word)	(((unsigned char *)(word))[0] & 1)
-#define WORD_SET_PARENT(word)	(((unsigned char *)(word))[0] |= 1)
-#define WORD_CLEAR_PARENT(word)	(((unsigned char *)(word))[0] &= ~1)
+#define WORD_PINNED(word)	(((unsigned char *)(word))[0] & 1)
+#define WORD_SET_PINNED(word)	(((unsigned char *)(word))[0] |= 1)
+#define WORD_CLEAR_PINNED(word)	(((unsigned char *)(word))[0] &= ~1)
 
 /*
  * Immediate & rope value fields.
@@ -661,7 +797,7 @@ void			DeclareWord(Col_Word word);
 #define WORD_CHAR_GET(word)		((Col_Char)(((uintptr_t)(word))>>8))
 #define WORD_CHAR_NEW(value)		((Col_Word)((((uintptr_t)(value))<<8)|0xFE))
 
-#define WORD_SMALL_STRING_GET_LENGTH(value) ((((uintptr_t)(value))&0xFC)>>2)
+#define WORD_SMALL_STRING_LENGTH(value) ((((uintptr_t)(value))&0xFC)>>2)
 #define WORD_SMALL_STRING_SET_LENGTH(word, length) (*((uintptr_t *)&(word)) = ((length)<<2)|2)
 #ifdef COL_BIGENDIAN
 #   define WORD_SMALL_STRING_DATA(word)	((Col_Char1  *)&(word))
@@ -721,13 +857,6 @@ void			DeclareWord(Col_Word word);
 #define WORD_TRAILER_SIZE	(sizeof(Col_Word))
 #define WORD_NEXT(word, size)	(*(Cell **)((char *)(word)+NB_CELLS(WORD_HEADER_SIZE+(size)+WORD_TRAILER_SIZE)*CELL_SIZE-WORD_TRAILER_SIZE))
 
-/* 
- * Max byte size of word data. A word can take no more than the available size 
- * of a page. Larger words must be built by concatenation of smaller ones. 
- */
-
-#define WORD_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-WORD_HEADER_SIZE)
-
 /*
  * Integer words.
  *
@@ -750,8 +879,6 @@ void			DeclareWord(Col_Word word);
  *
  *	Data : 32-bit integer
  */
-
-#define WORD_TYPE_INT		4
 
 #define WORD_INT_DATA(word)	(*(int *) WORD_DATA(word))
 
@@ -785,8 +912,6 @@ void			DeclareWord(Col_Word word);
  *	    of the string, such as a quoted or encoded form.
  */
 
-#define WORD_TYPE_STRING	8
-
 #define WORD_STRING_DATA(word)	(((Col_Rope *) WORD_DATA(word))[0])
 #define WORD_STRING_ALT(word)	(((Col_Rope *) WORD_DATA(word))[1])
 
@@ -799,94 +924,9 @@ void			DeclareWord(Col_Word word);
 
 /*
  *----------------------------------------------------------------
- * Roots and redirects.
+ * Redirects.
  *----------------------------------------------------------------
  */
-
-/*
- * They use the same fields for both rope and word versions, only the header
- * field and type ID change.
- */
-
-/*
- * Roots.
- *
- * Roots are explicitly preserved ropes or words, using a reference count.
- *
- * On 32-bit architectures the single-cell layout is as follows:
- *
- *    0                   1                   2                   3
- *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                    Rope or word type info                     |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                        Reference count                        |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                            Source                             |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                             Next                              |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- *	Reference count : 32-bit unsigned
- *	    Once the refcount drops to zero the root is removed, however the
- *	    source may survive if it is referenced elsewhere.
- *
- *	Source : 32-bit rope or word
- *
- *	Next : 32-bit rope or word
- *	    Roots are linked together in a singly-linked list for traversal
- *	    during GC.
- */
-
-#define ROPE_TYPE_ROOT		0x7F
-#define WORD_TYPE_ROOT		0xFC
-
-#define ROOT_REFCOUNT(cell)	(((size_t *)(cell))[1])
-#define ROOT_NEXT(cell)		(((Cell **)(cell))[3])
-
-/* Define separate accessors for type safety. */
-#define ROPE_ROOT_SOURCE(rope)	(((Col_Rope *)(rope))[2])
-#define WORD_ROOT_SOURCE(word)	(((Col_Word *)(word))[2])
-
-/* Careful: don't give arguments with side effects!  */
-#define RESOLVE_ROPE(rope) \
-    {if (ROPE_TYPE((rope)) == ROPE_TYPE_ROOT) {(rope) = ROPE_ROOT_SOURCE((rope));}}
-#define RESOLVE_WORD(word) \
-    {if (WORD_TYPE((word)) == WORD_TYPE_ROOT) {(word) = WORD_ROOT_SOURCE((word));}}
-
-/*
- * Parents.
- *
- * Parent roots are like automatic roots: they point to parents with children 
- * in newer generations.
- *
- * On 32-bit architectures the single-cell layout is as follows:
- *
- *    0                   1                   2                   3
- *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                    Rope or word type info                     |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                             Cell                              |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                            Unused                             |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                             Next                              |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- *	Cell : 32-bit rope or word
- *	    The parent cell having children in newer generations.
- *
- *	Next : 32-bit rope or word
- *	    Parents are linked together in a singly-linked list for traversal
- *	    during GC.
- */
-
-#define ROPE_TYPE_PARENT	0x7E
-#define WORD_TYPE_PARENT	0xF8
-
-#define PARENT_CELL(cell)	(((Cell **)(cell))[1])
-#define PARENT_NEXT(cell)	(((Cell **)(cell))[3])
 
 /*
  * Redirects.
@@ -894,6 +934,9 @@ void			DeclareWord(Col_Word word);
  * Redirects replace existing ropes during promotion. They only exist during
  * the GC.
  *
+ * They use the same fields for both rope and word versions, only the header
+ * field and type ID change.
+ *
  * On 32-bit architectures the single-cell layout is as follows:
  *
  *    0                   1                   2                   3
@@ -911,11 +954,13 @@ void			DeclareWord(Col_Word word);
  *	Source : 32-bit rope or word
  */
 
-#define ROPE_TYPE_REDIRECT	0x7D
-#define WORD_TYPE_REDIRECT	0xF4
+#ifdef PROMOTE_COMPACT
+#   define ROPE_TYPE_REDIRECT	0x7F
+#   define WORD_TYPE_REDIRECT	0xFC
 
-#define ROPE_REDIRECT_SOURCE(rope)	ROPE_ROOT_SOURCE(rope)
-#define WORD_REDIRECT_SOURCE(word)	WORD_ROOT_SOURCE(word)
+#   define ROPE_REDIRECT_SOURCE(rope)	(((Col_Rope *)(rope))[2])
+#   define WORD_REDIRECT_SOURCE(word)	(((Col_Word *)(word))[2])
+#endif /* PROMOTE_COMPACT*/
 
 
 /*
@@ -959,8 +1004,6 @@ void			DeclareWord(Col_Word word);
  *	    Points to the referenced word.
  */
 
-#define WORD_TYPE_REFERENCE		12
-
 #define WORD_REFERENCE_SOURCE(word)	(((Col_Word *)(word))[2])
 
 #define WORD_REFERENCE_INIT(word, source) \
@@ -991,18 +1034,18 @@ void			DeclareWord(Col_Word word);
  *    0                   1                   2                   3
  *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |   Type info   |     Unused    |            Length             |
+ *   |   Type info   |                    Unused                     |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Length                             |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   .                                                               .
  *   .                           Elements                            .
  *   .                                                               .
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *
- *	Length : 16-bit unsigned
- *	    A word taking up to AVAILABLE_CELLS, this ensures that the actual
- *	    size fits the length field width.
+ *	Length : 32-bit unsigned
  *
  *	Elements : array of 32-bit words
  *
@@ -1012,46 +1055,58 @@ void			DeclareWord(Col_Word word);
  *    0                   1                   2                   3
  *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |   Type info   |      Size     |            Length             |
+ *   |   Type info   |                     Size                      |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Length                             |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   .                                                               .
  *   .                           Elements                            .
  *   .                                                               .
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *
- *	Size : 8-bit unsigned
- *	    The number of allocated cells. On 32-bit systems, 8 bits should be 
- *	    sufficient to represent up to AVAILABLE_CELLS.
+ *	Size : 24-bit unsigned
+ *	    The number of allocated cells. 24 bits should be sufficient to 
+ *	    represent the maximum allocatable size.
  *
- *	Length : 16-bit unsigned
- *	    A word taking up to AVAILABLE_CELLS, this ensures that the actual
- *	    size fits the length field width.
+ *	Length : 32-bit unsigned
  *
  *	Elements : array of 32-bit words
  */
 
-#define WORD_TYPE_VECTOR		16
-#define WORD_TYPE_MVECTOR		20
+/* Immutable vector: */
+#define WORD_VECTOR_HEADER_SIZE		(sizeof(size_t))
 
-#define VECTOR_MAX_LENGTH		(WORD_MAX_SIZE/sizeof(Col_Word))
-
-#define WORD_VECTOR_LENGTH(word)	(((unsigned short *)(word))[1])
-#define WORD_VECTOR_ELEMENTS(word)	((Col_Word *) WORD_DATA(word))
+#define WORD_VECTOR_LENGTH(word)	(((size_t *)(word))[2])
+#define WORD_VECTOR_ELEMENTS(word)	((Col_Word *)(word)+3)
+#define VECTOR_MAX_LENGTH		((SIZE_MAX-(WORD_HEADER_SIZE+WORD_VECTOR_HEADER_SIZE))/sizeof(Col_Word))
+#define VECTOR_SIZE(length)		(NB_CELLS(WORD_HEADER_SIZE+WORD_VECTOR_HEADER_SIZE+(length)*sizeof(Col_Word)))
 
 #define WORD_VECTOR_INIT(word, length) \
     WORD_SET_TYPE_ID((word), WORD_TYPE_VECTOR); \
     WORD_SYNONYM(word) = WORD_NIL; \
-    WORD_VECTOR_LENGTH(word) = (unsigned short) (length);
+    WORD_VECTOR_LENGTH(word) = (length);
 
-#define WORD_MVECTOR_SIZE(word)		(((unsigned char *)(word))[1])
+/* Mutable vector: */
+#define MVECTOR_MAX_SIZE		(UINT_MAX>>CHAR_BIT)
+#define MVECTOR_SIZE_MASK		MVECTOR_MAX_SIZE
+#define MVECTOR_MAX_LENGTH(size)	(((size)*CELL_SIZE-(WORD_HEADER_SIZE+WORD_VECTOR_HEADER_SIZE))/sizeof(Col_Word))
+
+#ifdef COL_BIGENDIAN
+#   define WORD_MVECTOR_SIZE(word)	((((size_t *)(word))[0])&MVECTOR_SIZE_MASK)
+#   define WORD_MVECTOR_SET_SIZE(word, size) ((((size_t *)(word))[0])&=~MVECTOR_SIZE_MASK,(((size_t *)(word))[0])|=((size)&MVECTOR_SIZE_MASK))
+#else
+#   define WORD_MVECTOR_SIZE(word)	((((size_t *)(word))[0]>>CHAR_BIT)&MVECTOR_SIZE_MASK)
+#   define WORD_MVECTOR_SET_SIZE(word, size) ((((size_t *)(word))[0])&=~(MVECTOR_SIZE_MASK<<CHAR_BIT),(((size_t *)(word))[0])|=(((size)&MVECTOR_SIZE_MASK)<<CHAR_BIT))
+#endif
 
 #define WORD_MVECTOR_INIT(word, size, length) \
     WORD_SET_TYPE_ID((word), WORD_TYPE_MVECTOR); \
     WORD_SYNONYM(word) = WORD_NIL; \
-    WORD_MVECTOR_SIZE(word) = (unsigned char) (size); \
-    WORD_VECTOR_LENGTH(word) = (unsigned short) (length);
+    WORD_MVECTOR_SET_SIZE((word), (size)); \
+    WORD_VECTOR_LENGTH(word) = (length);
+
 
 /*
  * List words.
@@ -1095,7 +1150,7 @@ void			DeclareWord(Col_Word word);
  *	    Terminal loop length for cyclic lists, else zero.
  *
  *
- *  - Sublist node:
+ *  - Sublist nodes:
  *
  *    0                   1                   2                   3
  *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -1118,7 +1173,7 @@ void			DeclareWord(Col_Word word);
  *	First, Last : 32-bit unsigned
  *
  *
- *  - Concat node:
+ *  - Concat nodes:
  *
  *    0                   1                   2                   3
  *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -1145,12 +1200,7 @@ void			DeclareWord(Col_Word word);
  *	Left, Right : 32-bit words or list nodes
  */
 
-#define WORD_TYPE_LIST			24
-#define WORD_TYPE_MLIST			28
-#define WORD_TYPE_SUBLIST		32
-#define WORD_TYPE_CONCATLIST		36
-#define WORD_TYPE_MCONCATLIST		40
-
+/* List words: */
 #define WORD_LIST_ROOT(word)		(((Col_Word *)(word))[2])
 #define WORD_LIST_LOOP(word)		(((size_t *)(word))[3])
 
@@ -1166,11 +1216,12 @@ void			DeclareWord(Col_Word word);
     WORD_LIST_ROOT(word) = (root); \
     WORD_LIST_LOOP(word) = (loop);
 
-#define WORD_LISTNODE_DEPTH(word)	(((unsigned char *)(word))[1])
+#define WORD_LISTNODE_DEPTH(node)	(((unsigned char *)(node))[1])
 
-#define WORD_SUBLIST_SOURCE(word)	(((Col_Word *)(word))[1])
-#define WORD_SUBLIST_FIRST(word)	(((size_t *)(word))[2])
-#define WORD_SUBLIST_LAST(word)		(((size_t *)(word))[3])
+/* Sublist nodes: */
+#define WORD_SUBLIST_SOURCE(node)	(((Col_Word *)(node))[1])
+#define WORD_SUBLIST_FIRST(node)	(((size_t *)(node))[2])
+#define WORD_SUBLIST_LAST(node)		(((size_t *)(node))[3])
 
 #define WORD_SUBLIST_INIT(node, depth, source, first, last) \
     WORD_SET_TYPE_ID((node), WORD_TYPE_SUBLIST); \
@@ -1179,10 +1230,11 @@ void			DeclareWord(Col_Word word);
     WORD_SUBLIST_FIRST(node) = (first); \
     WORD_SUBLIST_LAST(node) = (last);
 
-#define WORD_CONCATLIST_LEFT_LENGTH(word) (((unsigned short *)(word))[1])
-#define WORD_CONCATLIST_LENGTH(word)	(((size_t *)(word))[1])
-#define WORD_CONCATLIST_LEFT(word)	(((Col_Word *)(word))[2])
-#define WORD_CONCATLIST_RIGHT(word)	(((Col_Word *)(word))[3])
+/* Concat node: */
+#define WORD_CONCATLIST_LEFT_LENGTH(node) (((unsigned short *)(node))[1])
+#define WORD_CONCATLIST_LENGTH(node)	(((size_t *)(node))[1])
+#define WORD_CONCATLIST_LEFT(node)	(((Col_Word *)(node))[2])
+#define WORD_CONCATLIST_RIGHT(node)	(((Col_Word *)(node))[3])
 
 #define WORD_CONCATLIST_INIT(node, depth, length, leftLength, left, right) \
     WORD_SET_TYPE_ID((node), WORD_TYPE_CONCATLIST); \
@@ -1199,5 +1251,311 @@ void			DeclareWord(Col_Word word);
     WORD_CONCATLIST_LEFT_LENGTH(node) = (unsigned short) ((leftLength)>USHRT_MAX?0:(leftLength)); \
     WORD_CONCATLIST_LEFT(node) = (left); \
     WORD_CONCATLIST_RIGHT(node) = (right);
+
+
+/*
+ *----------------------------------------------------------------
+ * Maps.
+ *----------------------------------------------------------------
+ */
+
+/*
+ * Hash maps.
+ *
+ * Hash maps are mutable datatypes used to implement maps, AKA associative 
+ * arrays. For each entry, an integer hash value is computed from the key, and 
+ * this hash value is used to select a "bucket", i.e. an insertion point in a 
+ * dynamic array. When two entries end up in the same bucket, there is a 
+ * collision. When the map exceeds a certain size or the number of collisions 
+ * exceed a certain threshold, the table is resized and entries are rehashed.
+ *
+ * For each bucket, hash entries are stored as linked lists. Each entry stores 
+ * its hash, key and value, as well as a pointer to the next entry.
+ *
+ * Integer hash maps are specialized hash maps where the hash value is the 
+ * integer key. The hash values thus don't need to be stored in map entries,
+ * which saves space & CPU.
+ * 
+ *  - Hash map words:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                    Unused                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Size                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                       Hash key function                       |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                     Compare keys function                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Buckets                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   .                                                               .
+ *   .                        Static buckets                         .
+ *   .                                                               .
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Size : 32-bit unsigned
+ *	    Number of elements in map.
+ *
+ *	Hash key function : 32-bit pointer
+ *	    Pointer to function for computing the hash value from a key.
+ *	    
+ *	Key compare function : 32-bit pointer
+ *	    Pointer to function for comparing two keys.
+ *
+ *	Buckets : 32-bit word
+ *	    Mutable vector/list node of buckets. If nil, buckets are stored in
+ *	    the inline static bucket array.
+ *
+ *	Static buckets : array of 32-bit words
+ *	    Inline bucket array for small sized maps.
+ *
+ *
+ *  - Integer hash map words:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                    Unused                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Size                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Buckets                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   .                                                               .
+ *   .                        Static buckets                         .
+ *   .                                                               .
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Size : 32-bit unsigned
+ *	    Number of elements in map.
+ *
+ *	Buckets : 32-bit word
+ *	    Bucket container. If nil, buckets are stored in the inline static 
+ *	    bucket array. Else it also uses hierarchic mutable vectors.
+ *
+ *	Static buckets : array of 32-bit words
+ *	    Inline bucket array for small sized maps.
+ *
+ *
+ *  - Hash entry nodes:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                     Hash                      |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Next                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                              Key                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Value                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Hash : 24-bit unsigned
+ *	    Higher order bits of the 32-bit hash value for fast negative test.
+ *	    Unused for integer hash maps.
+ *
+ *	Next : 32-bit word
+ *	    Pointer to next entry in chain.
+ *
+ *	Key : 32-bit word
+ *	    Entry key word.
+ *
+ *	Value : 32-bit word
+ *	    Entry value word.
+ *
+ *
+ *  - Integer hash entry nodes:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                    Unused                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Next                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                              Key                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Value                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Hash : 24-bit unsigned
+ *	    Higher order bits of the 32-bit hash value for fast negative test.
+ *	    Unused for integer hash maps.
+ *
+ *	Next : 32-bit word
+ *	    Pointer to next entry in chain.
+ *
+ *	Key : 32-bit integer
+ *	    Entry key.
+ *
+ *	Value : 32-bit word
+ *	    Entry value word.
+ */
+
+/* Hash maps: */
+/*
+#define WORD_HASHMAP_NBCELLS(word)	3 /* TODO make field?*//*
+#define WORD_HASHMAP_HEADER_SIZE	(sizeof(size_t)+sizeof(Col_HashKeyProc *)+sizeof(Col_CompareKeysProc *)+sizeof(Col_Word))
+#define WORD_HASHMAP_SIZE(word)		(((size_t *)(word))[2])
+#define WORD_HASHMAP_HASHKEY(word)	(((Col_HashKeyProc *)(word))[3])
+#define WORD_HASHMAP_COMPAREKEYS(word)	(((Col_CompareKeysProc *)(word))[4])
+#define WORD_HASHMAP_BUCKETS(word)	(((Col_Word *)(word))[5])
+#define WORD_HASHMAP_STATICBUCKETS_SIZE(word) ((WORD_HASHMAP_NBCELLS(word)*CELL_SIZE-(WORD_HEADER_SIZE+WORD_HASHMAP_HEADER_SIZE))/sizeof(Col_Word))
+#define WORD_HASHMAP_STATICBUCKETS(word) ((Col_Word *)((char *)WORD_DATA(word)+WORD_HASHMAP_HEADER_SIZE))
+*/
+
+/* Integer hash maps: */
+#define WORD_INTHASHMAP_NBCELLS(word)	3 /* TODO make field?*/
+#define WORD_INTHASHMAP_HEADER_SIZE	(sizeof(size_t)+sizeof(Col_Word))
+#define WORD_INTHASHMAP_SIZE(word)	(((size_t *)(word))[2])
+#define WORD_INTHASHMAP_BUCKETS(word)	(((Col_Word *)(word))[3])
+#define WORD_INTHASHMAP_STATICBUCKETS_SIZE(word) ((WORD_INTHASHMAP_NBCELLS(word)*CELL_SIZE-(WORD_HEADER_SIZE+WORD_INTHASHMAP_HEADER_SIZE))/sizeof(Col_Word))
+#define WORD_INTHASHMAP_STATICBUCKETS(word) ((Col_Word *)((char *)WORD_DATA(word)+WORD_INTHASHMAP_HEADER_SIZE))
+
+#define WORD_INTHASHMAP_INIT(word) \
+    WORD_SET_TYPE_ID((word), WORD_TYPE_INTHASHMAP); \
+    WORD_INTHASHMAP_SIZE(word) = 0; \
+    WORD_INTHASHMAP_BUCKETS(word) = WORD_NIL;
+
+/* Integer hash entries: */
+#define WORD_INTHASHENTRY_NEXT(node)	(((Col_Word *)(node))[1])
+#define WORD_INTHASHENTRY_KEY(node)	(((int *)(node))[2])
+#define WORD_INTHASHENTRY_VALUE(node)	(((Col_Word *)(node))[3])
+
+#define WORD_INTHASHENTRY_INIT(node, next, key, value) \
+    WORD_SET_TYPE_ID((node), WORD_TYPE_INTHASHENTRY); \
+    WORD_INTHASHENTRY_NEXT(node) = (next); \
+    WORD_INTHASHENTRY_KEY(node) = (key); \
+    WORD_INTHASHENTRY_VALUE(node) = (value);
+
+/*
+ * Trie maps.
+ *
+ * TODO
+ * 
+ *  - Trie map words:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                    Unused                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Size                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Root                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Size : 32-bit unsigned
+ *	    Number of elements in map.
+ *
+ *	Root : 32-bit node
+ *	    Root node of the trie.
+ *
+ *  - Trie map nodes:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                    Unused                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Mask                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Left                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Right                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Mask : 32-bit unsigned
+ *	    Bitmask where only the critical bit is set, i.e. the highest bit
+ *	    where left and right nodes differ.
+ *
+ *	Left, Right : 32-bit trie nodes
+ * 
+ *  - Trie map leaves:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                    Unused                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Unused                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                              Key                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Value                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Key : 32-bit word
+ *	    Key word.
+ *
+ *	Value : 32-bit word
+ *	    Value word.
+ * 
+ *  - Int trie map leaves:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                    Unused                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Unused                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                              Key                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Value                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Key : 32-bit integer
+ *	    Entry key.
+ *
+ *	Value : 32-bit word
+ *	    Entry value word.
+ */
+
+#define WORD_TRIEMAP_SIZE(word)		(((size_t *)(word))[2])
+#define WORD_TRIEMAP_ROOT(word)		(((Col_Word *)(word))[3])
+
+#define WORD_INTTRIEMAP_INIT(word) \
+    WORD_SET_TYPE_ID((word), WORD_TYPE_INTTRIEMAP); \
+    WORD_TRIEMAP_SIZE(word) = 0; \
+    WORD_TRIEMAP_ROOT(word) = WORD_NIL;
+
+#define WORD_TRIENODE_MASK(node)	(((uint32_t *)(node))[1])
+#define WORD_TRIENODE_LEFT(node)	(((Col_Word *)(node))[2])
+#define WORD_TRIENODE_RIGHT(node)	(((Col_Word *)(node))[3])
+
+#define WORD_TRIENODE_INIT(node, mask, left, right) \
+    WORD_SET_TYPE_ID((node), WORD_TYPE_TRIENODE); \
+    WORD_TRIENODE_MASK(node) = (mask); \
+    WORD_TRIENODE_LEFT(node) = (left); \
+    WORD_TRIENODE_RIGHT(node) = (right);
+
+/*
+#define node_TRIELEAF_KEY(node)		(((Col_node *)(node))[2])
+#define node_TRIELEAF_VALUE(node)	(((Col_node *)(node))[3])
+
+#define node_TRIELEAF_INIT(node, key, value) \
+    node_SET_TYPE_ID((node), node_TYPE_TRIELEAF); \
+    node_TRIELEAF_KEY(node) = (key); \
+    node_TRIELEAF_VALUE(node) = (value);
+*/
+
+#define WORD_INTTRIELEAF_KEY(node)	(((int *)(node))[2])
+#define WORD_INTTRIELEAF_VALUE(node)	(((Col_Word *)(node))[3])
+
+#define WORD_INTTRIELEAF_INIT(node, key, value) \
+    WORD_SET_TYPE_ID((node), WORD_TYPE_INTTRIELEAF); \
+    WORD_INTTRIELEAF_KEY(node) = (key); \
+    WORD_INTTRIELEAF_VALUE(node) = (value);
 
 #endif /* _COLIBRI_INTERNAL */

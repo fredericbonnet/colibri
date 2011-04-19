@@ -26,19 +26,11 @@ void			PlatCleanup(void);
 extern size_t systemPageSize;
 
 /*
- * Logical page after the last one in system page.
- */
-
-#define LAST_PAGE_NEXT(page)	\
-    PAGE_NEXT(((char *)(page) + systemPageSize - PAGE_SIZE))
-
-/*
  * Allocation/deallocation of system pages.
  */
 
-void *			PlatSysPageAlloc(MemoryPool * pool);
-void			PlatSysPageFree(MemoryPool * pool, void * page);
-void			PlatSysPageCleanup(MemoryPool * pool);
+void *			PlatSysPageAlloc(size_t number);
+void			PlatSysPageFree(void * page, size_t number);
 
 
 /*

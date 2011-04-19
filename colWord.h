@@ -54,6 +54,7 @@ typedef struct Col_WordType {
 #define COL_MVECTOR		((Col_WordType *) 13)	/* Flat mutable vector. */
 #define COL_LIST		((Col_WordType *) 15)	/* List. */
 #define COL_MLIST		((Col_WordType *) 17)	/* Mutable list. */
+#define COL_MAP			((Col_WordType *) 19)	/* Map (any kind). */
 
 typedef union {
     int i;			/* COL_INT. */
@@ -73,7 +74,7 @@ typedef union {
 	size_t length;
 	Col_Word *elements;
     } mvector;
-				/* COL_(M)LIST uses accessors and iterators. */
+				/* COL_(M)LIST and COL_MAP use accessors and iterators. */
     void *data;			/* Other values = (Col_WordType *). */
 } Col_WordData;
 
@@ -105,7 +106,7 @@ EXTERN void		Col_ClearWordSynonym(Col_Word word);
  *----------------------------------------------------------------
  */
 
-EXTERN Col_Word		Col_PreserveWord(Col_Word word);
-EXTERN Col_Word		Col_ReleaseWord(Col_Word word);
+EXTERN void		Col_PreserveWord(Col_Word word);
+EXTERN void		Col_ReleaseWord(Col_Word word);
 
 #endif /* _COLIBRI_WORD */

@@ -126,6 +126,8 @@ extern "C" {
 #   define uint16_t unsigned __int16
 #   define int32_t __int32
 #   define uint32_t unsigned __int32
+#   define int64_t __int64
+#   define uint64_t unsigned __int64
 #else
     /* Sensible fallback. */
 #   define int8_t char
@@ -134,6 +136,8 @@ extern "C" {
 #   define uint16_t unsigned short
 #   define int32_t int
 #   define uint32_t unsigned int
+#   define int64_t long long
+#   define uint64_t unsigned long long
 #endif
 
 /*
@@ -151,8 +155,13 @@ typedef void * Col_ClientData;
 #include "colRope.h"
 #include "colWord.h"
 
+#include "colVector.h"
 #include "colList.h"
+
 #include "colMap.h"
+#include "colHash.h"
+#include "colTrie.h"
+
 
 /*
  *----------------------------------------------------------------
@@ -195,7 +204,7 @@ EXTERN void		Col_ResumeGC(void);
  * Child declaration needed by the generational GC.
  */
 
-EXTERN void		Col_DeclareChild(void *parent, void *child);
+EXTERN void		Col_SetModified(void *cell);
 
 /*
  * end block for C++

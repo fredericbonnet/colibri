@@ -95,8 +95,7 @@ Col_NewRope(
 		return Col_NewRope(COL_UCS1, source, byteLength);
 	    } 
 	    
-	    rope = (Col_Rope) AllocCells(NB_CELLS(ROPE_UTF8_HEADER_SIZE
-		    + byteLength));
+	    rope = (Col_Rope) AllocCells(UTF8_SIZE(byteLength));
 	    ROPE_SET_TYPE(rope, ROPE_TYPE_UTF8);
 	    ROPE_UTF8_LENGTH(rope) = (unsigned short) length;
 	    ROPE_UTF8_BYTELENGTH(rope) = (unsigned short) byteLength;
@@ -120,8 +119,7 @@ Col_NewRope(
 	     * String fits into one multi-cell leaf rope. 
 	     */
 
-	    Col_Rope rope = (Col_Rope) AllocCells(NB_CELLS(ROPE_UCS_HEADER_SIZE
-		    + byteLength));
+	    Col_Rope rope = (Col_Rope) AllocCells(UCS_SIZE(byteLength));
 	    switch (format) {
 		case COL_UCS1:
 		    ROPE_SET_TYPE(rope, ROPE_TYPE_UCS1);
@@ -194,8 +192,6 @@ size_t
 Col_RopeLength(
     Col_Rope rope)		/* Rope to get char length for. */
 {
-    RESOLVE_ROPE(rope);
-
     switch (ROPE_TYPE(rope)) {
 	case ROPE_TYPE_NULL:
 	case ROPE_TYPE_EMPTY:
@@ -535,8 +531,6 @@ Col_Subrope(
     unsigned char depth=0;	/* Depth of source rope. */
     size_t length;		/* Length of resulting subrope. */
 
-    RESOLVE_ROPE(rope);
-
     /* 
      * Quick cases. 
      */
@@ -782,9 +776,6 @@ Col_ConcatRopes(
 				/* Respective depths of left and right ropes. */
     size_t leftLength, rightLength;
 				/* Respective lengths. */
-
-    RESOLVE_ROPE(left);
-    RESOLVE_ROPE(right);
 
     leftLength = Col_RopeLength(left);
     rightLength = Col_RopeLength(right);
@@ -1375,8 +1366,6 @@ Col_TraverseRopeChunks(
 {
     size_t ropeLength;
 
-    RESOLVE_ROPE(rope);
-
     if (lengthPtr) {
 	*lengthPtr = 0;
     }
@@ -1589,8 +1578,6 @@ Col_RopeIterBegin(
     Col_RopeIterator *it)	/* Iterator to initialize. */
 {
     int type;
-
-    RESOLVE_ROPE(rope);
 
     type = ROPE_TYPE(rope);
     if (type == ROPE_TYPE_NULL || type == ROPE_TYPE_EMPTY 
@@ -2458,8 +2445,6 @@ Col_GetCustomRopeInfo(
     size_t *sizePtr,		/* Returned data size. */
     void **dataPtr)		/* Returned data. */
 {
-    RESOLVE_ROPE(rope);
-
     if (ROPE_TYPE(rope) != ROPE_TYPE_CUSTOM) {
 	return NULL;
     }

@@ -101,6 +101,7 @@ Col_Error(
     }
     vfprintf(stderr, format, args);
     fprintf(stderr, "\n");
+    fflush(stderr);
 
     abort();
 }

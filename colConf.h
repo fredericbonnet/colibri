@@ -2,6 +2,44 @@
 #define _COLIBRI_CONFIGURATION
 
 /*
+ * Machine-specific stuff.
+ *
+ * Note: this code was take from Tcl.
+ */
+
+#ifdef HAVE_SYS_TYPES_H
+#    include <sys/types.h>
+#endif
+#ifdef HAVE_SYS_PARAM_H
+#    include <sys/param.h>
+#endif
+#ifdef BYTE_ORDER
+#    ifdef BIG_ENDIAN
+#	 if BYTE_ORDER == BIG_ENDIAN
+#	     undef COL_BIGENDIAN
+#	     define COL_BIGENDIAN 1
+#	 endif
+#    endif
+#    ifdef LITTLE_ENDIAN
+#	 if BYTE_ORDER == LITTLE_ENDIAN
+#	     undef COL_BIGENDIAN
+#	 endif
+#    endif
+#endif
+
+/*
+ * Machine word size. Comparing UINT_MAX and SIZE_MAX is a reasonable heuristics
+ * when discriminating 32-bit systems vs. 64-bit.
+ */
+
+#include <limits.h>
+#if UINT_MAX == SIZE_MAX
+#   define SIZE_BIT		32
+#else
+#   define SIZE_BIT		64
+#endif
+
+/*
  * Threading support.
  */
 
@@ -34,6 +72,13 @@
     :					(threshold))
 
 /*
+ * Large page size, i.e. number of pages above which cell groups are allocated
+ * in their own dedicated page range.
+ */
+
+#define LARGE_PAGE_SIZE		128 /* 512 KB */
+
+/*
  * Threshold value on a pool's fragmentation to decide whether to promote 
  * individual cells vs. whole pages. In practice this performs a compaction of 
  * this pool, which limits fragmentation and memory overhead. 
@@ -43,23 +88,16 @@
 #define PROMOTE_PAGE_FILL_RATIO 0.90
 
 /*
- * Number of system pages to allocate at once (see PoolAllocPages).
+ * Page and cell sizes, and number of cells per page.
  */
 
-#define NB_SYSPAGE_ALLOC	4
+#if SIZE_BIT == 32
+#   define PAGE_SIZE		1024
+#   define CELL_SIZE		16 /* = 4*4 */
+#   define CELLS_PER_PAGE	64 /* PAGE_SIZE/CELLS_PER_PAGE */
+#endif
 
-/* 
- * Allocator page size. System page size should be a multiple of it. 
- */
-
-#define PAGE_SIZE		1024
 typedef char Page[PAGE_SIZE];
-
-/*
- * Cell size. Each cell can store 4 pointers (=> 16 bytes on 32-bit systems).
- */
-
-#define CELL_SIZE		(sizeof(void *)*4)
 typedef char Cell[CELL_SIZE];
 
 #endif /* _COLIBRI_CONFIGURATION */

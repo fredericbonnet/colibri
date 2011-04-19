@@ -196,7 +196,6 @@ Col_NewRopeWord(
     Col_Word word;
     size_t length;
 
-    RESOLVE_ROPE(rope);
     switch (ROPE_TYPE(rope)) {
 	case ROPE_TYPE_EMPTY:
 	    return WORD_SMALL_STRING_EMPTY;
@@ -261,17 +260,7 @@ Col_NewWord(
 
 	actualSize += WORD_TRAILER_SIZE;
     }
-    if (actualSize > WORD_MAX_SIZE) {
-	/*
-	 * Not enough room.
-	 */
 
-	Col_Error(COL_ERROR, "Word size %u too large (max %u)", size, 
-		WORD_MAX_SIZE - (actualSize - size));
-	*dataPtr = NULL;
-	return WORD_NIL;
-    }
-    
     word = (Col_Word) AllocCells(NB_CELLS(WORD_HEADER_SIZE+actualSize));
     WORD_SET_TYPE_ADDR(word, type);
     WORD_SYNONYM(word) = WORD_NIL;
@@ -305,8 +294,6 @@ Col_GetWordInfo(
 {
     Col_WordType * typeInfo;
 
-    RESOLVE_WORD(word);
-    
     switch (WORD_TYPE(word)) {
 	/*
 	 * Immediate values.
@@ -324,7 +311,7 @@ Col_GetWordInfo(
 	    return COL_CHAR;
 
 	case WORD_TYPE_SMALL_STRING:
-	    dataPtr->str.length = WORD_SMALL_STRING_GET_LENGTH(word);
+	    dataPtr->str.length = WORD_SMALL_STRING_LENGTH(word);
 	    memcpy((void *) dataPtr->str.data, WORD_SMALL_STRING_DATA(word), 
 		    dataPtr->str.length);
 	    return COL_SMALL_STRING;
@@ -358,8 +345,8 @@ Col_GetWordInfo(
 	    return COL_VECTOR;
 
 	case WORD_TYPE_MVECTOR:
-	    dataPtr->mvector.maxLength = (WORD_MVECTOR_SIZE(word)*CELL_SIZE 
-		    - WORD_HEADER_SIZE) / sizeof(Col_Word);
+	    dataPtr->mvector.maxLength 
+		    = MVECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(word));
 	    dataPtr->mvector.length = WORD_VECTOR_LENGTH(word);
 	    dataPtr->mvector.elements = WORD_VECTOR_ELEMENTS(word);
 	    return COL_MVECTOR;
@@ -369,6 +356,10 @@ Col_GetWordInfo(
 
 	case WORD_TYPE_MLIST:
 	    return COL_MLIST;
+
+	case WORD_TYPE_INTHASHMAP:
+	case WORD_TYPE_INTTRIEMAP:
+	    return COL_MAP;
 
 	case WORD_TYPE_REFERENCE:
 	    dataPtr->refSource = WORD_REFERENCE_SOURCE(word);
@@ -413,8 +404,6 @@ Col_FindWordInfo(
     Col_WordData *dataPtr)	/* Returned data. */
 {
     Col_Word synonym;
-
-    RESOLVE_WORD(word);
 
     synonym = word;
     while (synonym) {
@@ -480,7 +469,6 @@ Col_GetWordSynonym(
 
 	return WORD_NIL;
     } else {
-	RESOLVE_WORD(word);
 	return WORD_SYNONYM(word);
     }
 }
@@ -530,10 +518,8 @@ Col_AddWordSynonym(
 
 	word = *wordPtr = UpconvertWord(word);
 	if (*parentPtr) {
-	    Col_DeclareChild((void *) word, (void *) *parentPtr);
+	    Col_SetModified((void *) *parentPtr);
 	}
-    } else {
-	RESOLVE_WORD(word);
     }
 
     if (IS_IMMEDIATE(synonym) || IS_ROPE(synonym)) {
@@ -543,7 +529,7 @@ Col_AddWordSynonym(
 	     */
 
 	    WORD_SYNONYM(word) = synonym;
-	    Col_DeclareChild((void *) word, (void *) synonym);
+	    Col_SetModified((void *) word);
 	    return;
 	}
 
@@ -552,8 +538,6 @@ Col_AddWordSynonym(
 	 */
 
 	synonym = UpconvertWord(synonym);
-    } else {
-	RESOLVE_WORD(synonym);
     }
 
     if (word == synonym) {
@@ -600,8 +584,8 @@ Col_AddWordSynonym(
 	WORD_SYNONYM(word) = WORD_SYNONYM(synonym);
 	WORD_SYNONYM(synonym) = tmp;
     }
-    Col_DeclareChild((void *) word, (void *) WORD_SYNONYM(word));
-    Col_DeclareChild((void *) synonym, (void *) WORD_SYNONYM(synonym));
+    Col_SetModified((void *) word);
+    Col_SetModified((void *) synonym);
 }
 
 /*
@@ -687,8 +671,6 @@ Col_ClearWordSynonym(
 {
     Col_Word synonym;
 
-    RESOLVE_WORD(word);
-
     if (!word || IS_IMMEDIATE(word) || IS_ROPE(word)) {
 	/*
 	 * Ropes or immediate values have no synonyms.
@@ -717,6 +699,6 @@ Col_ClearWordSynonym(
 	synonym = WORD_SYNONYM(synonym);
     }
     WORD_SYNONYM(synonym) = WORD_SYNONYM(word);
-    Col_DeclareChild((void *) synonym, (void *) WORD_SYNONYM(synonym));
+    Col_SetModified((void *) synonym);
     WORD_SYNONYM(word) = WORD_NIL;
 }

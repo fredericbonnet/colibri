@@ -3,6 +3,11 @@
 #include "../../colPlatform.h"
 
 #include <windows.h>
+#include <sys/types.h>
+
+/*
+ * Thread-local data.
+ */
 
 static DWORD tlsToken;
 typedef struct {
@@ -11,6 +16,17 @@ typedef struct {
     Col_ErrorProc *errorProc;
 } ThreadData;
 
+/*
+ * Bit twiddling hack for computing the log2 of a power of 2.
+ * See: http://www-graphics.stanford.edu/~seander/bithacks.html#IntegerLogDeBruijn
+ */
+
+static const int MultiplyDeBruijnBitPosition2[32] = 
+{
+  0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 
+  31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
+};
+#define LOG2(v) MultiplyDeBruijnBitPosition2[(uint32_t)(v * 0x077CB531U) >> 27]
 
 /*
  * Prototypes for functions used only in this file.
@@ -26,154 +42,401 @@ static BOOL Init(void);
  */
 
 /*
- * Memory is allocated with VirtualAlloc. As it can't reserve less than 
- * SYSTEM_INFO.dwAllocationGranularity (65536 on IA32) but can commit individual
- * pages with a size of SYSTEM_INFO.dwPageSize (4096 on IA32), this means that 
- * each logical page is part of a system page that is itself part of a larger
- * address range. Allocating whole SYSTEM_INFO.dwAllocationGranularity sized
- * pages would be too heavy.
+ * Contrary to most other platforms where individual pages can be allocated and
+ * freed (for example using mmap/munmap), the Windows VirtualAlloc API restricts 
+ * address reservation to a granularity of SYSTEM_INFO.dwAllocationGranularity 
+ * (65536 on IA32), although it can commit and decommit individual pages with a 
+ * size of SYSTEM_INFO.dwPageSize (4096 on IA32). Besides, behaving as if 
+ * system pages had a size of SYSTEM_INFO.dwAllocationGranularity proved to be
+ * too CPU and memory intensive. So if we want to keep the system page small, 
+ * this implies that each page is itself part of a larger address range.
  *
- * In order to keep track of committed pages in ranges, use the PAGE_RESERVED 
- * field of the first logical page in each system page to store the index of 
- * the next committed system page in range, forming a circular list (last one 
- * points to first). Indices must be consecutive. That way we can scan a range 
- * for holes from any of its page.
+ * Achieving single page granularity involves a lot of bookkeeping, as Windows 
+ * doesn't provide an efficient query API (VirtualQuery is very CPU intensive 
+ * and is known to be even slower on Win64). So large address ranges are 
+ * reserved, and individual pages are committed within these ranges.
  *
- * An alternative was to use VirtualQuery to get the committed and free pages 
- * in a range, but this proved to be too CPU expensive, and VirtualQuery is
- * known to be much slower on Win64.
+ * When the number of pages to allocate exceeds a certain size (defined as 
+ * LARGE_PAGE_SIZE), a dedicated address range is reserved and committed, which 
+ * must be freed all at once. Else,pages are allocated within larger address 
+ * ranges using the following scheme:
+ *
+ * Address ranges are reserved in geometrically increasing sizes up to a 
+ * maximum size (the first being a multiple of the allocation granularity). 
+ * Ranges form a singly-linked list in allocation order (so that search times 
+ * are geometrically increasing too). A descriptor structure is malloc'd along 
+ * with the range and consists of a pointer to the next descrptor, the base 
+ * address of the range, the total and free numbers of pages and the index of 
+ * the first free page in range, and a bitmask table for allocated pages (much 
+ * alike regular Colibri pages).
+ *
+ * To allocate a group of pages in an address range, the bitmask is scanned 
+ * until a large enough group of free pages is found. To free a group of
+ * pages, the containing address range is found by scanning all ranges (even
+ * VirtualQuery is too slow for this simple purpose!). In either case the 
+ * descriptor is updated accordingly. If a containing range is not found we 
+ * assume that it was a dedicated range and we attempt to release it at once.
+ *
+ * The allocation scheme may not look optimal at first sight (especially the
+ * bitmask scanning step), but keep in mind that the typical use case only 
+ * involves single page allocations. Multiple page allocations only occur when 
+ * allocating large, multiple cell-based objects, and most objects are single 
+ * cell sized. And very large pages will end up in their own dedicated range
+ * with no page management. Moreover stress tests have shown that this scheme 
+ * yielded similar or better performances than the previous scheme that was 
+ * limited to granularity-sized address ranges.
  */
 
 static SYSTEM_INFO systemInfo;
-static size_t pagesPerRange;
+static size_t shiftPage;
 
-#define PHYS_PAGE(range, index)	\
-    ((void *)((char *)(range)+systemInfo.dwPageSize*(index)))
-#define PHYS_PAGE_RANGE(page)	\
-    ((void *)((uintptr_t)(page) & ~(systemInfo.dwAllocationGranularity-1)))
-#define PHYS_PAGE_INDEX(page)	\
-    ((unsigned short)(((uintptr_t)(page) % systemInfo.dwAllocationGranularity) / systemInfo.dwPageSize))
-#define PHYS_PAGE_NEXT(page)	PAGE_RESERVED(page)
+typedef struct AddressRange {
+    struct AddressRange *next;
+    void *base;
+    size_t size;
+    size_t free;
+    size_t first;
+    unsigned char bitmask[0];
+} AddressRange;
 
-/*
- * Use the data field of the MemoryPool to store the last page belonging to a 
- * range with free pages. 
- */
+static AddressRange *ranges;
+static AddressRange *dedicatedRanges;
+static CRITICAL_SECTION protect;
 
-#define lastFreeRange data
+#define FIRST_RANGE_SIZE	256 /* 1 MB */
+#define MAX_RANGE_SIZE		32768 /* 128 MB */
+
+static size_t 
+FindClearedBits(
+    unsigned char *mask,	/* Bitmask table. */
+    size_t size,		/* Size of bitmask in bits. */
+    size_t number,		/* Number of consecutive bits to find. */
+    size_t index)		/* First bit to consider. */
+{
+    size_t i, first = (size_t)-1, remaining;
+    char seq;
+
+    /* 
+     * Iterate over bytes of the bitmask to find a chain of <number> zero bits. 
+     */
+
+    remaining = number;
+    for (i = (index>>3); i < (size>>3); i++) {
+	if (remaining <= 7) {
+	    /* 
+	     * End of sequence, or whole sequence for number < 8. 
+	     * Find sequence in byte. 
+	     */
+
+	    seq = firstZeroBitSequence[remaining-1][mask[i]];
+	    if (seq != -1) {
+		if (remaining == number) {
+		    /* 
+		     * Sequence fits into one byte. 
+		     */
+
+		    return (i<<3) + seq;
+		}
+
+		/* 
+		 * Sequence spans over several bytes. 
+		 */
+
+		if (seq == 0) {
+		    /* 
+		     * Sequence is contiguous. 
+		     */
+
+		    return first;
+		}
+	    }
+
+	    /* 
+	     * Sequence interrupted, restart. 
+	     */
+
+	    remaining = number;
+	}
+
+	/* 
+	 * Sequence may span over several bytes. 
+	 */
+
+	if (remaining == number) {
+	    /* 
+	     * Beginning of sequence. 
+	     *
+	     * Note: leading bits actually denote trailing cells: bit 0 (LSB) is
+	     * first cell, bit 7 (MSB) is last.
+	     */
+
+	    seq = longestLeadingZeroBitSequence[mask[i]];
+	    if (seq) {
+		first = (i<<3) + (8-seq);
+		remaining -= seq;
+	    }
+	} else {
+	    /* 
+	     * Middle of sequence, look for 8 bits cleared = zero byte. 
+	     */
+
+	    if (mask[i] == 0) {
+		/* 
+		 * Continue sequence. 
+		 */
+
+		remaining -= 8;
+	    } else {
+		/* 
+		 * Sequence interrupted, restart. 
+		 */
+
+		remaining = number;
+	    }
+	}
+	if (remaining == 0) {
+	    /*
+	     * End of sequence reached.
+	     */
+
+	    return first;
+	}
+    }
+
+    /*
+     * None found.
+     */
+
+    return (size_t) -1;
+}
+
+static void
+SetBit(
+    unsigned char *mask,	/* Bitmask table. */
+    size_t i)			/* Index of first bit to set. */
+{
+    mask[i>>3] |= 1<<(i&7);
+}
+
+static void 
+SetBits(
+    unsigned char *mask,	/* Bitmask table. */
+    size_t first,		/* Index of first bit to set. */
+    size_t number)		/* Number of bits to set. */
+{
+    size_t i;
+    for (i=first; i < first+number; i++) {
+	mask[i>>3] |= 1<<(i&7);
+    }
+}
+
+static void 
+ClearBits(
+    unsigned char *mask,	/* Bitmask table. */
+    size_t first,		/* Index of first bit to clear. */
+    size_t number)		/* Number of bits to clear. */
+{
+    size_t i;
+    for (i=first; i < first+number; i++) {
+	mask[i>>3] &= ~(1<<(i&7));
+    }
+}
+
+static size_t 
+TestBit(
+    unsigned char *mask,	/* Bitmask table. */
+    size_t index)		/* Index of bit to set. */
+{
+    return mask[index>>3] & (1<<(index&7));
+}
 
 /*
  *---------------------------------------------------------------------------
  *
  * PlatSysPageAlloc --
  *
- *	Allocate a system page.
+ *	Allocate system pages.
  *
  * Results:
- *	The new system page.
+ *	The allocated system pages' base address.
  *
  * Side effects:
- *	A new page within a new or existing range is allocated.
+ *	New pages are allocated.
  *
  *---------------------------------------------------------------------------
  */
 
 void * 
 PlatSysPageAlloc(
-    MemoryPool * pool)		/* The pool for which to alloc page. */
+    size_t number)		/* Number of pages to alloc. */
 {
-    void *base, *page;
+    void *addr = NULL;
+    AddressRange *range, **prevPtr;
+    size_t first, size;
 
-    /* 
-     * Look for an address range with a free page. 
-     */
-
-    for (page = pool->lastFreeRange; page; page = LAST_PAGE_NEXT(page)) {
-	unsigned short index, prev, next;
-
-	/* 
-	 * Search hole in page index list. 
+    if (number > LARGE_PAGE_SIZE || !(number 
+	    & ((systemInfo.dwAllocationGranularity >> shiftPage)-1))) {
+	/*
+	 * Length exceeds a certain threshold or is a multiple of the allocation
+	 * granularity, allocate dedicated address range.
 	 */
 
-	base = PHYS_PAGE_RANGE(page);
-	index = PHYS_PAGE_INDEX(page);
-	next = PHYS_PAGE_NEXT(page);
-	prev = index;
-	if (next == index) {
-	    /* 
-	     * Page is alone in range, allocate next one. 
-	     */
-
-	    next = (prev+1)%pagesPerRange;
-	} else {
+	addr = VirtualAlloc(NULL, number << shiftPage, MEM_RESERVE|MEM_COMMIT, 
+		PAGE_READWRITE);
+	if (!addr) {
 	    /*
-	     * Search next hole if any by comparing indices, which must be
-	     * consecutive.
-	     */
-
-	    do {
-		if ((next-prev)%pagesPerRange > 1) {
-		    /* 
-		     * Hole found. 
-		     */
-
-		    next = (prev+1)%pagesPerRange;
-		    break;
-		}
-		prev = next;
-		next = PHYS_PAGE_NEXT(PHYS_PAGE(base, prev));
-	    } while (next != index);
-	}
-	if (next != index) {
-	    /* 
-	     * Hole found, commit page.
-	     */
-
-	    page = PHYS_PAGE(base, next);
-	    if (!VirtualAlloc(page, systemInfo.dwPageSize, MEM_COMMIT, 
-		    PAGE_READWRITE)) {
-		/*
-		 * Fatal error!
-		 */
-
-		Col_Error(COL_FATAL, "VirtualAlloc: Error %u",
-			GetLastError());
-		return NULL;
-	    }
-
-	    /* 
-	     * Insert into list after <index>.
-	     */
-
-	    PHYS_PAGE_NEXT(page) = PHYS_PAGE_NEXT(PHYS_PAGE(base, prev));
-	    PHYS_PAGE_NEXT(PHYS_PAGE(base, prev)) = next;
-
-	    break;
-	}
-    }
-
-    if (!page) {
-	/* 
-	 * No room in existing ranges, reserve new one and allocate first page. 
-	 */
-
-	if (!(base = VirtualAlloc(NULL, systemInfo.dwAllocationGranularity, 
-		MEM_RESERVE, PAGE_READWRITE)) || !(page = VirtualAlloc(base, 
-		systemInfo.dwPageSize, MEM_COMMIT, PAGE_READWRITE))) {
-	    /* 
 	     * Fatal error!
 	     */
 
-	    Col_Error(COL_FATAL, "VirtualAlloc: Error %u",
-		    GetLastError());
+	    Col_Error(COL_FATAL, "VirtualAlloc: Error %u", GetLastError());
+	}
+
+	/*
+	 * Create descriptor without bitmask and insert at head.
+	 */
+
+	EnterCriticalSection(&protect);
+	range = (AddressRange *) (malloc(sizeof(AddressRange)));
+	range->next = dedicatedRanges;
+	range->base = addr;
+	range->size = number;
+	range->free = 0;
+	range->first = number;
+	dedicatedRanges = range;
+	LeaveCriticalSection(&protect);
+
+	return addr;
+    }
+
+    /*
+     * Try to find address range with enough consecutive pages.
+     */
+
+    EnterCriticalSection(&protect);
+
+    first = (size_t)-1;
+    prevPtr = &ranges;
+    range = ranges;
+    while (range) {
+	size = range->size;
+	if (range->free >= number) {
+	    /*
+	     * Range has the required number of pages.
+	     */
+
+	    unsigned char *mask = range->bitmask;
+	    first = range->first;
+
+	    if (number == 1 && !TestBit(mask, first)) {
+		/*
+		 * Fast-track the most common case: allocate the first free 
+		 * page.
+		 */
+
+		break;
+	    }
+	    
+	    /*
+	     * Find the first available bit sequence.
+	     */
+
+	    first = FindClearedBits(mask, size, number, first);
+	    if (first != (size_t)-1) {
+		break;
+	    }
+	}
+
+	/*
+	 * Not found, try next range.
+	 */
+
+	prevPtr = &range->next;
+	range = range->next;
+    }
+
+    if (!range) {
+	/*
+	 * No range was found with available pages. Create a new one.
+	 */
+
+	if (!ranges) {
+	    size = FIRST_RANGE_SIZE;
+	} else {
+	    /*
+	     * New range size is double that of the previous one.
+	     */
+
+	    size <<= 1;
+	    if (size > MAX_RANGE_SIZE) size = MAX_RANGE_SIZE;
+	}
+	ASSERT(number <= size-1);
+
+	/*
+	 * Reserve address range.
+	 */
+
+	addr = VirtualAlloc(NULL, size << shiftPage, MEM_RESERVE, 
+		PAGE_READWRITE);
+	if (!addr) {
+	    /*
+	     * Fatal error!
+	     */
+
+	    LeaveCriticalSection(&protect);
+	    Col_Error(COL_FATAL, "VirtualAlloc: Error %u", GetLastError());
 	    return NULL;
 	}
 
-	PHYS_PAGE_NEXT(page) = 0;
+	/*
+	 * Create descriptor.
+	 */
+
+	range = (AddressRange *) (malloc(sizeof(AddressRange) + (size >> 3)));
+	*prevPtr = range;
+	range->base = addr;
+	range->next = NULL;
+	range->size = size;
+	range->free = size;
+	range->first = 0;
+	memset(range->bitmask, 0, (size >> 3));
+	first = 0;
     }
 
-    pool->lastFreeRange = page;
-    return page;
+    /*
+     * Commit pages. 
+     */
+
+    ASSERT(first+number <= size);
+    ASSERT(number <= range->free);
+    addr = VirtualAlloc((char *) range->base + (first << shiftPage), 
+	    number << shiftPage, MEM_COMMIT, PAGE_READWRITE);
+    if (!addr) {
+	/*
+	 * Fatal error!
+	 */
+
+	LeaveCriticalSection(&protect);
+	Col_Error(COL_FATAL, "VirtualAlloc: Error %u", GetLastError());
+	return NULL;
+    }
+
+    /*
+     * Update metadata and return.
+     */
+
+    range->free -= number;
+    if (first == range->first) {
+	/* 
+	 * Simply increase the first free page index, the actual index will be 
+	 * updated on next allocation.
+	 */
+
+	range->first += number;
+    }
+    SetBits(range->bitmask, first, number);
+
+    LeaveCriticalSection(&protect);
+    return addr;
 }
 
 /*
@@ -181,65 +444,119 @@ PlatSysPageAlloc(
  *
  * PlatSysPageFree --
  *
- *	Free a system page.
+ *	Free system pages.
  *
  * Results:
  *	None.
  *
  * Side effects:
- *	The page is freed, along with its range when empty.
+ *	The pages are freed.
  *
  *---------------------------------------------------------------------------
  */
 
 void 
 PlatSysPageFree(
-    MemoryPool * pool,		/* The pool the page belongs to. */
-    void * page)		/* The page to free. */
+    void * page,		/* Base address of the pages to free. */
+    size_t number)		/* Number of pages to free. */
 {
-    unsigned short index = PHYS_PAGE_INDEX(page);
-    if (PHYS_PAGE_NEXT(page) == index) {
-	/* 
-	 * Last and only page in range, release whole range. 
-	 */
+    size_t index;
+    AddressRange * range;
+    unsigned char *mask;
 
-	VirtualFree(PHYS_PAGE_RANGE(page), 0, MEM_RELEASE);
-    } else {
-	/* 
-	 * Unlink and decommit first page. 
-	 */
+    EnterCriticalSection(&protect);
 
-	void *base = PHYS_PAGE_RANGE(page);
-	unsigned short prev, next;
-	for (prev = index, next = PHYS_PAGE_NEXT(PHYS_PAGE(base, prev)); 
-		next != index; prev = next, 
-		next = PHYS_PAGE_NEXT(PHYS_PAGE(base, next)));
-	PHYS_PAGE_NEXT(PHYS_PAGE(base, prev)) = PHYS_PAGE_NEXT(page);
-	VirtualFree(page, systemInfo.dwPageSize, MEM_DECOMMIT);
+    /*
+     * Get range info for page. 
+     */
+
+    range = ranges;
+    while (range) {
+	if (page >= range->base && (char *) page < (char *) range->base 
+		+ (range->size << shiftPage)) {
+	    break;
+	}
+	range = range->next;
     }
+    if (!range) {
+	/*
+	 * Likely dedicated address range. 
+	 */
+
+	AddressRange **prevPtr = &dedicatedRanges;
+	range = dedicatedRanges;
+	while (range) {
+	    if (page >= range->base && (char *) page < (char *) range->base 
+		    + (range->size << shiftPage)) {
+		break;
+	    }
+	    prevPtr = &range->next;
+	    range = range->next;
+	}
+	if (!range) {
+	    /*
+	     * Not found.
+	     */
+
+	    LeaveCriticalSection(&protect);
+	    Col_Error(COL_FATAL, "Page not found %p", page);
+	    return;
+	}
+
+	/*
+	 * Release whole range.
+	 */
+
+	if (!VirtualFree(range->base, 0, MEM_RELEASE)) {
+	    /*
+	     * Fatal error!
+	     */
+
+	    LeaveCriticalSection(&protect);
+	    Col_Error(COL_FATAL, "VirtualFree: Error %u", GetLastError());
+	    return;
+	}
+
+	/*
+	 * Remove from dedicated range list.
+	 */
+
+	*prevPtr = range->next;
+	free(range);
+	LeaveCriticalSection(&protect);
+	return;
+    }
+
+    mask = range->bitmask;
+    index = ((char *) page - (char *) range->base) >> shiftPage;
+    ASSERT(index+number <= range->size);
+    ASSERT(TestBit(mask, index));
+
+    /*
+     * Decommit pages.
+     */
+
+    if (!VirtualFree(page, number << shiftPage, MEM_DECOMMIT)) {
+	/*
+	 * Fatal error!
+	 */
+
+	LeaveCriticalSection(&protect);
+	Col_Error(COL_FATAL, "VirtualFree: Error %u", GetLastError());
+	return;
+    }
+    ClearBits(mask, index, number);
+    range->free += number;
+    ASSERT(range->free <= range->size);
+    if (range->first > index) {
+	/*
+	 * Old first free page is beyond the one we just freed, update.
+	 */
+	 
+	range->first = index;
+    }
+    LeaveCriticalSection(&protect);
 }
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatSysPageCleanup --
- *
- *	Final cleanup page after pages have been freed in pool.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Reset range pointer.
- *
- *---------------------------------------------------------------------------
- */
-
-void 
-PlatSysPageCleanup(MemoryPool * pool) {
-    pool->lastFreeRange = pool->pages;
-}
-
 
 /*
  *----------------------------------------------------------------
@@ -343,7 +660,11 @@ Init()
 
     GetSystemInfo(&systemInfo);
     systemPageSize = systemInfo.dwPageSize;
-    pagesPerRange = systemInfo.dwAllocationGranularity/systemInfo.dwPageSize;
+    shiftPage = LOG2(systemPageSize);
+
+    ranges = NULL;
+    dedicatedRanges = NULL;
+    InitializeCriticalSection(&protect);
 
     return TRUE;
 }

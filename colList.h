@@ -19,27 +19,6 @@
 EXTERN Col_Word		Col_NewReference();
 EXTERN void		Col_BindReference(Col_Word reference, Col_Word source);
 
-/* 
- * Vectors are immutable flat arrays of bounded length.
- */
-
-EXTERN size_t		Col_GetMaxVectorLength(void);
-EXTERN Col_Word		Col_NewVector(size_t length, 
-			    const Col_Word * elements);
-EXTERN Col_Word		Col_NewVectorNV(size_t length, ...);
-#define Col_NewVectorV(...) \
-    Col_NewVectorNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
-
-/*
- * Mutable vectors are flat arrays that can grow up to a maximum length, whose
- * content is directly modifiable through a C array; newly added children need 
- * proper declaration (Col_DeclareChild).
- */
-
-EXTERN Col_Word		Col_NewMVector(size_t maxLength);
-EXTERN void		Col_FreezeMVector(Col_Word mvector);
-EXTERN void		Col_MVectorSetLength(Col_Word mvector, size_t length);
-
 /*
  * Lists are immutable structures built by composition of other lists and 
  * vectors. Immutable vectors can be used in place of immutable lists. Mutable
@@ -158,13 +137,13 @@ typedef struct Col_ListIterator {
 #define Col_ListIterList(it)	((it)->list)
 #define Col_ListIterIndex(it)	((it)->index)
 	
-EXTERN void		Col_ListIterBegin(Col_Word list, size_t index, 
+EXTERN int		Col_ListIterBegin(Col_Word list, size_t index, 
 			    Col_ListIterator *it);
 EXTERN Col_Word		Col_ListIterAt(Col_ListIterator *it);
 EXTERN int		Col_ListIterCompare(Col_ListIterator *it1, 
 			    Col_ListIterator *it2);
-EXTERN void		Col_ListIterMoveTo(Col_ListIterator *it, size_t index);
-EXTERN void		Col_ListIterForward(Col_ListIterator *it, size_t nb);
+EXTERN int		Col_ListIterMoveTo(Col_ListIterator *it, size_t index);
+EXTERN int		Col_ListIterForward(Col_ListIterator *it, size_t nb);
 EXTERN void		Col_ListIterBackward(Col_ListIterator *it, size_t nb);
 
 #define Col_ListIterNext(it)	Col_ListIterForward((it), 1)

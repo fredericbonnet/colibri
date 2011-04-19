@@ -245,7 +245,7 @@ EXTERN Col_RopeCustomType * Col_GetCustomRopeInfo(Col_Rope rope,
  *----------------------------------------------------------------
  */
 
-EXTERN Col_Rope		Col_PreserveRope(Col_Rope rope);
-EXTERN Col_Rope		Col_ReleaseRope(Col_Rope rope);
+EXTERN void		Col_PreserveRope(Col_Rope rope);
+EXTERN void		Col_ReleaseRope(Col_Rope rope);
 
 #endif /* _COLIBRI_ROPE */

@@ -180,6 +180,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\colHash.c"
+				>
+			</File>
+			<File
 				RelativePath=".\colibri.c"
 				>
 			</File>
@@ -188,11 +192,23 @@
 				>
 			</File>
 			<File
+				RelativePath=".\colMap.c"
+				>
+			</File>
+			<File
 				RelativePath=".\platform\win32\colPlatform.c"
 				>
 			</File>
 			<File
 				RelativePath=".\colRope.c"
+				>
+			</File>
+			<File
+				RelativePath=".\colTrie.c"
+				>
+			</File>
+			<File
+				RelativePath=".\colVector.c"
 				>
 			</File>
 			<File
@@ -207,6 +223,10 @@
 			>
 			<File
 				RelativePath=".\colConf.h"
+				>
+			</File>
+			<File
+				RelativePath=".\colHash.h"
 				>
 			</File>
 			<File
@@ -234,7 +254,15 @@
 				>
 			</File>
 			<File
+				RelativePath=".\colTrie.h"
+				>
+			</File>
+			<File
 				RelativePath=".\colUtils.h"
+				>
+			</File>
+			<File
+				RelativePath=".\colVector.h"
 				>
 			</File>
 			<File
