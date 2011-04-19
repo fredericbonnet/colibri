@@ -12,8 +12,9 @@
 #include "colibri.h"
 #include "colInt.h"
 
-#include <string.h>
+#include <stdlib.h>
 #include <limits.h>
+#include <memory.h> /* For memcpy */
 #include <malloc.h> /* For alloca */
 
 /* 
@@ -860,6 +861,235 @@ Col_ConcatListsV(
 /*
  *---------------------------------------------------------------------------
  *
+ * Col_ListElementAt --
+ *
+ *	Get the element of a list at a given position. 
+ *
+ * Results:
+ *	If the index is past the end of the list, NULL, else the element.
+ *
+ * Side effects:
+ *	None.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+Col_Word
+Col_ListElementAt(
+    Col_Word list,		/* Lsit to get element from. */
+    size_t index)		/* Element index. */
+{
+    Col_ListIterator it;
+    
+    Col_ListIterBegin(list, index, &it);
+    return Col_ListIterElementAt(&it);
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Col_RepeatList --
+ *
+ *	Create a list formed by the repetition of a source list.
+ *
+ *	This method is based on recursive concatenations of the list
+ *	following the bit pattern of the count factor. Doubling a list simply 
+ *	consists of a concat with itself. In the end the resulting tree is 
+ *	very compact, and only a minimal number of extraneous cells are 
+ *	allocated during the balancing process (and will be eventually 
+ *	collected).
+ *
+ * Results:
+ *	The repetition of the source list.
+ *
+ * Side effects:
+ *	New lists may be created.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+Col_Word
+Col_RepeatList(
+    Col_Word list,		/* List to repeat. */
+    size_t count)		/* Repetition factor. */
+{
+    /* Quick cases. */
+    if (count == 0) {return NULL;}
+    if (count == 1) {return list;}
+    if (count == 2) {return Col_ConcatLists(list, list);}
+
+    if (count & 1) {
+	/* Odd.*/
+	return Col_ConcatLists(list, Col_RepeatList(list, count-1));
+    } else {
+	/* Even. */
+	return Col_RepeatList(Col_ConcatLists(list, list), count>>1);
+    }
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Col_ListInsert --
+ *
+ *	Insert a list into another one, just before the given insertion point.
+ *
+ *	Only perform minimal tests to prevent overflow, basic ops should 
+ *	perform further optimizations anyway.
+ *
+ *	As list are immutable, the result is a new list.
+ *
+ *	Insertion past the end of the list results in a concatenation.
+ *
+ * Results:
+ *	The resulting list.
+ *
+ * Side effects:
+ *	New lists may be created.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+Col_Word
+Col_ListInsert(
+    Col_Word into,		/* Where to insert. */
+    size_t index,		/* Index of insertion point. */
+    Col_Word list)		/* List to insert. */
+{
+    size_t listLength;
+    if (index == 0) {
+	/*
+	 * Insert at begin.
+	 */
+
+	return Col_ConcatLists(list, into);
+    }
+    listLength = Col_ListLength(into);
+    if (index >= listLength) {
+	/* 
+	 * Insert at end; don't pad. 
+	 */
+
+	return Col_ConcatLists(into, list);
+    }
+
+    /* 
+     * General case. 
+     */
+
+    return Col_ConcatLists(Col_ConcatLists(
+		    Col_Sublist(into, 0, index-1), list), 
+	    Col_Sublist(into, index, listLength-1));
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Col_ListRemove --
+ *
+ *	Remove a range of elements from a list.
+ *
+ *	Only perform minimal tests to prevent overflow, basic ops should 
+ *	perform further optimizations anyway.
+ *
+ *	As lists are immutable, the result is a new list.
+ *
+ * Results:
+ *	The resulting list.
+ *
+ * Side effects:
+ *	New lists may be created.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+Col_Word 
+Col_ListRemove(
+    Col_Word list,		/* List to remove sequence from. */
+    size_t first, size_t last)	/* Range of chars to remove. */
+{
+    size_t listLength;
+    if (first > last) {
+	/* 
+	 * No-op. 
+	 */
+
+	return list;
+    }
+    listLength = Col_ListLength(list);
+    if (listLength == 0 || first >= listLength) {
+	/*
+	 * No-op.
+	 */
+
+	return list;
+    } else if (first == 0) {
+	/*
+	 * Trim begin.
+	 */
+
+	return Col_Sublist(list, last+1, listLength-1);
+    } else if (last >= listLength-1) {
+	/* 
+	 * Trim end. 
+	 */
+
+	return Col_Sublist(list, 0, first-1);
+    }
+
+    /* 
+     * General case. 
+     */
+
+    return Col_ConcatLists(Col_Sublist(list, 0, first-1), 
+	    Col_Sublist(list, last+1, listLength-1));
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Col_ListReplace --
+ *
+ *	Replace a range of characters in a list with another.
+ *
+ *	Only perform minimal tests to prevent overflow, basic ops should 
+ *	perform further optimizations anyway.
+ *
+ *	As lists are immutable, the result is a new list.
+ *
+ * Results:
+ *	The resulting list.
+ *
+ * Side effects:
+ *	New lists may be created.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+Col_Word 
+Col_ListReplace(
+    Col_Word list,		/* Original list. */
+    size_t first, size_t last,	/* Inclusive range of chars to replace. */
+    Col_Word with)		/* Replacement list. */
+{
+    if (first > last) {
+	/* 
+	 * No-op. 
+	 */
+
+	return list;
+    }
+
+    /* 
+     * General case. 
+     */
+
+    return Col_ListInsert(Col_ListRemove(list, first, last), first, with);
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
  * Col_TraverseListChunks --
  *
  *	Iterate over the vectors of a list.
@@ -1019,7 +1249,7 @@ Col_ListIterBegin(
 
     if (index >= Col_ListLength(list)) {
 	/*
-	 * End of rope.
+	 * End of list.
 	 */
 
 	it->list = NULL;

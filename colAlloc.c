@@ -1,65 +1,16 @@
 #include "colibri.h"
 #include "colInt.h"
+#include "colPlat.h"
 
-#ifdef WIN32
-#   include <windows.h>
-#endif
+#include <stdlib.h>
+#include <string.h>
 
 /*
  * System page size. Should be a multiple of PAGE_SIZE on every possible 
  * platform.
  */
 
-static size_t systemPageSize;
-
-#ifdef WIN32
-/*
- * Windows-specific memory pool, i.e a MemoryPool augmented with system-specific
- * data.
- *
- * Memory is allocated with VirtualAlloc. As it can't reserve less than 
- * SYSTEM_INFO.dwAllocationGranularity (65536 on IA32) but can commit individual
- * pages with a size of SYSTEM_INFO.dwPageSize (4096 on IA32), this means that 
- * each logical page is part of a system page that is itself part of a larger
- * address range. Allocating whole SYSTEM_INFO.dwAllocationGranularity sized
- * pages would be too heavy.
- *
- * In order to keep track of committed pages in ranges, use the PAGE_RESERVED 
- * field of the first logical page in each system page to store the index of 
- * the next committed system page in range, forming a circular list (last one 
- * points to first). Indices must be consecutive. That way we can scan a range 
- * for holes from any of its page.
- *
- * An alternative was to use VirtualQuery to get the committed and free pages 
- * in a range, but this proved to be too CPU expensive, and VirtualQuery is
- * known to be much slower on Win64.
- */
-
-static SYSTEM_INFO systemInfo;
-static size_t pagesPerRange;
-
-#define PHYS_PAGE(range, index)	\
-    ((void *)((char *)(range)+systemInfo.dwPageSize*(index)))
-#define PHYS_PAGE_RANGE(page)	\
-    ((void *)((unsigned int)(page) & ~(systemInfo.dwAllocationGranularity-1)))
-#define PHYS_PAGE_INDEX(page)	\
-    ((unsigned short)(((unsigned int)(page) % systemInfo.dwAllocationGranularity) / systemInfo.dwPageSize))
-#define PHYS_PAGE_NEXT(page)	PAGE_RESERVED(page)
-
-typedef struct WinMemoryPool {
-    MemoryPool pool;		/* Must be first for polymorphism. */
-    void *lastFreeRange;	/* Last page belonging to a range with free
-				 * pages. */
-} WinMemoryPool;
-
-#endif /* WIN32 */
-
-/*
- * Logical page after the last one in system page.
- */
-
-#define LAST_PAGE_NEXT(page)	\
-    PAGE_NEXT(((char *)(page) + systemPageSize - PAGE_SIZE))
+size_t systemPageSize;
 
 
 /* 
@@ -252,9 +203,6 @@ static const char nbBitsSet[256] = {
  * Prototypes for functions used only in this file.
  */
 
-static void *		SysPageAlloc(MemoryPool * pool);
-static void		SysPageFree(MemoryPool * pool, void * page);
-static void		SysPageCleanup(MemoryPool * pool);
 static size_t		FindFreeCells(void *page, size_t number);
 
 
@@ -263,227 +211,63 @@ static size_t		FindFreeCells(void *page, size_t number);
  *
  * AllocInit --
  *
- *	Initialize the system-specific memory allocator.
+ *	Initialize the memory allocator.
  *
  * Results:
  *	None.
  *
  * Side effects:
- *	Global data is initialized.
+ *	Platform-specific -- see respective implementations of callees.
  *
  *---------------------------------------------------------------------------
  */
 
 void 
 AllocInit() {
-#ifdef WIN32
-    GetSystemInfo(&systemInfo);
-    systemPageSize = systemInfo.dwPageSize;
-    pagesPerRange = systemInfo.dwAllocationGranularity/systemInfo.dwPageSize;
-#endif /* WIN32 */
+    PlatAllocInit();
 }
 
 /*
  *---------------------------------------------------------------------------
  *
- * SysPageAlloc --
+ * PoolInit --
+ * PoolCleanup --
  *
- *	Allocate a system page.
- *
- * Results:
- *	The new system page.
- *
- * Side effects:
- *	See code (system-dependent).
- *
- *---------------------------------------------------------------------------
- */
-
-static void * 
-SysPageAlloc(
-    MemoryPool * pool)		/* The page for which to alloc page. */
-{
-#ifdef WIN32
-    WinMemoryPool * winPool = (WinMemoryPool *)pool;
-    void *base, *page;
-
-    /* 
-     * Look for an address range with a free page. 
-     */
-
-    for (page = winPool->lastFreeRange; page; page = LAST_PAGE_NEXT(page)) {
-	unsigned short index, prev, next;
-
-	/* 
-	 * Search hole in page index list. 
-	 */
-
-	base = PHYS_PAGE_RANGE(page);
-	index = PHYS_PAGE_INDEX(page);
-	next = PHYS_PAGE_NEXT(page);
-	prev = index;
-	if (next == index) {
-	    /* 
-	     * Page is alone in range, allocate next one. 
-	     */
-
-	    next = (prev+1)%pagesPerRange;
-	} else {
-	    /*
-	     * Search next hole if any by comparing indices, which must be
-	     * consecutive.
-	     */
-
-	    do {
-		if ((next-prev)%pagesPerRange > 1) {
-		    /* 
-		     * Hole found. 
-		     */
-
-		    next = (prev+1)%pagesPerRange;
-		    break;
-		}
-		prev = next;
-		next = PHYS_PAGE_NEXT(PHYS_PAGE(base, prev));
-	    } while (next != index);
-	}
-	if (next != index) {
-	    /* 
-	     * Hole found, commit page.
-	     */
-
-	    page = PHYS_PAGE(base, next);
-	    VirtualAlloc(page, systemInfo.dwPageSize, MEM_COMMIT, 
-		    PAGE_READWRITE);
-
-	    /* 
-	     * Insert into list after <index>.
-	     */
-
-	    PHYS_PAGE_NEXT(page) = PHYS_PAGE_NEXT(PHYS_PAGE(base, prev));
-	    PHYS_PAGE_NEXT(PHYS_PAGE(base, prev)) = next;
-
-	    break;
-	}
-    }
-
-    if (!page) {
-	/* 
-	 * No room in existing ranges, reserve new one and allocate first page. 
-	 */
-
-	base = VirtualAlloc(NULL, systemInfo.dwAllocationGranularity, 
-		MEM_RESERVE, PAGE_READWRITE);
-	page = VirtualAlloc(base, systemInfo.dwPageSize, MEM_COMMIT, 
-		PAGE_READWRITE);
-	PHYS_PAGE_NEXT(page) = 0;
-    }
-
-    winPool->lastFreeRange = page;
-    return page;
-#endif /* WIN32 */
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * SysPageFree --
- *
- *	Free a system page.
+ *	Initialize/cleanup memory pool.
  *
  * Results:
  *	None.
  *
  * Side effects:
- *	See code (system-dependent).
+ *	Structure is initialized or cleaned up.
  *
  *---------------------------------------------------------------------------
  */
 
-static void 
-SysPageFree(
-    MemoryPool * pool,		/* The pool the page belongs to. */
-    void * page)		/* The page to free. */
-{
-#ifdef WIN32
-    unsigned short index = PHYS_PAGE_INDEX(page);
-    if (PHYS_PAGE_NEXT(page) == index) {
-	/* 
-	 * Last and only page in range, release whole range. 
-	 */
-
-	VirtualFree(PHYS_PAGE_RANGE(page), 0, MEM_RELEASE);
-    } else {
-	/* 
-	 * Unlink and decommit first page. 
-	 */
-
-	void *base = PHYS_PAGE_RANGE(page);
-	unsigned short prev, next;
-	for (prev = index, next = PHYS_PAGE_NEXT(PHYS_PAGE(base, prev)); 
-		next != index; prev = next, 
-		next = PHYS_PAGE_NEXT(PHYS_PAGE(base, next)));
-	PHYS_PAGE_NEXT(PHYS_PAGE(base, prev)) = PHYS_PAGE_NEXT(page);
-	VirtualFree(page, systemInfo.dwPageSize, MEM_DECOMMIT);
-    }
-#endif
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * SysPageCleanup --
- *
- *	Final cleanup page after pages have been freed in pool.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	See code (system-dependent).
- *
- *---------------------------------------------------------------------------
- */
-
-static void 
-SysPageCleanup(MemoryPool * pool) {
-#ifdef WIN32
-    WinMemoryPool * winPool = (WinMemoryPool *)pool;
-
-    winPool->lastFreeRange = pool->pages;
-#endif /* WIN32 */
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PoolNew --
- *
- *	Allocate memory pool.
- *
- * Results:
- *	The newly allocated pool.
- *
- * Side effects:
- *	Memory allocated and initialized.
- *
- *---------------------------------------------------------------------------
- */
-
-MemoryPool * 
-PoolNew(
+void
+PoolInit(
+    MemoryPool *pool,		/* The pool to initialize. */
     unsigned int generation)	/* Generation number; 0 = youngest. */
 {
-#ifdef WIN32
-    WinMemoryPool * winPool = (WinMemoryPool *) malloc(sizeof(*winPool));
-    MemoryPool * pool = (MemoryPool *) winPool;
-
-    memset(winPool, 0, sizeof(*winPool));
-#endif
-
+    memset(pool, 0, sizeof(pool));
     pool->generation = generation;
+}
 
-    return pool;
+void
+PoolCleanup(
+    MemoryPool *pool)		/* The pool to cleanup. */
+{
+    char *base, *next;
+
+    /* 
+     * Free all system pages.
+     */
+
+    for (base = pool->pages; base; base = next) {
+	next = LAST_PAGE_NEXT(base);
+	PlatSysPageFree(pool, base);
+    }
+    PlatSysPageCleanup(pool);
 }
 
 /*
@@ -510,44 +294,53 @@ PoolAllocPages(
     void **nextPtr)		/* The page after which to insert the new one. */
 {
     char *base, *page, *next;
+    int i;
 
     /* 
-     * Allocate system page. 
+     * Allocate NB_SYSPAGE_ALLOC system pages. 
      */
 
-    base = SysPageAlloc(pool);
+    for (i = 0; i < NB_SYSPAGE_ALLOC; i++) {
+	base = PlatSysPageAlloc(pool);
 
-    pool->nbPages += systemPageSize/PAGE_SIZE;
-    pool->nbAlloc += systemPageSize/PAGE_SIZE;
-    pool->nbSetCells += RESERVED_CELLS*systemPageSize/PAGE_SIZE;
+	pool->nbPages += systemPageSize/PAGE_SIZE;
+	pool->nbAlloc += systemPageSize/PAGE_SIZE;
+	pool->nbSetCells += RESERVED_CELLS*systemPageSize/PAGE_SIZE;
 
-    /*
-     * Insert in list.
-     */
-
-    *nextPtr = base;
-
-    /* 
-     * Initialize pages. 
-     */
-
-    for (page = base; page < base + systemPageSize; page += PAGE_SIZE) {
-	/* 
-	 * Pages are linked in order.
+	/*
+	 * Insert in list.
 	 */
 
-	next = page + PAGE_SIZE;
-	if (next == base + systemPageSize) {
-	    next = NULL;
+	*nextPtr = base;
+
+	/* 
+	 * Initialize pages. 
+	 */
+
+	for (page = base; page < base + systemPageSize; page += PAGE_SIZE) {
+	    /* 
+	     * Pages are linked in order.
+	     */
+
+	    next = page + PAGE_SIZE;
+	    if (next == base + systemPageSize) {
+		next = NULL;
+	    }
+	    PAGE_NEXT(page) = next;
+
+	    /* Flags. */
+	    PAGE_FLAGS(page) = 0;
+	    PAGE_GENERATION(page) = (unsigned char) pool->generation;
+
+	    /* Initialize bit mask for allocated cells. */
+	    ClearAllCells(page);
 	}
-	PAGE_NEXT(page) = next;
 
-	/* Flags. */
-	PAGE_FLAGS(page) = 0;
-	PAGE_GENERATION(page) = (unsigned char) pool->generation;
+	/*
+	 * Remember insertion point.
+	 */
 
-	/* Initialize bit mask for allocated cells. */
-	ClearAllCells(page);
+	nextPtr = &LAST_PAGE_NEXT(base);
     }
 }
 
@@ -623,7 +416,7 @@ PoolFreePages(
 	     * Free the system page. 
 	     */
 
-	    SysPageFree(pool, base);
+	    PlatSysPageFree(pool, base);
 	}
     }
 
@@ -631,7 +424,7 @@ PoolFreePages(
      * Cleanup the pool. 
      */
 
-    SysPageCleanup(pool);
+    PlatSysPageCleanup(pool);
 }
 
 /*
@@ -727,7 +520,7 @@ FindFreeCells(
      */
 
     remaining = number;
-    for (i = 0; i < CELLS_PER_PAGE>>3; i++) {
+    for (i = 0; i < (CELLS_PER_PAGE>>3); i++) {
 	if (remaining <= 7) {
 	    /* 
 	     * End of sequence, or whole sequence for number < 8. 

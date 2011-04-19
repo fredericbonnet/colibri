@@ -47,6 +47,7 @@
 				RuntimeLibrary="3"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
+				Detect64BitPortabilityProblems="true"
 				DebugInformationFormat="4"
 			/>
 			<Tool
@@ -187,6 +188,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\platform\win32\colPlat.c"
+				>
+			</File>
+			<File
 				RelativePath=".\colRope.c"
 				>
 			</File>
@@ -201,6 +206,10 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
+				RelativePath=".\colConf.h"
+				>
+			</File>
+			<File
 				RelativePath=".\colibri.h"
 				>
 			</File>
@@ -210,6 +219,10 @@
 			</File>
 			<File
 				RelativePath=".\colList.h"
+				>
+			</File>
+			<File
+				RelativePath=".\colPlat.h"
 				>
 			</File>
 			<File

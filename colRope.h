@@ -11,6 +11,37 @@
 
 typedef const char * Col_Rope;
 
+/*
+ * String characters use the 32-bit Unicode encoding.
+ */
+
+typedef unsigned int Col_Char;
+#define COL_CHAR_INVALID	((Col_Char)-1)
+
+/* 
+ * Strings can use various formats. 
+ *
+ * Note: we assume that UTF-8 data is always well-formed. It is up to the 
+ * caller responsibility to validate and ensure well-formedness of UTF-8 data, 
+ * notably for security reasons. 
+ */
+
+typedef enum Col_StringFormat {
+    COL_UCS1, COL_UCS2, COL_UCS4, COL_UTF8
+} Col_StringFormat;
+
+typedef uint8_t Col_Char1;
+typedef uint16_t Col_Char2;
+typedef uint32_t Col_Char4;
+
+/* 
+ * Empty C strings cannot be used as is by ropes, use this constant instead, 
+ * which containts 2 NUL terminators instead of one. 
+ */
+
+#define STRING_EMPTY		"\0"
+
+
 /* 
  *----------------------------------------------------------------
  * Basic operations. 

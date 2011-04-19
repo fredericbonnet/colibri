@@ -1,44 +1,36 @@
-#include <windows.h>
-
 #include "colibri.h"
 #include "colInt.h"
-
-BOOL APIENTRY 
-DllMain( 
-    HMODULE hModule,
-    DWORD ul_reason_for_call,
-    LPVOID lpReserved)
-{
-    switch (ul_reason_for_call) {
-	case DLL_PROCESS_ATTACH:
-	case DLL_THREAD_ATTACH:
-	case DLL_THREAD_DETACH:
-	case DLL_PROCESS_DETACH:
-	    break;
-    }
-    return TRUE;
-}
+#include "colPlat.h"
 
 
 /*
  *---------------------------------------------------------------------------
  *
  * Col_Init --
+ * Col_Cleanup --
  *
- *	Initialize the rope engine.
+ *	Initialize/cleanup the library. Must be called in every thread.
  *
  * Results:
  *	None.
  *
  * Side effects:
- *	Initialize the allocator and garbage collector. See respective procs
- *	for infos.
+ *	Initialize/cleanup the garbage collector.
  *
  *---------------------------------------------------------------------------
  */
 
 void 
 Col_Init() {
-    AllocInit();
-    GCInit();
+    if (PlatEnter()) {
+	AllocInit();
+	GcInit();
+    }
+}
+void 
+Col_Cleanup() {
+    if (PlatLeave()) {
+	GcCleanup();
+	PlatCleanup();
+    }
 }

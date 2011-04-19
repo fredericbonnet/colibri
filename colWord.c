@@ -97,7 +97,7 @@ Col_NewStringWord(
 
     switch (format) {
 	case COL_UCS1: {
-	    size_t length = byteLength;
+	    size_t length = byteLength/sizeof(Col_Char1);
 	    if (length <= sizeof(Col_Word)-1) {
 		/*
 		 * Return small string value.
@@ -111,8 +111,8 @@ Col_NewStringWord(
 	}
 
 	case COL_UCS2: {
-	    size_t length = byteLength/2;
-	    const unsigned short * string = data;
+	    size_t length = byteLength/sizeof(Col_Char2);
+	    const Col_Char2 * string = data;
 	    if (length == 1 && string[0] > UCHAR_MAX) {
 		/*
 		 * Return char value.
@@ -128,7 +128,7 @@ Col_NewStringWord(
 		WORD_SMALL_STRING_SET_LENGTH(word, length);
 		for (i = 0; i < length; i++) {
 		    if (string[i] > UCHAR_MAX) break;
-		    WORD_SMALL_STRING_DATA(word)[i] = (unsigned char) string[i];
+		    WORD_SMALL_STRING_DATA(word)[i] = (Col_Char1) string[i];
 		}
 		if (i == length) {
 		    return word;
@@ -138,8 +138,8 @@ Col_NewStringWord(
 	}
 
 	case COL_UCS4: {
-	    size_t length = byteLength/4;
-	    const unsigned int * string = data;
+	    size_t length = byteLength/sizeof(Col_Char4);
+	    const Col_Char4 * string = data;
 	    if (length == 1 && string[0] > UCHAR_MAX 
 		    && string[0] <= WORD_CHAR_MAX) {
 		/*
@@ -156,7 +156,7 @@ Col_NewStringWord(
 		WORD_SMALL_STRING_SET_LENGTH(word, length);
 		for (i = 0; i < length; i++) {
 		    if (string[i] > UCHAR_MAX) break;
-		    WORD_SMALL_STRING_DATA(word)[i] = (unsigned char) string[i];
+		    WORD_SMALL_STRING_DATA(word)[i] = (Col_Char1) string[i];
 		}
 		if (i == length) {
 		    return word;
@@ -565,7 +565,11 @@ Col_AddWordSynonym(
      * pointers.
      */
 
-    SWAP_PTR(WORD_SYNONYM(word), WORD_SYNONYM(synonym));
+    {
+	Col_Word tmp = WORD_SYNONYM(word);
+	WORD_SYNONYM(word) = WORD_SYNONYM(synonym);
+	WORD_SYNONYM(synonym) = tmp;
+    }
     Col_DeclareChild(word, WORD_SYNONYM(word));
     Col_DeclareChild(synonym, WORD_SYNONYM(synonym));
 
@@ -598,13 +602,13 @@ UpconvertWord(
     
     converted = AllocCells(1);
     WORD_SYNONYM(converted) = NULL;
-    switch ((int) Col_GetWordInfo(word, &data)) {
-	case COL_INT:
+    switch ((intptr_t) Col_GetWordInfo(word, &data)) {
+	case (int) COL_INT:
 	    WORD_SET_TYPE_ID(converted, WORD_TYPE_INT);
 	    WORD_INT_DATA(converted) = data.i;
 	    break;
 
-	case COL_CHAR:
+	case (int) COL_CHAR:
 	    WORD_SET_TYPE_ID(converted, WORD_TYPE_STRING);
 	    if (data.ch <= USHRT_MAX) {
 		unsigned short ch2 = (unsigned short) data.ch; 
@@ -614,13 +618,13 @@ UpconvertWord(
 	    }
 	    break;
 
-	case COL_SMALL_STRING:
+	case (int) COL_SMALL_STRING:
 	    WORD_SET_TYPE_ID(converted, WORD_TYPE_STRING);
 	    WORD_STRING_DATA(converted) = Col_NewRope(COL_UCS1, data.str.data, 
 		    data.str.length);
 	    break;
 
-	case COL_ROPE:
+	case (int) COL_ROPE:
 	    WORD_SET_TYPE_ID(converted, WORD_TYPE_STRING);
 	    WORD_STRING_DATA(converted) = data.rope;
 	    break;

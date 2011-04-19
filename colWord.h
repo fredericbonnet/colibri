@@ -50,7 +50,7 @@ typedef union {
     Col_Char ch;		/* COL_CHAR. */
     struct {			/* COL_SMALL_STRING. */
 	char length;
-	char data[sizeof(Col_Word)-1];
+	Col_Char1 data[sizeof(Col_Word)-1];
     } str;
     Col_Rope rope;		/* COL_ROPE. */
     struct {

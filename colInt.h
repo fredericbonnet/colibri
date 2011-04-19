@@ -1,5 +1,7 @@
+#include "colConf.h"
+
 /*
- * Ensure WORDS_BIGENDIAN is defined correcly:
+ * Ensure COL_BIGENDIAN is defined correcly:
  * Needs to happen here in addition to configure to work with fat compiles on
  * Darwin (where configure runs only once for multiple architectures).
  */
@@ -13,13 +15,13 @@
 #ifdef BYTE_ORDER
 #    ifdef BIG_ENDIAN
 #	 if BYTE_ORDER == BIG_ENDIAN
-#	     undef WORDS_BIGENDIAN
-#	     define WORDS_BIGENDIAN 1
+#	     undef COL_BIGENDIAN
+#	     define COL_BIGENDIAN 1
 #	 endif
 #    endif
 #    ifdef LITTLE_ENDIAN
 #	 if BYTE_ORDER == LITTLE_ENDIAN
-#	     undef WORDS_BIGENDIAN
+#	     undef COL_BIGENDIAN
 #	 endif
 #    endif
 #endif
@@ -36,36 +38,12 @@
 #endif
 
 /*
- * Swap two values using XOR. Don't use when both are the same lvalue.
+ * Byte rotation in word.
  */
 
-#define SWAP(a, b)		(((a) ^= (b)), ((b) ^= (a)), ((a) ^= (b)))
-#define SWAP_PTR(a, b)		(((*(int *) &(a)) ^= (*(int *) &(b))), ((*(int *) &(b)) ^= (*(int *) &(a))), ((*(int *) &(a)) ^= (*(int *) &(b))))
+#define ROTATE_LEFT(value)	(((value)>>((sizeof(value)-1)*8)) | ((value)<<8))
+#define ROTATE_RIGHT(value)	(((value)<<((sizeof(value)-1)*8)) | ((value)>>8))
 
-/*
- *----------------------------------------------------------------
- * Mark-and-sweep, generational, exact GC.
- *----------------------------------------------------------------
- */
-
-/*
- * Initialization.
- */
-
-void			GCInit(void);
-
-/*
- * Cell allocation.
- */
-
-void *			AllocCells(size_t number);
-
-/*
- * Custom rope and word handling for cleanup.
- */
-
-void			DeclareCustomRope(Col_Rope rope);
-void			DeclareWord(Col_Word word);
 
 /*
  *----------------------------------------------------------------
@@ -73,34 +51,22 @@ void			DeclareWord(Col_Word word);
  *----------------------------------------------------------------
  */
 
-/* 
- * Allocator page size. System page size should be a multiple of it. 
- */
-
-#define PAGE_SIZE	    1024
-
-/*
- * Cell size. 16 bytes on 32-bit systems.
- */
-
-#define CELL_SIZE	    16
-
 /*
  * Pages are divided into cells. On a 32-bit system with 1024-byte logical pages,
  * each page stores 64 16-byte cells. 
  *
  * Each page has reserved cells that store information about the page. The 
- * remaining cells store rope info. For example, on a 32-bit system, the first 
- * cell reserved and is formatted as follows:
+ * remaining cells store rope info. For example, on a 32-bit system with 
+ * 1024-byte pages, the first cell is reserved and is formatted as follows:
  *
  *  - bytes 0-3:	link to next page in pool.
- *  - byte 4:		flags.
- *  - byte 5:		generation.
+ *  - byte 4:		generation.
+ *  - byte 5:		flags.
  *  - bytes 6-7:	reserved.
  *  - bytes 8-15:	bitmask for allocated cells (64 bits).
  */
 
-#define CELLS_PER_PAGE		(PAGE_SIZE/CELL_SIZE) /* 64 */
+#define CELLS_PER_PAGE		(PAGE_SIZE/CELL_SIZE)
 #if PAGE_SIZE==1024
 #   define RESERVED_CELLS	1	/* 2*32 bits + 64 bits */
 #elif PAGE_SIZE==4096
@@ -110,14 +76,14 @@ void			DeclareWord(Col_Word word);
 #define NB_CELLS(size)		(((size)+CELL_SIZE-1)/CELL_SIZE)
 
 #define PAGE_NEXT(page)		(*(void **)(page))
-#define PAGE_FLAGS(page)	(*((unsigned char *)(page)+4))
-#define PAGE_GENERATION(page)	(*((unsigned char *)(page)+5))
-#define PAGE_RESERVED(page)	(*(unsigned short *)((char *)(page)+6))
-#define PAGE_BITMASK(page)	((unsigned char *)(page)+8)
+#define PAGE_GENERATION(page)	(*((unsigned char *)(page)+sizeof(void *)))
+#define PAGE_FLAGS(page)	(*((unsigned char *)(page)+sizeof(void *)+1))
+#define PAGE_RESERVED(page)	(*(unsigned short *)((char *)(page)+sizeof(void *)+2))
+#define PAGE_BITMASK(page)	((unsigned char *)(page)+sizeof(void *)+2+sizeof(unsigned short))
 #define PAGE_CELL(page, index)	((void *)((char *)(page)+CELL_SIZE*(index)))
 
-#define CELL_PAGE(cell)		((void *)((unsigned int)(cell) & ~(PAGE_SIZE-1)))
-#define CELL_INDEX(cell)	(((unsigned int)(cell) % PAGE_SIZE) / CELL_SIZE)
+#define CELL_PAGE(cell)		((void *)((uintptr_t)(cell) & ~(PAGE_SIZE-1)))
+#define CELL_INDEX(cell)	(((uintptr_t)(cell) % PAGE_SIZE) / CELL_SIZE)
 
 /*
  * Memory pools. Pools are a set of pages that store the ropes of a given 
@@ -125,6 +91,7 @@ void			DeclareWord(Col_Word word);
  */
 
 typedef struct MemoryPool {
+    unsigned int generation;	/* Generation level; 0 = younger. */
     void *pages;		/* Pages form a singly-linked list. */
     void *lastFreePage[AVAILABLE_CELLS]; 
 				/* Last page where a cell sequence of a given 
@@ -133,7 +100,11 @@ typedef struct MemoryPool {
     size_t nbAlloc;		/* Number of pages alloc'd since last GC. */
     size_t nbSetCells;		/* Number of set cells in pool. */
     size_t gc;			/* GC counter. Used for generational GC. */
-    unsigned int generation;	/* Generation level; 0 = younger. */
+    const void *roots, *parents;/* List of roots for each source or parent in
+				 * pool. */
+    const void *sweepables;	/* List of ropes or words that need sweeping
+				 * when unreachable after a GC. */
+    Col_ClientData data;	/* Opaque token for system-specific data. */
 } MemoryPool;
 
 /* 
@@ -143,10 +114,11 @@ typedef struct MemoryPool {
 void			AllocInit(void);
 
 /*
- * Pool creation. Once created, pools cannot be freed.
+ * Pool initialization/cleanup.
  */
 
-MemoryPool *		PoolNew(unsigned int generation);
+void			PoolInit(MemoryPool *pool, unsigned int generation);
+void			PoolCleanup(MemoryPool *pool);
 
 /*
  * Allocation/deallocation of pool pages.
@@ -171,6 +143,69 @@ void			ClearCells(void *page, size_t first, size_t number);
 void			ClearAllCells(void *page);
 int			TestCell(void *page, size_t index);
 size_t			NbSetCells(void *page);
+
+
+/*
+ *----------------------------------------------------------------
+ * Mark-and-sweep, generational, exact GC.
+ *----------------------------------------------------------------
+ */
+
+/*
+ * Thread-local GC and memory pool related structure.
+ */
+
+typedef struct GcMemInfo {
+    /* 
+     * Memory pools where the new cells are created. 0 is for roots, 1 (Eden) is
+     * for regular cells, above is where cells and pages get promoted.
+     */
+
+    MemoryPool pools[GC_MAX_GENERATIONS];
+
+    /* 
+     * GC-protected section counter, i.e. nb of nested pause calls. When positive,
+     * we are in a GC-protected section.
+     */
+
+    size_t pauseGC;
+
+    /*
+     * Oldest collected generation during GC.
+     */
+
+    unsigned int maxCollectedGeneration;
+
+    /*
+     * Whether to promote individual cells when promoting the oldest collected 
+     * generation, instead of promoting whole pages. In practice this performs a 
+     * compaction of this pool, which limits fragmentation and memory overhead. 
+     */
+
+#ifdef PROMOTE_COMPACT
+    unsigned int compactGeneration;
+#endif
+} GcMemInfo;
+
+/*
+ * Initialization.
+ */
+
+void			GcInit(void);
+void			GcCleanup(void);
+
+/*
+ * Cell allocation.
+ */
+
+void *			AllocCells(size_t number);
+
+/*
+ * Custom rope and word handling for cleanup.
+ */
+
+void			DeclareCustomRope(Col_Rope rope);
+void			DeclareWord(Col_Word word);
 
 
 /*
@@ -202,11 +237,11 @@ size_t			NbSetCells(void *page);
 	 ((rope)[0]?				ROPE_TYPE_C	\
 	:((unsigned char)(rope)[1]&0x7F))	/* Type ID */   \
     :						ROPE_TYPE_NULL)
-#define ROPE_SET_TYPE(rope, type)	(((unsigned char *)(rope))[0] = 0, ((unsigned char *)(rope))[1] = (type))
+#define ROPE_SET_TYPE(rope, type) (((unsigned char *)(rope))[0] = 0, ((unsigned char *)(rope))[1] = (type))
 
-#define ROPE_PARENT(rope)		(((unsigned char *)(rope))[1] & 0x80)
-#define ROPE_SET_PARENT(rope)		(((unsigned char *)(rope))[1] |= 0x80)
-#define ROPE_CLEAR_PARENT(rope)		(((unsigned char *)(rope))[1] &= ~0x80)
+#define ROPE_PARENT(rope)	(((unsigned char *)(rope))[1] & 0x80)
+#define ROPE_SET_PARENT(rope)	(((unsigned char *)(rope))[1] |= 0x80)
+#define ROPE_CLEAR_PARENT(rope)	(((unsigned char *)(rope))[1] &= ~0x80)
 
 
 /* 
@@ -235,19 +270,22 @@ size_t			NbSetCells(void *page);
  *
  * ROPE_SUBROPE_DEPTH, ROPE_CONCAT_DEPTH: 8 bits will code up to 255 depth 
  * levels, which is more than sufficient for balanced binary trees. 
+ *
+ * ROPE_CUSTOM_NEXT: custom ropes with a freeProc are singly-linked together
+ * using this field, so that unreachable ropes get swept properly upon GC.
  */
 
 #define ROPE_UCS_LENGTH(rope)		(((unsigned short *)(rope))[1])
-#define ROPE_UCS_HEADER_SIZE		4
-#define ROPE_UCS_DATA(rope)		((const unsigned char *)((rope)+4))
-#define ROPE_UCS1_DATA(rope)		((const unsigned char *)((rope)+4))
-#define ROPE_UCS2_DATA(rope)		((const unsigned short *)((rope)+4))
-#define ROPE_UCS4_DATA(rope)		((const unsigned int *)((rope)+4))
+#define ROPE_UCS_HEADER_SIZE		(sizeof(Col_Char4))
+#define ROPE_UCS_DATA(rope)		((const Col_Char1 *)(rope)+ROPE_UCS_HEADER_SIZE)
+#define ROPE_UCS1_DATA(rope)		((const Col_Char1 *) ROPE_UCS_DATA(rope))
+#define ROPE_UCS2_DATA(rope)		((const Col_Char2 *) ROPE_UCS_DATA(rope))
+#define ROPE_UCS4_DATA(rope)		((const Col_Char4 *) ROPE_UCS_DATA(rope))
 
 #define ROPE_UTF8_LENGTH(rope)		(((unsigned short *)(rope))[1])
 #define ROPE_UTF8_BYTELENGTH(rope)	(((unsigned short *)(rope))[2])
-#define ROPE_UTF8_HEADER_SIZE		6
-#define ROPE_UTF8_DATA(rope)		((const unsigned char *)((rope)+6))
+#define ROPE_UTF8_HEADER_SIZE		(sizeof(short)*3)
+#define ROPE_UTF8_DATA(rope)		((const Col_Char1 *)(rope)+ROPE_UTF8_HEADER_SIZE)
 
 #define ROPE_SUBROPE_DEPTH(rope)	(((unsigned char *)(rope))[2]) 
 #define ROPE_SUBROPE_SOURCE(rope)	(((Col_Rope *)(rope))[1])
@@ -260,11 +298,11 @@ size_t			NbSetCells(void *page);
 #define ROPE_CONCAT_LEFT(rope)		(((Col_Rope *)(rope))[2])
 #define ROPE_CONCAT_RIGHT(rope)		(((Col_Rope *)(rope))[3])
 
-#define ROPE_CUSTOM_HEADER_SIZE		8
+#define ROPE_CUSTOM_HEADER_SIZE		(sizeof(void *)*2)
 #define ROPE_CUSTOM_SIZE(rope)		(((unsigned short *)(rope))[1])
 #define ROPE_CUSTOM_TYPE(rope)		(((Col_RopeCustomType **)(rope))[1])
-#define ROPE_CUSTOM_DATA(rope)		((void *)((rope)+8))
-#define ROPE_CUSTOM_TRAILER_SIZE	4
+#define ROPE_CUSTOM_DATA(rope)		((void *)((rope)+ROPE_CUSTOM_HEADER_SIZE))
+#define ROPE_CUSTOM_TRAILER_SIZE	(sizeof(Col_Rope))
 #define ROPE_CUSTOM_NEXT(rope, size)	(*(Col_Rope *)((rope)+NB_CELLS(ROPE_CUSTOM_HEADER_SIZE+(size)+ROPE_CUSTOM_TRAILER_SIZE)*CELL_SIZE-ROPE_CUSTOM_TRAILER_SIZE))
 
 /* 
@@ -299,12 +337,12 @@ size_t			NbSetCells(void *page);
  * The following tags are recognized:
  *
  *	P..			  ..P|0000	word pointer (aligned on 16 byte boundaries) including nil
- *	P..			   .P|1000 	rope pointer (not including C strings)
+ *	P..			  ..P|1000 	rope pointer (not including C strings)
  *	I..			     ..I|1 	small signed integer (31 bits on 32-bit systems)
  *	S..		     ..S|L....L|10	small string or char (general format)
  *	U..		     ..U|111111|10 	 - Unicode character (L=-1, 24 bits on 32-bit systems)
  *	0..                    0|000000|10	 - empty string
- *	0..            0S    ..S|000001|10	 - 1-char 8-bit string (L=1)
+ *	0..          ..0S..  ..S|000001|10	 - 1-char 8-bit string (L=1)
  *	0..  ..0S..          ..S|000010|10	 - 2-char 8-bit string (L=2)
  *	S..		     ..S|000011|10	 - 3-char 8-bit string (L=3)
  *	?..			  ..?|0100 	unused
@@ -313,16 +351,14 @@ size_t			NbSetCells(void *page);
 
 #define WORD_TYPE_REGULAR	0
 
-#define IS_ROPE(word)		((((unsigned int)(word))&0xF) == 8)
+#define IS_ROPE(word)		((((uintptr_t)(word))&0xF) == 8)
 #define WORD_TYPE_ROPE		-1
 
-#define IS_IMMEDIATE(word)	(((unsigned int)(word))&7)
+#define IS_IMMEDIATE(word)	(((uintptr_t)(word))&7)
 #define WORD_TYPE_NULL		-2
 #define WORD_TYPE_SMALL_INT	-3
 #define WORD_TYPE_CHAR		-4
 #define WORD_TYPE_SMALL_STRING	-5
-
-
 
 /* 
  * Type field. 
@@ -340,7 +376,8 @@ size_t			NbSetCells(void *page);
  * To ensure that the first byte is always non-zero, we set bit 1 of type 
  * pointers. On little endian architectures, the LSB is byte 0, so setting bit
  * 1 is sufficient to ensure that byte 0 is non-zero. On big endian 
- * architectures, we swap the LSB and MSB to get the same result.
+ * architectures, we rotate the pointer value one byte to the right so that the 
+ * original LSB ends up on byte 0.
  *
  * Predefined type IDs are chosen so that their bit 1 is zero to 
  * distinguish them with type pointers and avoid value clashes. The ID only
@@ -360,9 +397,9 @@ size_t			NbSetCells(void *page);
     ((word)?								\
 	IS_IMMEDIATE(word)?						\
 	    /* Immediate values */					\
-	     (((unsigned int)(word))&1)?	WORD_TYPE_SMALL_INT	\
-	    :(((unsigned int)(word))&2)?				\
-		 (((int)(word))&0x80)?		WORD_TYPE_CHAR		\
+	     (((uintptr_t)(word))&1)?		WORD_TYPE_SMALL_INT	\
+	    :(((uintptr_t)(word))&2)?					\
+		 (((uintptr_t)(word))&0x80)?	WORD_TYPE_CHAR		\
 		:				WORD_TYPE_SMALL_STRING	\
 	    /* Unknown format */					\
 	    :					WORD_TYPE_NULL		\
@@ -372,22 +409,22 @@ size_t			NbSetCells(void *page);
 	:(CELL_TYPE(word)&~3)			/* Type ID */		\
     :						WORD_TYPE_NULL)
 
-#ifdef WORDS_BIGENDIAN
-#   define WORD_GET_TYPE_ADDR(word) \
-	((addr) = ((Col_WordType *)(*(unsigned int *)(word)&~3)), SWAP(((char *)&(addr))[0], ((char *)&(addr))[3]))
+#ifdef COL_BIGENDIAN
+#   define WORD_GET_TYPE_ADDR(word, addr) \
+	((addr) = (Col_WordType *)(ROTATE_LEFT(*(uintptr_t *)(word))&~3))
 #   define WORD_SET_TYPE_ADDR(word, addr) \
-	(*(unsigned int *)(word) = ((unsigned int)(addr))|2, SWAP(((char *)(word))[0], ((char *)(word))[3]))
+	(*(uintptr_t *)(word) = ROTATE_RIGHT(((uintptr_t)(addr))|2))
 #else
 #   define WORD_GET_TYPE_ADDR(word, addr) \
-	((addr) = ((Col_WordType *)(*(unsigned int *)(word)&~3)))
+	((addr) = (Col_WordType *)(*(uintptr_t *)(word)&~3))
 #   define WORD_SET_TYPE_ADDR(word, addr) \
-	(*(unsigned int *)(word) = ((unsigned int)(addr))|2)
+	(*(uintptr_t *)(word) = ((uintptr_t)(addr))|2)
 #endif
-#define WORD_SET_TYPE_ID(word, type)	(((unsigned char *)(word))[0] = (type))
+#define WORD_SET_TYPE_ID(word, type) (((unsigned char *)(word))[0] = (type))
 
-#define WORD_PARENT(word)		(((unsigned char *)(word))[0] & 1)
-#define WORD_SET_PARENT(word)		(((unsigned char *)(word))[0] |= 1)
-#define WORD_CLEAR_PARENT(word)		(((unsigned char *)(word))[0] &= ~1)
+#define WORD_PARENT(word)	(((unsigned char *)(word))[0] & 1)
+#define WORD_SET_PARENT(word)	(((unsigned char *)(word))[0] |= 1)
+#define WORD_CLEAR_PARENT(word)	(((unsigned char *)(word))[0] &= ~1)
 
 /*
  * Predefined word types.
@@ -396,12 +433,12 @@ size_t			NbSetCells(void *page);
  * 2 lsbs are zero.
  */
 
-#define WORD_TYPE_INT			4
-#define WORD_TYPE_STRING		8
-#define WORD_TYPE_VECTOR		12
-#define WORD_TYPE_LIST			16
-#define WORD_TYPE_SUBLIST		20
-#define WORD_TYPE_CONCATLIST		24
+#define WORD_TYPE_INT		4
+#define WORD_TYPE_STRING	8
+#define WORD_TYPE_VECTOR	12
+#define WORD_TYPE_LIST		16
+#define WORD_TYPE_SUBLIST	20
+#define WORD_TYPE_CONCATLIST	24
 
 /*
  * Immediate & rope value fields.
@@ -409,48 +446,47 @@ size_t			NbSetCells(void *page);
  * Values are for 32-bit systems.
  */
 
-#define WORD_ROPE_GET(word)		((Col_Rope)(((unsigned int)(word))&~0xF))
-#define WORD_ROPE_NEW(value)		((Col_Word)(((unsigned int)(value))|8))
+#define WORD_ROPE_GET(word)		((Col_Rope)(((uintptr_t)(word))&~0xF))
+#define WORD_ROPE_NEW(value)		((Col_Word)(((uintptr_t)(value))|8))
 
-#define WORD_SMALL_INT_GET(word)	(((int)(word))>>1)
-#define WORD_SMALL_INT_NEW(value)	((Col_Word)(((value)<<1)|1))
+#define WORD_SMALL_INT_GET(word)	(((int)(intptr_t)(word))>>1)
+#define WORD_SMALL_INT_NEW(value)	((Col_Word)(intptr_t)((((int)(value))<<1)|1))
 
-#define WORD_CHAR_GET(word)		(((unsigned int)(word))>>8)
-#define WORD_CHAR_NEW(value)		((Col_Word)(((value)<<8)|0xFE))
+#define WORD_CHAR_GET(word)		((Col_Char)(((uintptr_t)(word))>>8))
+#define WORD_CHAR_NEW(value)		((Col_Word)((((uintptr_t)(value))<<8)|0xFE))
 
-#define WORD_SMALL_STRING_GET_LENGTH(value) \
-    ((((unsigned int)(value))&0xFC)>>2)
-#define WORD_SMALL_STRING_SET_LENGTH(word, length) \
-    (*((unsigned int *)&(word)) = ((length)<<2)|2)
-#ifdef WORDS_BIGENDIAN
-#   define WORD_SMALL_STRING_DATA(word) \
-	((unsigned char *)&(word))
+#define WORD_SMALL_STRING_GET_LENGTH(value) ((((uintptr_t)(value))&0xFC)>>2)
+#define WORD_SMALL_STRING_SET_LENGTH(word, length) (*((uintptr_t *)&(word)) = ((length)<<2)|2)
+#ifdef COL_BIGENDIAN
+#   define WORD_SMALL_STRING_DATA(word)	((Col_Char1  *)&(word))
 #else
-#   define WORD_SMALL_STRING_DATA(word) \
-	(((unsigned char *)&(word))+1)
+#   define WORD_SMALL_STRING_DATA(word)	(((Col_Char1 *)&(word))+1)
 #endif
 #define WORD_SMALL_STRING_EMPTY		((Col_Word) 2)
 
 /*
  * Word fields.
  *
- * Words may have synonyms that that can take any accepted word value: immediate
- * values (inc. NULL), ropes, or other words. Words can thus be part of chains
- * of synonyms having different types, but with semantically identical values. 
- * Such chains form a circular linked list using the 2nd machine word of the 
- * cell. The order of words in a synonym chain has no importance.
- *
  * Values are for 32-bit systems.
+ *
+ * WORD_SYNONYM: words may have synonyms that can take any accepted word value:
+ * immediate values (inc. NULL), ropes, or other words. Words can thus be part 
+ * of chains of synonyms having different types, but with semantically identical
+ * values. Such chains form a circular linked list using this field. The order 
+ * of words in a synonym chain has no importance.
+ *
+ * WORD_NEXT: words with a freeProc are singly-linked together using this field,
+ * so that unreachable words get swept properly upon GC.
  */
 
-#define WORD_HEADER_SIZE		8
-#define WORD_SYNONYM(word)		(((Col_Word *)(word))[1])
-#define WORD_DATA(word)			((void *)((char *)(word)+8))
-#define WORD_TRAILER_SIZE		4
-#define WORD_NEXT(word, size)		(*(Col_Word *)((char *)(word)+NB_CELLS(WORD_HEADER_SIZE+(size)+WORD_TRAILER_SIZE)*CELL_SIZE-WORD_TRAILER_SIZE))
+#define WORD_HEADER_SIZE	(sizeof(void *)*2)
+#define WORD_SYNONYM(word)	(((Col_Word *)(word))[1])
+#define WORD_DATA(word)		((void *)((char *)(word)+WORD_HEADER_SIZE))
+#define WORD_TRAILER_SIZE	(sizeof(Col_Word))
+#define WORD_NEXT(word, size)	(*(Col_Word *)((char *)(word)+NB_CELLS(WORD_HEADER_SIZE+(size)+WORD_TRAILER_SIZE)*CELL_SIZE-WORD_TRAILER_SIZE))
 
-#define WORD_INT_DATA(word)		(*(int *) WORD_DATA(word))
-#define WORD_STRING_DATA(word)		(*(Col_Rope *) WORD_DATA(word))
+#define WORD_INT_DATA(word)	(*(int *) WORD_DATA(word))
+#define WORD_STRING_DATA(word)	(*(Col_Rope *) WORD_DATA(word))
 
 /* 
  * Max byte size of word data. A word can take no more than the available size 
@@ -487,19 +523,19 @@ size_t			NbSetCells(void *page);
 #define WORD_TYPE_REDIRECT	0xF4
 
 /* Careful: don't give arguments with side effects!  */
-#define RESOLVE_ROPE(rope)	\
-	{if (ROPE_TYPE((rope)) == ROPE_TYPE_ROOT) {(rope) = ROOT_SOURCE((rope));}}
-#define RESOLVE_WORD(word)	\
-	{if (WORD_TYPE((word)) == WORD_TYPE_ROOT) {(word) = ROOT_SOURCE((word));}}
+#define RESOLVE_ROPE(rope) \
+    {if (ROPE_TYPE((rope)) == ROPE_TYPE_ROOT) {(rope) = ROOT_SOURCE((rope));}}
+#define RESOLVE_WORD(word) \
+    {if (WORD_TYPE((word)) == WORD_TYPE_ROOT) {(word) = ROOT_SOURCE((word));}}
 
-#define ROOT_REFCOUNT(ropeOrWord)	(((size_t *)(ropeOrWord))[1])
-#define ROOT_SOURCE(ropeOrWord)		(((const void **)(ropeOrWord))[2])
-#define ROOT_NEXT(ropeOrWord)		(((const void **)(ropeOrWord))[3])
+#define ROOT_REFCOUNT(cell)	(((size_t *)(cell))[1])
+#define ROOT_SOURCE(cell)	(((const void **)(cell))[2])
+#define ROOT_NEXT(cell)		(((const void **)(cell))[3])
 
-#define PARENT_CELL(ropeOrWord)		(((const void **)(ropeOrWord))[1])
-#define PARENT_NEXT(ropeOrWord)		(((const void **)(ropeOrWord))[3])
+#define PARENT_CELL(cell)	(((const void **)(cell))[1])
+#define PARENT_NEXT(cell)	(((const void **)(cell))[3])
 
-#define REDIRECT_SOURCE(rope)		ROOT_SOURCE(rope)
+#define REDIRECT_SOURCE(rope)	ROOT_SOURCE(rope)
 
 
 /*
@@ -513,7 +549,7 @@ size_t			NbSetCells(void *page);
  * available size of a page. Larger datasets must use tree-based lists.
  */
 
-#define VECTOR_MAX_LENGTH		(WORD_MAX_SIZE/sizeof(Col_Word))
+#define VECTOR_MAX_LENGTH	(WORD_MAX_SIZE/sizeof(Col_Word))
 
 /*
  * Vector fields.

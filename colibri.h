@@ -112,37 +112,35 @@ extern "C" {
 #endif
 
 /*
+ * Integral types.
+ */
+
+#if defined(HAVE_STDINT_H)
+    /* C99 types.*/
+#   include <stdint.h>
+#elif defined(_MSC_VER)
+    /* Microsoft specific extensions. */
+#   define int8_t __int8
+#   define uint8_t unsigned __int8
+#   define int16_t __int16
+#   define uint16_t unsigned __int16
+#   define int32_t __int32
+#   define uint32_t unsigned __int32
+#else
+    /* Sensible fallback. */
+#   define int8_t char
+#   define uint8_t unsigned char
+#   define int16_t short
+#   define uint16_t unsigned short
+#   define int32_t int
+#   define uint32_t unsigned int
+#endif
+
+/*
  * Opaque token used to hold private data. Typically used with callbacks.
  */
 
 typedef void * Col_ClientData;
-
-/* 
- * Strings can use various formats. 
- *
- * Note: we assume that UTF-8 data is always well-formed. It is up to the 
- * caller responsibility to validate and ensure well-formedness of UTF-8 data, 
- * notably for security reasons. 
- */
-
-typedef enum Col_StringFormat {
-    COL_UCS1, COL_UCS2, COL_UCS4, COL_UTF8
-} Col_StringFormat;
-
-/*
- * String characters use the 32-bit Unicode encoding.
- */
-
-typedef unsigned int Col_Char;
-#define COL_CHAR_INVALID	((Col_Char)-1)
-
-/* 
- * Empty C strings cannot be used as is by ropes, use this constant instead, 
- * which containts 2 NUL terminators instead of one. 
- */
-
-#define STRING_EMPTY		"\0"
-
 
 /*
  * Include other files.
@@ -155,11 +153,12 @@ typedef unsigned int Col_Char;
 
 /*
  *----------------------------------------------------------------
- * Initialization.
+ * Initialization/cleanup.
  *----------------------------------------------------------------
  */
 
 EXTERN void		Col_Init(void);
+EXTERN void		Col_Cleanup(void);
 
 
 /* 

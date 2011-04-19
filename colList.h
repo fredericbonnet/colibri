@@ -15,7 +15,7 @@
  * Vectors are flat arrays of bounded size.
  */
 
-EXTERN size_t		Col_GetMaxVectorLength();
+EXTERN size_t		Col_GetMaxVectorLength(void);
 EXTERN Col_Word		Col_NewVectorWord(size_t length, 
 			    const Col_Word * elements);
 EXTERN Col_Word		Col_NewVectorWordV(size_t length, ...);
@@ -32,6 +32,35 @@ EXTERN Col_Word		Col_Sublist(Col_Word list, size_t first, size_t last);
 EXTERN Col_Word		Col_ConcatLists(Col_Word left, Col_Word right);
 EXTERN Col_Word		Col_ConcatListsA(size_t number, Col_Word * words);
 EXTERN Col_Word		Col_ConcatListsV(size_t number, ...);
+
+
+/*
+ *----------------------------------------------------------------
+ * High level operations.
+ *----------------------------------------------------------------
+ */
+
+/* 
+ * Indexing. 
+ */
+
+EXTERN Col_Word		Col_ListElementAt(Col_Word list, size_t index);
+
+/* 
+ * Repetition of a given list.
+ */
+
+EXTERN Col_Word		Col_RepeatList(Col_Word list, size_t count);
+
+/* 
+ * Insertion/removal. 
+ */
+
+EXTERN Col_Word		Col_ListInsert(Col_Word into, size_t index, Col_Word list);
+EXTERN Col_Word		Col_ListRemove(Col_Word list, size_t first, size_t last);
+EXTERN Col_Word		Col_ListReplace(Col_Word list, size_t first, size_t last, 
+			    Col_Word with);
+
 
 /* 
  *----------------------------------------------------------------

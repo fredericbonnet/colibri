@@ -1,6 +1,7 @@
 #include "colibri.h"
 #include "colInt.h"
 
+#include <stdlib.h>
 #include <string.h>
 #include <limits.h>
 #include <malloc.h> /* For alloca */
@@ -26,9 +27,9 @@ static Col_RopeChunkEnumProc MergeStringsProc;
 static void		GetArms(Col_Rope rope, Col_Rope * leftPtr, 
 			    Col_Rope * rightPtr);
 static void		UpdateTraversalInfo(Col_RopeIterator *it);
-static const unsigned char * Utf8CharAddr(const unsigned char * buffer, 
+static const Col_Char1 * Utf8CharAddr(const Col_Char1 * data, 
 			    size_t index, size_t length, size_t byteLength);
-static Col_Char		Utf8CharValue(const unsigned char * buffer);
+static Col_Char		Utf8CharValue(const Col_Char1 * data);
 
 
 /*
@@ -71,7 +72,7 @@ Col_NewRope(
     }
 
     if (format == COL_UTF8) {
-	const unsigned char *data2;
+	const Col_Char1 *source = (const Col_Char1 *) data, *p;
 	if (byteLength <= UTF8_MAX_SIZE) {
 	    /*
 	     * String fits into one multi-cell leaf rope. We know the byte 
@@ -81,10 +82,8 @@ Col_NewRope(
 
 	    Col_Rope rope;
 	    size_t length = 0;
-	    for (data2 = (const unsigned char *) data; 
-		    data2 < (const unsigned char *) data+byteLength; 
-		    data2++) {
-		if ((*data2 & 0xC0) != 0x80) {length++;}
+	    for (p = source; p < source+byteLength; p++) {
+		if ((*p & 0xC0) != 0x80) {length++;}
 	    }
 	    if (length == byteLength) {
 		/* 
@@ -93,14 +92,14 @@ Col_NewRope(
 		 * instead of UTF-8. 
 		 */
 
-		return Col_NewRope(COL_UCS1, data, byteLength);
+		return Col_NewRope(COL_UCS1, source, byteLength);
 	    } 
 	    
 	    rope = AllocCells(NB_CELLS(ROPE_UTF8_HEADER_SIZE+byteLength));
 	    ROPE_SET_TYPE(rope, ROPE_TYPE_UTF8);
 	    ROPE_UTF8_LENGTH(rope) = (unsigned short) length;
 	    ROPE_UTF8_BYTELENGTH(rope) = (unsigned short) byteLength;
-	    memcpy((void *) ROPE_UTF8_DATA(rope), data, byteLength);
+	    memcpy((void *) ROPE_UTF8_DATA(rope), source, byteLength);
 	    return rope;
 	}
 
@@ -108,9 +107,8 @@ Col_NewRope(
 	 * Split data in half at char boundary. 
 	 */
 
-	for (data2 = (const unsigned char *) data+byteLength/2; 
-		(*data2 & 0xC0) == 0x80; data2++);
-	half = data2-(const unsigned char *) data;
+	for (p = source+byteLength/2; (*p & 0xC0) == 0x80; p++);
+	half = p-source;
     } else {
 	/* 
 	 * Fixed-width UCS.
@@ -125,17 +123,17 @@ Col_NewRope(
 	    switch (format) {
 		case COL_UCS1:
 		    ROPE_SET_TYPE(rope, ROPE_TYPE_UCS1);
-		    ROPE_UCS_LENGTH(rope) = (unsigned short) byteLength;
+		    ROPE_UCS_LENGTH(rope) = (unsigned short) byteLength/sizeof(Col_Char1);
 		    break;
 
 		case COL_UCS2:
 		    ROPE_SET_TYPE(rope, ROPE_TYPE_UCS2);
-		    ROPE_UCS_LENGTH(rope) = (unsigned short) byteLength/2;
+		    ROPE_UCS_LENGTH(rope) = (unsigned short) byteLength/sizeof(Col_Char2);
 		    break;
 
 		case COL_UCS4:
 		    ROPE_SET_TYPE(rope, ROPE_TYPE_UCS4);
-		    ROPE_UCS_LENGTH(rope) = (unsigned short) byteLength/4;
+		    ROPE_UCS_LENGTH(rope) = (unsigned short) byteLength/sizeof(Col_Char4);
 		    break;
 	    }
 	    memcpy((void *) ROPE_UCS_DATA(rope), data, byteLength);
@@ -148,15 +146,15 @@ Col_NewRope(
 
 	switch (format) {
 	    case COL_UCS1:
-		half = byteLength/2;
+		half = ((byteLength/sizeof(Col_Char1))/2)*sizeof(Col_Char1);
 		break;
 
 	    case COL_UCS2:
-		half = ((byteLength/2)/2)*2;
+		half = ((byteLength/sizeof(Col_Char2))/2)*sizeof(Col_Char2);
 		break;
 
 	    case COL_UCS4:
-		half = ((byteLength/4)/2)*4;
+		half = ((byteLength/sizeof(Col_Char4))/2)*sizeof(Col_Char4);
 		break;
 	}
     }
@@ -168,8 +166,7 @@ Col_NewRope(
      */
 
     return Col_ConcatRopes(Col_NewRope(format, data, half),
-	    Col_NewRope(format, (const unsigned char *) data+half, 
-		    byteLength-half));
+	    Col_NewRope(format, (const char *) data+half, byteLength-half));
 }
 
 /*
@@ -273,9 +270,9 @@ Col_RopeLength(
 
 typedef struct MergeStringsInfo {
     Col_StringFormat format;	/* Character format for the below buffer. */
-    unsigned char data[MAX_SHORT_LEAF_SIZE];
+    Col_Char1 data[MAX_SHORT_LEAF_SIZE];
 				/* Buffer storing the flattened data. */
-    size_t byteLength;		/* Byte length so far. */
+    size_t length, byteLength;	/* Char and byte length so far. */
 } MergeStringsInfo;
 
 static int 
@@ -287,7 +284,7 @@ MergeStringsProc(
     Col_ClientData clientData) 
 {
     MergeStringsInfo *info = (MergeStringsInfo *) clientData;
-    if (info->byteLength == 0) {
+    if (info->length == 0) {
 	info->format = format;
     }
     if (info->format == COL_UTF8) {
@@ -312,6 +309,7 @@ MergeStringsProc(
 	 */
 
 	memcpy(info->data+info->byteLength, data, byteLength);
+	info->length += length;
 	info->byteLength += byteLength;
 	return 0;
     } else {
@@ -334,7 +332,7 @@ MergeStringsProc(
 	    case COL_UCS1:
 		switch (format) {
 		    case COL_UCS2:
-			if (info->byteLength*2 + byteLength 
+			if ((info->length + length) * sizeof(Col_Char2)
 				> MAX_SHORT_LEAF_SIZE - ROPE_UCS_HEADER_SIZE) {
 			    /* 
 			     * Data won't fit. 
@@ -347,17 +345,16 @@ MergeStringsProc(
 			 * Upconvert existing data to UCS-2. 
 			 */
 
-			for (index = info->byteLength-1; index != -1; 
-				index--) {
-			    ((unsigned short *) info->data)[index]
+			for (index = info->length-1; index != -1; index --) {
+			    ((Col_Char2 *) info->data)[index]
 				    = info->data[index];
 			}
-			info->byteLength *= 2;
+			info->byteLength = info->length*sizeof(Col_Char2);
 			info->format = COL_UCS2;
 			break;
 
 		    case COL_UCS4:
-			if (info->byteLength*4 + byteLength 
+			if ((info->length + length) * sizeof(Col_Char4)
 				> MAX_SHORT_LEAF_SIZE - ROPE_UCS_HEADER_SIZE) {
 			    /* 
 			     * Data won't fit. 
@@ -370,12 +367,11 @@ MergeStringsProc(
 			 * Upconvert existing data to UCS-4. 
 			 */
 
-			for (index = info->byteLength-1; index != -1; 
-				index--) {
-			    ((unsigned int *) info->data)[index] 
+			for (index = info->length-1; index != -1; index--) {
+			    ((Col_Char4 *) info->data)[index] 
 				    = info->data[index];
 			}
-			info->byteLength *= 4;
+			info->byteLength = info->length * sizeof(Col_Char4);
 			info->format = COL_UCS4;
 			break;
 		}
@@ -384,7 +380,7 @@ MergeStringsProc(
 	    case COL_UCS2:
 		switch (format) {
 		    case COL_UCS1:
-			if (info->byteLength + length*2 
+			if (info->byteLength + length*sizeof(Col_Char2)
 				> MAX_SHORT_LEAF_SIZE - ROPE_UCS_HEADER_SIZE) {
 			    /* 
 			     * Data won't fit. 
@@ -398,14 +394,15 @@ MergeStringsProc(
 			 */
 
 			for (index = 0; index < length; index++) {
-			    ((unsigned short *) (info->data+info->byteLength))[index] 
-				    = ((unsigned char *) data)[index];
+			    ((Col_Char2 *) (info->data+info->byteLength))[index] 
+				    = ((Col_Char1 *) data)[index];
 			}
-			info->byteLength += length*2;
+			info->length += length;
+			info->byteLength += length*sizeof(Col_Char2);
 			return 0;
 
 		    case COL_UCS4:
-			if (info->byteLength*2 + byteLength 
+			if ((info->length + length) * sizeof(Col_Char4)
 				> MAX_SHORT_LEAF_SIZE - ROPE_UCS_HEADER_SIZE) {
 			    /* 
 			     * Data won't fit. 
@@ -418,12 +415,11 @@ MergeStringsProc(
 			 Upconvert existing data to UCS-4. 
 			 */
 
-			for (index = info->byteLength-1; index != -1; 
-				index--) {
-			    ((unsigned int *) info->data)[index] 
-				    = ((unsigned short *) info->data)[index];
+			for (index = info->length-1; index != -1; index--) {
+			    ((Col_Char4 *) info->data)[index] 
+				    = ((Col_Char2 *) info->data)[index];
 			}
-			info->byteLength *= 2;
+			info->byteLength = info->length * sizeof(Col_Char4);
 			info->format = COL_UCS4;
 			break;
 		}
@@ -432,7 +428,7 @@ MergeStringsProc(
 	    case COL_UCS4:
 		switch (format) {
 		    case COL_UCS1:
-			if (info->byteLength + length*4 
+			if (info->byteLength + length*sizeof(Col_Char4)
 				> MAX_SHORT_LEAF_SIZE - ROPE_UCS_HEADER_SIZE) {
 			    /* 
 			     * Data won't fit. 
@@ -446,14 +442,15 @@ MergeStringsProc(
 			 */
 
 			for (index = 0; index < length; index++) {
-			    ((unsigned int *) (info->data+info->byteLength))[index] 
-				    = ((unsigned char *) data)[index];
+			    ((Col_Char4 *) (info->data+info->byteLength))[index] 
+				    = ((Col_Char1 *) data)[index];
 			}
-			info->byteLength += length*4;
+			info->length += length;
+			info->byteLength += length*sizeof(Col_Char4);
 			return 0;
 
 		    case COL_UCS2:
-			if (info->byteLength + length*4 
+			if (info->byteLength + length*sizeof(Col_Char4)
 				> MAX_SHORT_LEAF_SIZE - ROPE_UCS_HEADER_SIZE) {
 			    /* 
 			     * Data won't fit. 
@@ -467,10 +464,11 @@ MergeStringsProc(
 			 */
 
 			for (index = 0; index < length; index++) {
-			    ((unsigned int *) (info->data+info->byteLength))[index] 
-				= ((unsigned short *) data)[index];
+			    ((Col_Char4 *) (info->data+info->byteLength))[index] 
+				    = ((Col_Char2 *) data)[index];
 			}
-			info->byteLength += length*4;
+			info->length += length;
+			info->byteLength += length*sizeof(Col_Char4);
 			return 0;
 		}
 		break;
@@ -491,6 +489,7 @@ MergeStringsProc(
 	 */
 
 	memcpy(info->data+info->byteLength, data, byteLength);
+	info->length += length;
 	info->byteLength += byteLength;
 	return 0;
     }
@@ -658,6 +657,7 @@ Col_Subrope(
 
     if (length <= MAX_SHORT_LEAF_SIZE) {
 	MergeStringsInfo info; 
+	info.length = 0;
 	info.byteLength = 0;
 
 	if (Col_TraverseRopeChunks(rope, first, length, MergeStringsProc, 
@@ -868,6 +868,7 @@ Col_ConcatRopes(
 
     if (leftLength + rightLength <= MAX_SHORT_LEAF_SIZE) {
 	MergeStringsInfo info; 
+	info.length = 0;
 	info.byteLength = 0;
 
 	if (Col_TraverseRopeChunks(left, 0, leftLength, MergeStringsProc, 
@@ -1401,18 +1402,18 @@ Col_TraverseRopeChunks(
 
 	case ROPE_TYPE_UCS1:
 	    if (lengthPtr) *lengthPtr = max;
-	    return proc(COL_UCS1, ROPE_UCS1_DATA(rope)+start, max, max, 
-		    clientData);
+	    return proc(COL_UCS1, ROPE_UCS1_DATA(rope)+start, max, 
+		    max*sizeof(Col_Char1), clientData);
 
 	case ROPE_TYPE_UCS2:
 	    if (lengthPtr) *lengthPtr = max;
-	    return proc(COL_UCS2, ROPE_UCS2_DATA(rope)+start, max, max*2, 
-		    clientData);
+	    return proc(COL_UCS2, ROPE_UCS2_DATA(rope)+start, max, 
+		    max*sizeof(Col_Char2), clientData);
 
 	case ROPE_TYPE_UCS4:
 	    if (lengthPtr) *lengthPtr = max;
-	    return proc(COL_UCS4, ROPE_UCS4_DATA(rope)+start, max, max*4, 
-		    clientData);
+	    return proc(COL_UCS4, ROPE_UCS4_DATA(rope)+start, max, 
+		    max*sizeof(Col_Char4), clientData);
 	    
 	case ROPE_TYPE_UTF8:
 	    /*
@@ -1434,7 +1435,7 @@ Col_TraverseRopeChunks(
 		 * bytes of the UTF-8 sequence.
 		 */
 
-		const unsigned char *startByte 
+		const Col_Char1 *startByte 
 			= Utf8CharAddr(ROPE_UTF8_DATA(rope), start, 
 				ROPE_UTF8_LENGTH(rope), 
 				ROPE_UTF8_BYTELENGTH(rope)),
@@ -1508,6 +1509,9 @@ Col_TraverseRopeChunks(
 
 		size_t i;
 		Col_Char c;
+		Col_Char1 c1;
+		Col_Char2 c2;
+		Col_Char4 c4;
 		int result = -1;
 
 		for (i = 0; i < max && !result; i++) {
@@ -1517,14 +1521,13 @@ Col_TraverseRopeChunks(
 		     * Use the shortest possible format.
 		     */
 
-		    if (c < UCHAR_MAX) {
-			unsigned char c1 = (unsigned char) c;
-			result = proc(COL_UCS4, &c1, 1, 1, clientData);
-		    } else if (c < USHRT_MAX) {
-			unsigned short c2 = (unsigned short) c;
-			result = proc(COL_UCS4, &c2, 1, 2, clientData);
+		    if ((c1 = c) == c) {
+			result = proc(COL_UCS1, &c1, 1, sizeof(c1), clientData);
+		    } else if ((c2 = c) == c) {
+			result = proc(COL_UCS2, &c2, 1, sizeof(c2), clientData);
 		    } else {
-			result = proc(COL_UCS4, &c, 1, 4, clientData);
+			c4 = c;
+			result = proc(COL_UCS4, &c, 1, sizeof(c4), clientData);
 		    }
 		}
 		if (lengthPtr) *lengthPtr = i;
@@ -1678,7 +1681,7 @@ UpdateTraversalInfo(
 		 * Flat variable-width strings need both char and byte indices. 
 		 */
 
-		const unsigned char * data = ROPE_UTF8_DATA(rope);
+		const Col_Char1 * data = ROPE_UTF8_DATA(rope);
 		it->traversal.leaf = rope;
 		it->traversal.index.var.c 
 			= (unsigned short) (it->index - offset);
@@ -1813,7 +1816,7 @@ Col_RopeIterCharAt(
 	     * Bounds checking was done elsewhere.
 	     */
 
-	    return (Col_Char) ((const unsigned char *)(it->traversal.leaf))[it->traversal.index.fixed];
+	    return (Col_Char) ((const Col_Char1 *)(it->traversal.leaf))[it->traversal.index.fixed];
 
 	case ROPE_TYPE_UCS1:
 	    return (Col_Char) ROPE_UCS1_DATA(it->traversal.leaf)[it->traversal.index.fixed];
@@ -1995,7 +1998,7 @@ Col_RopeIterForward(
 		 * Update byte index as well.
 		 */
 
-		const unsigned char * data = ROPE_UTF8_DATA(it->traversal.leaf);
+		const Col_Char1 * data = ROPE_UTF8_DATA(it->traversal.leaf);
 		size_t i;
 		for (i = 0; i < nb; i++) {
 		    while ((data[++it->traversal.index.var.b] & 0xC0) == 0x80); 
@@ -2106,7 +2109,7 @@ Col_RopeIterBackward(
 		 * Update byte index as well.
 		 */
 
-		const unsigned char * data = ROPE_UTF8_DATA(it->traversal.leaf);
+		const Col_Char1 * data = ROPE_UTF8_DATA(it->traversal.leaf);
 		size_t i;
 		for (i = 0; i < nb; i++) {
 		    while ((data[--it->traversal.index.var.b] & 0xC0) == 0x80);
@@ -2180,10 +2183,9 @@ Col_RopeIterMoveTo(
  *---------------------------------------------------------------------------
  */
 
-static const unsigned char * 
+static const Col_Char1 * 
 Utf8CharAddr(
-    const unsigned char * buffer,
-				/* UTF-8 byte sequence. */
+    const Col_Char1 * data,	/* UTF-8 byte sequence. */
     size_t index,		/* Index of char to find. */
     size_t length,		/* Char length of sequence. */
     size_t byteLength)		/* Byte length of sequence. */
@@ -2198,27 +2200,27 @@ Utf8CharAddr(
 	 */
 
 	size_t i = 0;
-	const unsigned char * b = buffer;
+	const Col_Char1 * p = data;
 	while (i != index) {
 	    i++;		/* Increment char index. */
-	    while ((*++b & 0xC0) == 0x80);
+	    while ((*++p & 0xC0) == 0x80);
 				/* Move byte pointer to next char boundary. */
 	}
-	return b;
+	return p;
     } else {
 	/* 
 	 * Second half; search backwards from end. 
 	 */
 
 	size_t i = length;
-	const unsigned char * b = buffer + byteLength;
+	const Col_Char1 * p = data + byteLength;
 	while (i != index) {
 	    i--;		/* Decrement char index. */
-	    while ((*--b & 0xC0) == 0x80); 
+	    while ((*--p & 0xC0) == 0x80); 
 				/* Move byte pointer to previous char 
 				 * boundary. */
 	}
-	return b;
+	return p;
     }
 }
 
@@ -2240,60 +2242,60 @@ Utf8CharAddr(
 
 static Col_Char 
 Utf8CharValue(
-    const unsigned char * buffer)
+    const Col_Char1 * data)
 				/* UTF-8 byte sequence. */
 {
-    if (*buffer < 0x80) {
+    if (*data < 0x80) {
 	/* 
 	 * Single byte, 0-7F codepoints. 
 	 */
 
-	return *buffer;
-    } else if (*buffer < 0xE0) {
+	return *data;
+    } else if (*data < 0xE0) {
 	/* 
 	 * 2-byte sequence, 80-7FF codepoints. 
 	 */
 
-	return   ((buffer[0] & 0x1F) << 6)
-	       |  (buffer[1] & 0x3F);
-    } else if (*buffer < 0xF0) {
+	return   ((data[0] & 0x1F) << 6)
+	       |  (data[1] & 0x3F);
+    } else if (*data < 0xF0) {
 	/* 
 	 * 3-byte sequence, 800-FFFF codepoints. 
 	 */
 
-	return   ((buffer[0] & 0x0F) << 12)
-	       | ((buffer[1] & 0x3F) << 6)
-	       |  (buffer[2] & 0x3F);
-    } else if (*buffer < 0xF8) {
+	return   ((data[0] & 0x0F) << 12)
+	       | ((data[1] & 0x3F) << 6)
+	       |  (data[2] & 0x3F);
+    } else if (*data < 0xF8) {
 	/* 
 	 * 4-byte sequence, 10000-1FFFFF codepoints. 
 	 */
 
-	return   ((buffer[0] & 0x07) << 18)
-	       | ((buffer[1] & 0x3F) << 12)
-	       | ((buffer[2] & 0x3F) << 6)
-	       |  (buffer[3] & 0x3F);
-    } else if (*buffer < 0xFC) {
+	return   ((data[0] & 0x07) << 18)
+	       | ((data[1] & 0x3F) << 12)
+	       | ((data[2] & 0x3F) << 6)
+	       |  (data[3] & 0x3F);
+    } else if (*data < 0xFC) {
 	/* 
 	 * 5-byte sequence, 200000-3FFFFFF codepoints. 
 	 */
 
-	return   ((buffer[0] & 0x03) << 24)
-	       | ((buffer[1] & 0x3F) << 18)
-	       | ((buffer[2] & 0x3F) << 12)
-	       | ((buffer[3] & 0x3F) << 6)
-	       |  (buffer[4] & 0x3F);
-    } else if (*buffer < 0xFE) {
+	return   ((data[0] & 0x03) << 24)
+	       | ((data[1] & 0x3F) << 18)
+	       | ((data[2] & 0x3F) << 12)
+	       | ((data[3] & 0x3F) << 6)
+	       |  (data[4] & 0x3F);
+    } else if (*data < 0xFE) {
 	/* 
 	 * 6-byte sequence, 4000000-7FFFFFFF codepoints. 
 	 */
 
-	return   ((buffer[0] & 0x03) << 30)
-	       | ((buffer[1] & 0x3F) << 24)
-	       | ((buffer[2] & 0x3F) << 18)
-	       | ((buffer[3] & 0x3F) << 12)
-	       | ((buffer[4] & 0x3F) << 6)
-	       |  (buffer[5] & 0x3F);
+	return   ((data[0] & 0x03) << 30)
+	       | ((data[1] & 0x3F) << 24)
+	       | ((data[2] & 0x3F) << 18)
+	       | ((data[3] & 0x3F) << 12)
+	       | ((data[4] & 0x3F) << 6)
+	       |  (data[5] & 0x3F);
     }
 
     /* 

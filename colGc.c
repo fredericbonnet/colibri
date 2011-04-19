@@ -15,85 +15,23 @@
  * occur every 10 gen-(x-1) collection, i.e. every 10^x gen-0 collection. 
  */
 
-
 #include "colibri.h"
 #include "colInt.h"
+#include "colPlat.h"
 
 #include <memory.h>
 #include <limits.h>
 
 /*
- * Max number of generations. With a generational factor of 10, and 6 
- * generations, the oldest generation would be collected 10^5 = 1,000,000 times 
- * less frequently than the youngest generation. With one GC every 1/10th of
- * second, that would mean about 1 major GC a day.
+ * Without thread support, use static data instead of thread-local storage.
  */
 
-#define GC_MAX_GENERATIONS	6
-
-/* 
- * GC-protected section counter, i.e. nb of nested pause calls. When positive,
- * we are in a GC-protected section.
- */
-
-static size_t pauseGC;
-
-/*
- * Oldest collected generation during GC.
- */
-
-static size_t maxCollectedGeneration;
-
-/*
- * Whether to promote individual cells when promoting the oldest collected 
- * generation, instead of promoting whole pages. In practice this performs a 
- * compaction of this pool, which limits fragmentation and memory overhead. 
- */
-
-#define PROMOTE_COMPACT
-#ifdef PROMOTE_COMPACT
-static size_t compactGeneration;
-static const double fillRatio = 0.90;
-#endif
-
-/* 
- * Singly-linked list of roots for each generation of source or parent.
- */
-
-static const void * roots[GC_MAX_GENERATIONS-1];
-static const void * parents[GC_MAX_GENERATIONS-1];
-
-/* 
- * Singly-linked list of custom ropes or words needing freeing upon deletion. 
- * Each custom rope or word contains a pointer to the next one (ROPE_CUSTOM_NEXT
- * and WORD_NEXT).
- */
-
-static const void * freeables;
-
-/* 
- * Number of page allocations on a pool before triggering a GC.
- */
-
-#define GC_MIN_PAGE_ALLOC	64
-#define GC_MAX_PAGE_ALLOC	1024
-#define GC_THRESHOLD(threshold)	\
-    ((threshold)<GC_MIN_PAGE_ALLOC ?	GC_MIN_PAGE_ALLOC \
-    :(threshold)>GC_MAX_PAGE_ALLOC ?	GC_MAX_PAGE_ALLOC \
-    :					(threshold))
-
-/* 
- * Generational factor, i.e. nb of GCs between generations. 
- */
-
-#define GC_GEN_FACTOR		10
-
-/* 
- * Pools where the new cells are created. 0 is for roots, 1 (Eden) is for 
- * regular cells.
- */
-
-static MemoryPool * pools[GC_MAX_GENERATIONS];
+#ifdef COL_THREADS
+#   define GetGcMemInfo PlatGetGcMemInfo
+#else /* COL_THREADS */
+static GcMemInfo gcMemInfo;
+#   define GetGcMemInfo() (&gcMemInfo)
+#endif /* COL_THREADS */
 
 /*
  * Prototypes for functions used only in this file.
@@ -102,47 +40,58 @@ static MemoryPool * pools[GC_MAX_GENERATIONS];
 static size_t		GetNbCells(const void *cell);
 static void *		PoolAllocCells(MemoryPool *pool, size_t number);
 static void		PerformGC(void);
-static void		ClearPoolBitmasks(unsigned int generation);
-static void		MarkReachableCellsFromRoots(void);
-static void		MarkReachableCellsFromParents(void);
-static void		MarkRope(Col_Rope *ropePtr, 
+static void		ClearPoolBitmasks(GcMemInfo *info, 
+			    unsigned int generation);
+static void		MarkReachableCellsFromRoots(GcMemInfo *info);
+static void		MarkReachableCellsFromParents(GcMemInfo *info);
+static void		MarkRope(GcMemInfo *info, Col_Rope *ropePtr, 
 			    unsigned int *generationPtr);
-static void		MarkWord(Col_Word *wordPtr, 
+static void		MarkWord(GcMemInfo *info, Col_Word *wordPtr, 
 			    unsigned int *generationPtr);
-static void		SweepFreeables(void);
-static void		PromotePages(unsigned int generation);
+static void		SweepUnreachableCells(GcMemInfo *info);
+static void		PromotePages(GcMemInfo *info, unsigned int generation);
 
 
 /*
  *---------------------------------------------------------------------------
  *
- * GCInit --
+ * GcInit --
+ * GcCleanup --
  *
- *	Initialize the garbage collector.
+ *	Initialize/cleanup the garbage collector.
  *
  * Results:
  *	None.
  *
  * Side effects:
- *	Global data is initialized.
+ *	Platform-specific -- see respective implementations of callees.
  *
  *---------------------------------------------------------------------------
  */
 
 void 
-GCInit() 
+GcInit() 
 {
     unsigned int generation;
-
+    GcMemInfo *info;
+    
+    info = GetGcMemInfo();
+    memset(info, 0, sizeof(*info));
     for (generation = 0; generation < GC_MAX_GENERATIONS; generation++) {
-	pools[generation] = PoolNew(generation);
+	PoolInit(&info->pools[generation], generation);
     }
+}
 
-    pauseGC = 0;
+void 
+GcCleanup() 
+{
+    unsigned int generation;
+    GcMemInfo *info;
 
-    memset((void *) roots, 0, sizeof(roots));
-    memset((void *) parents, 0, sizeof(parents));
-    freeables = NULL;
+    info = GetGcMemInfo();
+    for (generation = 0; generation < GC_MAX_GENERATIONS; generation++) {
+	PoolCleanup(&info->pools[generation]);
+    }
 }
 
 /*
@@ -286,10 +235,11 @@ Col_DeclareChild(
     const void *parent,		/* Parent rope or word. */
     const void *child)		/* Child rope or word. */
 {
+    GcMemInfo *info = GetGcMemInfo();
     unsigned int parentGen, childGen;
     void * root;
 
-    if (!pauseGC) {
+    if (!info->pauseGC) {
 	/*
 	 * Can't be called outside of a GC protected section.
 	 */
@@ -338,7 +288,7 @@ Col_DeclareChild(
 	     * Child is word.
 	     */
 
-	    RESOLVE_WORD((Col_Word) child);
+	    RESOLVE_WORD(*(Col_Word *) &child);
 	    childGen = PAGE_GENERATION(CELL_PAGE(child));
 	}
     } else {
@@ -354,7 +304,7 @@ Col_DeclareChild(
 	    return;
 	}
 
-	RESOLVE_ROPE((Col_Rope) child);
+	RESOLVE_ROPE(*(Col_Rope *) &child);
 	switch (ROPE_TYPE((Col_Rope) child)) {
 	    case ROPE_TYPE_NULL:
 	    case ROPE_TYPE_C:
@@ -367,7 +317,7 @@ Col_DeclareChild(
 	}
 	childGen = PAGE_GENERATION(CELL_PAGE(child));
     }
-    RESOLVE_WORD((Col_Word) parent);
+    RESOLVE_WORD(*(Col_Word *) &parent);
     parentGen = PAGE_GENERATION(CELL_PAGE(parent));
 
     /*
@@ -387,7 +337,7 @@ Col_DeclareChild(
      * Create a new parent root, and remember parent as such.
      */
 
-    root = PoolAllocCells(pools[0], 1);
+    root = PoolAllocCells(&info->pools[0], 1);
     if (CELL_TYPE(parent) /* word */) {
 	WORD_SET_TYPE_ID(root, WORD_TYPE_PARENT);
 	WORD_SET_PARENT(parent);
@@ -401,8 +351,8 @@ Col_DeclareChild(
      * Insert in parent root list for the parent generation.
      */
 
-    PARENT_NEXT(root) = parents[parentGen-1];
-    parents[parentGen-1] = root;
+    PARENT_NEXT(root) = info->pools[parentGen].parents;
+    info->pools[parentGen].parents = root;
 }
 
 /*
@@ -434,11 +384,12 @@ Col_Rope
 Col_PreserveRope(
     Col_Rope rope)		/* The rope to preserve. */
 {
+    GcMemInfo *info = GetGcMemInfo();
     Col_Rope root;
     unsigned int generation;
     int type;
 
-    if (!pauseGC) {
+    if (!info->pauseGC) {
 	/*
 	 * Can't be called outside of a GC protected section.
 	 */
@@ -471,7 +422,7 @@ Col_PreserveRope(
      * Create a new root rope.
      */
 
-    root = PoolAllocCells(pools[0], 1);
+    root = PoolAllocCells(&info->pools[0], 1);
     ROPE_SET_TYPE(root, ROPE_TYPE_ROOT);
     ROOT_REFCOUNT(root) = 1;
     ROOT_SOURCE(root) = rope;
@@ -481,8 +432,8 @@ Col_PreserveRope(
      */
 
     generation = PAGE_GENERATION(CELL_PAGE(rope));
-    ROOT_NEXT(root) = roots[generation-1];
-    roots[generation-1] = root;
+    ROOT_NEXT(root) = info->pools[generation].roots;
+    info->pools[generation].roots = root;
 
     return root;
 }
@@ -515,11 +466,12 @@ Col_Word
 Col_PreserveWord(
     Col_Word word)		/* The word to preserve. */
 {
+    GcMemInfo *info = GetGcMemInfo();
     Col_Word root;
     unsigned int generation;
     int type;
 
-    if (!pauseGC) {
+    if (!info->pauseGC) {
 	/*
 	 * Can't be called outside of a GC protected section.
 	 */
@@ -554,7 +506,7 @@ Col_PreserveWord(
      * Create a new root word.
      */
 
-    root = PoolAllocCells(pools[0], 1);
+    root = PoolAllocCells(&info->pools[0], 1);
     WORD_SET_TYPE_ID(root, WORD_TYPE_ROOT);
     ROOT_REFCOUNT(root) = 1;
     ROOT_SOURCE(root) = word;
@@ -564,8 +516,8 @@ Col_PreserveWord(
      */
 
     generation = PAGE_GENERATION(CELL_PAGE(word));
-    ROOT_NEXT(root) = roots[generation-1];
-    roots[generation-1] = root;
+    ROOT_NEXT(root) = info->pools[generation].roots;
+    info->pools[generation].roots = root;
 
     return root;
 }
@@ -623,8 +575,11 @@ DeclareCustomRope(
 	 * Type needs freeing. Remember by inserting in head of list.
 	 */
 
-	ROPE_CUSTOM_NEXT(rope, ROPE_CUSTOM_SIZE(rope)) = freeables;
-	freeables = rope;
+	GcMemInfo *info = GetGcMemInfo();
+	unsigned int generation = PAGE_GENERATION(CELL_PAGE(rope));
+	ROPE_CUSTOM_NEXT(rope, ROPE_CUSTOM_SIZE(rope)) 
+		= info->pools[generation].sweepables;
+	info->pools[generation].sweepables = rope;
     }
 }
 
@@ -640,8 +595,11 @@ DeclareWord(
 	     * Type needs freeing. Remember by inserting in head of list.
 	     */
 
-	    WORD_NEXT(word, typeInfo->sizeProc(word)) = freeables;
-	    freeables = word;
+	GcMemInfo *info = GetGcMemInfo();
+	    unsigned int generation = PAGE_GENERATION(CELL_PAGE(word));
+	    WORD_NEXT(word, typeInfo->sizeProc(word))
+		= info->pools[generation].sweepables;
+	    info->pools[generation].sweepables = word;
 	}
     }
 }
@@ -670,7 +628,9 @@ void *
 AllocCells(
     size_t number)		/* Number of cells to allocate. */
 {
-    if (!pauseGC) {
+    GcMemInfo *info = GetGcMemInfo();
+
+    if (!info->pauseGC) {
 	/*
 	 * Can't be called outside of a GC protected section.
 	 */
@@ -683,7 +643,7 @@ AllocCells(
      * Alloc cells; alloc pages if needed.
      */
 
-    return PoolAllocCells(pools[1], number);
+    return PoolAllocCells(&info->pools[1], number);
 }
 
 /*
@@ -789,24 +749,28 @@ PoolAllocCells(
 
 void 
 Col_PauseGC() {
-    pauseGC++;
+    GcMemInfo *info = GetGcMemInfo();
+
+    info->pauseGC++;
 }
 void 
 Col_ResumeGC(void)
 {
+    GcMemInfo *info = GetGcMemInfo();
     size_t threshold;
 
-    if (pauseGC > 1) {
+    if (info->pauseGC > 1) {
 	/* 
 	 * Within nested sections. 
 	 */
 
-	pauseGC--;
+	info->pauseGC--;
 	return;
     }
 
-    threshold = pools[2]->nbPages / GC_GEN_FACTOR;
-    if (pools[0]->nbAlloc + pools[1]->nbAlloc >= GC_THRESHOLD(threshold)) {
+    threshold = info->pools[2].nbPages / GC_GEN_FACTOR;
+    if (info->pools[0].nbAlloc + info->pools[1].nbAlloc 
+	    >= GC_THRESHOLD(threshold)) {
 	/* 
 	 * GC is needed when the number of pages allocated since the last GC 
 	 * exceed a given threshold.
@@ -819,7 +783,7 @@ Col_ResumeGC(void)
      * Leave protected section.
      */
 
-    pauseGC = 0;
+    info->pauseGC = 0;
 }
 
 /*
@@ -843,6 +807,7 @@ Col_ResumeGC(void)
 static void 
 PerformGC() 
 {
+    GcMemInfo *info = GetGcMemInfo();
     unsigned int generation;
     size_t threshold;
     size_t i;
@@ -859,16 +824,16 @@ PerformGC()
 		 * Intermediary generations. 
 		 */
 
-		threshold = pools[generation+1]->nbPages / GC_GEN_FACTOR;
-		if (pools[generation]->nbAlloc < GC_THRESHOLD(threshold)) {
+		threshold = info->pools[generation+1].nbPages / GC_GEN_FACTOR;
+		if (info->pools[generation].nbAlloc < GC_THRESHOLD(threshold)) {
 		    /*
 		     * Stop if number of allocations is less than the threshold.
 		     */
 
 		    break;
 		}
-		pools[generation]->gc++;
-		if (pools[generation]->gc < GC_GEN_FACTOR) {
+		info->pools[generation].gc++;
+		if (info->pools[generation].gc < GC_GEN_FACTOR) {
 		    /*
 		     * Collection frequency is logarithmic.
 		     */
@@ -880,31 +845,31 @@ PerformGC()
 		 * Ultimate generation.
 		 */
 
-		if (pools[generation]->nbAlloc < GC_MAX_PAGE_ALLOC) {
+		if (info->pools[generation].nbAlloc < GC_MAX_PAGE_ALLOC) {
 		    break;
 		}
 	    }
 	}
 
-	maxCollectedGeneration = generation;
+	info->maxCollectedGeneration = generation;
 
 	/* 
 	 * Clear bitmasks on pool. Reachable ropes will be marked again in the
 	 * next step.
 	 */
 
-	ClearPoolBitmasks(generation);
+	ClearPoolBitmasks(info, generation);
     }
 
 #ifdef PROMOTE_COMPACT
-    if (maxCollectedGeneration+1 < GC_MAX_GENERATIONS
-	    && pools[maxCollectedGeneration+1]->nbPages > 0
-	    && pools[maxCollectedGeneration+1]->nbSetCells 
-		    < (pools[maxCollectedGeneration+1]->nbPages * CELLS_PER_PAGE)
-		    * fillRatio) {
-	compactGeneration = maxCollectedGeneration;
+    if (info->maxCollectedGeneration+1 < GC_MAX_GENERATIONS
+	    && info->pools[info->maxCollectedGeneration+1].nbPages > 0
+	    && info->pools[info->maxCollectedGeneration+1].nbSetCells 
+		    < (info->pools[info->maxCollectedGeneration+1].nbPages * CELLS_PER_PAGE)
+		    * PROMOTE_PAGE_FILL_RATIO) {
+	info->compactGeneration = info->maxCollectedGeneration;
     } else {
-	compactGeneration = SIZE_MAX;
+	info->compactGeneration = SIZE_MAX;
     }
 #endif
 
@@ -913,21 +878,22 @@ PerformGC()
      * uncollected pools. This also marks still valid roots in the process.
      */
 
-    MarkReachableCellsFromRoots();
-    MarkReachableCellsFromParents();
+    MarkReachableCellsFromRoots(info);
+    MarkReachableCellsFromParents(info);
 
     /*
-     * Perform cleanup on all custom ropes and words that need freeing.
+     * Perform cleanup on all custom ropes and words that need sweeping.
      */
 
-    SweepFreeables();
+    SweepUnreachableCells(info);
 
     /*
      * Free empty pages from collected pools before promoting them.
      */
 
-    for (generation = 0; generation <= maxCollectedGeneration; generation++) {
-	PoolFreePages(pools[generation]);
+    for (generation = 0; generation <= info->maxCollectedGeneration; 
+	    generation++) {
+	PoolFreePages(&info->pools[generation]);
     }
 
     /* 
@@ -937,19 +903,22 @@ PerformGC()
      * Roots belong to the root pool (gen 0) and are never promoted.
      */
 
-    for (generation = maxCollectedGeneration; generation >= 1; generation--) {
-	PromotePages(generation);
+    for (generation = info->maxCollectedGeneration; generation >= 1; 
+	    generation--) {
+	PromotePages(info, generation);
     }
 
     /*
      * Finally, reset counters.
      */
 
-    for (generation = 0; generation <= maxCollectedGeneration; generation++) {
-	pools[generation]->nbAlloc = 0;
-	pools[generation]->gc = 0;
+    for (generation = 0; generation <= info->maxCollectedGeneration; 
+	    generation++) {
+	info->pools[generation].nbAlloc = 0;
+	info->pools[generation].gc = 0;
 	for (i = 0; i < AVAILABLE_CELLS; i++) {
-	    pools[generation]->lastFreePage[i] = pools[generation]->pages;
+	    info->pools[generation].lastFreePage[i] 
+		    = info->pools[generation].pages;
 	}
     }
 }
@@ -972,6 +941,7 @@ PerformGC()
 
 static void 
 ClearPoolBitmasks(
+    GcMemInfo *info,		/* Thread local info. */
     unsigned int generation)	/* The pool generation to traverse. */
 {
     void * page;
@@ -980,7 +950,7 @@ ClearPoolBitmasks(
      * Clear all bitmasks in pool. 
      */
 
-    for (page = pools[generation]->pages; page; page = PAGE_NEXT(page)) {
+    for (page = info->pools[generation].pages; page; page = PAGE_NEXT(page)) {
 	ClearAllCells(page);
     }
 }
@@ -1006,7 +976,8 @@ ClearPoolBitmasks(
  */
 
 static void 
-MarkReachableCellsFromRoots() 
+MarkReachableCellsFromRoots(
+    GcMemInfo *info)		/* Thread local info. */
 {
     unsigned int generation;
     const void *root, **previousPtr;
@@ -1019,9 +990,10 @@ MarkReachableCellsFromRoots()
      * First, simply mark roots for uncollected generations.
      */
 
-    for (generation = GC_MAX_GENERATIONS-1; generation > maxCollectedGeneration;
-	    generation--) {
-	for (root = roots[generation-1]; root; root = ROOT_NEXT(root)) {
+    for (generation = GC_MAX_GENERATIONS-1; 
+	    generation > info->maxCollectedGeneration; generation--) {
+	for (root = info->pools[generation].roots; root; 
+		root = ROOT_NEXT(root)) {
 	    SetCells(CELL_PAGE(root), CELL_INDEX(root), 1);
 	}
     }
@@ -1032,17 +1004,18 @@ MarkReachableCellsFromRoots()
      */
 
     for (/* Use last value of generation */; generation >= 1; generation--) {
-	for (previousPtr = &roots[generation-1], root = roots[generation-1]; 
-		root; root = *previousPtr) {
+	for (previousPtr = &info->pools[generation].roots, 
+		root = info->pools[generation].roots; root; 
+		root = *previousPtr) {
 	    if (ROOT_REFCOUNT(root)) {
 		/* 
 		 * Follow cells with positive refcount. 
 		 */
 
 		if (CELL_TYPE(root) /* word */) {
-		    MarkWord((Col_Word *) &root, NULL);
+		    MarkWord(info, (Col_Word *) &root, NULL);
 		} else {
-		    MarkRope((Col_Rope *) &root, NULL);
+		    MarkRope(info, (Col_Rope *) &root, NULL);
 		}
 		previousPtr = &ROOT_NEXT(root);
 	    } else {
@@ -1065,9 +1038,9 @@ MarkReachableCellsFromRoots()
 
 	    continue;
 	}
-	*previousPtr = roots[generation];
-	roots[generation] = roots[generation-1];
-	roots[generation-1] = NULL;
+	*previousPtr = info->pools[generation+1].roots;
+	info->pools[generation+1].roots = info->pools[generation].roots;
+	info->pools[generation].roots = NULL;
     }
 }
 
@@ -1091,7 +1064,8 @@ MarkReachableCellsFromRoots()
  */
 
 static void 
-MarkReachableCellsFromParents()	
+MarkReachableCellsFromParents(
+    GcMemInfo *info)		/* Thread local info. */
 {
     unsigned int generation;
     const void *root, **previousPtr, *parent;
@@ -1104,10 +1078,11 @@ MarkReachableCellsFromParents()
      * First, follow parents from uncollected generations.
      */
 
-    for (generation = GC_MAX_GENERATIONS-1; generation > maxCollectedGeneration; 
-	    generation--) {
-	for (previousPtr = &parents[generation-1], root = parents[generation-1]; 
-		root; root = *previousPtr) {
+    for (generation = GC_MAX_GENERATIONS-1; 
+	    generation > info->maxCollectedGeneration; generation--) {
+	for (previousPtr = &info->pools[generation].parents, 
+		root = info->pools[generation].parents; root; 
+		root = *previousPtr) {
 	    parent = PARENT_CELL(root);
 
 	    /*
@@ -1118,9 +1093,9 @@ MarkReachableCellsFromParents()
 	    /* ASSERT(TestCell(CELL_PAGE(parent), CELL_INDEX(parent))) */
 	    ClearCells(CELL_PAGE(parent), CELL_INDEX(parent), 1);
 	    if (CELL_TYPE(root) /* word */) {
-		MarkWord((Col_Word *) &parent, NULL);
+		MarkWord(info, (Col_Word *) &parent, NULL);
 	    } else {
-		MarkRope((Col_Rope *) &parent, NULL);
+		MarkRope(info, (Col_Rope *) &parent, NULL);
 	    }
 
 	    if (CELL_TYPE(root)?WORD_PARENT(parent):ROPE_PARENT(parent)) {
@@ -1148,10 +1123,11 @@ MarkReachableCellsFromParents()
      */
 
     for (/* use last value of generation */; generation > 0; generation--) {
-	for (previousPtr = &parents[generation-1], root = parents[generation-1]; 
-		root; root = *previousPtr) {
+	for (previousPtr = &info->pools[generation].parents, 
+		root = info->pools[generation].parents; root; 
+		root = *previousPtr) {
 #ifdef PROMOTE_COMPACT
-	    if (generation == compactGeneration) {
+	    if (generation == info->compactGeneration) {
 		/*
 		 * Parent was potentially redirected.
 		 */
@@ -1192,9 +1168,9 @@ MarkReachableCellsFromParents()
 
 	    continue;
 	}
-	*previousPtr = parents[generation];
-	parents[generation] = parents[generation-1];
-	parents[generation-1] = NULL;
+	*previousPtr = info->pools[generation+1].parents;
+	info->pools[generation+1].parents = info->pools[generation].parents;
+	info->pools[generation].parents = NULL;
     }
 }
 
@@ -1228,16 +1204,24 @@ MarkReachableCellsFromParents()
  *---------------------------------------------------------------------------
  */
 
+typedef struct MarkChildInfo
+{
+    GcMemInfo *info;
+    unsigned int *generationPtr;
+} MarkChildInfo;
+
 static void
 MarkRopeCustomChild(
     Col_Rope rope,
     Col_Rope *childPtr,
     Col_ClientData clientData)
 {
-    MarkRope(childPtr, (unsigned int *) clientData);
+    MarkRope(((MarkChildInfo *) clientData)->info, childPtr, 
+	    ((MarkChildInfo *) clientData)->generationPtr);
 }
 static void 
 MarkRope(
+    GcMemInfo *info,		/* Thread local info. */
     Col_Rope *ropePtr,		/* Rope to mark and follow. */
     unsigned int *generationPtr)
 				/* Youngest generation upon return. */
@@ -1299,12 +1283,13 @@ start:
     nbCells = GetNbCells(*ropePtr);
     
 #ifdef PROMOTE_COMPACT
-    if (PAGE_GENERATION(CELL_PAGE(*ropePtr)) == compactGeneration) {
+    if (PAGE_GENERATION(CELL_PAGE(*ropePtr)) == info->compactGeneration) {
 	/*
 	 * Ropes are relocated moved to the next generation.
 	 */
 
-	promoted = PoolAllocCells(pools[compactGeneration+1], nbCells);
+	promoted = PoolAllocCells(&info->pools[info->compactGeneration+1], 
+		nbCells);
 	memcpy(promoted, *ropePtr, nbCells * CELL_SIZE);
 
 	/*
@@ -1349,7 +1334,7 @@ start:
 	     * Follow left arm and tail recurse on right. 
 	     */
 
-	    MarkRope(&ROPE_CONCAT_LEFT(*ropePtr), NULL);
+	    MarkRope(info, &ROPE_CONCAT_LEFT(*ropePtr), NULL);
 	    ropePtr = &ROPE_CONCAT_RIGHT(*ropePtr);
 	    generationPtr = NULL;
 	    goto start;
@@ -1361,6 +1346,7 @@ start:
 		 */
 
 		if (ROPE_PARENT(*ropePtr)) {
+		    MarkChildInfo childInfo = {info, &childGen};
 		    childGen = UINT_MAX;
 		    ROPE_CUSTOM_TYPE(*ropePtr)->childrenProc(*ropePtr, 
 			    MarkRopeCustomChild, &childGen);
@@ -1368,8 +1354,9 @@ start:
 			ROPE_CLEAR_PARENT(*ropePtr);
 		    }
 		} else {
+		    MarkChildInfo childInfo = {info, NULL};
 		    ROPE_CUSTOM_TYPE(*ropePtr)->childrenProc(*ropePtr, 
-			    MarkRopeCustomChild, NULL);
+			    MarkRopeCustomChild, &childGen);
 		}
 	    }
 
@@ -1403,10 +1390,12 @@ MarkWordChild(
     Col_Word *childPtr,
     Col_ClientData clientData)
 {
-    MarkWord(childPtr, (unsigned int *) clientData);
+    MarkWord(((MarkChildInfo *) clientData)->info, childPtr, 
+	    ((MarkChildInfo *) clientData)->generationPtr);
 }
 static void 
 MarkWord(
+    GcMemInfo *info,		/* Thread local info. */
     Col_Word *wordPtr,		/* Word to mark and follow. */
     unsigned int *generationPtr)
 				/* Youngest generation upon return. */
@@ -1440,7 +1429,7 @@ start:
 
 	    {
 		Col_Rope rope = WORD_ROPE_GET(*wordPtr);
-		MarkRope(&rope, generationPtr);
+		MarkRope(info, &rope, generationPtr);
 		*wordPtr = WORD_ROPE_NEW(rope);
 	    }
 	    return;
@@ -1479,12 +1468,13 @@ start:
     nbCells = GetNbCells(*wordPtr);
     
 #ifdef PROMOTE_COMPACT
-    if (PAGE_GENERATION(CELL_PAGE(*wordPtr)) == compactGeneration) {
+    if (PAGE_GENERATION(CELL_PAGE(*wordPtr)) == info->compactGeneration) {
 	/*
 	 * Words are relocated moved to the next generation.
 	 */
 
-	promoted = PoolAllocCells(pools[compactGeneration+1], nbCells);
+	promoted = PoolAllocCells(&info->pools[info->compactGeneration+1], 
+		nbCells);
 	memcpy(promoted, *wordPtr, nbCells * CELL_SIZE);
 
 	/*
@@ -1533,7 +1523,7 @@ start:
 		size_t i, size = WORD_VECTOR_LENGTH(*wordPtr);
 		Col_Word *elements = WORD_VECTOR_ELEMENTS(*wordPtr);
 		for (i = 0; i < size; i++) {
-		    MarkWord(elements+i, NULL);
+		    MarkWord(info, elements+i, NULL);
 		}
 	    }
 
@@ -1548,7 +1538,7 @@ start:
 	     * Follow list root. 
 	     */
 
-	    MarkWord(&WORD_LIST_ROOT(*wordPtr), NULL);
+	    MarkWord(info, &WORD_LIST_ROOT(*wordPtr), NULL);
 
 	    /*
 	     * Continued below on synonym.
@@ -1570,7 +1560,7 @@ start:
 	     * Follow left arm and tail recurse on right. 
 	     */
 
-	    MarkWord(&WORD_CONCATLIST_LEFT(*wordPtr), NULL);
+	    MarkWord(info, &WORD_CONCATLIST_LEFT(*wordPtr), NULL);
 	    wordPtr = &WORD_CONCATLIST_RIGHT(*wordPtr);
 	    generationPtr = NULL;
 	    goto start;
@@ -1582,12 +1572,12 @@ start:
 		 * Follow children.
 		 */
 
+		MarkChildInfo childInfo = {info, NULL};
 		if (WORD_PARENT(*wordPtr)) {
+		    childInfo.generationPtr = &childGen;
 		    childGen = UINT_MAX;
-		    typeInfo->childrenProc(*wordPtr, MarkWordChild, &childGen);
-		} else {
-		    typeInfo->childrenProc(*wordPtr, MarkWordChild, NULL);
 		}
+		typeInfo->childrenProc(*wordPtr, MarkWordChild, &childInfo);
 	    }
 
 	    /*
@@ -1613,7 +1603,8 @@ start:
 	 * No tail recursion.
 	 */
 
-	MarkWord(&WORD_SYNONYM(*wordPtr), &childGen);
+	/* ASSERT(type == WORD_TYPE_REGULAR */
+	MarkWord(info, &WORD_SYNONYM(*wordPtr), &childGen);
 	if (childGen >= PAGE_GENERATION(CELL_PAGE(*wordPtr))) {
 	    WORD_CLEAR_PARENT(*wordPtr);
 	}
@@ -1631,94 +1622,106 @@ start:
 /*
  *---------------------------------------------------------------------------
  *
- * SweepFreeables --
+ * SweepUnreachableCells --
  *
- *	Perform cleanup for all custom ropes or words that need freeing.
+ *	Perform cleanup for all custom ropes or words that need sweeping.
  *
  * Results:
  *	None.
  *
  * Side effects:
- *	Calls each cleaned rope's freeProc.
+ *	Calls each cleaned cell's freeProc.
  *
  *---------------------------------------------------------------------------
  */
 
 static void 
-SweepFreeables()
+SweepUnreachableCells(
+    GcMemInfo *info)		/* Thread local info. */
 {
+    unsigned int generation;
     const void *cell, **previousPtr;
 
-    for (previousPtr = &freeables, cell = freeables; cell; 
-	    cell = *previousPtr) {
-	if (PAGE_GENERATION(CELL_PAGE(cell)) > maxCollectedGeneration) {
+    for (generation = 1; generation <= info->maxCollectedGeneration; 
+	    generation++) {
+	for (previousPtr = &info->pools[generation].sweepables, 
+		cell = info->pools[generation].sweepables; cell; 
+		cell = *previousPtr) {
 	    /*
-	     * Stop there as by construction freeables are in generation 
-	     * order.
+	     * Note: by construction, freeable words are custom ropes or regular 
+	     * words (i.e. with a type pointer).
 	     */
 
-	    break;
-	}
+	    if (CELL_TYPE(cell) /* word */) {
+		Col_Word word = cell;
+		Col_WordType * typeInfo;
 
-	/*
-	 * Note: by construction, freeable words are custom ropes or regular 
-	 * words (i.e. with a type pointer).
-	 */
+		if (generation == info->compactGeneration) {
+		    /* 
+		     * Word was potentially redirected.
+		     */
 
-	if (CELL_TYPE(cell) /* word */) {
-	    Col_Word word = cell;
-	    Col_WordType * typeInfo;
+		    ResolveRedirectWord(&word);
+		}
 
-	    ResolveRedirectWord(&word);
+		WORD_GET_TYPE_ADDR(word, typeInfo);
 
-	    WORD_GET_TYPE_ADDR(word, typeInfo);
+		if (!TestCell(CELL_PAGE(word), CELL_INDEX(word))) {
+		    /*
+		     * Cleanup.
+		     */
 
-	    if (!TestCell(CELL_PAGE(word), CELL_INDEX(word))) {
-		/*
-		 * Cleanup.
-		 */
+		    typeInfo->freeProc(word);
 
-		typeInfo->freeProc(word);
+		    /* 
+		     * Remove from list. 
+		     */
 
-		/* 
-		 * Remove from list. 
-		 */
+		    *previousPtr = WORD_NEXT(word, typeInfo->sizeProc(word));
+		} else {
+		    /*
+		     * Keep, updating reference in case of redirection.
+		     */
 
-		*previousPtr = WORD_NEXT(word, typeInfo->sizeProc(word));
+		    *previousPtr = word;
+
+		    *(Col_Word **) previousPtr = &WORD_NEXT(word, 
+			    typeInfo->sizeProc(word));
+		}
 	    } else {
-		/*
-		 * Update reference in case of redirection.
-		 */
+		Col_Rope rope = cell;
 
-		*previousPtr = word;
+		if (generation == info->compactGeneration) {
+		    /* 
+		     * Rope was potentially redirected.
+		     */
 
-		previousPtr = &WORD_NEXT(word, typeInfo->sizeProc(word));
-	    }
-	} else {
-	    Col_Rope rope = cell;
+		    ResolveRedirectRope(&rope);
+		}
 
-	    ResolveRedirectRope(&rope);
+		if (!TestCell(CELL_PAGE(rope), CELL_INDEX(rope))) {
+		    /*
+		     * Cleanup.
+		     */
 
-	    if (!TestCell(CELL_PAGE(rope), CELL_INDEX(rope))) {
-		/*
-		 * Cleanup.
-		 */
+		    ROPE_CUSTOM_TYPE(rope)->freeProc(rope);
 
-		ROPE_CUSTOM_TYPE(rope)->freeProc(rope);
+		    /* 
+		     * Remove from list. 
+		     */
 
-		/* 
-		 * Remove from list. 
-		 */
+		    *previousPtr = ROPE_CUSTOM_NEXT(rope, 
+			    ROPE_CUSTOM_SIZE(rope));
+		} else {
+		    /*
+		     * Keep, updating reference in case of redirection.
+		     */
 
-		*previousPtr = ROPE_CUSTOM_NEXT(rope, ROPE_CUSTOM_SIZE(rope));
-	    } else {
-		/*
-		 * Update reference in case of redirection.
-		 */
+		    *previousPtr = rope;
 
-		*previousPtr = rope;
-
-		previousPtr = &ROPE_CUSTOM_NEXT(rope, ROPE_CUSTOM_SIZE(rope));
+		    *(Col_Rope **) previousPtr = &ROPE_CUSTOM_NEXT(rope, 
+			    ROPE_CUSTOM_SIZE(rope));
+		}
 	    }
 	}
     }
@@ -1745,6 +1748,7 @@ SweepFreeables()
 
 static void 
 PromotePages(
+    GcMemInfo *info,		/* Thread local info. */
     unsigned int generation)	/* The pool generation to traverse. */
 {
     void *page, *prev;
@@ -1758,7 +1762,7 @@ PromotePages(
 	return;
     }
 
-    if (!pools[generation]->pages) {
+    if (!info->pools[generation].pages) {
 	/*
 	 * Nothing to promote.
 	 */
@@ -1770,20 +1774,21 @@ PromotePages(
      * Move the promoted pages to the head of the target pool's page list.
      */
 
-    for (page = pools[generation]->pages; page; page = PAGE_NEXT(page)) {
+    for (page = info->pools[generation].pages; page; page = PAGE_NEXT(page)) {
 	PAGE_GENERATION(page) = generation+1;
 	prev = page;
     }
-    PAGE_NEXT(prev) = pools[generation+1]->pages;
-    pools[generation+1]->pages = pools[generation]->pages;
-    pools[generation+1]->nbPages += pools[generation]->nbPages;
-    pools[generation+1]->nbAlloc += pools[generation]->nbPages;
-    pools[generation+1]->nbSetCells += pools[generation]->nbSetCells;
+    PAGE_NEXT(prev) = info->pools[generation+1].pages;
+    info->pools[generation+1].pages = info->pools[generation].pages;
+    info->pools[generation+1].nbPages += info->pools[generation].nbPages;
+    info->pools[generation+1].nbAlloc += info->pools[generation].nbPages;
+    info->pools[generation+1].nbSetCells += info->pools[generation].nbSetCells;
     for (i = 0; i < AVAILABLE_CELLS; i++) {
-	pools[generation+1]->lastFreePage[i] = pools[generation+1]->pages;
+	info->pools[generation+1].lastFreePage[i] 
+		= info->pools[generation+1].pages;
     }
-    pools[generation]->pages = NULL;
-    pools[generation]->nbPages = 0;
-    pools[generation]->nbAlloc = 0;
-    pools[generation]->nbSetCells = 0;
+    info->pools[generation].pages = NULL;
+    info->pools[generation].nbPages = 0;
+    info->pools[generation].nbAlloc = 0;
+    info->pools[generation].nbSetCells = 0;
 }
