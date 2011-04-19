@@ -174,7 +174,7 @@ EXTERN void		Col_ResumeGC(void);
  * Child declaration needed by the generational GC.
  */
 
-EXTERN void		Col_DeclareChild(const void *parent, const void *child);
+EXTERN void		Col_DeclareChild(void *parent, void *child);
 
 /*
  * end block for C++

@@ -95,7 +95,8 @@ Col_NewRope(
 		return Col_NewRope(COL_UCS1, source, byteLength);
 	    } 
 	    
-	    rope = AllocCells(NB_CELLS(ROPE_UTF8_HEADER_SIZE+byteLength));
+	    rope = (Col_Rope) AllocCells(NB_CELLS(ROPE_UTF8_HEADER_SIZE
+		    + byteLength));
 	    ROPE_SET_TYPE(rope, ROPE_TYPE_UTF8);
 	    ROPE_UTF8_LENGTH(rope) = (unsigned short) length;
 	    ROPE_UTF8_BYTELENGTH(rope) = (unsigned short) byteLength;
@@ -119,21 +120,25 @@ Col_NewRope(
 	     * String fits into one multi-cell leaf rope. 
 	     */
 
-	    Col_Rope rope = AllocCells(NB_CELLS(ROPE_UCS_HEADER_SIZE+byteLength));
+	    Col_Rope rope = (Col_Rope) AllocCells(NB_CELLS(ROPE_UCS_HEADER_SIZE
+		    + byteLength));
 	    switch (format) {
 		case COL_UCS1:
 		    ROPE_SET_TYPE(rope, ROPE_TYPE_UCS1);
-		    ROPE_UCS_LENGTH(rope) = (unsigned short) byteLength/sizeof(Col_Char1);
+		    ROPE_UCS_LENGTH(rope) = (unsigned short) byteLength
+			    / sizeof(Col_Char1);
 		    break;
 
 		case COL_UCS2:
 		    ROPE_SET_TYPE(rope, ROPE_TYPE_UCS2);
-		    ROPE_UCS_LENGTH(rope) = (unsigned short) byteLength/sizeof(Col_Char2);
+		    ROPE_UCS_LENGTH(rope) = (unsigned short) byteLength
+			    / sizeof(Col_Char2);
 		    break;
 
 		case COL_UCS4:
 		    ROPE_SET_TYPE(rope, ROPE_TYPE_UCS4);
-		    ROPE_UCS_LENGTH(rope) = (unsigned short) byteLength/sizeof(Col_Char4);
+		    ROPE_UCS_LENGTH(rope) = (unsigned short) byteLength
+			    / sizeof(Col_Char4);
 		    break;
 	    }
 	    memcpy((void *) ROPE_UCS_DATA(rope), data, byteLength);
@@ -192,7 +197,6 @@ Col_RopeLength(
     RESOLVE_ROPE(rope);
 
     switch (ROPE_TYPE(rope)) {
-
 	case ROPE_TYPE_NULL:
 	case ROPE_TYPE_EMPTY:
 	    /* 
@@ -240,6 +244,8 @@ Col_RopeLength(
 	     */
 
 	    return ROPE_CUSTOM_TYPE(rope)->lengthProc(rope);
+
+	/* ROPE_TYPE_UNKNOWN */
     }
 
     /* CANTHAPPEN */
@@ -553,11 +559,11 @@ Col_Subrope(
 
     length = last-first+1;
 
-    /* 
-     * Identity. 
-     */
-
     if (first == 0 && length == ropeLength) {
+	/* 
+	 * Identity. 
+	 */
+
 	return rope;
     }
 
@@ -647,6 +653,8 @@ Col_Subrope(
 		}
 	    }
 	    break;
+
+	/* ROPE_TYPE_UNKNOWN */
     }
 
     /* 
@@ -674,7 +682,7 @@ Col_Subrope(
      * General case: build a subrope node.
      */
 
-    subrope = AllocCells(1);
+    subrope = (Col_Rope) AllocCells(1);
     ROPE_SET_TYPE(subrope, ROPE_TYPE_SUBROPE);
     ROPE_SUBROPE_DEPTH(subrope) = depth;
     ROPE_SUBROPE_SOURCE(subrope) = rope;
@@ -778,16 +786,16 @@ Col_ConcatRopes(
     rightLength = Col_RopeLength(right);
     if (SIZE_MAX-leftLength < rightLength) {
 	/*
-	 * Avoid creating too long ropes.
+	 * Prevent the creation of too long ropes.
 	 */
 
-	return NULL;	
+	return NULL;
     }
 
     /* 
      * Handle quick cases and get input node depths. 
      */
-
+    
     switch (ROPE_TYPE(left)) {
 	case ROPE_TYPE_NULL:
 	    /* 
@@ -831,12 +839,14 @@ Col_ConcatRopes(
 		}
 	    }
 	    break;
+
+	/* ROPE_TYPE_UNKNOWN */
     }
     switch (ROPE_TYPE(right)) {
 	case ROPE_TYPE_NULL:
 	case ROPE_TYPE_EMPTY:
 	    /* 
-	     * Concat is a no-op on left. Special cases with empty are already 
+	     * Concat is a no-op on left. Special cases with null are already 
 	     * handled above. 
 	     */
 
@@ -858,6 +868,8 @@ Col_ConcatRopes(
 		}
 	    }
 	    break;
+
+	/* ROPE_TYPE_UNKNOWN */
     }
 
     /* 
@@ -1025,7 +1037,7 @@ Col_ConcatRopes(
      * General case: build a concat node.
      */
 
-    concatRope = AllocCells(1);
+    concatRope = (Col_Rope) AllocCells(1);
     ROPE_SET_TYPE(concatRope, ROPE_TYPE_CONCAT);
     ROPE_CONCAT_DEPTH(concatRope) 
 	= (leftDepth>rightDepth?leftDepth:rightDepth) + 1;
@@ -1042,7 +1054,7 @@ Col_ConcatRopes(
 Col_Rope 
 Col_ConcatRopesA(
     size_t number,		/* Number of ropes in below array. */
-    Col_Rope * ropes)		/* Ropes to concatenate in order. */
+    const Col_Rope * ropes)	/* Ropes to concatenate in order. */
 {
     size_t half;
 
@@ -1534,6 +1546,8 @@ Col_TraverseRopeChunks(
 		return result;
 	    }
 	    break;
+
+	/* ROPE_TYPE_UNKNOWN */
     }
 
     /* CANTHAPPEN */
@@ -1552,9 +1566,9 @@ Col_TraverseRopeChunks(
  *	None.
  *
  * Side effects:
- *	If index points past the end of the rope, the iterator pointed to by 
- *	it is initialized to the end iterator (i.e. whose rope field is 
- *	NULL), else it points to the character within the rope.
+ *	If index points past the end of the rope, the iterator is initialized 
+ *	to the end iterator (i.e. whose rope field is NULL), else it points to 
+ *	the character within the rope.
  *
  *---------------------------------------------------------------------------
  */
@@ -1774,6 +1788,8 @@ UpdateTraversalInfo(
 		it->traversal.leaf = rope;
 		it->traversal.index.fixed = it->index - offset;
 		break;
+
+	    /* ROPE_TYPE_UNKNOWN */
 	}
     }
     if (!it->traversal.subrope) {
@@ -1834,6 +1850,8 @@ Col_RopeIterCharAt(
 	case ROPE_TYPE_CUSTOM:
 	    return ROPE_CUSTOM_TYPE(it->traversal.leaf)->charAtProc(
 		    it->traversal.leaf, it->traversal.index.fixed);
+
+	/* ROPE_TYPE_UNKNOWN */
     }
     return COL_CHAR_INVALID;
 }
@@ -2021,6 +2039,8 @@ Col_RopeIterForward(
 		it->traversal.index.fixed += nb;
 	    }
 	    break;
+
+	/* ROPE_TYPE_UNKNOWN */
     }
 }
 
@@ -2131,6 +2151,8 @@ Col_RopeIterBackward(
 		it->traversal.index.fixed += nb;
 	    }
 	    break;
+
+	/* ROPE_TYPE_UNKNOWN */
     }
 }
 
@@ -2346,7 +2368,7 @@ Col_NewCustomRope(
 	return NULL;
     }
     
-    rope = AllocCells(NB_CELLS(ROPE_CUSTOM_HEADER_SIZE+actualSize));
+    rope = (Col_Rope) AllocCells(NB_CELLS(ROPE_CUSTOM_HEADER_SIZE+actualSize));
 
     ROPE_SET_TYPE(rope, ROPE_TYPE_CUSTOM);
     ROPE_CUSTOM_TYPE(rope) = type;

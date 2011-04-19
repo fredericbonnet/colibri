@@ -50,9 +50,11 @@
  */
 
 #define PAGE_SIZE		1024
+typedef char Page[PAGE_SIZE];
 
 /*
  * Cell size. Each cell can store 4 pointers (=> 16 bytes on 32-bit systems).
  */
 
 #define CELL_SIZE		(sizeof(void *)*4)
+typedef char Cell[CELL_SIZE];

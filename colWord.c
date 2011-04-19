@@ -50,9 +50,9 @@ Col_NewIntWord(
      * Create a new integer word.
      */
 
-    word = AllocCells(1);
+    word = (Col_Word) AllocCells(1);
     WORD_SET_TYPE_ID(word, WORD_TYPE_INT);
-    WORD_SYNONYM(word) = NULL;
+    WORD_SYNONYM(word) = WORD_NIL;
     WORD_INT_DATA(word) = value;
 
     return word;
@@ -219,13 +219,16 @@ Col_NewRopeWord(
 	     * Wrap the C string.
 	     */
 
-	    word = AllocCells(1);
+	    word = (Col_Word) AllocCells(1);
 	    WORD_SET_TYPE_ID(word, WORD_TYPE_STRING);
-	    WORD_SYNONYM(word) = NULL;
+	    WORD_SYNONYM(word) = WORD_NIL;
 	    WORD_STRING_DATA(word) = rope;
+	    WORD_STRING_ALT(word) = NULL;
 	    return word;
 
-	default: /* Including NULL */
+	/* ROPE_TYPE_UNKNOWN */
+
+	default: /* Including ROPE_TYPE_NULL */
 	    return WORD_ROPE_NEW(rope);
     }
 }
@@ -268,12 +271,12 @@ Col_NewWord(
 	 */
 
 	*dataPtr = NULL;
-	return NULL;
+	return WORD_NIL;
     }
     
-    word = AllocCells(NB_CELLS(WORD_HEADER_SIZE+actualSize));
+    word = (Col_Word) AllocCells(NB_CELLS(WORD_HEADER_SIZE+actualSize));
     WORD_SET_TYPE_ADDR(word, type);
-    WORD_SYNONYM(word) = NULL;
+    WORD_SYNONYM(word) = WORD_NIL;
     if (dataPtr) *dataPtr = WORD_DATA(word);
 
     DeclareWord(word);
@@ -313,8 +316,8 @@ Col_GetWordInfo(
 	 * Immediate values.
 	 */
 
-	case WORD_TYPE_NULL:
-	    return COL_NULL;
+	case WORD_TYPE_NIL:
+	    return COL_NIL;
 	    
 	case WORD_TYPE_SMALL_INT:
 	    dataPtr->i = WORD_SMALL_INT_GET(word);
@@ -329,6 +332,12 @@ Col_GetWordInfo(
 	    memcpy(dataPtr->str.data, WORD_SMALL_STRING_DATA(word), 
 		    dataPtr->str.length);
 	    return COL_SMALL_STRING;
+
+	case WORD_TYPE_EMPTY:
+	    /* Empty word is a zero-sized vector. */
+	    dataPtr->vector.length = 0;
+	    dataPtr->vector.elements = NULL;
+	    return COL_VECTOR;
 
 	/*
 	 * Ropes.
@@ -355,6 +364,16 @@ Col_GetWordInfo(
 	    dataPtr->vector.elements = WORD_VECTOR_ELEMENTS(word);
 	    return COL_VECTOR;
 
+	case WORD_TYPE_LIST:
+	    return COL_LIST;
+
+	case WORD_TYPE_SEQUENCE:
+	    return COL_SEQUENCE;
+
+	case WORD_TYPE_REFERENCE:
+	    dataPtr->ref = WORD_REFERENCE_SOURCE(word);
+	    return COL_REFERENCE;
+
 	/*
 	 * Regular word.
 	 */
@@ -364,8 +383,10 @@ Col_GetWordInfo(
 	    dataPtr->data = WORD_DATA(word);
 	    return typeInfo;
 
+	/* WORD_TYPE_UNKNOWN */
+
 	default:
-	    return COL_NULL;
+	    return COL_NIL;
     }
 }
 
@@ -377,7 +398,7 @@ Col_GetWordInfo(
  *	Find the value of a word with the given type.
  *
  * Results:
- *	The word or NULL if not found, and additional info in dataPtr.
+ *	The word or nil if not found, and additional info in dataPtr.
  *
  * Side effects:
  *	None.
@@ -422,7 +443,7 @@ Col_FindWordInfo(
 	    break;
 	}
     }
-    return NULL;
+    return WORD_NIL;
 }
 
 /*
@@ -436,7 +457,7 @@ Col_FindWordInfo(
  *	when a word only has one synonym that is an immediate value or a rope
  *	(as they have no such concept). 
  *	To iterate over the chain, simply call this function several times 
- *	with the intermediary results until it returns NULL.
+ *	with the intermediary results until it returns nil.
  *
  * Results:
  *	The word synonym, which can be a rope, an immediate value, or 
@@ -457,7 +478,7 @@ Col_GetWordSynonym(
 	 * Ropes or immediate values have no synonyms.
 	 */
 
-	return NULL;
+	return WORD_NIL;
     } else {
 	RESOLVE_WORD(word);
 	return WORD_SYNONYM(word);
@@ -521,7 +542,7 @@ Col_AddWordSynonym(
 	     */
 
 	    WORD_SYNONYM(word) = synonym;
-	    Col_DeclareChild(word, WORD_SYNONYM(word));
+	    Col_DeclareChild((void *) word, (void *) WORD_SYNONYM(word));
 	    return word;
 	}
 
@@ -534,8 +555,16 @@ Col_AddWordSynonym(
 	RESOLVE_WORD(synonym);
     }
 
+    if (word == synonym) {
+	/*
+	 * A word cannot be synonym with itself.
+	 */
+
+	return word;
+    }
+
     /*
-     * Synonym-less words have a NULL synonym pointer. Words with one single 
+     * Synonym-less words have a nil synonym pointer. Words with one single 
      * immediate or rope value simply point to it. Larger synonym chains must be
      * circular lists of real words. Here, ensure that both word and synonym's 
      * synonym chains are circular lists.
@@ -570,8 +599,8 @@ Col_AddWordSynonym(
 	WORD_SYNONYM(word) = WORD_SYNONYM(synonym);
 	WORD_SYNONYM(synonym) = tmp;
     }
-    Col_DeclareChild(word, WORD_SYNONYM(word));
-    Col_DeclareChild(synonym, WORD_SYNONYM(synonym));
+    Col_DeclareChild((void *) word, (void *) WORD_SYNONYM(word));
+    Col_DeclareChild((void *) synonym, (void *) WORD_SYNONYM(synonym));
 
     return word;
 }
@@ -600,15 +629,15 @@ UpconvertWord(
     Col_WordData data;
     Col_Word converted;
     
-    converted = AllocCells(1);
-    WORD_SYNONYM(converted) = NULL;
+    converted = (Col_Word) AllocCells(1);
+    WORD_SYNONYM(converted) = WORD_NIL;
     switch ((intptr_t) Col_GetWordInfo(word, &data)) {
-	case (int) COL_INT:
+	case (intptr_t) COL_INT:
 	    WORD_SET_TYPE_ID(converted, WORD_TYPE_INT);
 	    WORD_INT_DATA(converted) = data.i;
 	    break;
 
-	case (int) COL_CHAR:
+	case (intptr_t) COL_CHAR:
 	    WORD_SET_TYPE_ID(converted, WORD_TYPE_STRING);
 	    if (data.ch <= USHRT_MAX) {
 		unsigned short ch2 = (unsigned short) data.ch; 
@@ -616,17 +645,27 @@ UpconvertWord(
 	    } else {
 		WORD_STRING_DATA(converted) = Col_NewRope(COL_UCS4, &data.ch, 4);
 	    }
+	    WORD_STRING_ALT(converted) = NULL;
 	    break;
 
-	case (int) COL_SMALL_STRING:
+	case (intptr_t) COL_SMALL_STRING:
 	    WORD_SET_TYPE_ID(converted, WORD_TYPE_STRING);
 	    WORD_STRING_DATA(converted) = Col_NewRope(COL_UCS1, data.str.data, 
 		    data.str.length);
+	    WORD_STRING_ALT(converted) = NULL;
 	    break;
 
-	case (int) COL_ROPE:
+	case (intptr_t) COL_VECTOR:
+	    /* ASSERT(WORD == WORD_EMPTY) */
+	    WORD_SET_TYPE_ID(converted, WORD_TYPE_VECTOR);
+	    WORD_VECTOR_LENGTH(converted) = 0;
+	    WORD_VECTOR_FLAGS(converted) = 0;
+	    break;
+
+	case (intptr_t) COL_ROPE:
 	    WORD_SET_TYPE_ID(converted, WORD_TYPE_STRING);
 	    WORD_STRING_DATA(converted) = data.rope;
+	    WORD_STRING_ALT(converted) = NULL;
 	    break;
     }
 
@@ -673,7 +712,7 @@ Col_ClearWordSynonym(
 	 * No synonym chain. Simply clear word's synonym.
 	 */
 
-	WORD_SYNONYM(word) = NULL;
+	WORD_SYNONYM(word) = WORD_NIL;
 	return;
     }
 
@@ -686,6 +725,6 @@ Col_ClearWordSynonym(
 	synonym = WORD_SYNONYM(synonym);
     }
     WORD_SYNONYM(synonym) = WORD_SYNONYM(word);
-    Col_DeclareChild(synonym, WORD_SYNONYM(synonym));
-    WORD_SYNONYM(word) = NULL;
+    Col_DeclareChild((void *) synonym, (void *) WORD_SYNONYM(synonym));
+    WORD_SYNONYM(word) = WORD_NIL;
 }

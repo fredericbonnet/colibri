@@ -21,14 +21,16 @@
  */
 
 void 
-Col_Init() {
+Col_Init() 
+{
     if (PlatEnter()) {
 	AllocInit();
 	GcInit();
     }
 }
 void 
-Col_Cleanup() {
+Col_Cleanup() 
+{
     if (PlatLeave()) {
 	GcCleanup();
 	PlatCleanup();

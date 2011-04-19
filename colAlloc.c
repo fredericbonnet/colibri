@@ -257,7 +257,7 @@ void
 PoolCleanup(
     MemoryPool *pool)		/* The pool to cleanup. */
 {
-    char *base, *next;
+    Page *base, *next;
 
     /* 
      * Free all system pages.
@@ -291,42 +291,34 @@ PoolCleanup(
 void 
 PoolAllocPages(
     MemoryPool *pool,		/* The pool to alloc page into. */
-    void **nextPtr)		/* The page after which to insert the new one. */
+    Page **nextPtr)		/* The page after which to insert the new one. */
 {
-    char *base, *page, *next;
-    int i;
+    Page *base, *page;
+    const size_t nbPagesPerSysPage = systemPageSize/PAGE_SIZE;
+    size_t i;
 
     /* 
      * Allocate NB_SYSPAGE_ALLOC system pages. 
      */
 
     for (i = 0; i < NB_SYSPAGE_ALLOC; i++) {
-	base = PlatSysPageAlloc(pool);
+	base = (Page *) PlatSysPageAlloc(pool);
 
-	pool->nbPages += systemPageSize/PAGE_SIZE;
-	pool->nbAlloc += systemPageSize/PAGE_SIZE;
-	pool->nbSetCells += RESERVED_CELLS*systemPageSize/PAGE_SIZE;
-
-	/*
-	 * Insert in list.
-	 */
-
-	*nextPtr = base;
+	pool->nbPages += nbPagesPerSysPage;
+	pool->nbAlloc += nbPagesPerSysPage;
+	pool->nbSetCells += RESERVED_CELLS*nbPagesPerSysPage;
 
 	/* 
 	 * Initialize pages. 
 	 */
 
-	for (page = base; page < base + systemPageSize; page += PAGE_SIZE) {
+	for (i = 0, page = base; i < nbPagesPerSysPage; i++, page++) {
 	    /* 
 	     * Pages are linked in order.
 	     */
 
-	    next = page + PAGE_SIZE;
-	    if (next == base + systemPageSize) {
-		next = NULL;
-	    }
-	    PAGE_NEXT(page) = next;
+	    *nextPtr = page;
+	    nextPtr = &PAGE_NEXT(page);
 
 	    /* Flags. */
 	    PAGE_FLAGS(page) = 0;
@@ -336,11 +328,7 @@ PoolAllocPages(
 	    ClearAllCells(page);
 	}
 
-	/*
-	 * Remember insertion point.
-	 */
-
-	nextPtr = &LAST_PAGE_NEXT(base);
+	*nextPtr = NULL;
     }
 }
 
@@ -364,8 +352,10 @@ void
 PoolFreePages(
     MemoryPool *pool)		/* The pool with pages to free. */
 {
-    char *page, *base, *prev, *next;
+    Page *page, *base, *prev, *next;
+    const size_t nbPagesPerSysPage = systemPageSize/PAGE_SIZE;
     size_t nbSetCells;
+    size_t i;
 
     pool->nbPages = 0;
     pool->nbSetCells = 0;
@@ -382,7 +372,7 @@ PoolFreePages(
 	 */
 
 	nbSetCells = 0;
-	for (page = base; page < base + systemPageSize; page += PAGE_SIZE) {
+	for (i = 0, page = base; i < nbPagesPerSysPage; i++, page++) {
 	    nbSetCells += NbSetCells(page);
 	}
 	if (nbSetCells > RESERVED_CELLS * (systemPageSize/PAGE_SIZE)) {
@@ -391,7 +381,7 @@ PoolFreePages(
 	     */
 
 	    prev = base;
-	    pool->nbPages += systemPageSize/PAGE_SIZE;
+	    pool->nbPages += nbPagesPerSysPage;
 	    pool->nbSetCells += nbSetCells;
 	} else {
 	    /* 
@@ -444,14 +434,14 @@ PoolFreePages(
  *---------------------------------------------------------------------------
  */
 
-void * 
+Cell * 
 PageAllocCells(
     size_t number,		/* Number of cells to allocate. */
-    void *firstPage,		/* First page to traverse. */
-    void **tailPtr)		/* Upon return, pointer to tail for fast 
+    Page *firstPage,		/* First page to traverse. */
+    Page **tailPtr)		/* Upon return, pointer to tail for fast 
 				 * insertion of new pages. */
 {
-    void *page;
+    Page *page;
     size_t first;
 
     for (page = firstPage; page; page = PAGE_NEXT(page)) {
@@ -467,7 +457,7 @@ PageAllocCells(
 	     * Return address of first cell. 
 	     */
 
-	    return (char * ) page + (first * CELL_SIZE);
+	    return (Cell *) page + first;
 	}
 	if (PAGE_NEXT(page) == NULL) {
 	    *tailPtr = page;
@@ -632,7 +622,7 @@ FindFreeCells(
 
 void 
 SetCells(
-    void *page,			/* The page. */
+    Page *page,			/* The page. */
     size_t first,		/* Index of first cell. */
     size_t number)		/* Number of cells in sequence. */
 {
@@ -645,7 +635,7 @@ SetCells(
 
 void 
 ClearCells(
-    void *page,			/* The page. */
+    Page *page,			/* The page. */
     size_t first,		/* Index of first cell. */
     size_t number)		/* Number of cells in sequence. */
 {
@@ -658,7 +648,7 @@ ClearCells(
 
 void 
 ClearAllCells(
-    void *page)			/* The page for which to clear all cells. */
+    Page *page)			/* The page for which to clear all cells. */
 {
     unsigned char *mask = PAGE_BITMASK(page);
     size_t i;
@@ -691,7 +681,7 @@ ClearAllCells(
 
 int 
 TestCell(
-    void *page,			/* The page. */
+    Page *page,			/* The page. */
     size_t index)		/* Index of cell to set. */
 {
     unsigned char *mask = PAGE_BITMASK(page);
@@ -716,7 +706,7 @@ TestCell(
 
 size_t
 NbSetCells(
-    void *page)			/* The page. */
+    Page *page)			/* The page. */
 {
     unsigned char *mask = PAGE_BITMASK(page);
     size_t i, nb = 0;

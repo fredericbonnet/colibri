@@ -1,7 +1,7 @@
 #ifndef _COLIBRI_ROPE
 #define _COLIBRI_ROPE
 
-#include <stddef.h> /* For size_t and NULL */
+#include <stddef.h> /* For size_t */
 #include <stdarg.h> /* For variadic procs */
 
 
@@ -72,7 +72,7 @@ EXTERN Col_Rope		Col_Subrope(Col_Rope rope, size_t first, size_t last);
  */
 
 EXTERN Col_Rope		Col_ConcatRopes(Col_Rope left, Col_Rope right);
-EXTERN Col_Rope		Col_ConcatRopesA(size_t number, Col_Rope * ropes);
+EXTERN Col_Rope		Col_ConcatRopesA(size_t number, const Col_Rope * ropes);
 EXTERN Col_Rope		Col_ConcatRopesV(size_t number, ...);
 
 
@@ -122,7 +122,8 @@ EXTERN int		Col_TraverseRopeChunks(Col_Rope rope, size_t start, size_t max,
 			    size_t *lengthPtr);
 
 /*
- * Iteration over individual characters.
+ * Iteration over individual characters. Each iterator takes 8 words on the
+ * stack.
  */
 
 typedef struct Col_RopeIterator {

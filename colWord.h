@@ -5,7 +5,13 @@
  * Colibri words are opaque types.
  */
 
-typedef const void * Col_Word;
+typedef uintptr_t Col_Word;
+
+/*
+ * Nil is a valid word.
+ */
+
+#define WORD_NIL		((Col_Word) 0)
 
 /*
  * Function types and structures for word types.
@@ -37,13 +43,15 @@ typedef struct Col_WordType {
  * Word data types.
  */
 
-#define COL_NULL		((Col_WordType *) 0)	/* No value. */
+#define COL_NIL			((Col_WordType *) 0)	/* Nil word. */
 #define COL_INT			((Col_WordType *) 1)	/* Integer. */
 #define COL_CHAR		((Col_WordType *) 2)	/* Unicode character. */
 #define COL_SMALL_STRING	((Col_WordType *) 3)	/* Small string. */
 #define COL_ROPE		((Col_WordType *) 4)	/* Rope (string). */
 #define COL_VECTOR		((Col_WordType *) 5)	/* Flat vector. */
 #define COL_LIST		((Col_WordType *) 6)	/* List. */
+#define COL_SEQUENCE		((Col_WordType *) 7)	/* Sequence. */
+#define COL_REFERENCE		((Col_WordType *) 8)	/* Reference. */
 
 typedef union {
     int i;			/* COL_INT. */
@@ -57,7 +65,9 @@ typedef union {
 	size_t length;
 	const Col_Word *elements;
     } vector;			/* COL_VECTOR. */
-				/* COL_LIST use accessors and iterators. */
+				/* COL_LIST and COL_SEQUENCE use accessors and 
+				 * iterators. */
+    Col_Word ref;		/* COL_REFERENCE. */
     void *data;			/* Other values = (Col_WordType *). */
 } Col_WordData;
 

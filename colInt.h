@@ -52,8 +52,8 @@
  */
 
 /*
- * Pages are divided into cells. On a 32-bit system with 1024-byte logical pages,
- * each page stores 64 16-byte cells. 
+ * Pages are divided into cells. On a 32-bit system with 1024-byte logical 
+ * pages, each page stores 64 16-byte cells. 
  *
  * Each page has reserved cells that store information about the page. The 
  * remaining cells store rope info. For example, on a 32-bit system with 
@@ -67,22 +67,18 @@
  */
 
 #define CELLS_PER_PAGE		(PAGE_SIZE/CELL_SIZE)
-#if PAGE_SIZE==1024
-#   define RESERVED_CELLS	1	/* 2*32 bits + 64 bits */
-#elif PAGE_SIZE==4096
-#   define RESERVED_CELLS	3	/* 2*32 bits + 256 bits */
-#endif
+#define RESERVED_CELLS		1	/* 2*32 bits + 64 bits */
 #define AVAILABLE_CELLS		(CELLS_PER_PAGE-RESERVED_CELLS)
 #define NB_CELLS(size)		(((size)+CELL_SIZE-1)/CELL_SIZE)
 
-#define PAGE_NEXT(page)		(*(void **)(page))
+#define PAGE_NEXT(page)		(*(Page **)(page))
 #define PAGE_GENERATION(page)	(*((unsigned char *)(page)+sizeof(void *)))
 #define PAGE_FLAGS(page)	(*((unsigned char *)(page)+sizeof(void *)+1))
 #define PAGE_RESERVED(page)	(*(unsigned short *)((char *)(page)+sizeof(void *)+2))
 #define PAGE_BITMASK(page)	((unsigned char *)(page)+sizeof(void *)+2+sizeof(unsigned short))
-#define PAGE_CELL(page, index)	((void *)((char *)(page)+CELL_SIZE*(index)))
+#define PAGE_CELL(page, index)	((Cell *)(page)+(index))
 
-#define CELL_PAGE(cell)		((void *)((uintptr_t)(cell) & ~(PAGE_SIZE-1)))
+#define CELL_PAGE(cell)		((Page *)((uintptr_t)(cell) & ~(PAGE_SIZE-1)))
 #define CELL_INDEX(cell)	(((uintptr_t)(cell) % PAGE_SIZE) / CELL_SIZE)
 
 /*
@@ -92,18 +88,18 @@
 
 typedef struct MemoryPool {
     unsigned int generation;	/* Generation level; 0 = younger. */
-    void *pages;		/* Pages form a singly-linked list. */
-    void *lastFreePage[AVAILABLE_CELLS]; 
+    Page *pages;		/* Pages form a singly-linked list. */
+    Page *lastFreePage[AVAILABLE_CELLS]; 
 				/* Last page where a cell sequence of a given 
 				 * size was found. */
     size_t nbPages;		/* Number of pages in pool. */
     size_t nbAlloc;		/* Number of pages alloc'd since last GC. */
     size_t nbSetCells;		/* Number of set cells in pool. */
     size_t gc;			/* GC counter. Used for generational GC. */
-    const void *roots, *parents;/* List of roots for each source or parent in
+    Cell *roots, *parents;	/* List of roots for each source or parent in
 				 * pool. */
-    const void *sweepables;	/* List of ropes or words that need sweeping
-				 * when unreachable after a GC. */
+    Cell *sweepables;		/* List of cells that need sweeping when 
+				 * unreachable after a GC. */
     Col_ClientData data;	/* Opaque token for system-specific data. */
 } MemoryPool;
 
@@ -124,25 +120,25 @@ void			PoolCleanup(MemoryPool *pool);
  * Allocation/deallocation of pool pages.
  */
 
-void			PoolAllocPages(MemoryPool *pool, void **nextPtr);
+void			PoolAllocPages(MemoryPool *pool, Page **nextPtr);
 void			PoolFreePages(MemoryPool *pool);
 
 /*
  * Allocation of cells in pages.
  */
 
-void *			PageAllocCells(size_t number, void *firstPage, 
-			    void **tailPtr);
+Cell *			PageAllocCells(size_t number, Page *firstPage, 
+			    Page **tailPtr);
 
 /*
  * Allocation bitmask handling.
  */
 
-void			SetCells(void *page, size_t first, size_t number);
-void			ClearCells(void *page, size_t first, size_t number);
-void			ClearAllCells(void *page);
-int			TestCell(void *page, size_t index);
-size_t			NbSetCells(void *page);
+void			SetCells(Page *page, size_t first, size_t number);
+void			ClearCells(Page *page, size_t first, size_t number);
+void			ClearAllCells(Page *page);
+int			TestCell(Page *page, size_t index);
+size_t			NbSetCells(Page *page);
 
 
 /*
@@ -198,7 +194,7 @@ void			GcCleanup(void);
  * Cell allocation.
  */
 
-void *			AllocCells(size_t number);
+Cell *			AllocCells(size_t number);
 
 /*
  * Custom rope and word handling for cleanup.
@@ -229,6 +225,40 @@ void			DeclareWord(Col_Word word);
  * that the rope has children in youngest generations.
  *
  * ROPE_SET_TYPE also clears the parent flag.
+ *
+ * On 32-bit architectures the layout is as follows:
+ *
+ *  - C string "ABC"
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |      'A'      |      'B'      |      'C'      |       0       |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *
+ *  - Empty string
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |       0       |       0       |                               |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *
+ *  - Ropes
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |       0       |    Type     |P|                               |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+ *   .                                                               .
+ *   .                      Type-specific data                       .
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Parent flag (P) : 1 bit
+ *	Type : 7 bits
  */
 
 /* Careful: don't give arguments with side effects! */
@@ -245,52 +275,157 @@ void			DeclareWord(Col_Word word);
 
 
 /* 
- * Rope types. 
- *
  * ROPE_TYPE_EMPTY is set to 0 so that an empty rope equals a C string with
  * two NUL chars, i.e. "\0".
  */
 
 #define ROPE_TYPE_EMPTY		0
-#define ROPE_TYPE_UCS1		1
-#define ROPE_TYPE_UCS2		2
-#define ROPE_TYPE_UCS4		3
-#define ROPE_TYPE_UTF8		4
-#define ROPE_TYPE_SUBROPE	5
-#define ROPE_TYPE_CONCAT	6
-#define ROPE_TYPE_CUSTOM	7
-
 #define ROPE_TYPE_NULL		-1
 #define ROPE_TYPE_C		-2
+
+/*
+ * ROPE_TYPE_UNKNOWN is used as a tag in the source code to mark places where
+ * predefined type specific code is needed. Search for this tag when adding
+ * new predefined rope types.
+ */
 
 /*
  * Rope fields.
  *
  * Values are for 32-bit systems.
  *
- * ROPE_SUBROPE_DEPTH, ROPE_CONCAT_DEPTH: 8 bits will code up to 255 depth 
- * levels, which is more than sufficient for balanced binary trees. 
- *
- * ROPE_CUSTOM_NEXT: custom ropes with a freeProc are singly-linked together
- * using this field, so that unreachable ropes get swept properly upon GC.
  */
 
-#define ROPE_UCS_LENGTH(rope)		(((unsigned short *)(rope))[1])
-#define ROPE_UCS_HEADER_SIZE		(sizeof(Col_Char4))
-#define ROPE_UCS_DATA(rope)		((const Col_Char1 *)(rope)+ROPE_UCS_HEADER_SIZE)
-#define ROPE_UCS1_DATA(rope)		((const Col_Char1 *) ROPE_UCS_DATA(rope))
-#define ROPE_UCS2_DATA(rope)		((const Col_Char2 *) ROPE_UCS_DATA(rope))
-#define ROPE_UCS4_DATA(rope)		((const Col_Char4 *) ROPE_UCS_DATA(rope))
+/*
+ * Fixed-width UCS ropes.
+ *
+ * On 32-bit architectures the multi-cell layout is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |          Rope header          |            Length             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   .                                                               .
+ *   .                         Character data                        .
+ *   .                                                               .
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Length : 16-bit unsigned
+ *	    A rope taking up to AVAILABLE_CELLS, this ensures that the actual
+ *	    size fits the length field width.
+ */
+
+#define ROPE_TYPE_UCS1		1
+#define ROPE_TYPE_UCS2		2
+#define ROPE_TYPE_UCS4		3
+
+#define ROPE_UCS_LENGTH(rope)	(((unsigned short *)(rope))[1])
+#define ROPE_UCS_HEADER_SIZE	(sizeof(Col_Char4))
+#define ROPE_UCS_DATA(rope)	((const Col_Char1 *)(rope)+ROPE_UCS_HEADER_SIZE)
+#define ROPE_UCS1_DATA(rope)	((const Col_Char1 *) ROPE_UCS_DATA(rope))
+#define ROPE_UCS2_DATA(rope)	((const Col_Char2 *) ROPE_UCS_DATA(rope))
+#define ROPE_UCS4_DATA(rope)	((const Col_Char4 *) ROPE_UCS_DATA(rope))
+
+#define UCS_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-ROPE_UCS_HEADER_SIZE)
+
+/*
+ * Variable-width UTF-8 ropes.
+ *
+ * On 32-bit architectures the multi-cell layout is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |          Rope header          |            Length             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |          Byte length          |                               |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+ *   .                                                               .
+ *   .                         Character data                        .
+ *   .                                                               .
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Length : 16-bit unsigned
+ *
+ *	Byte length : 16-bit unsigned
+ *	    A rope taking up to AVAILABLE_CELLS, this ensures that the actual
+ *	    size fits the length field width.
+ */
+
+#define ROPE_TYPE_UTF8			4
 
 #define ROPE_UTF8_LENGTH(rope)		(((unsigned short *)(rope))[1])
 #define ROPE_UTF8_BYTELENGTH(rope)	(((unsigned short *)(rope))[2])
 #define ROPE_UTF8_HEADER_SIZE		(sizeof(short)*3)
 #define ROPE_UTF8_DATA(rope)		((const Col_Char1 *)(rope)+ROPE_UTF8_HEADER_SIZE)
 
+#define UTF8_MAX_SIZE			(AVAILABLE_CELLS*CELL_SIZE-ROPE_UTF8_HEADER_SIZE)
+
+/*
+ * Subropes.
+ *
+ * On 32-bit architectures the single-cell layout is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |          Rope header          |     Depth     |    Unused     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Source                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             First                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Last                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Depth : 8-bit unsigned
+ *	    8 bits will code up to 255 depth levels, which is more than 
+ *	    sufficient for balanced binary trees. 
+ *
+ *	Source : 32-bit rope
+ *
+ *	First, Last : 32-bit unsigned
+ */
+
+#define ROPE_TYPE_SUBROPE		5
+
 #define ROPE_SUBROPE_DEPTH(rope)	(((unsigned char *)(rope))[2]) 
 #define ROPE_SUBROPE_SOURCE(rope)	(((Col_Rope *)(rope))[1])
 #define ROPE_SUBROPE_FIRST(rope)	(((size_t *)(rope))[2])
 #define ROPE_SUBROPE_LAST(rope)		(((size_t *)(rope))[3])
+
+/*
+ * Concat ropes.
+ *
+ * On 32-bit architectures the single-cell layout is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |          Rope header          |     Depth     |  Left length  |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Length                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Left                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Right                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Depth : 8-bit unsigned
+ *	    8 bits will code up to 255 depth levels, which is more than 
+ *	    sufficient for balanced binary trees. 
+ *
+ *	Left length : 8-bit unsigned
+ *	    Used as shortcut to avoid dereferencing the left arm. Zero if actual
+ *	    length is larger than 255.
+ *
+ *	Length : 32-bit unsigned
+ *
+ *	Left, Right : 32-bit ropes
+ */
+
+#define ROPE_TYPE_CONCAT		6
 
 #define ROPE_CONCAT_DEPTH(rope)		(((unsigned char *)(rope))[2])
 #define ROPE_CONCAT_LEFT_LENGTH(rope)	(((unsigned char *)(rope))[3])
@@ -298,21 +433,46 @@ void			DeclareWord(Col_Word word);
 #define ROPE_CONCAT_LEFT(rope)		(((Col_Rope *)(rope))[2])
 #define ROPE_CONCAT_RIGHT(rope)		(((Col_Rope *)(rope))[3])
 
-#define ROPE_CUSTOM_HEADER_SIZE		(sizeof(void *)*2)
+/*
+ * Custom ropes.
+ *
+ * On 32-bit architectures the multi-cell layout is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |          Rope header          |               Size            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                         Type pointer                         |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   .                                                               .
+ *   .                          Custom data                          .
+ *   .                                                               .
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                        Next (optional)                        |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Size : 16-bit unsigned
+ *	    A rope taking up to AVAILABLE_CELLS, this ensures that the actual
+ *	    size fits the length field width.
+ *
+ *	Type pointer : 32-bit pointer
+ *
+ *	Next : 32-bit rope or word (optional)
+ *	    Custom ropes with a freeProc are singly-linked together using this 
+ *	    field, so that unreachable ropes get swept properly upon GC.
+ */
+
+#define ROPE_TYPE_CUSTOM		7
+
+#define ROPE_CUSTOM_HEADER_SIZE		(sizeof(void *) + sizeof(Col_RopeCustomType))
 #define ROPE_CUSTOM_SIZE(rope)		(((unsigned short *)(rope))[1])
 #define ROPE_CUSTOM_TYPE(rope)		(((Col_RopeCustomType **)(rope))[1])
 #define ROPE_CUSTOM_DATA(rope)		((void *)((rope)+ROPE_CUSTOM_HEADER_SIZE))
 #define ROPE_CUSTOM_TRAILER_SIZE	(sizeof(Col_Rope))
-#define ROPE_CUSTOM_NEXT(rope, size)	(*(Col_Rope *)((rope)+NB_CELLS(ROPE_CUSTOM_HEADER_SIZE+(size)+ROPE_CUSTOM_TRAILER_SIZE)*CELL_SIZE-ROPE_CUSTOM_TRAILER_SIZE))
+#define ROPE_CUSTOM_NEXT(rope, size)	(*(Cell **)((rope)+NB_CELLS(ROPE_CUSTOM_HEADER_SIZE+(size)+ROPE_CUSTOM_TRAILER_SIZE)*CELL_SIZE-ROPE_CUSTOM_TRAILER_SIZE))
 
-/* 
- * Max byte size of leaf ropes. A leaf rope can take no more than the available
- * size of a page. Larger ropes must be built by concatenation of smaller ones. 
- */
-
-#define UCS_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-ROPE_UCS_HEADER_SIZE)
-#define UTF8_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-ROPE_UTF8_HEADER_SIZE)
-#define CUSTOM_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-ROPE_CUSTOM_HEADER_SIZE)
+#define CUSTOM_MAX_SIZE			(AVAILABLE_CELLS*CELL_SIZE-ROPE_CUSTOM_HEADER_SIZE)
 
 
 /*
@@ -324,8 +484,8 @@ void			DeclareWord(Col_Word word);
 /*
  * Immediate value types.
  *
- * These types store their value in the pointer value, not in a structure. For
- * example, the NULL pointer represents a nil value. So these type IDs are
+ * These types store their value directly in the word value, not in the pointed 
+ * structure. For example, the value 0 represents nil. So these type IDs are
  * never used in the type field of word structures.
  *
  * Regular words point to structures stored in cells. As cells are aligned on
@@ -337,7 +497,6 @@ void			DeclareWord(Col_Word word);
  * The following tags are recognized:
  *
  *	P..			  ..P|0000	word pointer (aligned on 16 byte boundaries) including nil
- *	P..			  ..P|1000 	rope pointer (not including C strings)
  *	I..			     ..I|1 	small signed integer (31 bits on 32-bit systems)
  *	S..		     ..S|L....L|10	small string or char (general format)
  *	U..		     ..U|111111|10 	 - Unicode character (L=-1, 24 bits on 32-bit systems)
@@ -345,20 +504,29 @@ void			DeclareWord(Col_Word word);
  *	0..          ..0S..  ..S|000001|10	 - 1-char 8-bit string (L=1)
  *	0..  ..0S..          ..S|000010|10	 - 2-char 8-bit string (L=2)
  *	S..		     ..S|000011|10	 - 3-char 8-bit string (L=3)
- *	?..			  ..?|0100 	unused
+ *	0..			  ..0|0100 	empty word (zero-sized vector)
+ *	P..			  ..P|1000 	rope pointer (not including C strings)
  *	?..			  ..?|1100 	unused
  */
 
 #define WORD_TYPE_REGULAR	0
 
-#define IS_ROPE(word)		((((uintptr_t)(word))&0xF) == 8)
-#define WORD_TYPE_ROPE		-1
-
 #define IS_IMMEDIATE(word)	(((uintptr_t)(word))&7)
-#define WORD_TYPE_NULL		-2
-#define WORD_TYPE_SMALL_INT	-3
-#define WORD_TYPE_CHAR		-4
-#define WORD_TYPE_SMALL_STRING	-5
+#define WORD_TYPE_NIL		-1
+#define WORD_TYPE_SMALL_INT	-2
+#define WORD_TYPE_CHAR		-3
+#define WORD_TYPE_SMALL_STRING	-4
+#define WORD_TYPE_EMPTY		-5
+
+#define IS_ROPE(word)		((((uintptr_t)(word))&0xF) == 8)
+#define WORD_TYPE_ROPE		-6
+
+
+/*
+ * WORD_TYPE_UNKNOWN is used as a tag in the source code to mark places where
+ * predefined type specific code is needed. Search for this tag when adding
+ * new predefined word types.
+ */
 
 /* 
  * Type field. 
@@ -388,6 +556,37 @@ void			DeclareWord(Col_Word word);
  * When set, this means that the word has children in youngest generations.
  *
  * WORD_SET_TYPE_(ID|ADDR) also clears the parent flag.
+ *
+ * On 32-bit architectures the cell layout is as follows:
+ *
+ *  - Predefined types:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |P|0|   Type    |                                               |
+ *   +-+-+-+-+-+-+-+-+                                               +
+ *   .                                                               .
+ *   .                      Type-specific data                       .
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Parent flag (P) : 1 bit
+ *	Type : 6 bits
+ *
+ *
+ *  - Regular words:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |P|1|                         Type                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   .                                                               .
+ *   .                      Type-specific data                       .
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Parent flag (P) : 1 bit
+ *	Type :  32-bit pointer (with 2 lsbs cleared)
  */
 
 #define CELL_TYPE(cell)		(((unsigned char *)(cell))[0])
@@ -402,12 +601,12 @@ void			DeclareWord(Col_Word word);
 		 (((uintptr_t)(word))&0x80)?	WORD_TYPE_CHAR		\
 		:				WORD_TYPE_SMALL_STRING	\
 	    /* Unknown format */					\
-	    :					WORD_TYPE_NULL		\
+	    :					WORD_TYPE_NIL		\
 	:IS_ROPE(word)?				WORD_TYPE_ROPE		\
 	/* Pointer or predefined */					\
 	:(CELL_TYPE(word)&2)?			WORD_TYPE_REGULAR	\
 	:(CELL_TYPE(word)&~3)			/* Type ID */		\
-    :						WORD_TYPE_NULL)
+    :						WORD_TYPE_NIL)
 
 #ifdef COL_BIGENDIAN
 #   define WORD_GET_TYPE_ADDR(word, addr) \
@@ -427,27 +626,10 @@ void			DeclareWord(Col_Word word);
 #define WORD_CLEAR_PARENT(word)	(((unsigned char *)(word))[0] &= ~1)
 
 /*
- * Predefined word types.
- *
- * To respect the aforementioned constraints, values are chosen so that their 
- * 2 lsbs are zero.
- */
-
-#define WORD_TYPE_INT		4
-#define WORD_TYPE_STRING	8
-#define WORD_TYPE_VECTOR	12
-#define WORD_TYPE_LIST		16
-#define WORD_TYPE_SUBLIST	20
-#define WORD_TYPE_CONCATLIST	24
-
-/*
  * Immediate & rope value fields.
  *
  * Values are for 32-bit systems.
  */
-
-#define WORD_ROPE_GET(word)		((Col_Rope)(((uintptr_t)(word))&~0xF))
-#define WORD_ROPE_NEW(value)		((Col_Word)(((uintptr_t)(value))|8))
 
 #define WORD_SMALL_INT_GET(word)	(((int)(intptr_t)(word))>>1)
 #define WORD_SMALL_INT_NEW(value)	((Col_Word)(intptr_t)((((int)(value))<<1)|1))
@@ -464,29 +646,52 @@ void			DeclareWord(Col_Word word);
 #endif
 #define WORD_SMALL_STRING_EMPTY		((Col_Word) 2)
 
+#define WORD_EMPTY			((Col_Word) 4)
+
+#define WORD_ROPE_GET(word)		((Col_Rope)(((uintptr_t)(word))&~0xF))
+#define WORD_ROPE_NEW(value)		((Col_Word)(((uintptr_t)(value))|8))
+
 /*
  * Word fields.
  *
  * Values are for 32-bit systems.
  *
- * WORD_SYNONYM: words may have synonyms that can take any accepted word value:
- * immediate values (inc. NULL), ropes, or other words. Words can thus be part 
- * of chains of synonyms having different types, but with semantically identical
- * values. Such chains form a circular linked list using this field. The order 
- * of words in a synonym chain has no importance.
+ * On 32-bit architectures the layout is as follows:
  *
- * WORD_NEXT: words with a freeProc are singly-linked together using this field,
- * so that unreachable words get swept properly upon GC.
+ *  - Predefined types:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                           Type info                           |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   .                                                               .
+ *   .                      Type-specific data                       .
+ *   .                                                               .
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                        Next (optional)                        |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Synonym : 32-bit word
+ *	    Words may have synonyms that can take any accepted word value:
+ *	    immediate values (inc. nil), ropes, or other words. Words can thus 
+ *	    be part of chains of synonyms having different types, but with 
+ *	    semantically identical values. Such chains form a circular linked 
+ *	    list using this field. The order of words in a synonym chain has no 
+ *	    importance.
+ *
+ *	Next : 32-bit rope or word (optional)
+ *	    Words with a freeProc are singly-linked together using this field, 
+ *	    so that unreachable words get swept properly upon GC.
  */
 
-#define WORD_HEADER_SIZE	(sizeof(void *)*2)
+#define WORD_HEADER_SIZE	(sizeof(Col_WordType *)+sizeof(Col_Word))
 #define WORD_SYNONYM(word)	(((Col_Word *)(word))[1])
 #define WORD_DATA(word)		((void *)((char *)(word)+WORD_HEADER_SIZE))
 #define WORD_TRAILER_SIZE	(sizeof(Col_Word))
-#define WORD_NEXT(word, size)	(*(Col_Word *)((char *)(word)+NB_CELLS(WORD_HEADER_SIZE+(size)+WORD_TRAILER_SIZE)*CELL_SIZE-WORD_TRAILER_SIZE))
-
-#define WORD_INT_DATA(word)	(*(int *) WORD_DATA(word))
-#define WORD_STRING_DATA(word)	(*(Col_Rope *) WORD_DATA(word))
+#define WORD_NEXT(word, size)	(*(Cell **)((char *)(word)+NB_CELLS(WORD_HEADER_SIZE+(size)+WORD_TRAILER_SIZE)*CELL_SIZE-WORD_TRAILER_SIZE))
 
 /* 
  * Max byte size of word data. A word can take no more than the available size 
@@ -494,6 +699,64 @@ void			DeclareWord(Col_Word word);
  */
 
 #define WORD_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-WORD_HEADER_SIZE)
+
+/*
+ * Integer words.
+ *
+ * Used to wrap integers into a word structure. Needed when the integer is part 
+ * of a synonym chain or when it is too large to fit an immediate small integer.
+ *
+ * On 32-bit architectures the single-cell layout is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                    Unused                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Data                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Unused                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Data : 32-bit integer
+ */
+
+#define WORD_TYPE_INT		4
+
+#define WORD_INT_DATA(word)	(*(int *) WORD_DATA(word))
+
+/*
+ * String words.
+ *
+ * Used to wrap ropes into a word structure. Needed when the rope is part of
+ * a synonym chain.
+ *
+ * On 32-bit architectures the single-cell layout is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                    Unused                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Data                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                           Alternate                           |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Data, Alternate : 32-bit rope
+ *	    As its name says, Alternate provides an alternate representation
+ *	    of the string, such as a quoted or encoded form.
+ */
+
+#define WORD_TYPE_STRING	8
+
+#define WORD_STRING_DATA(word)	(((Col_Rope *) WORD_DATA(word))[0])
+#define WORD_STRING_ALT(word)	(((Col_Rope *) WORD_DATA(word))[1])
+
 
 /*
  *----------------------------------------------------------------
@@ -504,80 +767,448 @@ void			DeclareWord(Col_Word word);
 /*
  * They use the same fields for both rope and word versions, only the header
  * field and type ID change.
+ */
+
+/*
+ * Roots.
  *
  * Roots are explicitly preserved ropes or words, using a reference count.
+ *
+ * On 32-bit architectures the single-cell layout is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                    Rope or word type info                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                        Reference count                        |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Source                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Next                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Reference count : 32-bit unsigned
+ *	    Once the refcount drops to zero the root is removed, however the
+ *	    source may survive if it is referenced elsewhere.
+ *
+ *	Source : 32-bit rope or word
+ *
+ *	Next : 32-bit rope or word
+ *	    Roots are linked together in a singly-linked list for traversal
+ *	    during GC.
+ */
+
+#define ROPE_TYPE_ROOT		0x7F
+#define WORD_TYPE_ROOT		0xFC
+
+#define ROOT_REFCOUNT(cell)	(((size_t *)(cell))[1])
+#define ROOT_NEXT(cell)		(((Cell **)(cell))[3])
+
+/* Define separate accessors for type safety. */
+#define ROPE_ROOT_SOURCE(rope)	(((Col_Rope *)(rope))[2])
+#define WORD_ROOT_SOURCE(word)	(((Col_Word *)(word))[2])
+
+/* Careful: don't give arguments with side effects!  */
+#define RESOLVE_ROPE(rope) \
+    {if (ROPE_TYPE((rope)) == ROPE_TYPE_ROOT) {(rope) = ROPE_ROOT_SOURCE((rope));}}
+#define RESOLVE_WORD(word) \
+    {if (WORD_TYPE((word)) == WORD_TYPE_ROOT) {(word) = WORD_ROOT_SOURCE((word));}}
+
+/*
+ * Parents.
  *
  * Parent roots are like automatic roots: they point to parents with children 
  * in newer generations.
  *
- * Redirects replace existing ropes during promotion.
+ * On 32-bit architectures the single-cell layout is as follows:
  *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                    Rope or word type info                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Cell                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Unused                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Next                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Cell : 32-bit rope or word
+ *	    The parent cell having children in newer generations.
+ *
+ *	Next : 32-bit rope or word
+ *	    Parents are linked together in a singly-linked list for traversal
+ *	    during GC.
  */
 
-#define ROPE_TYPE_ROOT		0x7F
 #define ROPE_TYPE_PARENT	0x7E
-#define ROPE_TYPE_REDIRECT	0x7D
-
-#define WORD_TYPE_ROOT		0xFC
 #define WORD_TYPE_PARENT	0xF8
+
+#define PARENT_CELL(cell)	(((Cell **)(cell))[1])
+#define PARENT_NEXT(cell)	(((Cell **)(cell))[3])
+
+/*
+ * Redirects.
+ *
+ * Redirects replace existing ropes during promotion. They only exist during
+ * the GC.
+ *
+ * On 32-bit architectures the single-cell layout is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                    Rope or word type info                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Unused                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Source                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Unused                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Source : 32-bit rope or word
+ */
+
+#define ROPE_TYPE_REDIRECT	0x7D
 #define WORD_TYPE_REDIRECT	0xF4
 
-/* Careful: don't give arguments with side effects!  */
-#define RESOLVE_ROPE(rope) \
-    {if (ROPE_TYPE((rope)) == ROPE_TYPE_ROOT) {(rope) = ROOT_SOURCE((rope));}}
-#define RESOLVE_WORD(word) \
-    {if (WORD_TYPE((word)) == WORD_TYPE_ROOT) {(word) = ROOT_SOURCE((word));}}
-
-#define ROOT_REFCOUNT(cell)	(((size_t *)(cell))[1])
-#define ROOT_SOURCE(cell)	(((const void **)(cell))[2])
-#define ROOT_NEXT(cell)		(((const void **)(cell))[3])
-
-#define PARENT_CELL(cell)	(((const void **)(cell))[1])
-#define PARENT_NEXT(cell)	(((const void **)(cell))[3])
-
-#define REDIRECT_SOURCE(rope)	ROOT_SOURCE(rope)
+#define ROPE_REDIRECT_SOURCE(rope)	ROPE_ROOT_SOURCE(rope)
+#define WORD_REDIRECT_SOURCE(word)	WORD_ROOT_SOURCE(word)
 
 
 /*
  *----------------------------------------------------------------
- * Vectors and lists.
+ * Collections.
  *----------------------------------------------------------------
  */
 
-/* 
- * Max length of vectors words. A vector word can take no more than the 
- * available size of a page. Larger datasets must use tree-based lists.
- */
-
-#define VECTOR_MAX_LENGTH	(WORD_MAX_SIZE/sizeof(Col_Word))
-
 /*
- * Vector fields.
+ * Vector words.
+ *
+ * Vectors are arrays of word elements that fit in a single word structure. 
+ * Elements are directly addressable.
+ *
+ * On 32-bit architectures the multi-cell layout is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |     Size    |R|            Length             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   .                                                               .
+ *   .                           Elements                            .
+ *   .                                                               .
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Size : 7-bit unsigned
+ *	    When zero, vector is immutable. Else it is mutable and this field
+ *	    gives the number of allocated cells. On 32-bit systems, 7 bits 
+ *	    should be sufficient to represent up to AVAILABLE_CELLS.
+ *
+ *	Has References (R) : 1 bit
+ *	    When set, indicates that at least one of the elements is or contains
+ *	    a reference.
+ *
+ *	Length : 16-bit unsigned
+ *	    A word taking up to AVAILABLE_CELLS, this ensures that the actual
+ *	    size fits the length field width.
+ *
+ *	Elements : array of 32-bit words
  */
+
+#define WORD_TYPE_VECTOR		12
+
+#define VECTOR_MAX_LENGTH		(WORD_MAX_SIZE/sizeof(Col_Word))
 
 #define WORD_VECTOR_FLAGS(word)		(((unsigned char *)(word))[1])
+/*#define WORD_VECTOR_FLAG_SIZE_MASK	0x7F*/
+#define WORD_VECTOR_FLAG_HASREFS	0x80
 #define WORD_VECTOR_LENGTH(word)	(((unsigned short *)(word))[1])
 #define WORD_VECTOR_ELEMENTS(word)	((Col_Word *) WORD_DATA(word))
 
 /*
- * List fields.
+ * List words.
  *
- * List nodes and sublists are not regular words in the sense that they have no 
+ * Lists are collections of randomly accessed words elements. They are similar 
+ * to vectors but have no size limit (bar the platform-specific integer limits). 
+ * They are implemented as self-balanced binary trees whose leaves are vectors, 
+ * and are very similar to ropes.
+ *
+ * A vector is a list.
+ *
+ * Concat and sublist nodes are not regular words in the sense that they have no 
  * synonym field. Instead they store their size. They are similar to concat 
  * resp. substring ropes and use the same format. They are never used 
  * independently from list words.
+ *
+ * On 32-bit architectures the single-cell layout is as follows:
+ *
+ *  - List words:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                   Unused                      |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Length                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Root                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Length : 32-bit unsigned
+ *
+ *	Root : 32-bit word
+ *	    The root is either a sublist or concat list node. It cannot be a
+ *	    vector since in this case the list could be represented by a 
+ *	    single vector. 
+ *
+ *
+ *  - Sublist node:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |R|0|   Unused  |     Depth     |    Unused     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Source                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             First                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Last                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Has References (R) : 1 bit
+ *	    When set, indicates that at least one of the elements is or contains
+ *	    a reference.
+ *
+ *	Mutable (M) : 1 bit, always zero (sublists are never mutable).
+ *
+ *	Depth : 8-bit unsigned
+ *	    8 bits will code up to 255 depth levels, which is more than 
+ *	    sufficient for balanced binary trees. 
+ *
+ *	Source : 32-bit word
+ *
+ *	First, Last : 32-bit unsigned
+ *
+ *
+ *  - Concat node:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |R|M|   Unused  |     Depth     |  Left length  |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Length                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Left                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Right                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Has References (R) : 1 bit
+ *	    When set, indicates that at least one of the elements is or contains
+ *	    a reference.
+ *
+ *	Mutable (M) : 1 bit
+ *	    When zero, this guarantees that all children are immutable.
+ *
+ *	Depth : 8-bit unsigned
+ *	    8 bits will code up to 255 depth levels, which is more than 
+ *	    sufficient for balanced binary trees. 
+ *
+ *	Left length : 8-bit unsigned
+ *	    Used as shortcut to avoid dereferencing the left arm. Zero if actual 
+ *	    length is larger than 255.
+ *
+ *	Length : 32-bit unsigned
+ *
+ *	Left, Right : 32-bit words or list nodes
  */
+
+#define WORD_TYPE_LIST			16
+#define WORD_TYPE_SUBLIST		20
+#define WORD_TYPE_CONCATLIST		24
 
 #define WORD_LIST_LENGTH(word)		(((size_t *)(word))[2])
 #define WORD_LIST_ROOT(word)		(((Col_Word *)(word))[3])
 
-#define WORD_SUBLIST_DEPTH(word)	(((unsigned char *)(word))[1]) 
+#define WORD_LISTNODE_FLAGS(word)	(((unsigned char *)(word))[1])
+#define WORD_LISTNODE_FLAG_HASREFS	1
+/*#define WORD_LISTNODE_FLAG_MUTABLE	2*/
+#define WORD_LISTNODE_DEPTH(word)	(((unsigned char *)(word))[2]) 
+
 #define WORD_SUBLIST_SOURCE(word)	(((Col_Word *)(word))[1])
 #define WORD_SUBLIST_FIRST(word)	(((size_t *)(word))[2])
 #define WORD_SUBLIST_LAST(word)		(((size_t *)(word))[3])
 
-#define WORD_CONCATLIST_DEPTH(word)	(((unsigned char *)(word))[1])
-#define WORD_CONCATLIST_LEFT_LENGTH(word) (((unsigned short *)(word))[1])
+#define WORD_CONCATLIST_LEFT_LENGTH(word) (((unsigned char *)(word))[3])
 #define WORD_CONCATLIST_LENGTH(word)	(((size_t *)(word))[1])
 #define WORD_CONCATLIST_LEFT(word)	(((Col_Word *)(word))[2])
 #define WORD_CONCATLIST_RIGHT(word)	(((Col_Word *)(word))[3])
+
+/*
+ * Sequence words.
+ *
+ * Sequences are collections of words that are sequentially traversable and 
+ * potentially cyclic. They are implemented as linked lists of parts that are 
+ * either lists or references to sequences. The sequence is formed by logically 
+ * concatenating its parts, references being resolved recursively. Sequences 
+ * thus form a (potentially cyclic) tree that is traversed depth-first.
+ *
+ * Sequences have no known length: they can be infinite when cyclic, or far 
+ * exceed the integer limit. However each node, being a list, has a known
+ * length.
+ *
+ * Consecutive lists are merged into one when possible. The only case when this
+ * is not done is when their combined length exceeds the maximum list length.
+ *
+ * When a cycle is found, the remainder of the sequence is trimmed.
+ *
+ * Lists are sequences. Since vectors are lists, vectors are also sequences.
+ *
+ * On 32-bit architectures the single-cell layout is as follows:
+ *
+ *  - Sequence words:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |C|                   Unused                    |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Root                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                          Stack nodes                          |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Cyclic (C) : 1 bit
+ *	    When set, indicates that the sequence is cyclic.
+ *
+ *	Root : 32-bit word
+ *	    The root is a vector, sublist or concat list node, whose elements
+ *	    are lists (including vectors) or references to sequences.
+ *
+ *	Stack nodes : 32-bit word
+ *	    Linked list of previously allocated but now free stack nodes.
+ *
+ *
+ *  - Sequence nodes:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                    Unused                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             List                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                           Reference                           |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Next                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	List : 32-bit word
+ *	    List element. May be nil.
+ *
+ *	Reference : 32-bit word
+ *	    Reference to another sequence. May be nil.
+ *
+ *	Next : 32-bit word
+ *	    Sequence nodes are linked together in a singly-linked list.
+ *
+ *
+ *  - Stack nodes:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                    Unused                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                           Sequence                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Node                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                             Next                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Sequence : 32-bit word
+ *	    Uplevel sequence.
+ *
+ *	Node : 32-bit word
+ *	    Parent node in uplevel sequence.
+ *
+ *	Next : 32-bit word
+ *	    When in use, uplevel stack node.
+ *	    When free, next in free stack node list.
+ */
+
+#define WORD_TYPE_SEQUENCE		28
+#define WORD_TYPE_SEQUENCE_NODE		32
+#define WORD_TYPE_SEQUENCE_STACK	36
+
+#define WORD_SEQUENCE_CYCLIC(word)	(((unsigned char *)(word))[1])
+#define WORD_SEQUENCE_ROOT(word)	(((Col_Word *)(word))[2])
+#define WORD_SEQUENCE_STACKNODES(word)	(((Col_Word *)(word))[3])
+
+#define WORD_SEQNODE_LIST(word)		(((Col_Word *)(word))[1])
+#define WORD_SEQNODE_REF(word)		(((Col_Word *)(word))[2])
+#define WORD_SEQNODE_NEXT(word)		(((Col_Word *)(word))[3])
+
+#define WORD_SEQSTACK_SEQUENCE(word)	(((Col_Word *)(word))[1])
+#define WORD_SEQSTACK_NODE(word)	(((Col_Word *)(word))[2])
+#define WORD_SEQSTACK_NEXT(word)	(((Col_Word *)(word))[3])
+
+
+/*
+ *----------------------------------------------------------------
+ * References.
+ *----------------------------------------------------------------
+ */
+
+/*
+ * Reference words.
+ *
+ * References can be used to build self-referential structures, especially 
+ * immutable ones such as lists. References can be resolved after their 
+ * creation, allowing for example a list or one of its children to include a 
+ * reference to an element that is created at a later time. 
+ *
+ * References can also be used for data sharing in mutable structures. In the 
+ * general, immutable case, references may help distinguish words having the 
+ * same value.
+ *
+ * References are synonymous with the word they refer to. Thus, unbound
+ * references are semantically identical to nil. So an unbound reference is 
+ * not an error condition at this level of abstraction, although it may be one 
+ * if the upper abstraction layer expects non-nil values. In other words, 
+ * references are outside the domain of values.
+ *
+ * On 32-bit architectures the single-cell layout is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                   Unused                      |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Source                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Unused                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Source : 32-bit word.
+ *	    Points to the referenced word.
+ */
+
+#define WORD_TYPE_REFERENCE		40
+
+#define WORD_REFERENCE_SOURCE(word)	(((Col_Word *)(word))[2])

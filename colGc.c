@@ -115,7 +115,7 @@ GetNbCells(
     const void *cell)		/* The first cell of the rope or word. */
 {
     if (CELL_TYPE(cell) /* word */) {
-	Col_Word word = cell;
+	Col_Word word = (Col_Word) cell;
 	Col_WordType * typeInfo;
 
 	/*
@@ -132,6 +132,8 @@ GetNbCells(
 		WORD_GET_TYPE_ADDR(word, typeInfo);
 		return NB_CELLS(WORD_HEADER_SIZE + typeInfo->sizeProc(word)
 			+ (typeInfo->freeProc?WORD_TRAILER_SIZE:0));
+
+	    /* WORD_TYPE_UNKNOWN */
 
 	    default:
 		return 1;
@@ -162,6 +164,8 @@ GetNbCells(
 		return NB_CELLS(ROPE_CUSTOM_HEADER_SIZE + ROPE_CUSTOM_SIZE(rope) 
 			+ (ROPE_CUSTOM_TYPE(rope)->freeProc?ROPE_CUSTOM_TRAILER_SIZE:0));
 
+	    /* ROPE_TYPE_UNKNOWN */
+
 	    default:
 		return 1;
 	}
@@ -190,7 +194,7 @@ GetNbCells(
 #define ResolveRedirectRope(ropePtr)			\
 {							\
     if (ROPE_TYPE(*(ropePtr)) == ROPE_TYPE_REDIRECT) {	\
-	*(ropePtr) = REDIRECT_SOURCE(*(ropePtr));	\
+	*(ropePtr) = ROPE_REDIRECT_SOURCE(*(ropePtr));	\
     }							\
 }
 #define ResolveRedirectWord(wordPtr)			\
@@ -204,7 +208,7 @@ GetNbCells(
 	}						\
 							\
 	case WORD_TYPE_REDIRECT:			\
-	    *(wordPtr) = REDIRECT_SOURCE(*wordPtr);	\
+	    *(wordPtr) = (Col_Word) WORD_REDIRECT_SOURCE(*wordPtr);	\
 	    break;					\
     }							\
 }
@@ -232,12 +236,12 @@ GetNbCells(
 
 EXTERN void
 Col_DeclareChild(
-    const void *parent,		/* Parent rope or word. */
-    const void *child)		/* Child rope or word. */
+    void *parent,		/* Parent rope or word. */
+    void *child)		/* Child rope or word. */
 {
     GcMemInfo *info = GetGcMemInfo();
     unsigned int parentGen, childGen;
-    void * root;
+    Cell * root;
 
     if (!info->pauseGC) {
 	/*
@@ -424,8 +428,8 @@ Col_PreserveRope(
 
     root = PoolAllocCells(&info->pools[0], 1);
     ROPE_SET_TYPE(root, ROPE_TYPE_ROOT);
-    ROOT_REFCOUNT(root) = 1;
-    ROOT_SOURCE(root) = rope;
+    ROOT_REFCOUNT((Cell *) root) = 1;
+    ROPE_ROOT_SOURCE(root) = rope;
 
     /* 
      * Insert in head of the root list. 
@@ -433,7 +437,7 @@ Col_PreserveRope(
 
     generation = PAGE_GENERATION(CELL_PAGE(rope));
     ROOT_NEXT(root) = info->pools[generation].roots;
-    info->pools[generation].roots = root;
+    info->pools[generation].roots = (Cell *) root;
 
     return root;
 }
@@ -459,7 +463,7 @@ Col_ReleaseRope(
      */
 
     ROOT_REFCOUNT(rope) = 0;
-    return ROOT_SOURCE(rope);
+    return ROPE_ROOT_SOURCE(rope);
 }
 
 Col_Word 
@@ -477,16 +481,17 @@ Col_PreserveWord(
 	 */
 
 	/* TODO: exception */
-	return NULL;
+	return WORD_NIL;
     }
 
     type = WORD_TYPE(word);
 
     switch (type) {
-	case WORD_TYPE_NULL:
+	case WORD_TYPE_NIL:
 	case WORD_TYPE_SMALL_INT:
-	case WORD_TYPE_SMALL_STRING:
 	case WORD_TYPE_CHAR:
+	case WORD_TYPE_SMALL_STRING:
+	case WORD_TYPE_EMPTY:
 	    /* 
 	     * Immediate values. 
 	     */
@@ -506,10 +511,10 @@ Col_PreserveWord(
      * Create a new root word.
      */
 
-    root = PoolAllocCells(&info->pools[0], 1);
+    root = (Col_Word) PoolAllocCells(&info->pools[0], 1);
     WORD_SET_TYPE_ID(root, WORD_TYPE_ROOT);
     ROOT_REFCOUNT(root) = 1;
-    ROOT_SOURCE(root) = word;
+    WORD_ROOT_SOURCE(root) = word;
 
     /* 
      * Insert in head of the root list. 
@@ -517,7 +522,7 @@ Col_PreserveWord(
 
     generation = PAGE_GENERATION(CELL_PAGE(word));
     ROOT_NEXT(root) = info->pools[generation].roots;
-    info->pools[generation].roots = root;
+    info->pools[generation].roots = (Cell *) root;
 
     return root;
 }
@@ -543,7 +548,7 @@ Col_ReleaseWord(
      */
 
     ROOT_REFCOUNT(word) = 0;
-    return ROOT_SOURCE(word);
+    return WORD_ROOT_SOURCE(word);
 }
 
 /*
@@ -579,7 +584,7 @@ DeclareCustomRope(
 	unsigned int generation = PAGE_GENERATION(CELL_PAGE(rope));
 	ROPE_CUSTOM_NEXT(rope, ROPE_CUSTOM_SIZE(rope)) 
 		= info->pools[generation].sweepables;
-	info->pools[generation].sweepables = rope;
+	info->pools[generation].sweepables = (Cell *) rope;
     }
 }
 
@@ -599,7 +604,7 @@ DeclareWord(
 	    unsigned int generation = PAGE_GENERATION(CELL_PAGE(word));
 	    WORD_NEXT(word, typeInfo->sizeProc(word))
 		= info->pools[generation].sweepables;
-	    info->pools[generation].sweepables = word;
+	    info->pools[generation].sweepables = (Cell *) word;
 	}
     }
 }
@@ -624,7 +629,7 @@ DeclareWord(
  *---------------------------------------------------------------------------
  */
 
-void *
+Cell *
 AllocCells(
     size_t number)		/* Number of cells to allocate. */
 {
@@ -670,8 +675,8 @@ PoolAllocCells(
     MemoryPool *pool,		/* Pool into which to allocate cells. */
     size_t number)		/* Number of cells to allocate. */
 {
-    void *cells;
-    void *tail;
+    Cell *cells;
+    Page *tail;
     size_t i;
     
     if (!pool->pages) {
@@ -980,7 +985,7 @@ MarkReachableCellsFromRoots(
     GcMemInfo *info)		/* Thread local info. */
 {
     unsigned int generation;
-    const void *root, **previousPtr;
+    Cell *root, **previousPtr;
 
     /*
      * Iterate in reverse so that existing lists don't get overwritten.
@@ -1068,7 +1073,7 @@ MarkReachableCellsFromParents(
     GcMemInfo *info)		/* Thread local info. */
 {
     unsigned int generation;
-    const void *root, **previousPtr, *parent;
+    Cell *root, **previousPtr, *parent;
 
     /*
      * Iterate in reverse so that existing lists don't get overwritten.
@@ -1259,7 +1264,7 @@ start:
 		    && *generationPtr > PAGE_GENERATION(CELL_PAGE(*ropePtr))) {
 		*generationPtr = PAGE_GENERATION(CELL_PAGE(*ropePtr));
 	    }
-	    *ropePtr = REDIRECT_SOURCE(*ropePtr);
+	    *ropePtr = ROPE_REDIRECT_SOURCE(*ropePtr);
 	    return;
     }
 
@@ -1285,7 +1290,7 @@ start:
 #ifdef PROMOTE_COMPACT
     if (PAGE_GENERATION(CELL_PAGE(*ropePtr)) == info->compactGeneration) {
 	/*
-	 * Ropes are relocated moved to the next generation.
+	 * Ropes are moved to the next generation.
 	 */
 
 	promoted = PoolAllocCells(&info->pools[info->compactGeneration+1], 
@@ -1297,7 +1302,7 @@ start:
 	 */
 
 	ROPE_SET_TYPE(*ropePtr, ROPE_TYPE_REDIRECT);
-	REDIRECT_SOURCE(*ropePtr) = promoted;
+	ROPE_REDIRECT_SOURCE(*ropePtr) = promoted;
 
 	/*
 	 * Follow redirect to resolve its children. Clearing the first cell is 
@@ -1371,9 +1376,11 @@ start:
 	     * Tail recurse on source. 
 	     */
 
-	    ropePtr = (Col_Rope *) &ROOT_SOURCE(*ropePtr);
+	    ropePtr = &ROPE_ROOT_SOURCE(*ropePtr);
 	    generationPtr = NULL;
 	    goto start;
+
+	/* ROPE_TYPE_UNKNOWN */
 
 	default:
 	    /*
@@ -1403,7 +1410,7 @@ MarkWord(
     Col_WordType * typeInfo;
     int type;
     size_t nbCells;
-    void *promoted;
+    Col_Word promoted;
     unsigned int childGen;
 
     /*
@@ -1444,7 +1451,7 @@ start:
 		    && *generationPtr > PAGE_GENERATION(CELL_PAGE(*wordPtr))) {
 		*generationPtr = PAGE_GENERATION(CELL_PAGE(*wordPtr));
 	    }
-	    *wordPtr = REDIRECT_SOURCE(*wordPtr);
+	    *wordPtr = WORD_REDIRECT_SOURCE(*wordPtr);
 	    return;
     }
 
@@ -1465,24 +1472,24 @@ start:
 	return;
     }
 
-    nbCells = GetNbCells(*wordPtr);
+    nbCells = GetNbCells((const void *) *wordPtr);
     
 #ifdef PROMOTE_COMPACT
     if (PAGE_GENERATION(CELL_PAGE(*wordPtr)) == info->compactGeneration) {
 	/*
-	 * Words are relocated moved to the next generation.
+	 * Words are moved to the next generation.
 	 */
 
-	promoted = PoolAllocCells(&info->pools[info->compactGeneration+1], 
+	promoted = (Col_Word) PoolAllocCells(&info->pools[info->compactGeneration+1], 
 		nbCells);
-	memcpy(promoted, *wordPtr, nbCells * CELL_SIZE);
+	memcpy((void *) promoted, (const void *) *wordPtr, nbCells * CELL_SIZE);
 
 	/*
 	 * Replace original by redirect.
 	 */
 
 	WORD_SET_TYPE_ID(*wordPtr, WORD_TYPE_REDIRECT);
-	REDIRECT_SOURCE(*wordPtr) = promoted;
+	WORD_REDIRECT_SOURCE(*wordPtr) = promoted;
 
 	/*
 	 * Follow redirect to resolve its children. Clearing the first cell is 
@@ -1510,7 +1517,7 @@ start:
 	     * Tail recurse on source. 
 	     */
 
-	    wordPtr = &ROOT_SOURCE(*wordPtr);
+	    wordPtr = &WORD_ROOT_SOURCE(*wordPtr);
 	    generationPtr = NULL;
 	    goto start;
 
@@ -1564,7 +1571,56 @@ start:
 	    wordPtr = &WORD_CONCATLIST_RIGHT(*wordPtr);
 	    generationPtr = NULL;
 	    goto start;
-    	    
+
+	case WORD_TYPE_SEQUENCE:
+	    /* 
+	     * Clear stack nodes and follow sequence root.
+	     */
+
+	    WORD_SEQUENCE_STACKNODES(*wordPtr) = WORD_NIL;
+	    MarkWord(info, &WORD_SEQUENCE_ROOT(*wordPtr), NULL);
+	    
+	    /*
+	     * Continued below on synonym.
+	     */
+
+	    break;
+
+	case WORD_TYPE_SEQUENCE_NODE:
+	    /* 
+	     * Follow list and reference, and tail recurse on next.
+	     */
+
+	    MarkWord(info, &WORD_SEQNODE_LIST(*wordPtr), NULL);
+	    MarkWord(info, &WORD_SEQNODE_REF(*wordPtr), NULL);
+	    wordPtr = &WORD_SEQNODE_NEXT(*wordPtr);
+	    generationPtr = NULL;
+	    goto start;
+
+	case WORD_TYPE_SEQUENCE_STACK:
+	    /* 
+	     * Follow sequence and node, and tail recurse on next. 
+	     */
+
+	    MarkWord(info, &WORD_SEQSTACK_SEQUENCE(*wordPtr), NULL);
+	    MarkWord(info, &WORD_SEQSTACK_NODE(*wordPtr), NULL);
+	    wordPtr = &WORD_SEQSTACK_NEXT(*wordPtr);
+	    generationPtr = NULL;
+	    goto start;
+
+	case WORD_TYPE_REFERENCE:
+	    /* 
+	     * Follow source.
+	     */
+
+	    MarkWord(info, &WORD_REFERENCE_SOURCE(*wordPtr), NULL);
+
+	    /*
+	     * Continued below on synonym.
+	     */
+
+	    break;
+
 	case WORD_TYPE_REGULAR:
 	    WORD_GET_TYPE_ADDR(*wordPtr, typeInfo);
 	    if (typeInfo->childrenProc) {
@@ -1585,6 +1641,8 @@ start:
 	     */
 
 	    break;
+
+	/* WORD_TYPE_UNKNOWN */
 
 	default:
 	    /*
@@ -1640,7 +1698,7 @@ SweepUnreachableCells(
     GcMemInfo *info)		/* Thread local info. */
 {
     unsigned int generation;
-    const void *cell, **previousPtr;
+    Cell *cell, **previousPtr;
 
     for (generation = 1; generation <= info->maxCollectedGeneration; 
 	    generation++) {
@@ -1653,7 +1711,7 @@ SweepUnreachableCells(
 	     */
 
 	    if (CELL_TYPE(cell) /* word */) {
-		Col_Word word = cell;
+		Col_Word word = (Col_Word) cell;
 		Col_WordType * typeInfo;
 
 		if (generation == info->compactGeneration) {
@@ -1683,13 +1741,12 @@ SweepUnreachableCells(
 		     * Keep, updating reference in case of redirection.
 		     */
 
-		    *previousPtr = word;
+		    *previousPtr = (Cell *) word;
 
-		    *(Col_Word **) previousPtr = &WORD_NEXT(word, 
-			    typeInfo->sizeProc(word));
+		    previousPtr = &WORD_NEXT(word, typeInfo->sizeProc(word));
 		}
 	    } else {
-		Col_Rope rope = cell;
+		Col_Rope rope = (Col_Rope) cell;
 
 		if (generation == info->compactGeneration) {
 		    /* 
@@ -1710,16 +1767,16 @@ SweepUnreachableCells(
 		     * Remove from list. 
 		     */
 
-		    *previousPtr = ROPE_CUSTOM_NEXT(rope, 
+		    *previousPtr = (Cell *) ROPE_CUSTOM_NEXT(rope, 
 			    ROPE_CUSTOM_SIZE(rope));
 		} else {
 		    /*
 		     * Keep, updating reference in case of redirection.
 		     */
 
-		    *previousPtr = rope;
+		    *previousPtr = (Cell *) rope;
 
-		    *(Col_Rope **) previousPtr = &ROPE_CUSTOM_NEXT(rope, 
+		    previousPtr = &ROPE_CUSTOM_NEXT(rope, 
 			    ROPE_CUSTOM_SIZE(rope));
 		}
 	    }

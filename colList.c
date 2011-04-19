@@ -14,14 +14,15 @@
 
 #include <stdlib.h>
 #include <limits.h>
-#include <memory.h> /* For memcpy */
 #include <malloc.h> /* For alloca */
 
 /* 
- * Max byte size of short list (inc. header) created with sublist or concat. 
+ * Max byte size/length of short list (inc. header) created with sublist or 
+ * concat. 
  */
 
 #define MAX_SHORT_LIST_SIZE	(3*CELL_SIZE)
+#define MAX_SHORT_LIST_LENGTH	((MAX_SHORT_LIST_SIZE-WORD_HEADER_SIZE)/sizeof(Col_Word))
 
 /*
  * Max depth of subnodes in iterators.
@@ -34,10 +35,23 @@
  */
 
 static Col_ListChunksEnumProc MergeChunksProc;
-static Col_Word		NewList(Col_Word root);
+static Col_Word		NewListWord(Col_Word root);
+static Col_Word		NewListNode(size_t length, const Col_Word * elements);
+static Col_Word		Sublist(Col_Word list,	size_t first, size_t last);
 static void		GetArms(Col_Word node, Col_Word * leftPtr, 
 			    Col_Word * rightPtr);
+static Col_Word		ConcatLists(Col_Word left, Col_Word right);
+static Col_Word		ConcatListsA(size_t number, const Col_Word * words);
+static Col_Word		ConcatListsL(Col_Word list, size_t first, size_t last);
+static Col_Word		NewSequenceWord(Col_Word root);
+static Col_Word		NewSequenceNode(Col_Word part, Col_Word *sequencePtr, 
+			    Col_Word prev);
+static Col_Word		NewSequence(const Col_Word * partsA, Col_Word partsL,
+			    size_t first, size_t last);
 static void		UpdateTraversalInfo(Col_ListIterator *it);
+static int		PushNode(Col_SequenceIterator *it);
+static void		PopNode(Col_SequenceIterator *it);
+static void		FindPart(Col_SequenceIterator *it);
 
 
 /*
@@ -65,18 +79,18 @@ Col_GetMaxVectorLength()
 /*
  *---------------------------------------------------------------------------
  *
- * Col_NewVectorWord --
- * Col_NewVectorWordV --
+ * Col_NewVector --
+ * Col_NewVectorV --
  *
- *	Create a new list word.
+ *	Create a new vector word.
  *	Col_NewVectorWordV is a variadic version of Col_NewVectorWord.
  *
  *	Truncates the provided data if it is larger than the maximum length.
  *	Calling code must thus check the length of the created word, and use
- *	use additional structures to assemble vectors into larger lists.
+ *	additional structures to assemble vectors into larger lists.
  *
  * Results:
- *	The new word, or NULL when length is zero.
+ *	The new word.
  *
  * Side effects:
  *	May allocate memory cells.
@@ -85,14 +99,21 @@ Col_GetMaxVectorLength()
  */
 
 Col_Word
-Col_NewVectorWord(
+Col_NewVector(
     size_t length,		/* Length of below array. */
     const Col_Word * elements)	/* Array of words to populate vector with. */
 {
     Col_Word vector;		/* Resulting word in the general case. */
+    size_t i;
+    Col_Word *dst;
+    int hasRefs=0;
 
     if (length == 0) {
-	return NULL;
+	/* 
+	 * Use singleton immediate value.
+	 */
+
+	return WORD_EMPTY;
     }
 
     /*
@@ -110,20 +131,23 @@ Col_NewVectorWord(
      * the newly created vector.
      */
 
-    vector = AllocCells(NB_CELLS(WORD_HEADER_SIZE 
+    vector = (Col_Word) AllocCells(NB_CELLS(WORD_HEADER_SIZE 
 	    + (length * sizeof(Col_Word))));
     WORD_SET_TYPE_ID(vector, WORD_TYPE_VECTOR);
-    WORD_SYNONYM(vector) = NULL;
-    WORD_VECTOR_FLAGS(vector) = 0;
+    WORD_SYNONYM(vector) = WORD_NIL;
     WORD_VECTOR_LENGTH(vector) = (unsigned short) length;
-    memcpy((void *) WORD_VECTOR_ELEMENTS(vector), elements, 
-	    length * sizeof(Col_Word));
+    dst = WORD_VECTOR_ELEMENTS(vector);
+    for (i=0; i < length; i++) {
+	dst[i] = elements[i];
+	if (WORD_TYPE(dst[i]) == WORD_TYPE_REFERENCE) hasRefs = 1;
+    }
+    WORD_VECTOR_FLAGS(vector) = (hasRefs?WORD_VECTOR_FLAG_HASREFS:0);
 
     return vector;
 }
 
 Col_Word
-Col_NewVectorWordV(
+Col_NewVectorV(
     size_t length,		/* Number of arguments. */
     ...)			/* Remaining arguments, i.e. words to add in 
 				 * order. */
@@ -131,9 +155,14 @@ Col_NewVectorWordV(
     size_t i;
     va_list args;
     Col_Word vector, *elements;
+    int hasRefs=0;
 
     if (length == 0) {
-	return NULL;
+	/* 
+	 * Use singleton immediate value.
+	 */
+
+	return WORD_EMPTY;
     }
 
     /*
@@ -151,23 +180,64 @@ Col_NewVectorWordV(
      * the newly created vector.
      */
 
-    vector = AllocCells(NB_CELLS(WORD_HEADER_SIZE + (length * sizeof(Col_Word))));
+    vector = (Col_Word) AllocCells(NB_CELLS(WORD_HEADER_SIZE 
+	    + (length * sizeof(Col_Word))));
     WORD_SET_TYPE_ID(vector, WORD_TYPE_VECTOR);
-    WORD_SYNONYM(vector) = NULL;
-    WORD_VECTOR_FLAGS(vector) = 0;
+    WORD_SYNONYM(vector) = WORD_NIL;
     WORD_VECTOR_LENGTH(vector) = (unsigned short) length;
     elements = WORD_VECTOR_ELEMENTS(vector);
     va_start(args, length);
     for (i=0; i < length; i++) {
 	elements[i] = va_arg(args, Col_Word);
+	if (WORD_TYPE(elements[i]) == WORD_TYPE_REFERENCE) hasRefs = 1;
     }
+    WORD_VECTOR_FLAGS(vector) = (hasRefs?WORD_VECTOR_FLAG_HASREFS:0);
+
     return vector;
 }
 
 /*
  *---------------------------------------------------------------------------
  *
- * Col_NewListWord --
+ * NewListWord --
+ *
+ *	Utility proc used to wrap a list around a root node. List nodes are
+ *	not regular words in the sense that they have no synonym field, so they
+ *	must be wrapped around a list word.
+ *
+ * Results:
+ *	The new word.
+ *
+ * Side effects:
+ *	Allocates memory cells.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+static Col_Word	
+NewListWord(
+    Col_Word root)		/* The list root. */
+{
+    Col_Word list;
+    switch (WORD_TYPE(root)) {
+	case WORD_TYPE_SUBLIST:
+	case WORD_TYPE_CONCATLIST:
+	    list = (Col_Word) AllocCells(1);
+	    WORD_SET_TYPE_ID(list, WORD_TYPE_LIST);
+	    WORD_LIST_LENGTH(list) = Col_ListLength(root);
+	    WORD_LIST_ROOT(list) = root;
+
+	    return list;
+	
+	default:
+	    return root;
+    }
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Col_NewList --
  *
  *	Create a new list word.
  *
@@ -175,7 +245,7 @@ Col_NewVectorWordV(
  *	in half and assembled in a tree.
  *
  * Results:
- *	The new word, or NULL when length is zero.
+ *	The new word, or nil when length is zero.
  *
  * Side effects:
  *	May allocate memory cells.
@@ -184,7 +254,15 @@ Col_NewVectorWordV(
  */
 
 Col_Word
-Col_NewListWord(
+Col_NewList(
+    size_t length,		/* Length of below array. */
+    const Col_Word * elements)	/* Array of words to populate list with. */
+{
+    return NewListWord(NewListNode(length, elements));
+}
+
+static Col_Word
+NewListNode(
     size_t length,		/* Length of below array. */
     const Col_Word * elements)	/* Array of words to populate list with. */
 {
@@ -195,20 +273,18 @@ Col_NewListWord(
 	 * List fits into one vector. 
 	 */
 
-	return Col_NewVectorWord(length, elements);
+	return Col_NewVector(length, elements);
     }
 
     /* 
      * The list is built by concatenating the two halves of the array. This 
      * recursive halving ensures that the resulting binary tree is properly 
      * balanced. 
-     *
-     * TODO: optimize by avoiding useless roots?
      */
 
     half = length/2;
-    return Col_ConcatLists(Col_NewListWord(half, elements),
-	    Col_NewListWord(length-half, elements+half));
+    return ConcatLists(NewListNode(half, elements),
+	    NewListNode(length-half, elements+half));
 }
 
 /*
@@ -250,39 +326,14 @@ Col_ListLength(
 
 	    return WORD_SUBLIST_LAST(list)-WORD_SUBLIST_FIRST(list)+1;
 
-	default:
+	default: /* Including WORD_TYPE_EMPTY */
+	    /* 
+	     * Note: non-list nodes (i.e. scalars) are not considered as
+	     * single-element lists and thus have zero length.
+	     */
+
 	    return 0;
     }
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * NewList --
- *
- *	Utility proc used to wrap a list around a root node. List nodes are
- *	not regular words in the sense that they have no synonym field, so they
- *	must be wrapped around a list word.
- *
- * Results:
- *	The new word.
- *
- * Side effects:
- *	Allocates memory cells.
- *
- *---------------------------------------------------------------------------
- */
-
-static Col_Word	
-NewList(
-    Col_Word root)		/* The list root. */
-{
-    Col_Word list = AllocCells(1);
-    WORD_SET_TYPE_ID(list, WORD_TYPE_LIST);
-    WORD_LIST_LENGTH(list) = Col_ListLength(root);
-    WORD_LIST_ROOT(list) = root;
-
-    return list;
 }
 
 /*
@@ -308,7 +359,7 @@ NewList(
 
 typedef struct MergeChunksInfo {
     size_t length;		/* Length so far. */
-    Col_Word *elements;		/* Element array. */
+    Col_Word vector;		/* Vector word. */
 } MergeChunksInfo;
 
 static int 
@@ -318,14 +369,23 @@ MergeChunksProc(
     Col_ClientData clientData) 
 {
     MergeChunksInfo *info = (MergeChunksInfo *) clientData;
+    size_t i;
+    Col_Word *dst;
+    int hasRefs;
 
     /* 
      * Append elements. 
      */
 
-    memcpy((void *) (info->elements+info->length), elements, 
-	    length * sizeof(Col_Word));
+    hasRefs = WORD_VECTOR_FLAGS(info->vector) & WORD_VECTOR_FLAG_HASREFS;
+    dst = WORD_VECTOR_ELEMENTS(info->vector)+info->length;
+    for (i=0; i < length; i++) {
+	dst[i] = elements[i];
+	if (WORD_TYPE(dst[i]) == WORD_TYPE_REFERENCE) hasRefs = 1;
+    }
+    WORD_VECTOR_FLAGS(info->vector) |= (hasRefs?WORD_VECTOR_FLAG_HASREFS:0);
     info->length += length;
+
     return 0;
 }
 
@@ -343,7 +403,7 @@ MergeChunksProc(
  *	 - sublists of concats point to the deepest superset sublist.
  *
  * Results:
- *	When first is past the end of the list, or last is before first, NULL. 
+ *	When first is past the end of the list, or last is before first, nil. 
  *	Else, a list representing the sublist.
  *
  * Side effects:
@@ -357,24 +417,56 @@ Col_Sublist(
     Col_Word list,		/* The list to extract the sublist from. */
     size_t first, size_t last)	/* Range of sublist. */
 {
-    Col_Word sublist;		/* Resulting list in the general case. */
+    Col_Word sublist;		/* Resulting list node in the general case. */
+    Col_Word listRoot;		/* Actual root node. */
+
+    RESOLVE_WORD(list);
+
+    /*
+     * Avoid creating useless list roots for identity cases.
+     */
+
+    if (WORD_TYPE(list) == WORD_TYPE_LIST) {
+	listRoot = WORD_LIST_ROOT(list);
+    } else {
+	listRoot = list;
+    }
+
+    sublist = Sublist(listRoot, first, last);
+
+    if (sublist == listRoot) {
+	return list;
+    } else {
+	return NewListWord(sublist);
+    }
+}
+
+static Col_Word
+Sublist(
+    Col_Word list,		/* The list to extract the sublist from. */
+    size_t first, size_t last)	/* Range of sublist. */
+{
+    Col_Word sublist;		/* Resulting list node in the general case. */
     size_t listLength;		/* Length of source list. */
     unsigned char depth=0;	/* Depth of source list. */
     size_t length;		/* Length of resulting sublist. */
-
-    RESOLVE_WORD(list);
+    int hasRefs=0;		/* Whether source has references. */
 
     /* 
      * Quick cases. 
      */
 
     if (last < first) {
-	return NULL;
+	return WORD_NIL;
     }
 
     listLength = Col_ListLength(list);
     if (first >= listLength) {
-	return NULL;
+	/*
+	 * This handles empty and scalars as well.
+	 */
+
+	return WORD_NIL;
     }
 
     /* 
@@ -387,11 +479,11 @@ Col_Sublist(
 
     length = last-first+1;
 
-    /* 
-     * Identity. 
-     */
-
     if (first == 0 && length == listLength) {
+	/* 
+	 * Identity. 
+	 */
+
 	return list;
     }
 
@@ -399,16 +491,24 @@ Col_Sublist(
      * Type-specific quick cases. 
      */
 
-    if (WORD_TYPE(list) == WORD_TYPE_LIST) {
-	list = WORD_LIST_ROOT(list);
-    }
+    /* ASSERT(WORD_TYPE(list) != WORD_TYPE_EMPTY */
+    /* ASSERT(WORD_TYPE(list) != WORD_TYPE_LIST */
     switch (WORD_TYPE(list)) {
+	case WORD_TYPE_VECTOR:
+	     /*
+	     * Don't scan the whole vector to check for references, simply 
+	     * replicate the flag value.
+	     */
+
+	    hasRefs = WORD_VECTOR_FLAGS(list) & WORD_VECTOR_FLAG_HASREFS;
+	    break;
+
 	case WORD_TYPE_SUBLIST:
 	    /* 
 	     * Point to original source. 
 	     */
 
-	    return Col_Sublist(WORD_SUBLIST_SOURCE(list), 
+	    return Sublist(WORD_SUBLIST_SOURCE(list), 
 		    WORD_SUBLIST_FIRST(list)+first, 
 		    WORD_SUBLIST_FIRST(list)+last);
 
@@ -426,16 +526,23 @@ Col_Sublist(
 		 * Left arm is a superset of sublist. 
 		 */
 
-		return Col_Sublist(WORD_CONCATLIST_LEFT(list), first, last);
+		return Sublist(WORD_CONCATLIST_LEFT(list), first, last);
 	    } else if (first >= leftLength) {
 		/*
 		 * Right arm is a superset of sublist. 
 		 */
 
-		return Col_Sublist(WORD_CONCATLIST_RIGHT(list), first-leftLength, 
+		return Sublist(WORD_CONCATLIST_RIGHT(list), first-leftLength, 
 			last-leftLength);
 	    }
-	    depth = WORD_CONCATLIST_DEPTH(list);
+	    depth = WORD_LISTNODE_DEPTH(list);
+
+	    /*
+	     * Don't scan the whole list to check for references, simply 
+	     * replicate the flag value.
+	     */
+
+	    hasRefs = WORD_LISTNODE_FLAGS(list) & WORD_LISTNODE_FLAG_HASREFS;
 	    break;
 	}
     }
@@ -444,16 +551,16 @@ Col_Sublist(
      * Build a vector for short sublists.
      */
 
-    if (length * sizeof(Col_Word) <= MAX_SHORT_LIST_SIZE - WORD_HEADER_SIZE) {
+    if (length <= MAX_SHORT_LIST_LENGTH) {
 	MergeChunksInfo info; 
-	Col_Word vector = AllocCells(NB_CELLS(WORD_HEADER_SIZE 
+	Col_Word vector = (Col_Word) AllocCells(NB_CELLS(WORD_HEADER_SIZE 
 		+ (length * sizeof(Col_Word))));
 	WORD_SET_TYPE_ID(vector, WORD_TYPE_VECTOR);
-	WORD_SYNONYM(vector) = NULL;
+	WORD_SYNONYM(vector) = WORD_NIL;
 	WORD_VECTOR_FLAGS(vector) = 0;
-
-	info.elements = WORD_VECTOR_ELEMENTS(vector);
+	
 	info.length = 0;
+	info.vector = vector;
 	Col_TraverseListChunks(list, first, length, MergeChunksProc, &info, 
 		NULL);
 	WORD_VECTOR_LENGTH(vector) = (unsigned short) info.length;
@@ -465,14 +572,15 @@ Col_Sublist(
      * General case: build a sublist node.
      */
 
-    sublist = AllocCells(1);
+    sublist = (Col_Word) AllocCells(1);
     WORD_SET_TYPE_ID(sublist, WORD_TYPE_SUBLIST);
-    WORD_SUBLIST_DEPTH(sublist) = depth;
+    WORD_LISTNODE_FLAGS(sublist) = (hasRefs?WORD_LISTNODE_FLAG_HASREFS:0);
+    WORD_LISTNODE_DEPTH(sublist) = depth;
     WORD_SUBLIST_SOURCE(sublist) = list;
     WORD_SUBLIST_FIRST(sublist) = first;
     WORD_SUBLIST_LAST(sublist) = last;
 
-    return NewList(sublist);
+    return sublist;
 }
 
 /*
@@ -510,9 +618,9 @@ GetArms(
 	if (leftLength == 0) {
 	    leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(source));
 	}
-	*leftPtr = Col_Sublist(WORD_CONCATLIST_LEFT(source), 
+	*leftPtr = Sublist(WORD_CONCATLIST_LEFT(source), 
 		WORD_SUBLIST_FIRST(node), leftLength-1);
-	*rightPtr = Col_Sublist(WORD_CONCATLIST_RIGHT(source), 0, 
+	*rightPtr = Sublist(WORD_CONCATLIST_RIGHT(source), 0, 
 		WORD_SUBLIST_LAST(node)-leftLength);
     }
 }
@@ -523,12 +631,14 @@ GetArms(
  * Col_ConcatLists --
  * Col_ConcatListsA --
  * Col_ConcatListsV --
+ * Col_ConcatListsL --
  *
  *	Concatenate lists.
  *	Col_ConcatLists concatenates two lists.
  *	Col_ConcatListsA concatenates several lists given in an array, by 
  *	recursive halvings until it contains one or two elements. 
  *	Col_ConcatListsV is a variadic version of Col_ConcatListsA.
+ *	Col_ConcatListsL takes a list of lists as input.
  *
  *	Concatenation forms self-balanced binary trees. Each node has a depth 
  *	level. Concat nodes have a depth > 1. Sublist nodes have a depth equal
@@ -539,10 +649,10 @@ GetArms(
  *	the tree is rebalanced.
  *
  * Results:
- *	If both lists are NULL, or if the resulting list would exceed the
- *	maximum length, NULL. Else, a list representing the 
+ *	If both lists are nil, or if the resulting list would exceed the
+ *	maximum length, nil. Else, a list representing the 
  *	concatenation of both lists.
- *	Array and variadic versions return NULL when concatenating zero lists,
+ *	Array and variadic versions return nil when concatenating zero lists,
  *	and the source list when concatenating a single one.
  *
  * Side effects:
@@ -558,10 +668,46 @@ Col_ConcatLists(
     Col_Word right)		/* Right part. */
 {
     Col_Word concatNode;	/* Resulting list node in the general case. */
+    Col_Word leftRoot, rightRoot;
+				/* Actual root nodes. */
+
+    RESOLVE_WORD(left);
+    RESOLVE_WORD(right);
+
+    /*
+     * Avoid creating useless list roots for identity cases.
+     */
+
+    if (WORD_TYPE(left) == WORD_TYPE_LIST) {
+	leftRoot  = WORD_LIST_ROOT(left);
+    } else {
+	leftRoot = left;
+    }
+    if (WORD_TYPE(right) == WORD_TYPE_LIST) {
+	rightRoot = WORD_LIST_ROOT(right);
+    } else {
+	rightRoot = right;
+    }
+
+    concatNode = ConcatLists(leftRoot, rightRoot);
+
+    if (concatNode == leftRoot)  return left;
+    if (concatNode == rightRoot) return right;
+
+    return NewListWord(concatNode);
+}
+
+static Col_Word
+ConcatLists(
+    Col_Word left,		/* Left part. */
+    Col_Word right)		/* Right part. */
+{
+    Col_Word concatNode;	/* Resulting list node in the general case. */
     unsigned char leftDepth=0, rightDepth=0; 
 				/* Respective depths of left and right lists. */
     size_t leftLength, rightLength;
 				/* Respective lengths. */
+    int hasRefs=0;		/* Whether either part has references. */
 
     RESOLVE_WORD(left);
     RESOLVE_WORD(right);
@@ -570,15 +716,33 @@ Col_ConcatLists(
     rightLength = Col_ListLength(right);
     if (SIZE_MAX-leftLength < rightLength) {
 	/*
-	 * Avoid creating too long lists.
+	 * Prevent the creation of too long lists.
 	 */
 
-	return NULL;	
+	return WORD_NIL;
     }
 
     /* 
      * Handle quick cases and get input node depths. 
      */
+
+    if (leftLength == 0) {
+	/* 
+	 * Distinguish between empty+nil vs. empty+non-nil so that concat
+	 * will return a non-nil result. 
+	 *
+	 * This handles scalars as well.
+	 */
+
+	return (WORD_TYPE(right)==WORD_TYPE_NIL?left:right);
+    } else if (rightLength == 0) {
+	/* 
+	 * Concat is a no-op on left. Special cases with nil are already 
+	 * handled above. 
+	 */
+
+	return left;
+    }
 
     if (WORD_TYPE(left) == WORD_TYPE_LIST) {
 	left = WORD_LIST_ROOT(left);
@@ -586,13 +750,12 @@ Col_ConcatLists(
     if (WORD_TYPE(right) == WORD_TYPE_LIST) {
 	right = WORD_LIST_ROOT(right);
     }
+    /* ASSERT(WORD_TYPE(left) != WORD_TYPE_EMPTY */
+    /* ASSERT(WORD_TYPE(left) != WORD_TYPE_LIST */
     switch (WORD_TYPE(left)) {
-	case WORD_TYPE_NULL:
-	    /* 
-	     * Concat is a no-op on right. 
-	     */
-
-	    return right;
+	case WORD_TYPE_VECTOR:
+	    hasRefs = WORD_VECTOR_FLAGS(left) & WORD_VECTOR_FLAG_HASREFS;
+	    break;
 
 	case WORD_TYPE_SUBLIST:
 	    if (WORD_TYPE(right) == WORD_TYPE_SUBLIST
@@ -603,30 +766,27 @@ Col_ConcatLists(
 		 * for fast consecutive insertions/removals at a given index.
 		 */
 
-		return Col_Sublist(WORD_SUBLIST_SOURCE(left), 
+		return Sublist(WORD_SUBLIST_SOURCE(left), 
 			WORD_SUBLIST_FIRST(left), WORD_SUBLIST_LAST(right));
 	    }
-	    leftDepth = WORD_SUBLIST_DEPTH(left);
-	    break;
+	    /* continued. */
 
 	case WORD_TYPE_CONCATLIST:
-	    leftDepth = WORD_CONCATLIST_DEPTH(left);
+	    leftDepth = WORD_LISTNODE_DEPTH(left);
+	    hasRefs = WORD_LISTNODE_FLAGS(left) & WORD_LISTNODE_FLAG_HASREFS;
 	    break;
     }
+    /* ASSERT(WORD_TYPE(right) != WORD_TYPE_EMPTY */
+    /* ASSERT(WORD_TYPE(right) != WORD_TYPE_LIST */
     switch (WORD_TYPE(right)) {
-	case WORD_TYPE_NULL:
-	    /* 
-	     * Concat is a no-op on left.
-	     */
-
-	    return left;
-
-	case WORD_TYPE_SUBLIST:
-	    rightDepth = WORD_SUBLIST_DEPTH(right);
+	case WORD_TYPE_VECTOR:
+	    hasRefs |= WORD_VECTOR_FLAGS(right) & WORD_VECTOR_FLAG_HASREFS;
 	    break;
 
+	case WORD_TYPE_SUBLIST:
 	case WORD_TYPE_CONCATLIST:
-	    rightDepth = WORD_CONCATLIST_DEPTH(right);
+	    rightDepth = WORD_LISTNODE_DEPTH(right);
+	    hasRefs |= WORD_LISTNODE_FLAGS(right) & WORD_LISTNODE_FLAG_HASREFS;
 	    break;
     }
 
@@ -634,16 +794,16 @@ Col_ConcatLists(
      * Build a vector for short sublists.
      */
 
-    if ((leftLength + rightLength) * sizeof(Col_Word) 
-	    <= MAX_SHORT_LIST_SIZE - WORD_HEADER_SIZE) {
+    if (leftLength + rightLength <= MAX_SHORT_LIST_LENGTH) {
 	MergeChunksInfo info; 
-	Col_Word vector = AllocCells(NB_CELLS(WORD_HEADER_SIZE 
+	Col_Word vector = (Col_Word) AllocCells(NB_CELLS(WORD_HEADER_SIZE 
 		+ (leftLength + rightLength) * sizeof(Col_Word)));
 	WORD_SET_TYPE_ID(vector, WORD_TYPE_VECTOR);
-	WORD_SYNONYM(vector) = NULL;
+	WORD_SYNONYM(vector) = WORD_NIL;
 	WORD_VECTOR_FLAGS(vector) = 0;
-
-	info.elements = WORD_VECTOR_ELEMENTS(vector);
+	
+	info.length = 0;
+	info.vector = vector;
 	Col_TraverseListChunks(left, 0, leftLength, MergeChunksProc, &info, 
 		NULL);
 	Col_TraverseListChunks(right, 0, rightLength, MergeChunksProc, &info, 
@@ -675,8 +835,10 @@ Col_ConcatLists(
 
 	GetArms(left, &left1, &left2);
 	switch (WORD_TYPE(left1)) {
-	    case WORD_TYPE_SUBLIST: left1Depth = WORD_SUBLIST_DEPTH(left1); break;
-	    case WORD_TYPE_CONCATLIST: left1Depth = WORD_CONCATLIST_DEPTH(left1); break;
+	    case WORD_TYPE_SUBLIST: 
+	    case WORD_TYPE_CONCATLIST:
+		left1Depth = WORD_LISTNODE_DEPTH(left1); 
+		break;
 	}
 	if (left1Depth < leftDepth-1) {
 	    /* 
@@ -701,8 +863,8 @@ Col_ConcatLists(
 
 	    Col_Word left21, left22;
 	    GetArms(left2, &left21, &left22);
-	    return Col_ConcatLists(Col_ConcatLists(left1, left21), 
-		    Col_ConcatLists(left22, right));
+	    return ConcatLists(ConcatLists(left1, left21), 
+		    ConcatLists(left22, right));
 	} else {
 	    /* 
 	     * Left1 is deeper or at the same level, rotate to right.
@@ -724,7 +886,7 @@ Col_ConcatLists(
 	     *   ?       ?   left2   right
 	     */
 
-	    return Col_ConcatLists(left1, Col_ConcatLists(left2, right));
+	    return ConcatLists(left1, ConcatLists(left2, right));
 	}
     } else if (leftDepth+1 < rightDepth) {
 	/* 
@@ -738,8 +900,10 @@ Col_ConcatLists(
 
 	GetArms(right, &right1, &right2);
 	switch (WORD_TYPE(right2)) {
-	    case WORD_TYPE_SUBLIST: right2Depth = WORD_SUBLIST_DEPTH(right2); break;
-	    case WORD_TYPE_CONCATLIST: right2Depth = WORD_CONCATLIST_DEPTH(right2); break;
+	    case WORD_TYPE_SUBLIST:
+	    case WORD_TYPE_CONCATLIST:
+		right2Depth = WORD_LISTNODE_DEPTH(right2); 
+		break;
 	}
 	if (right2Depth < rightDepth-1) {
 	    /* 
@@ -764,8 +928,8 @@ Col_ConcatLists(
 
 	    Col_Word right11, right12;
 	    GetArms(right1, &right11, &right12);
-	    return Col_ConcatLists(Col_ConcatLists(left, right11), 
-		    Col_ConcatLists(right12, right2));
+	    return ConcatLists(ConcatLists(left, right11), 
+		    ConcatLists(right12, right2));
 	} else {
 	    /* 
 	     * Right2 is deeper or at the same level, rotate to left.
@@ -787,7 +951,7 @@ Col_ConcatLists(
 	     *  left   right1  ?        ?
 	     */
 
-	    return Col_ConcatLists(Col_ConcatLists(left, right1), right2);
+	    return ConcatLists(ConcatLists(left, right1), right2);
 	}
     }
     
@@ -795,24 +959,33 @@ Col_ConcatLists(
      * General case: build a concat node.
      */
 
-    concatNode = AllocCells(1);
+    concatNode = (Col_Word) AllocCells(1);
     WORD_SET_TYPE_ID(concatNode, WORD_TYPE_CONCATLIST);
-    WORD_CONCATLIST_DEPTH(concatNode) 
+    WORD_LISTNODE_FLAGS(concatNode) = (hasRefs?WORD_LISTNODE_FLAG_HASREFS:0);
+    WORD_LISTNODE_DEPTH(concatNode) 
 	= (leftDepth>rightDepth?leftDepth:rightDepth) + 1;
     WORD_CONCATLIST_LENGTH(concatNode) = leftLength + rightLength;
     WORD_CONCATLIST_LEFT_LENGTH(concatNode) 
-	= (leftLength<=USHRT_MAX)?(unsigned short) leftLength:0;
+	= (leftLength<=UCHAR_MAX)?(unsigned char) leftLength:0;
     WORD_CONCATLIST_LEFT(concatNode) = left;
     WORD_CONCATLIST_RIGHT(concatNode) = right;
 
-    return NewList(concatNode);
+    return concatNode;
 }
 
 /* - Array version. */
 Col_Word
 Col_ConcatListsA(
     size_t number,		/* Number of lists in below array. */
-    Col_Word * lists)		/* Lists to concatenate in order. */
+    const Col_Word * lists)	/* Lists to concatenate in order. */
+{
+    return NewListWord(ConcatListsA(number, lists));
+}
+
+static Col_Word
+ConcatListsA(
+    size_t number,		/* Number of lists in below array. */
+    const Col_Word * lists)	/* Lists to concatenate in order. */
 {
     size_t half;
 
@@ -820,9 +993,9 @@ Col_ConcatListsA(
      * Quick cases.
      */
 
-    if (number == 0) {return NULL;}
+    if (number == 0) {return WORD_NIL;}
     if (number == 1) {return lists[0];}
-    if (number == 2) {return Col_ConcatLists(lists[0], lists[1]);}
+    if (number == 2) {return ConcatLists(lists[0], lists[1]);}
 
     /* 
      * Split array and concatenate both halves. This should result in a well 
@@ -830,9 +1003,10 @@ Col_ConcatListsA(
      */
 
     half = number/2;
-    return Col_ConcatLists(Col_ConcatListsA(half, lists), 
-	    Col_ConcatListsA(number-half, lists+half));
+    return ConcatLists(ConcatListsA(half, lists), ConcatListsA(number-half, 
+	    lists+half));
 }
+
 
 /* - Variadic version. */
 Col_Word
@@ -858,6 +1032,572 @@ Col_ConcatListsV(
     return Col_ConcatListsA(number, lists);
 }
 
+/* - List version. */
+Col_Word
+Col_ConcatListsL(
+    Col_Word list,		/* List of lists to concatenate. */
+    size_t first, size_t last)	/* Range to consider. */
+{
+    size_t length;
+
+    /* 
+     * Normalize range.
+     */
+
+    if (last < first) {
+	return WORD_NIL;
+    }
+    length = Col_ListLength(list);
+    if (first >= length) {
+	return WORD_NIL;
+    }
+    if (last >= length) {
+	last = length-1;
+    }
+    return NewListWord(ConcatListsL(list, first, last));
+}
+
+static Col_Word
+ConcatListsL(
+    Col_Word list,		/* List of lists to concatenate. */
+    size_t first, size_t last)	/* Range to consider. */
+{
+    size_t number = last-first+1, half;
+
+    /* 
+     * Quick cases.
+     */
+
+    if (number == 0) {return WORD_NIL;}
+    if (number == 1) {return Col_ListElementAt(list, first);}
+    if (number == 2) {
+	Col_ListIterator it;
+	Col_Word l1, l2;
+
+	Col_ListIterBegin(list, first, &it);
+	l1 = Col_ListIterElementAt(&it);
+	Col_ListIterNext(&it);
+	l2 = Col_ListIterElementAt(&it);
+	return ConcatLists(l1, l2);
+    }
+
+    /* 
+     * Split range and concatenate both halves. This should result in a well 
+     * balanced tree. 
+     */
+
+    half = number/2;
+    return ConcatLists(ConcatListsL(list, first, first+half-1), 
+	    ConcatListsL(list, first+half, last));
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Col_NewSequence --
+ * Col_NewSequenceV --
+ * Col_NewSequenceL --
+ *
+ *	Create a new sequence word from parts that must be lists or references
+ *	to lists.
+ *	Col_NewSequenceV is a variadic version of Col_NewSequence.
+ *	Col_NewSequenceL takes a list of parts as input.
+ *	Col_NewSequenceI takes an interval of list iterators as input.
+ *
+ *	Attempts to create a simple list whenever possible (i.e. when there is
+ *	no reference and the total length is within the allowed limits).
+ *
+ * Results:
+ *	Nil if the number of parts is zero or if all parts are nil.
+ *	Else, the new word, which may be a simple list or reference.
+ *
+ * Side effects:
+ *	Allocates memory cells.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+static Col_Word
+NewSequenceWord(
+    Col_Word root)		/* Root node of sequence. */
+{
+    Col_Word sequence = (Col_Word) AllocCells(1);
+    WORD_SET_TYPE_ID(sequence, WORD_TYPE_SEQUENCE);
+    WORD_SYNONYM(sequence) = WORD_NIL;
+    WORD_SEQUENCE_CYCLIC(sequence) = 0;
+    WORD_SEQUENCE_ROOT(sequence) = root;
+    WORD_SEQUENCE_STACKNODES(sequence) = WORD_NIL;
+
+    return sequence;
+}
+static Col_Word
+NewSequenceNode(
+    Col_Word part,
+    Col_Word *sequencePtr, 
+    Col_Word prev) 
+{
+    Col_Word node;
+    unsigned char cyclic;
+
+    switch (WORD_TYPE(part)) {
+	case WORD_TYPE_VECTOR:
+	case WORD_TYPE_LIST:
+	    node = (Col_Word) AllocCells(1);
+	    WORD_SET_TYPE_ID(node, WORD_TYPE_SEQUENCE_NODE);
+	    WORD_SEQNODE_LIST(node) = part;
+	    WORD_SEQNODE_REF(node) = WORD_NIL;
+	    WORD_SEQNODE_NEXT(node) = WORD_NIL;
+
+	    if (!*sequencePtr) {
+		*sequencePtr = NewSequenceWord(node);
+	    }
+	    if (prev) {
+		WORD_SEQNODE_NEXT(prev) = node;
+	    }
+	    return node;
+
+	case WORD_TYPE_REFERENCE:
+	    node = (Col_Word) AllocCells(1);
+	    WORD_SET_TYPE_ID(node, WORD_TYPE_SEQUENCE_NODE);
+	    WORD_SEQNODE_LIST(node) = WORD_NIL;
+	    WORD_SEQNODE_REF(node) = part;
+	    WORD_SEQNODE_NEXT(node) = WORD_NIL;
+
+	    if (!*sequencePtr) {
+		*sequencePtr = NewSequenceWord(node);
+	    }
+	    if (prev) {
+		WORD_SEQNODE_NEXT(prev) = node;
+	    }
+	    return node;
+
+	case WORD_TYPE_SEQUENCE:
+	    /* 
+	     * Copy & insert sequence nodes.
+	     */
+
+	    cyclic = WORD_SEQUENCE_CYCLIC(part);
+	    if (cyclic && *sequencePtr) {
+		WORD_SEQUENCE_CYCLIC(*sequencePtr) = 1;
+	    }
+	    part = WORD_SEQUENCE_ROOT(part);
+	    do {
+		node = (Col_Word) AllocCells(1);
+		WORD_SET_TYPE_ID(node, WORD_TYPE_SEQUENCE_NODE);
+		WORD_SEQNODE_LIST(node) = WORD_SEQNODE_LIST(part);
+		WORD_SEQNODE_REF(node) = WORD_SEQNODE_REF(part);
+		WORD_SEQNODE_NEXT(node) = WORD_NIL;
+
+		if (!*sequencePtr) {
+		    *sequencePtr = NewSequenceWord(node);
+		    WORD_SEQUENCE_CYCLIC(*sequencePtr) = cyclic;
+		}
+		if (prev) {
+		    WORD_SEQNODE_NEXT(prev) = node;
+		}
+		prev = node;
+		part = WORD_SEQNODE_NEXT(part);
+	    } while (WORD_TYPE(part) == WORD_TYPE_SEQUENCE_NODE);
+	    if (part) {
+		/*
+		 * Convert non-node tail as well.
+		 */
+
+		/* ASSERT(WORD_TYPE_PART(part) != WORD_TYPE_SEQUENCE_NODE) */
+		return NewSequenceNode(part, sequencePtr, prev);
+	    } else {
+		return prev;
+	    }
+
+	default: /* CANTHAPPEN */
+	    return WORD_NIL;
+    }
+}
+
+static Col_Word
+NewSequence(
+    const Col_Word * partsA,	/* Parts of the sequence to create (array 
+				 * version). */
+    Col_Word partsL,		/* List containing parts (list version). */
+    size_t first, size_t last)	/* Range to consider. */
+{
+    Col_Word sequence;		/* Resulting word in the general case. */
+    Col_Word prev, prevPrev;	/* Used when chaining sequence nodes. */
+    size_t listLength;		/* Cumulated length of lists to merge so far. */
+    size_t firstList;		/* First of consecutive lists parts to merge. */
+    size_t i;
+    Col_ListIterator it;
+    size_t length;
+    int type;
+
+    /*
+     * Quick cases.
+     */
+
+    if (first > last) {return WORD_NIL;}
+    if (first == last) {
+	Col_Word part = (partsA ? partsA[first] : 
+		Col_ListElementAt(partsL, first));
+	RESOLVE_WORD(part);
+	switch (WORD_TYPE(part)) {
+	    case WORD_TYPE_VECTOR:
+	    case WORD_TYPE_LIST:
+	    case WORD_TYPE_REFERENCE:
+	    case WORD_TYPE_SEQUENCE:
+		return part;
+
+	    default:
+		return WORD_NIL;
+	}
+    }
+
+    /*
+     * Initialize word to nil for now; we may still be able to return one of 
+     * the given part in simple cases (e.g. concatenating several lists into
+     * one). Create sequence word only when needed.
+     */
+
+    sequence = WORD_NIL;
+
+    /*
+     * Add parts sequentially.
+     */
+
+    listLength = 0;
+    prev = prevPrev = WORD_NIL;
+    for (i=first, (partsA ? 0 : Col_ListIterBegin(partsL, first, &it)); 
+	    i <= last; i++, (partsA ? 0 : Col_ListIterNext(&it))) {
+	Col_Word part = (partsA ? partsA[i] : Col_ListIterElementAt(&it));
+	RESOLVE_WORD(part);
+	type = WORD_TYPE(part);
+	switch (type) {
+	    case WORD_TYPE_VECTOR:
+	    case WORD_TYPE_LIST:
+		length = Col_ListLength(part);
+		if (length <= SIZE_MAX-listLength) {
+		    /*
+		     * Merge list with previous ones.
+		     */
+
+		    if (listLength == 0) {
+			firstList = i;
+		    }
+		    listLength += length;
+		    continue; /* Continue loop. */
+		}
+		break;
+
+	    case WORD_TYPE_REFERENCE:
+	    case WORD_TYPE_SEQUENCE:
+		break;
+
+	    default:
+		/*
+		 * Unexpected type, skip part altogether.
+		 */
+
+		continue;
+	}
+
+	if (WORD_TYPE(prev) != WORD_TYPE_SEQUENCE_NODE) {
+	    /*
+	     * Ensure that previous node is a regular node.
+	     */
+
+	    prev = NewSequenceNode(prev, &sequence, prevPrev);
+	}
+
+	if (listLength > 0) {
+	    /*
+	     * Add node with merged lists so far.
+	     */
+
+	    Col_Word list = (partsA ? Col_ConcatListsA(i-firstList, 
+		    partsA+firstList) : Col_ConcatListsL(partsL, firstList, 
+		    i-1));
+	    Col_Word node = NewSequenceNode(list, &sequence, prev);
+	    prevPrev = prev;
+	    prev = node;
+	    listLength = 0;
+	}
+
+	switch (type) {
+	    case WORD_TYPE_VECTOR:
+	    case WORD_TYPE_LIST:
+		/*
+		 * Begin new sequence of lists to merge.
+		 */
+
+		firstList = i;
+		listLength = length;
+		continue;
+	}
+
+	if (prev) {
+	    /*
+	     * Add node to sequence.
+	     */
+
+	    /* ASSERT(sequence) */
+	    if (type == WORD_TYPE_REFERENCE && !WORD_SEQNODE_REF(prev)) {
+		WORD_SEQNODE_REF(prev) = part;
+	    } else {
+		WORD_SEQNODE_NEXT(prev) = part;
+		prevPrev = prev;
+		prev = part;
+	    }
+	} else {
+	    /*
+	     * Use part as node for now.
+	     */
+
+	    /* ASSERT(!prevPrev) */
+	    /* ASSERT(!sequence) */
+	    prev = part;
+	}
+	if (type == WORD_TYPE_SEQUENCE && WORD_SEQUENCE_CYCLIC(part)) {
+	    /*
+	     * Stop there, remaining parts are unreachable.
+	     */
+
+	    break;
+	}
+    }
+
+    if (listLength > 0) {
+	/*
+	 * Add node with lists merged so far.
+	 */
+
+	Col_Word list = (partsA ? Col_ConcatListsA(i-firstList, 
+		partsA+firstList) : Col_ConcatListsL(partsL, firstList, i-1));
+
+	if (!prev) {
+	    /*
+	     * Return simple list.
+	     */
+
+	    /* ASSERT(!sequence) */
+	    return list;
+	}
+
+	if (WORD_TYPE(prev) != WORD_TYPE_SEQUENCE_NODE) {
+	    /*
+	     * Ensure that previous node is a regular node.
+	     */
+
+	    prev = NewSequenceNode(prev, &sequence, prevPrev);
+	}
+
+	/*
+	 * Add node to sequence.
+	 */
+
+	/* ASSERT(sequence) */
+	WORD_SEQNODE_NEXT(prev) = list;
+    }
+    
+    if (!sequence) {
+	/*
+	 * Return simple part.
+	 *
+	 * Note: this also works for empty sequences.
+	 */
+
+	/* ASSERT(!prevPrev) */
+	return prev;
+    }
+
+    /* ASSERT(sequence) */
+    /* ASSERT(prev) */
+    if (WORD_TYPE(prev) == WORD_TYPE_SEQUENCE) {
+	/*
+	 * Point to the sequence root rather than the sequence word itself; this
+	 * way, sequence tails may be shared across sequence words. 
+	 */
+
+	/* ASSERT(prevPrev) */
+	WORD_SEQNODE_NEXT(prevPrev) = WORD_SEQUENCE_ROOT(prev);
+
+	/*
+	 * Sequences ending with a cyclic sequence are themselves cyclic.
+	 */
+
+	if (WORD_SEQUENCE_CYCLIC(prev)) {
+	    WORD_SEQUENCE_CYCLIC(sequence) = 1;
+	}
+    }
+
+    return sequence;
+}
+
+Col_Word
+Col_NewSequence(
+    size_t nbParts,		/* Number of parts. */
+    const Col_Word * parts)	/* Parts of the sequence to create. */
+{
+    if (nbParts == 0) {return WORD_NIL;}
+    return NewSequence(parts, WORD_NIL, 0, nbParts-1);
+}
+
+Col_Word
+Col_NewSequenceV(
+    size_t nbParts,		/* Number of parts. */
+    ...)			/* Remaining arguments are parts of the sequence
+				 * to create. */
+{
+    size_t i;
+    va_list args;
+    Col_Word *parts;
+    
+    /* 
+     * Convert vararg list to array. Use alloca since a vararg list is 
+     * typically small. 
+     */
+
+    parts = alloca(nbParts*sizeof(Col_Word));
+    va_start(args, nbParts);
+    for (i=0; i < nbParts; i++) {
+	parts[i] = va_arg(args, Col_Word);
+    }
+    return Col_NewSequence(nbParts, parts);
+}
+
+/* - List version. */
+Col_Word
+Col_NewSequenceL(
+    Col_Word parts,		/* List of parts to concatenate. */
+    size_t first, size_t last)	/* Range to consider. */
+{
+    size_t length;
+
+    /* 
+     * Normalize range.
+     */
+
+    if (last < first) {
+	return WORD_NIL;
+    }
+    length = Col_ListLength(parts);
+    if (first >= length) {
+	return WORD_NIL;
+    }
+    if (last >= length) {
+	last = length-1;
+    }
+
+    return NewSequence(NULL, parts, first, last);
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Col_NewReference --
+ *
+ *	Create a new reference word.
+ *
+ * Side effects:
+  *	The new word.
+ *
+ * Side effects:
+ *	Allocates memory cells.
+*
+ *---------------------------------------------------------------------------
+ */
+
+Col_Word
+Col_NewReference()
+{
+    Col_Word ref;
+
+    ref = (Col_Word) AllocCells(1);
+    WORD_SET_TYPE_ID(ref, WORD_TYPE_REFERENCE);
+    WORD_SYNONYM(ref) = WORD_NIL;
+    WORD_REFERENCE_SOURCE(ref) = WORD_NIL;
+
+    return ref;
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Col_BindReference --
+ *
+ *	Bind the reference to a given word. If this word is itself a reference,
+ *	use its source.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The reference and source words become synonyms.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+void
+Col_BindReference(
+    Col_Word ref,		/* Reference to bind. */
+    Col_Word source)		/* Word to bind to. */
+{
+    Col_Word word;
+
+    RESOLVE_WORD(ref);
+
+    if (WORD_TYPE(ref) != WORD_TYPE_REFERENCE) return;
+
+    if (WORD_REFERENCE_SOURCE(ref)) {
+	/*
+	 * Reference is already bound.
+	 */
+
+	/* TODO: exception */
+	return;
+    }
+
+    RESOLVE_WORD(source);
+
+    /*
+     * Prevent circular references.
+     */
+
+    word = source;
+    while (WORD_TYPE(word) == WORD_TYPE_REFERENCE) {
+	word = WORD_REFERENCE_SOURCE(word);
+	if (word == ref) {
+	    /* TODO: exception */
+	    return;
+	}
+    }
+    WORD_REFERENCE_SOURCE(ref) = source;
+    Col_AddWordSynonym(ref, source);
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Col_GetReference --
+ *
+ *	Resolve a reference, i.e. get the source.
+ *
+ * Results:
+ *	The reference source.
+ *
+ * Side effects:
+ *	None.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+Col_Word
+Col_GetReference(
+    Col_Word ref)		/* Reference to resolve. */
+{
+    RESOLVE_WORD(ref);
+
+    return WORD_REFERENCE_SOURCE(ref);
+}
+
 /*
  *---------------------------------------------------------------------------
  *
@@ -866,7 +1606,7 @@ Col_ConcatListsV(
  *	Get the element of a list at a given position. 
  *
  * Results:
- *	If the index is past the end of the list, NULL, else the element.
+ *	If the index is past the end of the list, nil, else the element.
  *
  * Side effects:
  *	None.
@@ -876,7 +1616,7 @@ Col_ConcatListsV(
 
 Col_Word
 Col_ListElementAt(
-    Col_Word list,		/* Lsit to get element from. */
+    Col_Word list,		/* List to get element from. */
     size_t index)		/* Element index. */
 {
     Col_ListIterator it;
@@ -900,7 +1640,8 @@ Col_ListElementAt(
  *	collected).
  *
  * Results:
- *	The repetition of the source list.
+ *	Nil if count is zero or the list is nil.
+ *	Else, the repetition of the source list.
  *
  * Side effects:
  *	New lists may be created.
@@ -914,7 +1655,7 @@ Col_RepeatList(
     size_t count)		/* Repetition factor. */
 {
     /* Quick cases. */
-    if (count == 0) {return NULL;}
+    if (count == 0) {return WORD_NIL;}
     if (count == 1) {return list;}
     if (count == 2) {return Col_ConcatLists(list, list);}
 
@@ -977,8 +1718,7 @@ Col_ListInsert(
      * General case. 
      */
 
-    return Col_ConcatLists(Col_ConcatLists(
-		    Col_Sublist(into, 0, index-1), list), 
+    return Col_ConcatLists(Col_ConcatLists(Col_Sublist(into, 0, index-1), list), 
 	    Col_Sublist(into, index, listLength-1));
 }
 
@@ -1232,9 +1972,9 @@ Col_TraverseListChunks(
  *	None.
  *
  * Side effects:
- *	If index points past the end of the list, the iterator pointed to by 
- *	it is initialized to the end iterator (i.e. whose list field is 
- *	NULL), else it points to the element within the list.
+ *	If index points past the end of the list, the iterator is initialized 
+ *	to the end iterator (i.e. whose list field is nil), else it points 
+ *	to the element within the list.
  *
  *---------------------------------------------------------------------------
  */
@@ -1249,10 +1989,10 @@ Col_ListIterBegin(
 
     if (index >= Col_ListLength(list)) {
 	/*
-	 * End of list.
+	 * End of list. This also handles scalars.
 	 */
 
-	it->list = NULL;
+	it->list = WORD_NIL;
 
 	return;
     }
@@ -1264,8 +2004,8 @@ Col_ListIterBegin(
      * Traversal info will be lazily computed.
      */
 
-    it->traversal.subnode = NULL;
-    it->traversal.leaf = NULL;
+    it->traversal.subnode = WORD_NIL;
+    it->traversal.leaf = WORD_NIL;
 }
 
 /*
@@ -1313,7 +2053,7 @@ UpdateTraversalInfo(
 	 * Out of range.
 	 */
 
-	it->traversal.subnode = NULL;
+	it->traversal.subnode = WORD_NIL;
     }
 
     /*
@@ -1332,7 +2072,7 @@ UpdateTraversalInfo(
     last = it->traversal.last;
     offset = it->traversal.offset;
 
-    it->traversal.leaf = NULL;
+    it->traversal.leaf = WORD_NIL;
     while (!it->traversal.leaf) {
 	switch (WORD_TYPE(node)) {
 	    case WORD_TYPE_VECTOR:
@@ -1353,7 +2093,7 @@ UpdateTraversalInfo(
 		break;
 
 	    case WORD_TYPE_SUBLIST: 
-		if (WORD_SUBLIST_DEPTH(node) == MAX_ITERATOR_SUBNODE_DEPTH 
+		if (WORD_LISTNODE_DEPTH(node) == MAX_ITERATOR_SUBNODE_DEPTH 
 			|| !it->traversal.subnode) {
 		    /*
 		     * Remember as subnode.
@@ -1379,7 +2119,7 @@ UpdateTraversalInfo(
 		if (leftLength == 0) {
 		    leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(node));
 		}
-		if (WORD_CONCATLIST_DEPTH(node) == MAX_ITERATOR_SUBNODE_DEPTH
+		if (WORD_LISTNODE_DEPTH(node) == MAX_ITERATOR_SUBNODE_DEPTH
 			|| !it->traversal.subnode) {
 		    /*
 		     * Remember as subnode.
@@ -1428,7 +2168,7 @@ UpdateTraversalInfo(
  *	Get the element designated by the iterator.
  *
  * Results:
- *	If the index is past the end of the list, NULL, else the element.
+ *	If the index is past the end of the list, nil, else the element.
  *
  * Side effects:
  *	None.
@@ -1441,7 +2181,7 @@ Col_ListIterElementAt(
     Col_ListIterator *it)	/* Iterator that points to the element. */
 {
     if (Col_ListIterEnd(it)) {
-	return NULL;
+	return WORD_NIL;
     }
 
     if (!it->traversal.leaf) {
@@ -1525,7 +2265,7 @@ Col_ListIterForward(
 	 * Reached end of list.
 	 */
 
-	it->list = NULL;
+	it->list = WORD_NIL;
 	return;
     }
     it->index += nb;
@@ -1543,7 +2283,7 @@ Col_ListIterForward(
 	 * subnode, as it may be used again should the iteration go back.
 	 */
 
-	it->traversal.leaf = NULL;
+	it->traversal.leaf = WORD_NIL;
 	return;
     }
 
@@ -1556,7 +2296,7 @@ Col_ListIterForward(
 	 * Reached end of leaf.
 	 */
 
-	it->traversal.leaf = NULL;
+	it->traversal.leaf = WORD_NIL;
     } else {
 	it->traversal.index += nb;
     }
@@ -1592,7 +2332,7 @@ Col_ListIterBackward(
      */
     
     if (it->index < nb) {
-	it->list = NULL;
+	it->list = WORD_NIL;
 	return;
     }
 
@@ -1611,7 +2351,7 @@ Col_ListIterBackward(
 	 * subnode, as it may be used again should the iteration go back.
 	 */
 
-	it->traversal.leaf = NULL;
+	it->traversal.leaf = WORD_NIL;
 	return;
     }
 
@@ -1624,7 +2364,7 @@ Col_ListIterBackward(
 	 * Reached beginning of leaf. 
 	 */
 
-	it->traversal.leaf = NULL;
+	it->traversal.leaf = WORD_NIL;
     } else {
 	it->traversal.index -= nb;
     }
@@ -1656,4 +2396,478 @@ Col_ListIterMoveTo(
     } else if (index < it->index) {
 	Col_ListIterBackward(it, it->index - index);
     }
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * PushNode --
+ * PopNode --
+ *
+ *	Push/pop current node onto stack and update the iterator accordingly.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The iterator is updated.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+static int
+PushNode(
+    Col_SequenceIterator *it)	/* The iterator to update. */
+{
+    /* ASSERT(it->seq) */
+    /* ASSERT(it->node) */
+
+    if (it->turtle && it->seq == WORD_SEQSTACK_SEQUENCE(it->turtle)) {
+	/*
+	 * Cycle detected! Mark & trim all sequences in stack as cyclic, and 
+	 * clear stack.
+	 */
+
+	WORD_SEQUENCE_CYCLIC(it->seq) = 1;
+	WORD_SEQNODE_NEXT(it->node) = WORD_NIL;
+	while (it->stack) {
+	    Col_Word stack = it->stack;
+	    Col_Word seq = WORD_SEQSTACK_SEQUENCE(stack);
+	    Col_Word node = WORD_SEQSTACK_NODE(stack);
+
+	    WORD_SEQUENCE_CYCLIC(seq) = 1;
+	    if (WORD_TYPE(node) == WORD_TYPE_SEQUENCE_NODE) {
+		WORD_SEQNODE_NEXT(node) = WORD_NIL;
+	    }
+
+	    /*
+	     * Move stack node to the free list.
+	     */
+
+	    it->stack = WORD_SEQSTACK_NEXT(stack);
+	    WORD_SEQSTACK_NEXT(stack) = WORD_SEQUENCE_STACKNODES(seq);
+	    WORD_SEQUENCE_STACKNODES(seq) = stack;
+	}
+	it->turtle = WORD_NIL;
+	it->limit = 1;
+	it->steps = 0;
+    } else {
+	/*
+	 * Push current node onto stack.
+	 */
+
+	Col_Word stack = WORD_SEQUENCE_STACKNODES(it->seq);
+	if (stack) {
+	    /*
+	     * Reuse existing stack node.
+	     */
+
+	    /* ASSERT(WORD_SEQSTACK_SEQUENCE(stack) == it->seq) */
+	    WORD_SEQUENCE_STACKNODES(it->seq)
+		    = WORD_SEQSTACK_NEXT(stack);
+	} else {
+	    /*
+	     * Create new stack node.
+	     */
+
+	    stack = (Col_Word) AllocCells(1);
+	    WORD_SET_TYPE_ID(stack, WORD_TYPE_SEQUENCE_STACK);
+	    WORD_SEQSTACK_SEQUENCE(stack) = it->seq;
+	}
+	WORD_SEQSTACK_NODE(stack) = it->node;
+
+	/*
+	 * Push onto stack.
+	 */
+
+	WORD_SEQSTACK_NEXT(stack) = it->stack;
+	it->stack = stack;
+
+	/*
+	 * Brent's cycle detection algorithm.
+	 */
+
+	it->steps++;
+	if (it->steps == it->limit) {
+	    it->steps = 0;
+	    it->limit *= 2;
+	    it->turtle = it->stack;
+	}
+    }
+
+    /*
+     * Follow reference.
+     */
+
+    if (WORD_TYPE(it->node) == WORD_TYPE_SEQUENCE_NODE) {
+	/* ASSERT(WORD_SEQNODE_REF(it->node)) */
+	it->node = WORD_SEQNODE_REF(it->node);
+    }
+    while (WORD_TYPE(it->node) == WORD_TYPE_REFERENCE) {
+	it->node = WORD_REFERENCE_SOURCE(it->node);
+    }
+
+    /*
+     * The stack being empty means a cycle was found.
+     */
+
+    return (it->stack ? 0 : 1);
+}
+
+static void
+PopNode(
+    Col_SequenceIterator *it)	/* The iterator to update. */
+{
+    /* ASSERT(it->seq) */
+    Col_Word stack = it->stack;
+    if (!stack) {
+	/*
+	 * End of sequence.
+	 */
+
+	it->seq = WORD_NIL;
+    } else {
+	/*
+	 * Reverse Brent's algorithm.
+	 *
+	 * Note: although this step is O(n), the limit value is typically 
+	 * small.
+	 */
+
+	if (it->steps == 0) {
+	    it->limit /= 2;
+	    it->steps = it->limit;
+	    while (it->steps >= it->limit) {
+		it->turtle = WORD_SEQSTACK_NEXT(it->turtle);
+		it->steps--;
+	    }
+	} else {
+	    it->steps--;
+	}
+
+	/*
+	 * Move stack node to the free list.
+	 */
+
+	it->stack = WORD_SEQSTACK_NEXT(stack);
+	WORD_SEQSTACK_NEXT(stack) = WORD_SEQUENCE_STACKNODES(it->seq);
+	WORD_SEQUENCE_STACKNODES(it->seq) = stack;
+
+	/*
+	 * Up one level.
+	 */
+
+	it->seq = WORD_SEQSTACK_SEQUENCE(stack);
+	it->node = WORD_SEQSTACK_NODE(stack);
+    }
+}
+
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * FindPart --
+ *
+ *	Update the given sequence iterator so that it points to a node with a 
+ *	valid part.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	If no valid part is found (e.g. when following unbound references),
+ *	the iterator reaches end.
+ *	The stack is updated when following reference downwards.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+static void
+FindPart(
+    Col_SequenceIterator *it)	/* The iterator to update. */
+{
+    int cycle = 0;
+    for (;;) { /* Loop until part found or end reached. */
+	switch (WORD_TYPE(it->node)) {
+	    case WORD_TYPE_VECTOR:
+	    case WORD_TYPE_LIST:
+		/*
+		 * Node is a valid part.
+		 */
+
+		return;
+
+	    case WORD_TYPE_REFERENCE:
+		/*
+		 * Follow reference.
+		 */
+
+		cycle += PushNode(it);
+		if (cycle > 1) {
+		    /*
+		     * Two cycles without finding part means the cycle is empty.
+		     * End of sequence.
+		     */
+
+		    it->seq = WORD_NIL;
+		    return;
+		}
+		break;
+
+	    case WORD_TYPE_SEQUENCE:
+		/*
+		 * Descend into sequence.
+		 */
+
+		it->seq = it->node;
+		it->node = WORD_SEQUENCE_ROOT(it->node);
+		break;
+
+	    case WORD_TYPE_SEQUENCE_NODE:
+		if (WORD_SEQNODE_LIST(it->node)) {
+		    /*
+		     * Node contains a valid part.
+		     */
+
+		    return;
+		}
+
+		/*
+		 * Descend into reference.
+		 */
+
+		cycle += PushNode(it);
+		if (cycle > 1) {
+		    /*
+		     * Two cycles without finding part means the cycle is empty.
+		     * End of sequence.
+		     */
+
+		    it->seq = WORD_NIL;
+		    return;
+		}
+		break;
+
+	    case WORD_TYPE_NIL:
+		/*
+		 * Up one level and to the next node.
+		 */
+
+		PopNode(it);
+		if (!it->seq) {
+		    /*
+		     * End of sequence.
+		     */
+
+		    return;
+		}
+		/* ASSERT(it->node) */
+		it->node = WORD_SEQNODE_NEXT(it->node);
+		break;
+	}
+    }
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Col_SequenceIterBegin --
+ *
+ *	Initialize the sequence iterator so that it points to the first
+ *	element within the sequence.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	If the sequence is nil, the iterator is initialized to the end iterator
+ *	(i.e. whose seq field is nil), else it points to the first element 
+ *	within the sequence.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+void
+Col_SequenceIterBegin(
+    Col_Word sequence,		/* Sequence to iterate over. */
+    Col_SequenceIterator *it)	/* Iterator to initialize. */
+{
+    RESOLVE_WORD(sequence);
+
+begin:
+    switch (WORD_TYPE(sequence)) {
+	case WORD_TYPE_SEQUENCE:
+	    /*
+	     * Regular sequence.
+	     */
+
+	    it->seq = sequence;
+	    it->node = WORD_SEQUENCE_ROOT(sequence);
+	    it->stack = WORD_NIL;
+	    it->turtle = WORD_NIL;
+	    it->limit = 1;
+	    it->steps = 0;
+	    FindPart(it);
+	    break;
+
+	case WORD_TYPE_VECTOR:
+	case WORD_TYPE_LIST:
+	    /*
+	     * Vectors and lists are like single-part sequences.
+	     */
+
+	    it->seq = sequence;
+	    it->node = sequence;
+	    it->stack = WORD_NIL;
+	    break;
+
+	case WORD_TYPE_REFERENCE:
+	    /*
+	     * Follow reference (tail recurse).
+	     */
+
+	    sequence = WORD_REFERENCE_SOURCE(sequence);
+	    goto begin;
+
+	default:
+	    /*
+	     * End of iteration.
+	     */
+
+	    it->seq = WORD_NIL;
+    }
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Col_SequenceIterDone --
+ *
+ *	Called when we're done with the given iterator.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Cleanup all iterator relative data that may have been allocated. Set
+ *	the iterator to the end iterator.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+void
+Col_SequenceIterDone(
+    Col_SequenceIterator *it)	/* Iterator to cleanup. */
+{
+    if (Col_SequenceIterEnd(it)) {
+	return;
+    }
+
+    /*
+     * Move stack nodes to free list.
+     */
+
+    while (it->stack) {
+	Col_Word seq = WORD_SEQSTACK_SEQUENCE(it->stack);
+	Col_Word next = WORD_SEQSTACK_NEXT(it->stack);
+	WORD_SEQSTACK_NEXT(it->stack) = WORD_SEQUENCE_STACKNODES(seq);
+	WORD_SEQUENCE_STACKNODES(seq) = it->stack;
+	it->stack = next;
+    }
+    it->seq = WORD_NIL;
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Col_SequenceIterPartAt --
+ *
+ *	Get the part designated by the iterator.
+ *
+ * Results:
+ *	If the index is past the end of the sequence, nil, else the part (i.e.
+ *	list).
+ *
+ * Side effects:
+ *	None.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+Col_Word
+Col_SequenceIterPartAt(
+    Col_SequenceIterator *it)	/* Iterator that points to the part. */
+{
+    if (Col_SequenceIterEnd(it)) {
+	return WORD_NIL;
+    }
+
+    /* ASSERT(WORD_TYPE(it->node) != WORD_TYPE_REFERENCE) */
+    switch (WORD_TYPE(it->node)) {
+	case WORD_TYPE_VECTOR:
+	case WORD_TYPE_LIST:
+	    /*
+	     * Node is a part itself.
+	     */
+
+	    /* ASSERT(it->seq == it->node) */
+	    return it->node;
+
+	default:
+	    return WORD_SEQNODE_LIST(it->node);
+    }
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Col_SequenceIterNext --
+ *
+ *	Move the iterator to the nb-th next element.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Update the iterator.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+void
+Col_SequenceIterNext(
+    Col_SequenceIterator *it)	/* The iterator to move. */
+{
+    if (Col_SequenceIterEnd(it)) {
+	return;
+    }
+
+    switch (WORD_TYPE(it->node)) {
+	case WORD_TYPE_VECTOR:
+	case WORD_TYPE_LIST:
+	    /*
+	     * End of sequence.
+	     */
+
+	    it->node = WORD_NIL;
+	    break;
+
+	case WORD_TYPE_SEQUENCE_NODE:
+	    if (WORD_SEQNODE_REF(it->node)) {
+		/*
+		 * Descend into reference.
+		 */
+
+		PushNode(it);
+	    } else {
+		/*
+		 * Next node.
+		 */
+
+		it->node = WORD_SEQNODE_NEXT(it->node);
+	    }
+	    break;
+    }
+
+    FindPart(it);
 }
