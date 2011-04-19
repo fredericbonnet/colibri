@@ -83,7 +83,7 @@ EXTERN Col_Rope		Col_ConcatRopesV(size_t number, ...);
  */
 
 /* 
- * Indexing. 
+ * Accessing. 
  */
 
 EXTERN Col_Char		Col_RopeCharAt(Col_Rope rope, size_t index);
@@ -98,10 +98,12 @@ EXTERN Col_Rope		Col_RepeatRope(Col_Rope rope, size_t count);
  * Insertion/removal. 
  */
 
-EXTERN Col_Rope		Col_RopeInsert(Col_Rope into, size_t index, Col_Rope rope);
-EXTERN Col_Rope		Col_RopeRemove(Col_Rope rope, size_t first, size_t last);
-EXTERN Col_Rope		Col_RopeReplace(Col_Rope rope, size_t first, size_t last, 
-			    Col_Rope with);
+EXTERN Col_Rope		Col_RopeInsert(Col_Rope into, size_t index, 
+			    Col_Rope rope);
+EXTERN Col_Rope		Col_RopeRemove(Col_Rope rope, size_t first, 
+			    size_t last);
+EXTERN Col_Rope		Col_RopeReplace(Col_Rope rope, size_t first, 
+			    size_t last, Col_Rope with);
 
 
 /* 
@@ -117,9 +119,9 @@ EXTERN Col_Rope		Col_RopeReplace(Col_Rope rope, size_t first, size_t last,
 typedef int (Col_RopeChunkEnumProc) (Col_StringFormat format, const void *data, 
 	size_t length, size_t byteLength, Col_ClientData clientData);
 
-EXTERN int		Col_TraverseRopeChunks(Col_Rope rope, size_t start, size_t max, 
-			    Col_RopeChunkEnumProc *proc, Col_ClientData clientData, 
-			    size_t *lengthPtr);
+EXTERN int		Col_TraverseRopeChunks(Col_Rope rope, size_t start, 
+			    size_t max, Col_RopeChunkEnumProc *proc, 
+			    Col_ClientData clientData, size_t *lengthPtr);
 
 /*
  * Iteration over individual characters. Each iterator takes 8 words on the

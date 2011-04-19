@@ -149,7 +149,7 @@ typedef void * Col_ClientData;
 #include "colRope.h"
 #include "colWord.h"
 
-#include "colList.h"
+#include "colCollection.h"
 
 /*
  *----------------------------------------------------------------
@@ -159,6 +159,24 @@ typedef void * Col_ClientData;
 
 EXTERN void		Col_Init(void);
 EXTERN void		Col_Cleanup(void);
+
+
+/*
+ *----------------------------------------------------------------
+ * Error handling.
+ *----------------------------------------------------------------
+ */
+
+typedef enum {
+    COL_FATAL,
+    COL_ERROR
+} Col_ErrorLevel;
+typedef void (Col_ErrorProc)(Col_ErrorLevel level, const char *format, 
+			     va_list args);
+
+EXTERN void		Col_Error(Col_ErrorLevel level, const char *format, 
+			    ...);
+EXTERN void		Col_SetErrorProc(Col_ErrorProc *proc);
 
 
 /* 

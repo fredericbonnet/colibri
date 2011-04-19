@@ -1,6 +1,6 @@
 #include "../../colibri.h"
-#include "../../colInt.h"
-#include "../../colPlat.h"
+#include "../../colInternal.h"
+#include "../../colPlatform.h"
 
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -11,7 +11,8 @@ static pthread_once_t once = PTHREAD_ONCE_INIT;
 static pthread_key_t tsdKey;
 typedef struct {
     size_t nestCount;
-    GcMemInfo info; 
+    GcMemInfo gcMemInfo; 
+	Col_ErrorProc *errorProc;
 } ThreadData;
 
 /*
@@ -278,6 +279,7 @@ PlatSysPageCleanup(MemoryPool * pool) {
  *---------------------------------------------------------------------------
  *
  * PlatGetGcMemInfo --
+ * PlatGetErrorProcPtr --
  *
  *	Get thread-local info.
  *
@@ -292,7 +294,12 @@ PlatSysPageCleanup(MemoryPool * pool) {
 
 GcMemInfo *
 PlatGetGcMemInfo() {
-    return &((ThreadData *) pthread_getspecific(tsdKey))->info;
+    return &((ThreadData *) pthread_getspecific(tsdKey))->gcMemInfo;
+}
+
+Col_ErrorProc **
+PlatGetErrorProcPtr() {
+    return &((ThreadData *) pthread_getspecific(tsdKey))->errorProc;
 }
 
 #endif /* COL_THREADS */

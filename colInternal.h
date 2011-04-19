@@ -1,3 +1,6 @@
+#ifndef _COLIBRI_INTERNAL
+#define _COLIBRI_INTERNAL
+
 #include "colConf.h"
 
 /*
@@ -504,9 +507,8 @@ void			DeclareWord(Col_Word word);
  *	0..          ..0S..  ..S|000001|10	 - 1-char 8-bit string (L=1)
  *	0..  ..0S..          ..S|000010|10	 - 2-char 8-bit string (L=2)
  *	S..		     ..S|000011|10	 - 3-char 8-bit string (L=3)
- *	0..			  ..0|0100 	empty word (zero-sized vector)
+ *	L..			   ..L|100 	Void list (full of nil)
  *	P..			  ..P|1000 	rope pointer (not including C strings)
- *	?..			  ..?|1100 	unused
  */
 
 #define WORD_TYPE_REGULAR	0
@@ -516,7 +518,7 @@ void			DeclareWord(Col_Word word);
 #define WORD_TYPE_SMALL_INT	-2
 #define WORD_TYPE_CHAR		-3
 #define WORD_TYPE_SMALL_STRING	-4
-#define WORD_TYPE_EMPTY		-5
+#define WORD_TYPE_VOID_LIST	-5
 
 #define IS_ROPE(word)		((((uintptr_t)(word))&0xF) == 8)
 #define WORD_TYPE_ROPE		-6
@@ -549,7 +551,8 @@ void			DeclareWord(Col_Word word);
  *
  * Predefined type IDs are chosen so that their bit 1 is zero to 
  * distinguish them with type pointers and avoid value clashes. The ID only
- * takes byte 0, the rest of the word being free to use.
+ * takes byte 0, the rest of the word being free to use. This gives up to 63
+ * predefined type IDs (4-252 with steps of 4).
  *
  * We use bit 0 of the type field as a parenthood indicator for both predefined
  * type IDs and type pointers. Given the above, this bit is always on byte 0. 
@@ -600,6 +603,7 @@ void			DeclareWord(Col_Word word);
 	    :(((uintptr_t)(word))&2)?					\
 		 (((uintptr_t)(word))&0x80)?	WORD_TYPE_CHAR		\
 		:				WORD_TYPE_SMALL_STRING	\
+	    :(((uintptr_t)(word))&4)?		WORD_TYPE_VOID_LIST	\
 	    /* Unknown format */					\
 	    :					WORD_TYPE_NIL		\
 	:IS_ROPE(word)?				WORD_TYPE_ROPE		\
@@ -631,6 +635,8 @@ void			DeclareWord(Col_Word word);
  * Values are for 32-bit systems.
  */
 
+#define SMALL_INT_MAX			(INT_MAX>>1)
+#define SMALL_INT_MIN			(INT_MIN>>1)
 #define WORD_SMALL_INT_GET(word)	(((int)(intptr_t)(word))>>1)
 #define WORD_SMALL_INT_NEW(value)	((Col_Word)(intptr_t)((((int)(value))<<1)|1))
 
@@ -646,7 +652,11 @@ void			DeclareWord(Col_Word word);
 #endif
 #define WORD_SMALL_STRING_EMPTY		((Col_Word) 2)
 
-#define WORD_EMPTY			((Col_Word) 4)
+#define VOID_LIST_MAX_LENGTH		(SIZE_MAX>>3)
+#define WORD_VOID_LIST_LENGTH(word)	(((size_t)(intptr_t)(word))>>3)
+#define WORD_VOID_LIST_NEW(length)	((Col_Word)(intptr_t)((((size_t)(length))<<3)|4))
+
+#define WORD_EMPTY			WORD_VOID_LIST_NEW(0)
 
 #define WORD_ROPE_GET(word)		((Col_Rope)(((uintptr_t)(word))&~0xF))
 #define WORD_ROPE_NEW(value)		((Col_Word)(((uintptr_t)(value))|8))
@@ -881,6 +891,52 @@ void			DeclareWord(Col_Word word);
 
 /*
  *----------------------------------------------------------------
+ * References.
+ *----------------------------------------------------------------
+ */
+
+/*
+ * Reference words.
+ *
+ * References can be used to build self-referential structures, especially 
+ * immutable ones such as lists. References can be resolved after their 
+ * creation, allowing for example a list or one of its children to include a 
+ * reference to an element that is created at a later time. 
+ *
+ * References may also help identify words having the same value in immutable
+ * structures where words are naturally shared.
+ *
+ * References are synonymous with the word they refer to. Thus, unbound
+ * references are semantically identical to nil. So an unbound reference is 
+ * not an error condition at this level of abstraction, although it may be one 
+ * if the upper abstraction layer expects non-nil values. In other words, 
+ * references are outside the domain of values.
+ *
+ * On 32-bit architectures the single-cell layout is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |                    Unused                     |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Source                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Unused                             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Source : 32-bit word.
+ *	    Points to the referenced word.
+ */
+
+#define WORD_TYPE_REFERENCE		12
+
+#define WORD_REFERENCE_SOURCE(word)	(((Col_Word *)(word))[2])
+
+
+/*
+ *----------------------------------------------------------------
  * Collections.
  *----------------------------------------------------------------
  */
@@ -891,12 +947,17 @@ void			DeclareWord(Col_Word word);
  * Vectors are arrays of word elements that fit in a single word structure. 
  * Elements are directly addressable.
  *
+ * Immutable vectors' content and length are fixed.
+ * Mutable vectors can grow up to the word's reserved size.
+ *
  * On 32-bit architectures the multi-cell layout is as follows:
  *
+ *  - Immutable vector words:
+ * 
  *    0                   1                   2                   3
  *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |   Type info   |     Size    |R|            Length             |
+ *   |   Type info   |     Unused    |            Length             |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   |                            Synonym                            |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -905,14 +966,30 @@ void			DeclareWord(Col_Word word);
  *   .                                                               .
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *
- *	Size : 7-bit unsigned
- *	    When zero, vector is immutable. Else it is mutable and this field
- *	    gives the number of allocated cells. On 32-bit systems, 7 bits 
- *	    should be sufficient to represent up to AVAILABLE_CELLS.
+ *	Length : 16-bit unsigned
+ *	    A word taking up to AVAILABLE_CELLS, this ensures that the actual
+ *	    size fits the length field width.
  *
- *	Has References (R) : 1 bit
- *	    When set, indicates that at least one of the elements is or contains
- *	    a reference.
+ *	Elements : array of 32-bit words
+ *
+ *
+ *  - Mutable vector words:
+ * 
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |   Type info   |      Size     |            Length             |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                            Synonym                            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   .                                                               .
+ *   .                           Elements                            .
+ *   .                                                               .
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *	Size : 8-bit unsigned
+ *	    The number of allocated cells. On 32-bit systems, 8 bits should be 
+ *	    sufficient to represent up to AVAILABLE_CELLS.
  *
  *	Length : 16-bit unsigned
  *	    A word taking up to AVAILABLE_CELLS, this ensures that the actual
@@ -921,15 +998,15 @@ void			DeclareWord(Col_Word word);
  *	Elements : array of 32-bit words
  */
 
-#define WORD_TYPE_VECTOR		12
+#define WORD_TYPE_VECTOR		16
+#define WORD_TYPE_MVECTOR		20
 
 #define VECTOR_MAX_LENGTH		(WORD_MAX_SIZE/sizeof(Col_Word))
 
-#define WORD_VECTOR_FLAGS(word)		(((unsigned char *)(word))[1])
-/*#define WORD_VECTOR_FLAG_SIZE_MASK	0x7F*/
-#define WORD_VECTOR_FLAG_HASREFS	0x80
 #define WORD_VECTOR_LENGTH(word)	(((unsigned short *)(word))[1])
 #define WORD_VECTOR_ELEMENTS(word)	((Col_Word *) WORD_DATA(word))
+
+#define WORD_MVECTOR_SIZE(word)		(((unsigned char *)(word))[1])
 
 /*
  * List words.
@@ -939,12 +1016,15 @@ void			DeclareWord(Col_Word word);
  * They are implemented as self-balanced binary trees whose leaves are vectors, 
  * and are very similar to ropes.
  *
- * A vector is a list.
- *
  * Concat and sublist nodes are not regular words in the sense that they have no 
  * synonym field. Instead they store their size. They are similar to concat 
  * resp. substring ropes and use the same format. They are never used 
  * independently from list words.
+ *
+ * Immutable lists and nodes are made of immutable nodes and vectors.
+ * Mutable lists and nodes can use both mutable or immutable nodes and vectors 
+ * with a copy-on-write semantics. For this reason sublist nodes are never 
+ * mutable.
  *
  * On 32-bit architectures the single-cell layout is as follows:
  *
@@ -953,21 +1033,21 @@ void			DeclareWord(Col_Word word);
  *    0                   1                   2                   3
  *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |   Type info   |                   Unused                      |
+ *   |   Type info   |                    Unused                     |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   |                            Synonym                            |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                            Length                             |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   |                             Root                              |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- *	Length : 32-bit unsigned
+ *   |                             Loop                              |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *
  *	Root : 32-bit word
- *	    The root is either a sublist or concat list node. It cannot be a
- *	    vector since in this case the list could be represented by a 
- *	    single vector. 
+ *	    The root is either a sublist or concat list node. The list length
+ *	    is given by its root node.
+ *
+ *	Loop : 32-bit unsigned
+ *	    Terminal loop length for cyclic lists, else zero.
  *
  *
  *  - Sublist node:
@@ -975,7 +1055,7 @@ void			DeclareWord(Col_Word word);
  *    0                   1                   2                   3
  *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |   Type info   |R|0|   Unused  |     Depth     |    Unused     |
+ *   |   Type info   |     Unused    |     Depth     |    Unused     |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   |                            Source                             |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -983,12 +1063,6 @@ void			DeclareWord(Col_Word word);
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   |                             Last                              |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- *	Has References (R) : 1 bit
- *	    When set, indicates that at least one of the elements is or contains
- *	    a reference.
- *
- *	Mutable (M) : 1 bit, always zero (sublists are never mutable).
  *
  *	Depth : 8-bit unsigned
  *	    8 bits will code up to 255 depth levels, which is more than 
@@ -1004,7 +1078,7 @@ void			DeclareWord(Col_Word word);
  *    0                   1                   2                   3
  *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |   Type info   |R|M|   Unused  |     Depth     |  Left length  |
+ *   |   Type info   |     Unused    |     Depth     |  Left length  |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   |                            Length                             |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -1012,13 +1086,6 @@ void			DeclareWord(Col_Word word);
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   |                             Right                             |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- *	Has References (R) : 1 bit
- *	    When set, indicates that at least one of the elements is or contains
- *	    a reference.
- *
- *	Mutable (M) : 1 bit
- *	    When zero, this guarantees that all children are immutable.
  *
  *	Depth : 8-bit unsigned
  *	    8 bits will code up to 255 depth levels, which is more than 
@@ -1033,16 +1100,17 @@ void			DeclareWord(Col_Word word);
  *	Left, Right : 32-bit words or list nodes
  */
 
-#define WORD_TYPE_LIST			16
-#define WORD_TYPE_SUBLIST		20
-#define WORD_TYPE_CONCATLIST		24
+#define WORD_TYPE_LIST			24
+#define WORD_TYPE_MLIST			28
+#define WORD_TYPE_SUBLIST		32
+#define WORD_TYPE_CONCATLIST		36
+#define WORD_TYPE_MCONCATLIST		40
 
-#define WORD_LIST_LENGTH(word)		(((size_t *)(word))[2])
-#define WORD_LIST_ROOT(word)		(((Col_Word *)(word))[3])
+#define WORD_LIST_ROOT(word)		(((Col_Word *)(word))[2])
+#define WORD_LIST_LOOP(word)		(((size_t *)(word))[3])
 
-#define WORD_LISTNODE_FLAGS(word)	(((unsigned char *)(word))[1])
-#define WORD_LISTNODE_FLAG_HASREFS	1
-/*#define WORD_LISTNODE_FLAG_MUTABLE	2*/
+#define WORD_LIST_VOID_LENGTH(word)	(((size_t *)(word))[2])
+
 #define WORD_LISTNODE_DEPTH(word)	(((unsigned char *)(word))[2]) 
 
 #define WORD_SUBLIST_SOURCE(word)	(((Col_Word *)(word))[1])
@@ -1054,161 +1122,4 @@ void			DeclareWord(Col_Word word);
 #define WORD_CONCATLIST_LEFT(word)	(((Col_Word *)(word))[2])
 #define WORD_CONCATLIST_RIGHT(word)	(((Col_Word *)(word))[3])
 
-/*
- * Sequence words.
- *
- * Sequences are collections of words that are sequentially traversable and 
- * potentially cyclic. They are implemented as linked lists of parts that are 
- * either lists or references to sequences. The sequence is formed by logically 
- * concatenating its parts, references being resolved recursively. Sequences 
- * thus form a (potentially cyclic) tree that is traversed depth-first.
- *
- * Sequences have no known length: they can be infinite when cyclic, or far 
- * exceed the integer limit. However each node, being a list, has a known
- * length.
- *
- * Consecutive lists are merged into one when possible. The only case when this
- * is not done is when their combined length exceeds the maximum list length.
- *
- * When a cycle is found, the remainder of the sequence is trimmed.
- *
- * Lists are sequences. Since vectors are lists, vectors are also sequences.
- *
- * On 32-bit architectures the single-cell layout is as follows:
- *
- *  - Sequence words:
- *
- *    0                   1                   2                   3
- *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |   Type info   |C|                   Unused                    |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                            Synonym                            |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                             Root                              |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                          Stack nodes                          |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- *	Cyclic (C) : 1 bit
- *	    When set, indicates that the sequence is cyclic.
- *
- *	Root : 32-bit word
- *	    The root is a vector, sublist or concat list node, whose elements
- *	    are lists (including vectors) or references to sequences.
- *
- *	Stack nodes : 32-bit word
- *	    Linked list of previously allocated but now free stack nodes.
- *
- *
- *  - Sequence nodes:
- *
- *    0                   1                   2                   3
- *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |   Type info   |                    Unused                     |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                             List                              |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                           Reference                           |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                             Next                              |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- *	List : 32-bit word
- *	    List element. May be nil.
- *
- *	Reference : 32-bit word
- *	    Reference to another sequence. May be nil.
- *
- *	Next : 32-bit word
- *	    Sequence nodes are linked together in a singly-linked list.
- *
- *
- *  - Stack nodes:
- *
- *    0                   1                   2                   3
- *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |   Type info   |                    Unused                     |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                           Sequence                            |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                             Node                              |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                             Next                              |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- *	Sequence : 32-bit word
- *	    Uplevel sequence.
- *
- *	Node : 32-bit word
- *	    Parent node in uplevel sequence.
- *
- *	Next : 32-bit word
- *	    When in use, uplevel stack node.
- *	    When free, next in free stack node list.
- */
-
-#define WORD_TYPE_SEQUENCE		28
-#define WORD_TYPE_SEQUENCE_NODE		32
-#define WORD_TYPE_SEQUENCE_STACK	36
-
-#define WORD_SEQUENCE_CYCLIC(word)	(((unsigned char *)(word))[1])
-#define WORD_SEQUENCE_ROOT(word)	(((Col_Word *)(word))[2])
-#define WORD_SEQUENCE_STACKNODES(word)	(((Col_Word *)(word))[3])
-
-#define WORD_SEQNODE_LIST(word)		(((Col_Word *)(word))[1])
-#define WORD_SEQNODE_REF(word)		(((Col_Word *)(word))[2])
-#define WORD_SEQNODE_NEXT(word)		(((Col_Word *)(word))[3])
-
-#define WORD_SEQSTACK_SEQUENCE(word)	(((Col_Word *)(word))[1])
-#define WORD_SEQSTACK_NODE(word)	(((Col_Word *)(word))[2])
-#define WORD_SEQSTACK_NEXT(word)	(((Col_Word *)(word))[3])
-
-
-/*
- *----------------------------------------------------------------
- * References.
- *----------------------------------------------------------------
- */
-
-/*
- * Reference words.
- *
- * References can be used to build self-referential structures, especially 
- * immutable ones such as lists. References can be resolved after their 
- * creation, allowing for example a list or one of its children to include a 
- * reference to an element that is created at a later time. 
- *
- * References can also be used for data sharing in mutable structures. In the 
- * general, immutable case, references may help distinguish words having the 
- * same value.
- *
- * References are synonymous with the word they refer to. Thus, unbound
- * references are semantically identical to nil. So an unbound reference is 
- * not an error condition at this level of abstraction, although it may be one 
- * if the upper abstraction layer expects non-nil values. In other words, 
- * references are outside the domain of values.
- *
- * On 32-bit architectures the single-cell layout is as follows:
- *
- *    0                   1                   2                   3
- *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |   Type info   |                   Unused                      |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                            Synonym                            |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                            Source                             |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |                            Unused                             |
- *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- *	Source : 32-bit word.
- *	    Points to the referenced word.
- */
-
-#define WORD_TYPE_REFERENCE		40
-
-#define WORD_REFERENCE_SOURCE(word)	(((Col_Word *)(word))[2])
+#endif /* _COLIBRI_INTERNAL */

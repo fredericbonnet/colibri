@@ -1,6 +1,6 @@
 #include "colibri.h"
-#include "colInt.h"
-#include "colPlat.h"
+#include "colInternal.h"
+#include "colPlatform.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -501,8 +501,14 @@ FindFreeCells(
      */
 
     if (number > AVAILABLE_CELLS) {
-	/*TODO: exception*/ 
-	return 0;
+	/*
+	 * Too large.
+	 */
+
+	Col_Error(COL_ERROR, 
+	    "Cannot allocate more than %u cells (asking for %d)", 
+	    AVAILABLE_CELLS, number);
+	return (size_t)-1;
     }
 
     /* 

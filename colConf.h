@@ -1,3 +1,6 @@
+#ifndef _COLIBRI_CONFIGURATION
+#define _COLIBRI_CONFIGURATION
+
 /*
  * Threading support.
  */
@@ -58,3 +61,5 @@ typedef char Page[PAGE_SIZE];
 
 #define CELL_SIZE		(sizeof(void *)*4)
 typedef char Cell[CELL_SIZE];
+
+#endif /* _COLIBRI_CONFIGURATION */

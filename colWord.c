@@ -1,5 +1,5 @@
 #include "colibri.h"
-#include "colInt.h"
+#include "colInternal.h"
 
 #include <string.h>
 #include <limits.h>
@@ -42,7 +42,7 @@ Col_NewIntWord(
      * Return integer value if possible.
      */
 
-    if (value <= (INT_MAX>>1) && value >= (INT_MIN>>1)) {
+    if (value <= SMALL_INT_MAX && value >= SMALL_INT_MIN) {
 	return WORD_SMALL_INT_NEW(value);
     }
 
@@ -306,12 +306,10 @@ Col_GetWordInfo(
     Col_WordData *dataPtr)	/* Returned data. */
 {
     Col_WordType * typeInfo;
-    int type;
 
     RESOLVE_WORD(word);
     
-    type = WORD_TYPE(word);
-    switch (type) {
+    switch (WORD_TYPE(word)) {
 	/*
 	 * Immediate values.
 	 */
@@ -329,15 +327,12 @@ Col_GetWordInfo(
 
 	case WORD_TYPE_SMALL_STRING:
 	    dataPtr->str.length = WORD_SMALL_STRING_GET_LENGTH(word);
-	    memcpy(dataPtr->str.data, WORD_SMALL_STRING_DATA(word), 
+	    memcpy((void *) dataPtr->str.data, WORD_SMALL_STRING_DATA(word), 
 		    dataPtr->str.length);
 	    return COL_SMALL_STRING;
 
-	case WORD_TYPE_EMPTY:
-	    /* Empty word is a zero-sized vector. */
-	    dataPtr->vector.length = 0;
-	    dataPtr->vector.elements = NULL;
-	    return COL_VECTOR;
+	case WORD_TYPE_VOID_LIST:
+	    return COL_LIST;
 
 	/*
 	 * Ropes.
@@ -364,14 +359,21 @@ Col_GetWordInfo(
 	    dataPtr->vector.elements = WORD_VECTOR_ELEMENTS(word);
 	    return COL_VECTOR;
 
+	case WORD_TYPE_MVECTOR:
+	    dataPtr->mvector.maxLength = (WORD_MVECTOR_SIZE(word)*CELL_SIZE 
+		    - WORD_HEADER_SIZE) / sizeof(Col_Word);
+	    dataPtr->mvector.length = WORD_VECTOR_LENGTH(word);
+	    dataPtr->mvector.elements = WORD_VECTOR_ELEMENTS(word);
+	    return COL_MVECTOR;
+
 	case WORD_TYPE_LIST:
 	    return COL_LIST;
 
-	case WORD_TYPE_SEQUENCE:
-	    return COL_SEQUENCE;
+	case WORD_TYPE_MLIST:
+	    return COL_MLIST;
 
 	case WORD_TYPE_REFERENCE:
-	    dataPtr->ref = WORD_REFERENCE_SOURCE(word);
+	    dataPtr->refSource = WORD_REFERENCE_SOURCE(word);
 	    return COL_REFERENCE;
 
 	/*
@@ -493,44 +495,45 @@ Col_GetWordSynonym(
  *	Add a synonym to a word.
  *
  * Results:
- *	The modified word, which can be the original one. This in turn must be
- *	declared as child of its original container.
+ *	None.
  *
  * Side effects:
- *	Modify the chain of synonyms, may allocate new words.
+ *	Modify the chain of synonyms, may allocate new words. If the word is
+ *	an immediate value, it may be upconverted to a regular word, and
+ *	declared as child if the parent is given.
  *
  *---------------------------------------------------------------------------
  */
 
-Col_Word
+void
 Col_AddWordSynonym(
-    Col_Word word,		/* The word to add synonym to. */
-    Col_Word synonym)		/* The synonym to add. */
+    Col_Word *wordPtr,		/* Point to the word to add synonym to. */
+    Col_Word synonym,		/* The synonym to add. */
+    Col_Word *parentPtr)	/* If non-nil, parent of the given word. */
 {
+    Col_Word word = *wordPtr;
+
     /*
      * Quick cases.
      */
 
-    if (!synonym) {
-	return word;
-    } else if (!word) {
-	return synonym;
+    if (!word || !synonym) {
+	/*
+	 * Nil can't have synonyms.
+	 */
+
+	return;
     }
 
     if (IS_IMMEDIATE(word) || IS_ROPE(word)) {
-	if (!IS_IMMEDIATE(synonym) && !IS_ROPE(synonym)) {
-	    /*
-	     * Reverse: add word to synonym.
-	     */
-
-	    return Col_AddWordSynonym(synonym, word);
-	}
-
 	/*
 	 * Upconvert word so that it can point to the synonym.
 	 */
 
-	word = UpconvertWord(word);
+	word = *wordPtr = UpconvertWord(word);
+	if (*parentPtr) {
+	    Col_DeclareChild((void *) word, (void *) *parentPtr);
+	}
     } else {
 	RESOLVE_WORD(word);
     }
@@ -542,8 +545,8 @@ Col_AddWordSynonym(
 	     */
 
 	    WORD_SYNONYM(word) = synonym;
-	    Col_DeclareChild((void *) word, (void *) WORD_SYNONYM(word));
-	    return word;
+	    Col_DeclareChild((void *) word, (void *) synonym);
+	    return;
 	}
 
 	/*
@@ -560,7 +563,7 @@ Col_AddWordSynonym(
 	 * A word cannot be synonym with itself.
 	 */
 
-	return word;
+	return;
     }
 
     /*
@@ -601,8 +604,6 @@ Col_AddWordSynonym(
     }
     Col_DeclareChild((void *) word, (void *) WORD_SYNONYM(word));
     Col_DeclareChild((void *) synonym, (void *) WORD_SYNONYM(synonym));
-
-    return word;
 }
 
 /*
@@ -655,11 +656,11 @@ UpconvertWord(
 	    WORD_STRING_ALT(converted) = NULL;
 	    break;
 
-	case (intptr_t) COL_VECTOR:
-	    /* ASSERT(WORD == WORD_EMPTY) */
-	    WORD_SET_TYPE_ID(converted, WORD_TYPE_VECTOR);
-	    WORD_VECTOR_LENGTH(converted) = 0;
-	    WORD_VECTOR_FLAGS(converted) = 0;
+	case (intptr_t) COL_LIST:
+	    /* ASSERT(WORD_TYPE(word) == WORD_VOID_LIST) */
+	    WORD_SET_TYPE_ID(converted, WORD_TYPE_LIST);
+	    WORD_LIST_ROOT(converted) = WORD_VOID_LIST_NEW(data.vector.length);
+	    WORD_LIST_LOOP(converted) = 0;
 	    break;
 
 	case (intptr_t) COL_ROPE:

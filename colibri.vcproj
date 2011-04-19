@@ -176,6 +176,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\colCollection.c"
+				>
+			</File>
+			<File
 				RelativePath=".\colGc.c"
 				>
 			</File>
@@ -184,11 +188,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\colList.c"
-				>
-			</File>
-			<File
-				RelativePath=".\platform\win32\colPlat.c"
+				RelativePath=".\platform\win32\colPlatform.c"
 				>
 			</File>
 			<File
@@ -206,6 +206,10 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
+				RelativePath=".\colCollection.h"
+				>
+			</File>
+			<File
 				RelativePath=".\colConf.h"
 				>
 			</File>
@@ -214,15 +218,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\colInt.h"
+				RelativePath=".\colInternal.h"
 				>
 			</File>
 			<File
-				RelativePath=".\colList.h"
-				>
-			</File>
-			<File
-				RelativePath=".\colPlat.h"
+				RelativePath=".\colPlatform.h"
 				>
 			</File>
 			<File

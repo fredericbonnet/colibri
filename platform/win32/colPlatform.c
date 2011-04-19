@@ -1,13 +1,14 @@
 #include "../../colibri.h"
-#include "../../colInt.h"
-#include "../../colPlat.h"
+#include "../../colInternal.h"
+#include "../../colPlatform.h"
 
 #include <windows.h>
 
 static DWORD tlsToken;
 typedef struct {
     size_t nestCount;
-    GcMemInfo info; 
+    GcMemInfo gcMemInfo; 
+    Col_ErrorProc *errorProc;
 } ThreadData;
 
 
@@ -286,10 +287,16 @@ PlatSysPageAlloc(
 	     */
 
 	    page = PHYS_PAGE(base, next);
-	    VirtualAlloc(page, systemInfo.dwPageSize, MEM_COMMIT, 
-		    PAGE_READWRITE);
+	    if (!VirtualAlloc(page, systemInfo.dwPageSize, MEM_COMMIT, 
+		    PAGE_READWRITE)) {
+		/*
+		 * Fatal error!
+		 */
 
-	    /* TODO: exception handling. */
+		Col_Error(COL_FATAL, "VirtualAlloc: Error %u",
+			GetLastError());
+		return NULL;
+	    }
 
 	    /* 
 	     * Insert into list after <index>.
@@ -307,12 +314,17 @@ PlatSysPageAlloc(
 	 * No room in existing ranges, reserve new one and allocate first page. 
 	 */
 
-	base = VirtualAlloc(NULL, systemInfo.dwAllocationGranularity, 
-		MEM_RESERVE, PAGE_READWRITE);
-	page = VirtualAlloc(base, systemInfo.dwPageSize, MEM_COMMIT, 
-		PAGE_READWRITE);
+	if (!(base = VirtualAlloc(NULL, systemInfo.dwAllocationGranularity, 
+		MEM_RESERVE, PAGE_READWRITE)) || !(page = VirtualAlloc(base, 
+		systemInfo.dwPageSize, MEM_COMMIT, PAGE_READWRITE))) {
+	    /* 
+	     * Fatal error!
+	     */
 
-	/* TODO: exception handling. */
+	    Col_Error(COL_FATAL, "VirtualAlloc: Error %u",
+		    GetLastError());
+	    return NULL;
+	}
 
 	PHYS_PAGE_NEXT(page) = 0;
     }
@@ -398,6 +410,7 @@ PlatSysPageCleanup(MemoryPool * pool) {
  *---------------------------------------------------------------------------
  *
  * PlatGetGcMemInfo --
+ * PlatGetErrorProcPtr --
  *
  *	Get thread-local info.
  *
@@ -412,7 +425,12 @@ PlatSysPageCleanup(MemoryPool * pool) {
 
 GcMemInfo *
 PlatGetGcMemInfo() {
-    return &((ThreadData *) TlsGetValue(tlsToken))->info;
+    return &((ThreadData *) TlsGetValue(tlsToken))->gcMemInfo;
+}
+
+Col_ErrorProc **
+PlatGetErrorProcPtr() {
+    return &((ThreadData *) TlsGetValue(tlsToken))->errorProc;
 }
 
 #endif /* COL_THREADS */

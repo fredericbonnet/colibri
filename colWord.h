@@ -40,34 +40,40 @@ typedef struct Col_WordType {
 } Col_WordType;
 
 /*
- * Word data types.
+ * Word data types. Use odd values to ensure no clash with Col_WordType 
+ * pointer values.
  */
 
 #define COL_NIL			((Col_WordType *) 0)	/* Nil word. */
 #define COL_INT			((Col_WordType *) 1)	/* Integer. */
-#define COL_CHAR		((Col_WordType *) 2)	/* Unicode character. */
-#define COL_SMALL_STRING	((Col_WordType *) 3)	/* Small string. */
-#define COL_ROPE		((Col_WordType *) 4)	/* Rope (string). */
-#define COL_VECTOR		((Col_WordType *) 5)	/* Flat vector. */
-#define COL_LIST		((Col_WordType *) 6)	/* List. */
-#define COL_SEQUENCE		((Col_WordType *) 7)	/* Sequence. */
-#define COL_REFERENCE		((Col_WordType *) 8)	/* Reference. */
+#define COL_CHAR		((Col_WordType *) 3)	/* Unicode character. */
+#define COL_SMALL_STRING	((Col_WordType *) 5)	/* Small string. */
+#define COL_ROPE		((Col_WordType *) 7)	/* Rope (string). */
+#define COL_REFERENCE		((Col_WordType *) 9)	/* Reference. */
+#define COL_VECTOR		((Col_WordType *) 11)	/* Flat vector. */
+#define COL_MVECTOR		((Col_WordType *) 13)	/* Flat mutable vector. */
+#define COL_LIST		((Col_WordType *) 15)	/* List. */
+#define COL_MLIST		((Col_WordType *) 17)	/* Mutable list. */
 
 typedef union {
     int i;			/* COL_INT. */
     Col_Char ch;		/* COL_CHAR. */
     struct {			/* COL_SMALL_STRING. */
 	char length;
-	Col_Char1 data[sizeof(Col_Word)-1];
+	const Col_Char1 data[sizeof(Col_Word)-1];
     } str;
     Col_Rope rope;		/* COL_ROPE. */
-    struct {
+    Col_Word refSource;		/* COL_REFERENCE. */
+    struct {			/* COL_VECTOR. */
 	size_t length;
 	const Col_Word *elements;
-    } vector;			/* COL_VECTOR. */
-				/* COL_LIST and COL_SEQUENCE use accessors and 
-				 * iterators. */
-    Col_Word ref;		/* COL_REFERENCE. */
+    } vector;
+    struct {			/* COL_MVECTOR. */
+	size_t maxLength;
+	size_t length;
+	Col_Word *elements;
+    } mvector;
+				/* COL_(M)LIST uses accessors and iterators. */
     void *data;			/* Other values = (Col_WordType *). */
 } Col_WordData;
 
@@ -89,7 +95,7 @@ EXTERN Col_Word		Col_NewWord(Col_WordType *type, size_t size,
 EXTERN Col_WordType *	Col_GetWordInfo(Col_Word word, Col_WordData *dataPtr);
 EXTERN Col_Word		Col_FindWordInfo(Col_Word word, Col_WordType * type, Col_WordData *dataPtr);
 EXTERN Col_Word		Col_GetWordSynonym(Col_Word word);
-EXTERN Col_Word		Col_AddWordSynonym(Col_Word word, Col_Word synonym);
+EXTERN void		Col_AddWordSynonym(Col_Word *wordPtr, Col_Word synonym, Col_Word *parentPtr);
 EXTERN void		Col_ClearWordSynonym(Col_Word word);
 
 

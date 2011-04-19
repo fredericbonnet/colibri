@@ -16,8 +16,8 @@
  */
 
 #include "colibri.h"
-#include "colInt.h"
-#include "colPlat.h"
+#include "colInternal.h"
+#include "colPlatform.h"
 
 #include <memory.h>
 #include <limits.h>
@@ -127,6 +127,9 @@ GetNbCells(
 	    case WORD_TYPE_VECTOR:
 		return NB_CELLS(WORD_HEADER_SIZE 
 			+ WORD_VECTOR_LENGTH(word)*sizeof(Col_Word));
+
+	    case WORD_TYPE_MVECTOR:
+		return WORD_MVECTOR_SIZE(word);
 
 	    case WORD_TYPE_REGULAR:
 		WORD_GET_TYPE_ADDR(word, typeInfo);
@@ -248,7 +251,7 @@ Col_DeclareChild(
 	 * Can't be called outside of a GC protected section.
 	 */
 
-	/* TODO: exception */
+	Col_Error(COL_ERROR, "Called outside of a GC-protected section");
 	return;
     }
 
@@ -398,7 +401,7 @@ Col_PreserveRope(
 	 * Can't be called outside of a GC protected section.
 	 */
 
-	/* TODO: exception */
+	Col_Error(COL_ERROR, "Called outside of a GC-protected section");
 	return NULL;
     }
 
@@ -480,7 +483,7 @@ Col_PreserveWord(
 	 * Can't be called outside of a GC protected section.
 	 */
 
-	/* TODO: exception */
+	Col_Error(COL_ERROR, "Called outside of a GC-protected section");
 	return WORD_NIL;
     }
 
@@ -491,7 +494,7 @@ Col_PreserveWord(
 	case WORD_TYPE_SMALL_INT:
 	case WORD_TYPE_CHAR:
 	case WORD_TYPE_SMALL_STRING:
-	case WORD_TYPE_EMPTY:
+	case WORD_TYPE_VOID_LIST:
 	    /* 
 	     * Immediate values. 
 	     */
@@ -640,7 +643,7 @@ AllocCells(
 	 * Can't be called outside of a GC protected section.
 	 */
 
-	/* TODO: exception */
+	Col_Error(COL_ERROR, "Called outside of a GC-protected section");
 	return NULL;
     }
     
@@ -706,7 +709,11 @@ PoolAllocCells(
 
     PoolAllocPages(pool, &PAGE_NEXT(tail));
     if (!PAGE_NEXT(tail)) {
-	/* TODO: exception out of memory? */ 
+	/*
+	 * Fatal error!
+	 */
+
+	Col_Error(COL_FATAL, "Page allocation failed");
 	return NULL;
     }
     cells = PageAllocCells(number, PAGE_NEXT(tail), &tail);
@@ -1054,7 +1061,7 @@ MarkReachableCellsFromRoots(
  *
  * MarkReachableCellsFromParents --
  *
- *	Mark all cells following parents from uncollectd pools having children 
+ *	Mark all cells following parents from uncollected pools having children 
  *	in collected pools.
  *
  *	Only parents with still unmarked children are followed.
@@ -1522,6 +1529,7 @@ start:
 	    goto start;
 
 	case WORD_TYPE_VECTOR:
+	case WORD_TYPE_MVECTOR:
 	    /* 
 	     * Follow elements. 
 	     */
@@ -1541,6 +1549,7 @@ start:
 	    break;
 
 	case WORD_TYPE_LIST:
+	case WORD_TYPE_MLIST:
 	    /* 
 	     * Follow list root. 
 	     */
@@ -1563,48 +1572,13 @@ start:
 	    goto start;
 
 	case WORD_TYPE_CONCATLIST:
+	case WORD_TYPE_MCONCATLIST:
 	    /* 
 	     * Follow left arm and tail recurse on right. 
 	     */
 
 	    MarkWord(info, &WORD_CONCATLIST_LEFT(*wordPtr), NULL);
 	    wordPtr = &WORD_CONCATLIST_RIGHT(*wordPtr);
-	    generationPtr = NULL;
-	    goto start;
-
-	case WORD_TYPE_SEQUENCE:
-	    /* 
-	     * Clear stack nodes and follow sequence root.
-	     */
-
-	    WORD_SEQUENCE_STACKNODES(*wordPtr) = WORD_NIL;
-	    MarkWord(info, &WORD_SEQUENCE_ROOT(*wordPtr), NULL);
-	    
-	    /*
-	     * Continued below on synonym.
-	     */
-
-	    break;
-
-	case WORD_TYPE_SEQUENCE_NODE:
-	    /* 
-	     * Follow list and reference, and tail recurse on next.
-	     */
-
-	    MarkWord(info, &WORD_SEQNODE_LIST(*wordPtr), NULL);
-	    MarkWord(info, &WORD_SEQNODE_REF(*wordPtr), NULL);
-	    wordPtr = &WORD_SEQNODE_NEXT(*wordPtr);
-	    generationPtr = NULL;
-	    goto start;
-
-	case WORD_TYPE_SEQUENCE_STACK:
-	    /* 
-	     * Follow sequence and node, and tail recurse on next. 
-	     */
-
-	    MarkWord(info, &WORD_SEQSTACK_SEQUENCE(*wordPtr), NULL);
-	    MarkWord(info, &WORD_SEQSTACK_NODE(*wordPtr), NULL);
-	    wordPtr = &WORD_SEQSTACK_NEXT(*wordPtr);
 	    generationPtr = NULL;
 	    goto start;
 

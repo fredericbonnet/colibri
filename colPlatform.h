@@ -1,3 +1,6 @@
+#ifndef _COLIBRI_PLATFORM
+#define _COLIBRI_PLATFORM
+
 /*
  *----------------------------------------------------------------
  * Process & thread.
@@ -56,4 +59,7 @@ void			PlatSysPageCleanup(MemoryPool * pool);
 
 #ifdef COL_THREADS
 GcMemInfo *		PlatGetGcMemInfo(void);
+Col_ErrorProc **	PlatGetErrorProcPtr(void);
 #endif
+
+#endif /* _COLIBRI_PLATFORM */

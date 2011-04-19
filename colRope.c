@@ -1,5 +1,5 @@
 #include "colibri.h"
-#include "colInt.h"
+#include "colInternal.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -786,10 +786,13 @@ Col_ConcatRopes(
     rightLength = Col_RopeLength(right);
     if (SIZE_MAX-leftLength < rightLength) {
 	/*
-	 * Prevent the creation of too long ropes.
+	 * Concatenated rope would be too long.
 	 */
 
-	return NULL;
+	Col_Error(COL_ERROR, 
+		"Combined length %u+%u exceeds the maximum allowed value for ropes (%u)", 
+		leftLength, rightLength, SIZE_MAX);
+	return WORD_NIL;
     }
 
     /* 
@@ -900,8 +903,8 @@ Col_ConcatRopes(
      * that is balanced as well, i.e. where left and right depths don't differ 
      * by more that 1 level.
 
-    /* Note that by construction, a subrope with depth >= 1 points to a concat,
-     * as by construction it cannot point to another subrope (see Col_Subrope). 
+    /* Note that a subrope with depth >= 1 always points to a concat, as by 
+     * construction it cannot point to another subrope (see Col_Subrope). 
      */
 
     if (leftDepth > rightDepth+1) {
@@ -1040,10 +1043,10 @@ Col_ConcatRopes(
     concatRope = (Col_Rope) AllocCells(1);
     ROPE_SET_TYPE(concatRope, ROPE_TYPE_CONCAT);
     ROPE_CONCAT_DEPTH(concatRope) 
-	= (leftDepth>rightDepth?leftDepth:rightDepth) + 1;
+	    = (leftDepth>rightDepth?leftDepth:rightDepth) + 1;
     ROPE_CONCAT_LENGTH(concatRope) = leftLength + rightLength;
     ROPE_CONCAT_LEFT_LENGTH(concatRope) 
-	= (leftLength<=UCHAR_MAX)?(unsigned char) leftLength:0;
+	    = (leftLength<=UCHAR_MAX)?(unsigned char) leftLength:0;
     ROPE_CONCAT_LEFT(concatRope) = left;
     ROPE_CONCAT_RIGHT(concatRope) = right;
 
