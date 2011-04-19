@@ -170,7 +170,11 @@ typedef void * Col_ClientData;
  *----------------------------------------------------------------
  */
 
-EXTERN void		Col_Init(void);
+#define COL_SINGLE		0
+#define COL_ASYNC		1
+#define COL_SHARED		2
+
+EXTERN void		Col_Init(unsigned int model);
 EXTERN void		Col_Cleanup(void);
 
 
@@ -199,6 +203,7 @@ EXTERN void		Col_SetErrorProc(Col_ErrorProc *proc);
  */
 
 EXTERN void		Col_PauseGC(void);
+EXTERN int		Col_TryPauseGC(void);
 EXTERN void		Col_ResumeGC(void);
 
 /*

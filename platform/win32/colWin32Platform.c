@@ -9,12 +9,7 @@
  * Thread-local data.
  */
 
-static DWORD tlsToken;
-typedef struct {
-    size_t nestCount;
-    GcMemInfo gcMemInfo; 
-    Col_ErrorProc *errorProc;
-} ThreadData;
+DWORD tlsToken;
 
 /*
  * Bit twiddling hack for computing the log2 of a power of 2.
@@ -32,7 +27,18 @@ static const int MultiplyDeBruijnBitPosition2[32] =
  * Prototypes for functions used only in this file.
  */
 
-static BOOL Init(void);
+static size_t		FindClearedBits(unsigned char *mask, size_t size, 
+			    size_t number, size_t index);
+static void		SetBit(unsigned char *mask, size_t i);
+static void		SetBits(unsigned char *mask, size_t first, 
+			    size_t number);
+static void		ClearBits(unsigned char *mask, size_t first, 
+			    size_t number);
+static size_t		TestBit(unsigned char *mask, size_t index);
+static struct PlatGroupData * AllocGroupData(unsigned int model);
+static void		FreeGroupData(struct PlatGroupData *groupData);
+static DWORD WINAPI	GcThreadProc(LPVOID lpParameter);
+static BOOL		Init(void);
 
 
 /*
@@ -101,10 +107,24 @@ typedef struct AddressRange {
 
 static AddressRange *ranges;
 static AddressRange *dedicatedRanges;
-static CRITICAL_SECTION protect;
+static CRITICAL_SECTION csPageAlloc;
 
-#define FIRST_RANGE_SIZE	256 /* 1 MB */
-#define MAX_RANGE_SIZE		32768 /* 128 MB */
+#define FIRST_RANGE_SIZE	256	/* 1 MB */
+#define MAX_RANGE_SIZE		32768	/* 128 MB */
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * FindClearedBits --
+ * SetBit --
+ * SetBits --
+ * ClearBits --
+ * TestBit --
+ *
+ *	Bit manipulation routines. Adapted from colAlloc.c.
+ *
+ *---------------------------------------------------------------------------
+ */
 
 static size_t 
 FindClearedBits(
@@ -295,15 +315,17 @@ PlatSysPageAlloc(
 	 * Create descriptor without bitmask and insert at head.
 	 */
 
-	EnterCriticalSection(&protect);
-	range = (AddressRange *) (malloc(sizeof(AddressRange)));
-	range->next = dedicatedRanges;
-	range->base = addr;
-	range->size = number;
-	range->free = 0;
-	range->first = number;
-	dedicatedRanges = range;
-	LeaveCriticalSection(&protect);
+	EnterCriticalSection(&csPageAlloc);
+	{
+	    range = (AddressRange *) (malloc(sizeof(AddressRange)));
+	    range->next = dedicatedRanges;
+	    range->base = addr;
+	    range->size = number;
+	    range->free = 0;
+	    range->first = number;
+	    dedicatedRanges = range;
+	}
+	LeaveCriticalSection(&csPageAlloc);
 
 	return addr;
     }
@@ -312,130 +334,129 @@ PlatSysPageAlloc(
      * Try to find address range with enough consecutive pages.
      */
 
-    EnterCriticalSection(&protect);
-
-    first = (size_t)-1;
-    prevPtr = &ranges;
-    range = ranges;
-    while (range) {
-	size = range->size;
-	if (range->free >= number) {
-	    /*
-	     * Range has the required number of pages.
-	     */
-
-	    unsigned char *mask = range->bitmask;
-	    first = range->first;
-
-	    if (number == 1 && !TestBit(mask, first)) {
+    EnterCriticalSection(&csPageAlloc);
+    {
+	first = (size_t)-1;
+	prevPtr = &ranges;
+	range = ranges;
+	while (range) {
+	    size = range->size;
+	    if (range->free >= number) {
 		/*
-		 * Fast-track the most common case: allocate the first free 
-		 * page.
+		 * Range has the required number of pages.
 		 */
 
-		break;
+		unsigned char *mask = range->bitmask;
+		first = range->first;
+
+		if (number == 1 && !TestBit(mask, first)) {
+		    /*
+		     * Fast-track the most common case: allocate the first free 
+		     * page.
+		     */
+
+		    break;
+		}
+    	    
+		/*
+		 * Find the first available bit sequence.
+		 */
+
+		first = FindClearedBits(mask, size, number, first);
+		if (first != (size_t)-1) {
+		    break;
+		}
 	    }
-	    
+
 	    /*
-	     * Find the first available bit sequence.
+	     * Not found, try next range.
 	     */
 
-	    first = FindClearedBits(mask, size, number, first);
-	    if (first != (size_t)-1) {
-		break;
+	    prevPtr = &range->next;
+	    range = range->next;
+	}
+
+	if (!range) {
+	    /*
+	     * No range was found with available pages. Create a new one.
+	     */
+
+	    if (!ranges) {
+		size = FIRST_RANGE_SIZE;
+	    } else {
+		/*
+		 * New range size is double that of the previous one.
+		 */
+
+		size <<= 1;
+		if (size > MAX_RANGE_SIZE) size = MAX_RANGE_SIZE;
 	    }
+	    ASSERT(number <= size-1);
+
+	    /*
+	     * Reserve address range.
+	     */
+
+	    addr = VirtualAlloc(NULL, size << shiftPage, MEM_RESERVE, 
+		    PAGE_READWRITE);
+	    if (!addr) {
+		/*
+		 * Fatal error!
+		 */
+
+		Col_Error(COL_FATAL, "VirtualAlloc: Error %u", GetLastError());
+		goto end;
+	    }
+
+	    /*
+	     * Create descriptor.
+	     */
+
+	    range = (AddressRange *) (malloc(sizeof(AddressRange) + (size>>3)));
+	    *prevPtr = range;
+	    range->base = addr;
+	    range->next = NULL;
+	    range->size = size;
+	    range->free = size;
+	    range->first = 0;
+	    memset(range->bitmask, 0, (size >> 3));
+	    first = 0;
 	}
 
 	/*
-	 * Not found, try next range.
+	 * Commit pages. 
 	 */
 
-	prevPtr = &range->next;
-	range = range->next;
-    }
-
-    if (!range) {
-	/*
-	 * No range was found with available pages. Create a new one.
-	 */
-
-	if (!ranges) {
-	    size = FIRST_RANGE_SIZE;
-	} else {
-	    /*
-	     * New range size is double that of the previous one.
-	     */
-
-	    size <<= 1;
-	    if (size > MAX_RANGE_SIZE) size = MAX_RANGE_SIZE;
-	}
-	ASSERT(number <= size-1);
-
-	/*
-	 * Reserve address range.
-	 */
-
-	addr = VirtualAlloc(NULL, size << shiftPage, MEM_RESERVE, 
-		PAGE_READWRITE);
+	ASSERT(first+number <= size);
+	ASSERT(number <= range->free);
+	addr = VirtualAlloc((char *) range->base + (first << shiftPage), 
+		number << shiftPage, MEM_COMMIT, PAGE_READWRITE);
 	if (!addr) {
 	    /*
 	     * Fatal error!
 	     */
 
-	    LeaveCriticalSection(&protect);
 	    Col_Error(COL_FATAL, "VirtualAlloc: Error %u", GetLastError());
-	    return NULL;
+	    goto end;
 	}
 
 	/*
-	 * Create descriptor.
+	 * Update metadata and return.
 	 */
 
-	range = (AddressRange *) (malloc(sizeof(AddressRange) + (size >> 3)));
-	*prevPtr = range;
-	range->base = addr;
-	range->next = NULL;
-	range->size = size;
-	range->free = size;
-	range->first = 0;
-	memset(range->bitmask, 0, (size >> 3));
-	first = 0;
+	range->free -= number;
+	if (first == range->first) {
+	    /* 
+	     * Simply increase the first free page index, the actual index will be 
+	     * updated on next allocation.
+	     */
+
+	    range->first += number;
+	}
+	SetBits(range->bitmask, first, number);
     }
-
-    /*
-     * Commit pages. 
-     */
-
-    ASSERT(first+number <= size);
-    ASSERT(number <= range->free);
-    addr = VirtualAlloc((char *) range->base + (first << shiftPage), 
-	    number << shiftPage, MEM_COMMIT, PAGE_READWRITE);
-    if (!addr) {
-	/*
-	 * Fatal error!
-	 */
-
-	LeaveCriticalSection(&protect);
-	Col_Error(COL_FATAL, "VirtualAlloc: Error %u", GetLastError());
-	return NULL;
-    }
-
-    /*
-     * Update metadata and return.
-     */
-
-    range->free -= number;
-    if (first == range->first) {
-	/* 
-	 * Simply increase the first free page index, the actual index will be 
-	 * updated on next allocation.
-	 */
-
-	range->first += number;
-    }
-    SetBits(range->bitmask, first, number);
-
-    LeaveCriticalSection(&protect);
+end:
+    LeaveCriticalSection(&csPageAlloc);
     return addr;
 }
 
@@ -464,143 +485,603 @@ PlatSysPageFree(
     AddressRange * range;
     unsigned char *mask;
 
-    EnterCriticalSection(&protect);
-
-    /*
-     * Get range info for page. 
-     */
-
-    range = ranges;
-    while (range) {
-	if (page >= range->base && (char *) page < (char *) range->base 
-		+ (range->size << shiftPage)) {
-	    break;
-	}
-	range = range->next;
-    }
-    if (!range) {
+    EnterCriticalSection(&csPageAlloc);
+    {
 	/*
-	 * Likely dedicated address range. 
+	 * Get range info for page. 
 	 */
 
-	AddressRange **prevPtr = &dedicatedRanges;
-	range = dedicatedRanges;
+	range = ranges;
 	while (range) {
 	    if (page >= range->base && (char *) page < (char *) range->base 
 		    + (range->size << shiftPage)) {
 		break;
 	    }
-	    prevPtr = &range->next;
 	    range = range->next;
 	}
 	if (!range) {
 	    /*
-	     * Not found.
+	     * Likely dedicated address range. 
 	     */
 
-	    LeaveCriticalSection(&protect);
-	    Col_Error(COL_FATAL, "Page not found %p", page);
-	    return;
+	    AddressRange **prevPtr = &dedicatedRanges;
+	    range = dedicatedRanges;
+	    while (range) {
+		if (page >= range->base && (char *) page < (char *) range->base 
+			+ (range->size << shiftPage)) {
+		    break;
+		}
+		prevPtr = &range->next;
+		range = range->next;
+	    }
+	    if (!range) {
+		/*
+		 * Not found.
+		 */
+
+		Col_Error(COL_FATAL, "Page not found %p", page);
+		goto end;
+	    }
+
+	    /*
+	     * Release whole range.
+	     */
+
+	    if (!VirtualFree(range->base, 0, MEM_RELEASE)) {
+		/*
+		 * Fatal error!
+		 */
+
+		Col_Error(COL_FATAL, "VirtualFree: Error %u", GetLastError());
+		goto end;
+	    }
+
+	    /*
+	     * Remove from dedicated range list.
+	     */
+
+	    *prevPtr = range->next;
+	    free(range);
+	    goto end;
 	}
 
+	mask = range->bitmask;
+	index = ((char *) page - (char *) range->base) >> shiftPage;
+	ASSERT(index+number <= range->size);
+	ASSERT(TestBit(mask, index));
+
 	/*
-	 * Release whole range.
+	 * Decommit pages.
 	 */
 
-	if (!VirtualFree(range->base, 0, MEM_RELEASE)) {
+	if (!VirtualFree(page, number << shiftPage, MEM_DECOMMIT)) {
 	    /*
 	     * Fatal error!
 	     */
 
-	    LeaveCriticalSection(&protect);
 	    Col_Error(COL_FATAL, "VirtualFree: Error %u", GetLastError());
-	    return;
+	    goto end;
 	}
-
-	/*
-	 * Remove from dedicated range list.
-	 */
-
-	*prevPtr = range->next;
-	free(range);
-	LeaveCriticalSection(&protect);
-	return;
+	ClearBits(mask, index, number);
+	range->free += number;
+	ASSERT(range->free <= range->size);
+	if (range->first > index) {
+	    /*
+	     * Old first free page is beyond the one we just freed, update.
+	     */
+    	 
+	    range->first = index;
+	}
     }
-
-    mask = range->bitmask;
-    index = ((char *) page - (char *) range->base) >> shiftPage;
-    ASSERT(index+number <= range->size);
-    ASSERT(TestBit(mask, index));
-
-    /*
-     * Decommit pages.
-     */
-
-    if (!VirtualFree(page, number << shiftPage, MEM_DECOMMIT)) {
-	/*
-	 * Fatal error!
-	 */
-
-	LeaveCriticalSection(&protect);
-	Col_Error(COL_FATAL, "VirtualFree: Error %u", GetLastError());
-	return;
-    }
-    ClearBits(mask, index, number);
-    range->free += number;
-    ASSERT(range->free <= range->size);
-    if (range->first > index) {
-	/*
-	 * Old first free page is beyond the one we just freed, update.
-	 */
-	 
-	range->first = index;
-    }
-    LeaveCriticalSection(&protect);
+end:
+    LeaveCriticalSection(&csPageAlloc);
 }
-
-/*
- *----------------------------------------------------------------
- * Mark-and-sweep, generational, exact GC.
- *----------------------------------------------------------------
- */
-
-#ifdef COL_THREADS
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatGetGcMemInfo --
- * PlatGetErrorProcPtr --
- *
- *	Get thread-local info.
- *
- * Results:
- *	Pointer to thread-local info.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
-
-GcMemInfo *
-PlatGetGcMemInfo() {
-    return &((ThreadData *) TlsGetValue(tlsToken))->gcMemInfo;
-}
-
-Col_ErrorProc **
-PlatGetErrorProcPtr() {
-    return &((ThreadData *) TlsGetValue(tlsToken))->errorProc;
-}
-
-#endif /* COL_THREADS */
-
 
 /*
  *----------------------------------------------------------------
  * Process & threads.
  *----------------------------------------------------------------
  */
+
+typedef struct PlatGroupData {
+    GroupData data;		/* Generic structure. */
+    struct PlatGroupData *next;	/* Next active group in list. */
+
+    CRITICAL_SECTION csRoots;	/* Protect root management. */
+    CRITICAL_SECTION csDirties;	/* Protect dirty page management. */
+
+    CRITICAL_SECTION csGc;	/* Protect GC from worker threads. */
+    HANDLE eventGcScheduled;	/* Triggers GC thread. */
+    HANDLE eventGcDone;		/* Barrier for worker threads. */
+    int scheduled;		/* Flag for when a GC is scheduled. */
+    int terminated;		/* Flag for thread group destruction. */
+    int nbActive;		/* Active worker thread counter. */
+    HANDLE threadGc;		/* GC thread. */
+} PlatGroupData;
+static PlatGroupData *sharedGroups;
+static CRITICAL_SECTION csSharedGroups;
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * AllocGroupData --
+ *
+ *	Allocate and initialize a thread group data structure.
+ *
+ * Results:
+ *	The newly allocated structure.
+ *
+ * Side effects:
+ *	Memory allocated and system objects created.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+static PlatGroupData *
+AllocGroupData(
+    unsigned int model)		/* Threading model. */
+{
+    PlatGroupData *groupData = (PlatGroupData *) malloc(sizeof(PlatGroupData));
+    memset(groupData, 0, sizeof(PlatGroupData));
+    groupData->data.model = model;
+    GcInitGroup((GroupData *) groupData);
+
+    if (model != COL_SINGLE) {
+	/*
+	 * Create synchronization objects.
+	 */
+
+	//TODO error handling.
+	InitializeCriticalSection(&groupData->csRoots);
+	InitializeCriticalSection(&groupData->csDirties);
+
+	InitializeCriticalSection(&groupData->csGc);
+	groupData->eventGcDone = CreateEvent(NULL, TRUE, TRUE, NULL);
+	groupData->eventGcScheduled = CreateEvent(NULL, FALSE, FALSE, NULL);
+
+	/*
+	 * Create GC thread.
+	 */
+
+	groupData->threadGc = CreateThread(NULL, 0, GcThreadProc, groupData,
+		0, NULL);
+    }
+
+    return groupData;
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * FreeGroupData --
+ *
+ *	Free a thread group data structure.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Memory freed and system objects deleted.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+static void
+FreeGroupData(
+    PlatGroupData *groupData)	/* Structure to free. */
+{
+    if (groupData->data.model != COL_SINGLE) {
+	/*
+	 * Signal and wait for termination of GC thread.
+	 */
+
+	//TODO error handling.
+	groupData->terminated = 1;
+	SignalObjectAndWait(groupData->eventGcScheduled, groupData->threadGc,
+	    INFINITE, FALSE);
+
+	/*
+	 * Destroy synchronization objects.
+	 */
+
+	DeleteObject(groupData->eventGcScheduled);
+	DeleteObject(groupData->eventGcDone);
+	DeleteCriticalSection(&groupData->csGc);
+
+	DeleteCriticalSection(&groupData->csDirties);
+	DeleteCriticalSection(&groupData->csRoots);
+    }
+
+    GcCleanupGroup((GroupData *) groupData);
+    free(groupData);
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * PlatEnter --
+ *
+ *	Enter the thread.
+ *
+ * Results:
+ *	Non-zero if this is the first nested call, else 0.
+ *
+ * Side effects:
+ *	Global data is initialized; decrement nesting count.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+int
+PlatEnter(
+    unsigned int model)		/* Threading model. */
+{
+    ThreadData *data = PlatGetThreadData();
+    if (data) {
+	/* 
+	 * Increment nest count. 
+	 */
+
+	return ((++data->nestCount) == 1);
+    }
+
+    /*
+     * Initialize thread data.
+     */
+
+    data = (ThreadData *) malloc(sizeof(ThreadData));
+    memset(data, 0, sizeof(*data));
+    data->nestCount = 1;
+    GcInitThread(data);
+    TlsSetValue(tlsToken, data);
+
+    if (model == COL_SINGLE || model == COL_ASYNC) {
+	/*
+	 * Allocate dedicated group.
+	 */
+
+	data->groupData = (GroupData *) AllocGroupData(model);
+	data->groupData->first = data;
+	data->next = data;
+    } else {
+	/*
+	 * Try to find shared group with same model value.
+	 */
+
+	EnterCriticalSection(&csSharedGroups);
+	{
+	    PlatGroupData *groupData = sharedGroups;
+	    while (groupData && groupData->data.model != model) {
+		groupData = groupData->next;
+	    }
+	    if (!groupData) {
+		/*
+		 * Allocate new group and insert at head.
+		 */
+
+		groupData = AllocGroupData(model);
+		groupData->next = sharedGroups;
+		sharedGroups = groupData;
+	    }
+
+	    /*
+	     * Add thread to group.
+	     */
+
+	    data->groupData = (GroupData *) groupData;
+	    if (data->groupData->first) {
+		data->next = data->groupData->first->next;
+		data->groupData->first->next = data;
+	    } else {
+		data->groupData->first = data;
+		data->next = data;
+	    }
+	}
+	LeaveCriticalSection(&csSharedGroups);
+    }
+
+    return 1;
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * PlatLeave --
+ *
+ *	Leave the thread.
+ *
+ * Results:
+ *	Non-zero if this is the last nested call, else 0.
+ *
+ * Side effects:
+ *	Decrement nesting count.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+int
+PlatLeave()
+{
+    ThreadData *data = PlatGetThreadData();
+    if (!data) {
+	/* TODO: exception ? */
+	return 0;
+    }
+
+    /*
+     * Decrement nest count.
+     */
+
+    if (--data->nestCount) {
+	return 0;
+    }
+    
+    /*
+     * This is the last nested call, free structures.
+     */
+
+    if (data->groupData->model == COL_SINGLE || data->groupData->model 
+	    == COL_ASYNC) {
+	/*
+	 * Free dedicated group as well.
+	 */
+
+	FreeGroupData((PlatGroupData *) data->groupData);
+    } else {
+	/*
+	 * Remove from shared group.
+	 */
+
+	EnterCriticalSection(&csSharedGroups);
+	{
+	    if (data->next == data) {
+		/*
+		 * Free group as well.
+		 */
+
+		FreeGroupData((PlatGroupData *) data->groupData);
+	    } else {
+		/*
+		 * Unlink.
+		 */
+
+		ThreadData *prev = data->next;
+		while (prev->next != data) {
+		    prev = prev->next;
+		}
+		prev->next = data->next;
+		data->groupData->first = prev;
+	    }
+	}
+	LeaveCriticalSection(&csSharedGroups);
+    }
+
+    GcCleanupThread(data);
+    free(data);
+    TlsSetValue(tlsToken, 0);
+
+    return 1;
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * GcThreadProc --
+ *
+ *	Thread dedicated to the GC process. Activated when one of the worker
+ *	threads in the group triggers the GC.
+ *
+ * Results:
+ *	None (always zero).
+ *
+ * Side effects:
+ *	Calls PerformGC.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+static DWORD WINAPI
+GcThreadProc(
+    LPVOID lpParameter)
+{
+    PlatGroupData *groupData = (PlatGroupData *) lpParameter;
+    for (;;) {
+	WaitForSingleObject(groupData->eventGcScheduled, INFINITE);
+	EnterCriticalSection(&groupData->csGc);
+	{
+	    if (groupData->scheduled) {
+		groupData->scheduled = 0;
+		PerformGC((GroupData *) groupData);
+	    }
+	    SetEvent(groupData->eventGcDone);
+	}
+	LeaveCriticalSection(&groupData->csGc);
+	if (groupData->terminated) {
+	    ExitThread(0);
+	}
+    }
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * PlatSyncPauseGC --
+ * PlatTrySyncPauseGC --
+ *
+ *	Called when a worker thread calls the outermost Col_PauseGC.
+ *
+ *	PlatSyncPauseGC may block as long as a GC is underway (see 
+ *	GcThreadProc).
+ *	PlatTrySyncPauseGC is non-blocking.
+ *
+ * Results:
+ *	PlatTrySyncPauseGC: non-zero if successful.
+ *
+ * Side effects:
+ *	Update internal structures.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+void
+PlatSyncPauseGC(
+    GroupData *data) 
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    WaitForSingleObject(groupData->eventGcDone, INFINITE);
+    EnterCriticalSection(&groupData->csGc);
+    {
+	groupData->nbActive++;
+    }
+    LeaveCriticalSection(&groupData->csGc);
+}
+
+int
+PlatTrySyncPauseGC(
+    GroupData *data) 
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    if (WaitForSingleObject(groupData->eventGcDone, 0) 
+	    != WAIT_OBJECT_0) {
+	return 0;
+    }
+    EnterCriticalSection(&groupData->csGc);
+    {
+	groupData->nbActive++;
+    }
+    LeaveCriticalSection(&groupData->csGc);
+    return 1;
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * PlatSyncResumeGC --
+ *
+ *	Called when a worker thread calls the outermost Col_ResumeGC.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	If last thread in group, may trigger the GC if previously scheduled.
+ *	This will block further calls to Col_PauseGC/PlatSyncPauseGC.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+void
+PlatSyncResumeGC(
+    GroupData *data,
+    int schedule) 
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    EnterCriticalSection(&groupData->csGc);
+    {
+	if (schedule && !groupData->scheduled) {
+	    ResetEvent(groupData->eventGcDone);
+	    groupData->scheduled = 1;
+	}
+	--groupData->nbActive;
+	if (!groupData->nbActive && groupData->scheduled) {
+	    SetEvent(groupData->eventGcScheduled);
+	}
+    }
+    LeaveCriticalSection(&groupData->csGc);
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * PlatEnterProtectRoots --
+ *
+ *	Enter protected section for root management.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Blocks until no thread owns the section.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+void
+PlatEnterProtectRoots(
+    GroupData *data)
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    EnterCriticalSection(&groupData->csRoots);
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * PlatLeaveProtectRoots --
+ *
+ *	Leave protected section for root management.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	May unblock any thread waiting for the section.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+void
+PlatLeaveProtectRoots(GroupData *data)
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    LeaveCriticalSection(&groupData->csRoots);
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * PlatEnterProtectDirties --
+ *
+ *	Enter protected section for dirty page management.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Blocks until no thread owns the section.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+void
+PlatEnterProtectDirties(GroupData *data)
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    EnterCriticalSection(&groupData->csDirties);
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * PlatLeaveProtectRoots --
+ *
+ *	Leave protected section for root management.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	May unblock any thread waiting for the section.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+void
+PlatLeaveProtectDirties(GroupData *data)
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    LeaveCriticalSection(&groupData->csDirties);
+}
 
 /*
  *---------------------------------------------------------------------------
@@ -664,105 +1145,10 @@ Init()
 
     ranges = NULL;
     dedicatedRanges = NULL;
-    InitializeCriticalSection(&protect);
+    InitializeCriticalSection(&csPageAlloc);
+
+    sharedGroups = NULL;
+    InitializeCriticalSection(&csSharedGroups);
 
     return TRUE;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatEnter --
- *
- *	Enter the thread.
- *
- * Results:
- *	Non-zero if this is the first nested call, else 0.
- *
- * Side effects:
- *	Global data is initialized; decrement nesting count.
- *
- *---------------------------------------------------------------------------
- */
-
-int
-PlatEnter()
-{
-    ThreadData *info = (ThreadData *) TlsGetValue(tlsToken);
-    if (!info) {
-	/*
-	 * Not yet initialized.
-	*/
-
-	info = (ThreadData *) malloc(sizeof(ThreadData));
-	info->nestCount = 0;
-	TlsSetValue(tlsToken, info);
-    }
-
-    /* 
-     * Increment nest count. 
-     */
-
-    return ((++info->nestCount) == 1);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatLeave --
- *
- *	Leave the thread.
- *
- * Results:
- *	Non-zero if this is the last nested call, else 0.
- *
- * Side effects:
- *	Decrement nesting count.
- *
- *---------------------------------------------------------------------------
- */
-
-int
-PlatLeave()
-{
-    ThreadData *info = (ThreadData *) TlsGetValue(tlsToken);
-    if (!info) {
-	/* TODO: exception ? */
-	return 0;
-    }
-
-    /*
-     * Decrement nest count.
-     */
-
-    return ((--info->nestCount) == 0);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatCleanup --
- *
- *	Final cleanup.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Cleanup global structures.
- *
- *---------------------------------------------------------------------------
- */
-
-void
-PlatCleanup()
-{
-    ThreadData *info = (ThreadData *) TlsGetValue(tlsToken);
-    if (!info || info->nestCount != 0) {
-	/* TODO: exception ? */
-	return;
-    }
-
-    free(info);
-    TlsSetValue(tlsToken, 0);
 }

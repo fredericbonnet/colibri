@@ -196,10 +196,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\platform\win32\colPlatform.c"
-				>
-			</File>
-			<File
 				RelativePath=".\colRope.c"
 				>
 			</File>
@@ -209,6 +205,10 @@
 			</File>
 			<File
 				RelativePath=".\colVector.c"
+				>
+			</File>
+			<File
+				RelativePath=".\platform\win32\colWin32Platform.c"
 				>
 			</File>
 			<File
@@ -263,6 +263,10 @@
 			</File>
 			<File
 				RelativePath=".\colVector.h"
+				>
+			</File>
+			<File
+				RelativePath=".\platform\win32\colWin32Platform.h"
 				>
 			</File>
 			<File

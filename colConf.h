@@ -40,12 +40,6 @@
 #endif
 
 /*
- * Threading support.
- */
-
-#define COL_THREADS
-
-/*
  * Max number of generations. With a generational factor of 10, and 6 
  * generations, the oldest generation would be collected 10^5 = 1,000,000 times 
  * less frequently than the youngest generation. With one GC every 1/10th of
@@ -96,8 +90,5 @@
 #   define CELL_SIZE		16 /* = 4*4 */
 #   define CELLS_PER_PAGE	64 /* PAGE_SIZE/CELLS_PER_PAGE */
 #endif
-
-typedef char Page[PAGE_SIZE];
-typedef char Cell[CELL_SIZE];
 
 #endif /* _COLIBRI_CONFIGURATION */

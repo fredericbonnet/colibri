@@ -43,11 +43,15 @@
  *
  *  - bytes 0-3:	link to next page in pool.
  *  - byte 4:		generation.
- *  - byte 5:		lowest child generation from page.
- *  - byte 6:		size of system page containing this page.
- *  - byte 7:		1 if page is last in system page, else 0.
+ *  - byte 5:		flags:
+ *			 - dirty: such pages potentially contain parents.
+		         - last: whether page is last in system page.
+ *  - byte 6-7:		size of system page containing this page.
  *  - bytes 8-15:	bitmask for allocated cells (64 bits).
  */
+
+typedef char Page[PAGE_SIZE];
+typedef char Cell[CELL_SIZE];
 
 extern const char firstZeroBitSequence[7][256];
 extern const char longestLeadingZeroBitSequence[256];
@@ -59,9 +63,10 @@ extern const char nbBitsSet[256];
 
 #define PAGE_NEXT(page)		(*(Page **)(page))
 #define PAGE_GENERATION(page)	(*((unsigned char *)(page)+sizeof(void *)))
-#define PAGE_PARENT(page)	(*((unsigned char *)(page)+sizeof(void *)+1))
-#define PAGE_SYSTEMSIZE(page)	(*((unsigned char *)(page)+sizeof(void *)+2))
-#define PAGE_LAST(page)		(*((unsigned char *)(page)+sizeof(void *)+3))
+#define PAGE_FLAGS(page)	(*((unsigned char *)(page)+sizeof(void *)+1))
+#define PAGE_FLAG_DIRTY		1
+#define PAGE_FLAG_LAST		2
+#define PAGE_SYSTEMSIZE(page)	(*(unsigned short *)((unsigned char *)(page)+sizeof(void *)+2))
 #define PAGE_BITMASK(page)	((unsigned char *)(page)+sizeof(void *)+4)
 #define PAGE_CELL(page, index)	((Cell *)(page)+(index))
 
@@ -126,37 +131,48 @@ size_t			NbSetCells(Page *page);
  */
 
 /*
- * Thread-local GC and memory pool related structure.
+ * Group data.
  */
 
-typedef struct GcMemInfo {
-    /* 
-     * Memory pools where the new cells are created. 0 is for roots, 1 (Eden) is
-     * for regular cells, above is where cells and pages get promoted.
+typedef struct GroupData {
+    /*
+     * Threading model:
+     *
+     *	 - COL_SINGLE : strict appartment + stop-the-world model. GC is done 
+     *	   synchronously when client thread resumes GC (Col_ResumeGC).
+     *	 - COL_ASYNC : strict appartment model with asynchronous GC. GC uses a 
+     *	   dedicated thread for asynchronous processing, the client thread 
+     *	   cannot pause a running GC and is blocked until completion.
+     *	 - COL_SHARED : shared multithreaded model with GC-preference. Data can 
+     *	   be shared across client threads of the same group (COL_SHARED is the 
+     *	   base index value). GC uses a dedicated thread for asynchronous 
+     *	   processing.; GC process starts once all client threads get out of 
+     *	   pause, no client thread can pause a scheduled GC.
      */
 
-    MemoryPool pools[GC_MAX_GENERATIONS];
+    unsigned int model;
 
     /* 
-     * GC-protected section counter, i.e. nb of nested pause calls. When positive,
-     * we are in a GC-protected section.
+     * Root descriptors are stored in a trie indexed by the root cell address. 
+     * Dirty page descriptors are stored in a linked list. Both types of cells
+     * are managed in a dedicated memory pool (generation 0).
      */
 
-    size_t pauseGC;
+    MemoryPool rootPool;
+    Cell *roots;
+    Cell *dirties;
+
+    /* 
+     * Memory pools for older generations (1 < generation < GC_MAX_GENERATIONS).
+     */
+
+    MemoryPool pools[GC_MAX_GENERATIONS-2];
 
     /*
-     * Oldest collected generation during GC.
+     * Oldest collected generation during current GC.
      */
 
     unsigned int maxCollectedGeneration;
-
-    /* 
-     * Roots are stored in a trie indexed by the root source addresses. Parent
-     * pages are stored in a linked list.
-     */
-
-    Cell *roots;
-    Cell *parents;
 
     /*
      * Whether to promote individual cells when promoting the oldest collected 
@@ -167,14 +183,67 @@ typedef struct GcMemInfo {
 #ifdef PROMOTE_COMPACT
     unsigned int compactGeneration;
 #endif
-} GcMemInfo;
+
+    /*
+     * Group members form a circular list.
+     */
+
+    struct ThreadData *first;
+
+} GroupData;
+
+/*
+ * Thread-local data.
+ */
+
+typedef struct ThreadData {
+    /*
+     * Next in thread group member circular list.
+     */
+
+    struct ThreadData *next;
+
+    /*
+     * Thread group data.
+     */
+
+    GroupData *groupData;
+
+    /*
+     * Number of nested calls to Col_Init. Clear structures once it drops to 
+     * zero.
+     */
+
+    size_t nestCount;
+
+    /*
+     * Error procs are thread-local.
+     */
+
+    Col_ErrorProc *errorProc;
+
+    /* 
+     * GC-protected section counter, i.e. nb of nested pause calls. When 
+     * positive, we are in a GC-protected section.
+     */
+
+    size_t pauseGC;
+
+    /* 
+     * Eden, i.e. memory pool for generation 1.
+     */
+
+    MemoryPool eden;
+} ThreadData;
 
 /*
  * Initialization.
  */
 
-void			GcInit(void);
-void			GcCleanup(void);
+void			GcInitThread(ThreadData *data);
+void			GcInitGroup(GroupData *data);
+void			GcCleanupThread(ThreadData *data);
+void			GcCleanupGroup(GroupData *data);
 
 /*
  * Cell allocation.
@@ -183,10 +252,17 @@ void			GcCleanup(void);
 Cell *			AllocCells(size_t number);
 
 /*
+ * Garbage collection.
+ */
+
+void			PerformGC(GroupData *data);
+
+/*
  * Custom word handling for cleanup.
  */
 
-void			DeclareCustomWord(Col_Word word);
+void			DeclareCustomWord(Col_Word word, 
+			    Col_CustomWordType *type);
 
 /*
  * Roots are explicitly preserved words, using a reference count.
@@ -274,9 +350,9 @@ void			DeclareCustomWord(Col_Word word);
     ROOT_LEAF_SOURCE(cell) = source;
 
 /*
- * Parent pages.
+ * Dirty pages.
  *
- * Parent roots are like automatic roots: they point to pages whose cells 
+ * Parent roots are like automatic roots: they belong to dirty pages whose cells 
  * potentially have children in newer generations.
  *
  * On 32-bit architectures the single-cell layout is as follows:
@@ -294,7 +370,7 @@ void			DeclareCustomWord(Col_Word word);
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *
  *	Next : 32-bit pointer to cell
- *	    Parent nodes are linked together in a singly-linked list for 
+ *	    Dirty nodes are linked together in a singly-linked list for 
  *	    traversal during GC.
  *
  *	Page : 32-bit pointer to page
@@ -303,14 +379,14 @@ void			DeclareCustomWord(Col_Word word);
  *	    Generation of the source page.
  */
 
-#define PARENT_NEXT(cell)	(((Cell **)(cell))[0])
-#define PARENT_PAGE(cell)	(((Page **)(cell))[1])
-#define PARENT_GENERATION(cell)	(((unsigned int *)(cell))[2])
+#define DIRTY_NEXT(cell)	(((Cell **)(cell))[0])
+#define DIRTY_PAGE(cell)	(((Page **)(cell))[1])
+#define DIRTY_GENERATION(cell)	(((unsigned int *)(cell))[2])
 
-#define PARENT_INIT(cell, next, page, generation) \
-    PARENT_NEXT(cell) = next; \
-    PARENT_PAGE(cell) = page; \
-    PARENT_GENERATION(cell) = generation;
+#define DIRTY_INIT(cell, next, page, generation) \
+    DIRTY_NEXT(cell) = next; \
+    DIRTY_PAGE(cell) = page; \
+    DIRTY_GENERATION(cell) = generation;
 
 
 /*

@@ -5,7 +5,7 @@ CFLAGS=-O3
 OBJS = 	colibri.o \
 	colAlloc.o \
 	colGc.o \
-	colPlatform.o \
+	colUnixPlatform.o \
 	colRope.o \
 	colWord.o \
 	colVector.o \

@@ -81,7 +81,7 @@ Col_NewCustomWord(
     WORD_CUSTOM_INIT(word, type);
     if (dataPtr) *dataPtr = WORD_CUSTOM_DATA(word, type);
 
-    DeclareCustomWord(word);
+    DeclareCustomWord(word, type);
 
     return word;
 }

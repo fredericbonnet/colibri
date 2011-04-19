@@ -229,7 +229,7 @@ PoolInit(
     MemoryPool *pool,		/* The pool to initialize. */
     unsigned int generation)	/* Generation number; 0 = youngest. */
 {
-    memset(pool, 0, sizeof(pool));
+    memset(pool, 0, sizeof(*pool));
     pool->generation = generation;
 }
 
@@ -244,7 +244,8 @@ PoolCleanup(
      */
 
     for (base = pool->pages; base; base = next) {
-	for (page = base; !PAGE_LAST(page); page = PAGE_NEXT(page));
+	for (page = base; !(PAGE_FLAGS(page) & PAGE_FLAG_LAST); 
+		page = PAGE_NEXT(page));
 	next = PAGE_NEXT(page);
 	PlatSysPageFree(base, PAGE_SYSTEMSIZE(base));
     }
@@ -330,16 +331,15 @@ PoolAllocPages(
 
 	/* Flags. */
 	PAGE_GENERATION(page) = (unsigned char) pool->generation;
-	PAGE_PARENT(page) = 0;
-	PAGE_SYSTEMSIZE(page) = (unsigned char) nbSysPages;
-	PAGE_LAST(page) = 0;
+	PAGE_FLAGS(page) = 0;
+	PAGE_SYSTEMSIZE(page) = (unsigned short) nbSysPages;//FIXME: gets truncated with large page groups
 
 	/* Initialize bit mask for allocated cells. */
 	ClearAllCells(page);
     }
     pool->lastPage = prev;
     PAGE_NEXT(prev) = NULL;
-    PAGE_LAST(prev) = 1;
+    PAGE_FLAGS(prev) |= PAGE_FLAG_LAST;
 }
 
 /*
@@ -383,7 +383,7 @@ PoolFreeEmptyPages(
 	for (page = base; ; page = PAGE_NEXT(page)) {
 	    nbPages++;
 	    nbSetCells += NbSetCells(page);
-	    if (PAGE_LAST(page)) break;
+	    if (PAGE_FLAGS(page) & PAGE_FLAG_LAST) break;
 	}
 	next = PAGE_NEXT(page);
 	if (nbSetCells > RESERVED_CELLS * nbPages) {
@@ -414,7 +414,7 @@ PoolFreeEmptyPages(
 		     * trailing cells.
 		     */
 
-		    PAGE_LAST(page) = 0;
+		    PAGE_FLAGS(page) &= ~PAGE_FLAG_LAST;
 		    for (i = nbPages; i < nbPagesPerSysPage; i++) {
 			PAGE_NEXT(page) = page+1;
 			page++;
@@ -422,9 +422,8 @@ PoolFreeEmptyPages(
 			/* Flags. */
 			PAGE_GENERATION(page) 
 				= (unsigned char) pool->generation;
-			PAGE_PARENT(page) = 0;
+			PAGE_FLAGS(page) = 0;
 			PAGE_SYSTEMSIZE(page) = 1;
-			PAGE_LAST(page) = 0;
 
 			/* Initialize bit mask for allocated cells. */
 			ClearAllCells(page);
@@ -432,7 +431,7 @@ PoolFreeEmptyPages(
 			nbPages++;
 			nbSetCells++;
 		    }
-		    PAGE_LAST(page) = 1;
+		    PAGE_FLAGS(page) |= PAGE_FLAG_LAST;
 		    PAGE_NEXT(page) = next;
 		}
 	    }
@@ -475,8 +474,6 @@ PoolFreeEmptyPages(
  * PoolAllocCells --
  *
  *	Allocate cells in a pool, allocating new pages if needed. 
- *
- *	The maximum number of cells is AVAILABLE_CELLS.
  *
  * Results:
  *	If successful, a pointer to the first allocated cell. Else NULL.

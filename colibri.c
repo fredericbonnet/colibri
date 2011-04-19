@@ -7,15 +7,10 @@
 
 
 /*
- * Without thread support, use static data instead of thread-local storage.
+ * Thread-local storage.
  */
 
-#ifdef COL_THREADS
-#   define GetErrorProcPtr PlatGetErrorProcPtr
-#else /* COL_THREADS */
-static Col_ErrorProc *errorProc;
-#   define GetErrorProcPtr() (&errorProc)
-#endif /* COL_THREADS */
+#define GetErrorProcPtr PlatGetErrorProcPtr
 
 /*
  *---------------------------------------------------------------------------
@@ -24,6 +19,19 @@ static Col_ErrorProc *errorProc;
  * Col_Cleanup --
  *
  *	Initialize/cleanup the library. Must be called in every thread.
+ *
+ *	Several threading models are possible:
+ *
+ *	 - COL_SINGLE : strict appartment + stop-the-world model. GC is done 
+ *	   synchronously when client thread resumes GC (Col_ResumeGC).
+ *	 - COL_ASYNC : strict appartment model with asynchronous GC. GC uses a 
+ *	   dedicated thread for asynchronous processing, the client thread 
+ *	   cannot pause a running GC and is blocked until completion.
+ *	 - COL_SHARED : shared multithreaded model with GC-preference. Data can 
+ *	   be shared across client threads of the same group (COL_SHARED is the 
+ *	   base index value). GC uses a dedicated thread for asynchronous 
+ *	   processing.; GC process starts once all client threads get out of 
+ *	   pause, no client thread can pause a scheduled GC.
  *
  * Results:
  *	None.
@@ -35,20 +43,15 @@ static Col_ErrorProc *errorProc;
  */
 
 void 
-Col_Init() 
+Col_Init(
+    unsigned int model)		/* Threading model. */
 {
-    if (PlatEnter()) {
-	GcInit();
-	Col_SetErrorProc(NULL);
-    }
+    PlatEnter(model);
 }
 void 
 Col_Cleanup() 
 {
-    if (PlatLeave()) {
-	GcCleanup();
-	PlatCleanup();
-    }
+    PlatLeave();
 }
 
 /*
@@ -74,15 +77,15 @@ Col_Error(
     ...)			/* Remaining arguments fed to fprintf. */
 {
     va_list args;
-    Col_ErrorProc *errorProc = *GetErrorProcPtr();
+    ThreadData *data = PlatGetThreadData();
 
     va_start(args, format);
-    if (errorProc) {
+    if (data->errorProc) {
 	/*
 	 * Call custom proc.
 	 */
 
-	(*errorProc)(level, format, args);
+	(data->errorProc)(level, format, args);
 	return;
     }
 
@@ -126,5 +129,5 @@ void
 Col_SetErrorProc(
     Col_ErrorProc *proc)	/* The new error proc. */
 {
-    *GetErrorProcPtr() = proc;
+    PlatGetThreadData()->errorProc = proc;
 }
