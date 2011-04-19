@@ -4,13 +4,12 @@
 #include <string.h>
 #include <limits.h>
 
-#define WORD_CHAR_MAX		0xFFFFFF
-
 /*
  * Prototypes for functions used only in this file.
  */
 
-static Col_Word		UpconvertWord(Col_Word word);
+static int		HasSynonymField(Col_Word word);
+static void		AddSynonymField(Col_Word *wordPtr);
 
 
 /*
@@ -42,8 +41,8 @@ Col_NewIntWord(
      * Return integer value if possible.
      */
 
-    if (value <= SMALL_INT_MAX && value >= SMALL_INT_MIN) {
-	return WORD_SMALL_INT_NEW(value);
+    if (value <= SMALLINT_MAX && value >= SMALLINT_MIN) {
+	return WORD_SMALLINT_NEW(value);
     }
 
     /*
@@ -59,184 +58,12 @@ Col_NewIntWord(
 /*
  *---------------------------------------------------------------------------
  *
- * Col_NewStringWord --
+ * Col_NewCustomWord --
  *
- *	Create a new string word.
- *
- *	If the string contains a single Unicode char, or if the string is 
- *	8-bit clean and is sufficiently small, return an immediate value 
- *	instead of allocating memory.
+ *	Create a new custom word.
  *
  * Results:
- *	The new word, which can be an immediate value if the string is
- *	sufficiently small, or a rope.
- *
- * Side effects:
- *	May allocate memory cells.
- *
- *---------------------------------------------------------------------------
- */
-
-Col_Word
-Col_NewStringWord(
-    Col_StringFormat format,	/* */
-    const void *data,		/* Same arguments as Col_NewRope. */
-    size_t byteLength)		/* */
-{
-    Col_Word word;
-
-    if (byteLength == 0) {
-	/*
-	 * Empty string.
-	 */
-
-	return WORD_SMALL_STRING_EMPTY;
-    }
-
-    switch (format) {
-	case COL_UCS1: {
-	    size_t length = byteLength/sizeof(Col_Char1);
-	    if (length <= sizeof(Col_Word)-1) {
-		/*
-		 * Return small string value.
-		 */
-
-		WORD_SMALL_STRING_SET_LENGTH(word, length);
-		memcpy(WORD_SMALL_STRING_DATA(word), data, length);
-		return word;
-	    }
-	    break;
-	}
-
-	case COL_UCS2: {
-	    size_t length = byteLength/sizeof(Col_Char2);
-	    const Col_Char2 * string = data;
-	    if (length == 1 && string[0] > UCHAR_MAX) {
-		/*
-		 * Return char value.
-		 */
-
-		return WORD_CHAR_NEW(string[0]);
-	    } else if (length <= sizeof(Col_Word)-1) {
-		/*
-		 * Return small string value if possible.
-		 */
-
-		size_t i;
-		WORD_SMALL_STRING_SET_LENGTH(word, length);
-		for (i = 0; i < length; i++) {
-		    if (string[i] > UCHAR_MAX) break;
-		    WORD_SMALL_STRING_DATA(word)[i] = (Col_Char1) string[i];
-		}
-		if (i == length) {
-		    return word;
-		}
-	    }
-	    break;
-	}
-
-	case COL_UCS4: {
-	    size_t length = byteLength/sizeof(Col_Char4);
-	    const Col_Char4 * string = data;
-	    if (length == 1 && string[0] > UCHAR_MAX 
-		    && string[0] <= WORD_CHAR_MAX) {
-		/*
-		 * Return char value.
-		 */
-
-		return WORD_CHAR_NEW(string[0]);
-	    } else if (length <= sizeof(Col_Word)-1) {
-		/*
-		 * Return small string value if possible.
-		 */
-
-		size_t i;
-		WORD_SMALL_STRING_SET_LENGTH(word, length);
-		for (i = 0; i < length; i++) {
-		    if (string[i] > UCHAR_MAX) break;
-		    WORD_SMALL_STRING_DATA(word)[i] = (Col_Char1) string[i];
-		}
-		if (i == length) {
-		    return word;
-		}
-	    }
-	    break;
-	}
-    }
-
-    /*
-     * Return a new rope word.
-     */
-
-    return WORD_ROPE_NEW(Col_NewRope(format, data, byteLength));
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_NewRopeWord --
- *
- *	Create a new rope word.
- *
- *	If the rope is a C string, creates a new word that wraps this string.
- *
- * Results:
- *	A new word or the rope itself wrapped as word.
- *
- * Side effects:
- *	May allocate memory cells.
- *
- *---------------------------------------------------------------------------
- */
-
-Col_Word
-Col_NewRopeWord(
-    Col_Rope rope)		/* Rope value of the word to create. */
-{
-    Col_Word word;
-    size_t length;
-
-    switch (ROPE_TYPE(rope)) {
-	case ROPE_TYPE_EMPTY:
-	    return WORD_SMALL_STRING_EMPTY;
-
-	case ROPE_TYPE_C:
-	    /*
-	     * Return small string value if possible.
-	     */
-
-	    length = strnlen(rope, sizeof(Col_Word));
-	    if (length <= sizeof(Col_Word)-1) {
-		WORD_SMALL_STRING_SET_LENGTH(word, length);
-		memcpy(WORD_SMALL_STRING_DATA(word), rope, length);
-		return word;
-	    }
-
-	    /*
-	     * Wrap the C string.
-	     */
-
-	    word = (Col_Word) AllocCells(1);
-	    WORD_STRING_INIT(word, rope, NULL);
-
-	    return word;
-
-	/* ROPE_TYPE_UNKNOWN */
-
-	default: /* Including ROPE_TYPE_NULL */
-	    return WORD_ROPE_NEW(rope);
-    }
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_NewWord --
- *
- *	Create a new word.
- *
- * Results:
- *	A new rope of the given size.
+ *	A new word of the given size.
  *
  * Side effects:
  *	Memory cells are allocated.
@@ -245,28 +72,16 @@ Col_NewRopeWord(
  */
 
 Col_Word
-Col_NewWord(
-    Col_WordType *type,		/* The word type. */
+Col_NewCustomWord(
+    Col_CustomWordType *type,	/* The word type. */
     size_t size,		/* Size of data. */
     void **dataPtr)		/* Will hold a pointer to the allocated data. */
 {
-    Col_Word word;
-    size_t actualSize = size;
+    Col_Word word = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(size, type));
+    WORD_CUSTOM_INIT(word, type);
+    if (dataPtr) *dataPtr = WORD_CUSTOM_DATA(word, type);
 
-    if (type->freeProc) {
-	/* 
-	 * Leave aligned space for next pointer. 
-	 */
-
-	actualSize += WORD_TRAILER_SIZE;
-    }
-
-    word = (Col_Word) AllocCells(NB_CELLS(WORD_HEADER_SIZE+actualSize));
-    WORD_SET_TYPE_ADDR(word, type);
-    WORD_SYNONYM(word) = WORD_NIL;
-    if (dataPtr) *dataPtr = WORD_DATA(word);
-
-    DeclareWord(word);
+    DeclareCustomWord(word);
 
     return word;
 }
@@ -287,13 +102,11 @@ Col_NewWord(
  *---------------------------------------------------------------------------
  */
 
-Col_WordType *
+Col_WordType
 Col_GetWordInfo(
     Col_Word word,		/* The word to get info for. */
     Col_WordData *dataPtr)	/* Returned data. */
 {
-    Col_WordType * typeInfo;
-
     switch (WORD_TYPE(word)) {
 	/*
 	 * Immediate values.
@@ -302,42 +115,52 @@ Col_GetWordInfo(
 	case WORD_TYPE_NIL:
 	    return COL_NIL;
 	    
-	case WORD_TYPE_SMALL_INT:
-	    dataPtr->i = WORD_SMALL_INT_GET(word);
+	case WORD_TYPE_SMALLINT:
+	    dataPtr->i = WORD_SMALLINT_GET(word);
 	    return COL_INT;
 
 	case WORD_TYPE_CHAR:
 	    dataPtr->ch = WORD_CHAR_GET(word);
 	    return COL_CHAR;
 
-	case WORD_TYPE_SMALL_STRING:
-	    dataPtr->str.length = WORD_SMALL_STRING_LENGTH(word);
-	    memcpy((void *) dataPtr->str.data, WORD_SMALL_STRING_DATA(word), 
-		    dataPtr->str.length);
-	    return COL_SMALL_STRING;
+	case WORD_TYPE_SMALLSTR:
+	    dataPtr->string._smallData = word;
+	    dataPtr->string.format = COL_UCS1;
+	    dataPtr->string.data 
+		    = WORD_SMALLSTR_DATA(dataPtr->string._smallData);
+	    dataPtr->string.byteLength = WORD_SMALLSTR_LENGTH(word);
+	    return COL_STRING;
 
-	case WORD_TYPE_VOID_LIST:
+	case WORD_TYPE_VOIDLIST:
 	    return COL_LIST;
-
-	/*
-	 * Ropes.
-	 */
-
-	case WORD_TYPE_ROPE:
-	    dataPtr->rope = WORD_ROPE_GET(word);
-	    return COL_ROPE;
 
 	/*
 	 * Predefined types.
 	 */
 
-	case WORD_TYPE_INT:
-	    dataPtr->i = WORD_INT_DATA(word);
-	    return COL_INT;
+	case WORD_TYPE_WRAP:
+	    return Col_GetWordInfo(word, dataPtr);
 
-	case WORD_TYPE_STRING:
-	    dataPtr->rope = WORD_STRING_DATA(word);
+	case WORD_TYPE_UCSSTR:
+	    dataPtr->string.format = WORD_UCSSTR_FORMAT(word);
+	    dataPtr->string.data = WORD_UCSSTR_DATA(word);
+	    dataPtr->string.byteLength = WORD_UCSSTR_LENGTH(word)
+		    * WORD_UCSSTR_FORMAT(word);
+	    return COL_STRING;
+
+	case WORD_TYPE_UTF8STR:
+	    dataPtr->string.format = COL_UTF8;
+	    dataPtr->string.data = WORD_UCSSTR_DATA(word);
+	    dataPtr->string.byteLength = WORD_UTF8STR_BYTELENGTH(word);
+	    return COL_STRING;
+
+	case WORD_TYPE_SUBROPE:
+	case WORD_TYPE_CONCATROPE:
 	    return COL_ROPE;
+
+	case WORD_TYPE_INT:
+	    dataPtr->i = WORD_INT_VALUE(word);
+	    return COL_INT;
 
 	case WORD_TYPE_VECTOR:
 	    dataPtr->vector.length = WORD_VECTOR_LENGTH(word);
@@ -346,33 +169,37 @@ Col_GetWordInfo(
 
 	case WORD_TYPE_MVECTOR:
 	    dataPtr->mvector.maxLength 
-		    = MVECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(word));
+		    = VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(word) * CELL_SIZE);
 	    dataPtr->mvector.length = WORD_VECTOR_LENGTH(word);
 	    dataPtr->mvector.elements = WORD_VECTOR_ELEMENTS(word);
 	    return COL_MVECTOR;
 
 	case WORD_TYPE_LIST:
+	case WORD_TYPE_SUBLIST:
+	case WORD_TYPE_CONCATLIST:
 	    return COL_LIST;
 
 	case WORD_TYPE_MLIST:
 	    return COL_MLIST;
 
+	case WORD_TYPE_STRHASHMAP:
+	case WORD_TYPE_STRTRIEMAP:
+	    return COL_STRMAP;
+
 	case WORD_TYPE_INTHASHMAP:
 	case WORD_TYPE_INTTRIEMAP:
-	    return COL_MAP;
-
-	case WORD_TYPE_REFERENCE:
-	    dataPtr->refSource = WORD_REFERENCE_SOURCE(word);
-	    return COL_REFERENCE;
+	    return COL_INTMAP;
 
 	/*
-	 * Regular word.
+	 * Custom word.
 	 */
 
-	case WORD_TYPE_REGULAR:
-	    WORD_GET_TYPE_ADDR(word, typeInfo);
-	    dataPtr->data = WORD_DATA(word);
-	    return typeInfo;
+	case WORD_TYPE_CUSTOM: {
+	    Col_CustomWordType *typeInfo = WORD_TYPEINFO(word);
+	    dataPtr->custom.type = typeInfo;
+	    dataPtr->custom.data = WORD_CUSTOM_DATA(word, dataPtr->custom.type);
+	    return COL_CUSTOM;
+	}
 
 	/* WORD_TYPE_UNKNOWN */
 
@@ -400,7 +227,7 @@ Col_GetWordInfo(
 Col_Word
 Col_FindWordInfo(
     Col_Word word,		/* The word to get value from. */
-    Col_WordType * type,	/* The required type. */
+    Col_WordType type,		/* The required type. */
     Col_WordData *dataPtr)	/* Returned data. */
 {
     Col_Word synonym;
@@ -415,7 +242,7 @@ Col_FindWordInfo(
 	    return synonym;
 	}
 
-	if (IS_IMMEDIATE(synonym) || IS_ROPE(synonym)) {
+	if (!HasSynonymField(synonym)) {
 	    /*
 	     * Not a chain.
 	     */
@@ -433,6 +260,100 @@ Col_FindWordInfo(
 	}
     }
     return WORD_NIL;
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * HasSynonymField --
+ *
+ *	Test whether the word has a synonym field.
+ *
+ * Results:
+ *	Whether the word has a synonym field.
+ *
+ * Side effects:
+ *	None.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+static int
+HasSynonymField(
+    Col_Word word)		/* The word to test. */
+{
+    switch (WORD_TYPE(word)) {
+	case WORD_TYPE_WRAP:
+	case WORD_TYPE_INT:
+	case WORD_TYPE_LIST:
+	case WORD_TYPE_MLIST:
+	case WORD_TYPE_STRHASHMAP:
+	case WORD_TYPE_INTHASHMAP:
+	case WORD_TYPE_STRTRIEMAP:
+	case WORD_TYPE_INTTRIEMAP:
+	    return 1;
+
+	/* WORD_TYPE_UNKNOWN */
+
+	default:
+	    return 0;
+    }
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * AddSynonymField --
+ *
+ *	Return a word that is semantically identical to the given one and has
+ *	a synonym field.
+ *
+ * Results:
+ *	A word with a synonym field.
+ *
+ * Side effects:
+ *	Allocates memory cells.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+static void
+AddSynonymField(
+    Col_Word *wordPtr)		/* Point to the word to convert. */
+{
+    Col_Word converted;
+
+    ASSERT(!HasSynonymField(*wordPtr));
+
+    converted = (Col_Word) AllocCells(1);
+    TRACE("\t\tAdding synonym field to 0x%p => 0x%p\n", *wordPtr, converted);
+    switch (WORD_TYPE(*wordPtr)) {
+	/*
+	 * Some types have dedicated wrappers.
+	 */
+
+	case WORD_TYPE_SMALLINT:
+	    WORD_INT_INIT(converted, WORD_SMALLINT_GET(*wordPtr));
+	    break;
+
+	case WORD_TYPE_VOIDLIST:
+	case WORD_TYPE_SUBLIST:
+	case WORD_TYPE_CONCATLIST:
+	    WORD_LIST_INIT(converted, *wordPtr, 0);
+	    break;
+
+	/* WORD_TYPE_UNKNOWN */
+
+	default:
+	    /*
+	     * Use generic wrapper.
+	     */
+
+	    WORD_WRAP_INIT(converted, *wordPtr);
+	    break;
+    }
+
+    *wordPtr = converted;
 }
 
 /*
@@ -462,11 +383,7 @@ Col_Word
 Col_GetWordSynonym(
     Col_Word word)		/* The word to get synonym for. */
 {
-    if (!word || IS_IMMEDIATE(word) || IS_ROPE(word)) {
-	/*
-	 * Ropes or immediate values have no synonyms.
-	 */
-
+    if (!HasSynonymField(word)) {
 	return WORD_NIL;
     } else {
 	return WORD_SYNONYM(word);
@@ -495,15 +412,15 @@ void
 Col_AddWordSynonym(
     Col_Word *wordPtr,		/* Point to the word to add synonym to. */
     Col_Word synonym,		/* The synonym to add. */
-    Col_Word *parentPtr)	/* If non-nil, parent of the given word. */
+    Col_Word parent)		/* If non-nil, parent of the given word. */
 {
-    Col_Word word = *wordPtr;
+    Col_Word word;
 
     /*
      * Quick cases.
      */
 
-    if (!word || !synonym) {
+    if (!*wordPtr || !synonym) {
 	/*
 	 * Nil can't have synonyms.
 	 */
@@ -511,34 +428,11 @@ Col_AddWordSynonym(
 	return;
     }
 
-    if (IS_IMMEDIATE(word) || IS_ROPE(word)) {
-	/*
-	 * Upconvert word so that it can point to the synonym.
-	 */
-
-	word = *wordPtr = UpconvertWord(word);
-	if (*parentPtr) {
-	    Col_SetModified((void *) *parentPtr);
-	}
+    if (!HasSynonymField(*wordPtr)) {
+	AddSynonymField(wordPtr);
+	if (parent) Col_WordSetModified(parent);
     }
-
-    if (IS_IMMEDIATE(synonym) || IS_ROPE(synonym)) {
-	if (!WORD_SYNONYM(word)) {
-	    /*
-	     * Word has no current synonym, simply add the new one.
-	     */
-
-	    WORD_SYNONYM(word) = synonym;
-	    Col_SetModified((void *) word);
-	    return;
-	}
-
-	/*
-	 * Upconvert synonym as well.
-	 */
-
-	synonym = UpconvertWord(synonym);
-    }
+    word = *wordPtr;
 
     if (word == synonym) {
 	/*
@@ -548,29 +442,39 @@ Col_AddWordSynonym(
 	return;
     }
 
+    if (!HasSynonymField(synonym)) {
+	if (!WORD_SYNONYM(word)) {
+	    /*
+	     * Word has no current synonym, simply add the new one without
+	     * converting the synonym.
+	     */
+
+	    WORD_SYNONYM(word) = synonym;
+	    Col_WordSetModified(word);
+	    return;
+	}
+	AddSynonymField(&synonym);
+    }
+    
     /*
-     * Synonym-less words have a nil synonym pointer. Words with one single 
-     * immediate or rope value simply point to it. Larger synonym chains must be
-     * circular lists of real words. Here, ensure that both word and synonym's 
-     * synonym chains are circular lists.
-     *
-     * Note: No need to declare children here as it will be done anyway in the 
-     * final step.
-     *
+     * Synonym-less words have a nil synonym pointer. Words with one synonym
+     * without synonym field itself simply point to it. Larger synonym chains 
+     * must be circular lists of words with synonym fields. Here, ensure that 
+     * both word and synonym's synonym chains are circular lists.
      */
 
+    ASSERT(HasSynonymField(word));
+    ASSERT(HasSynonymField(synonym));
     if (!WORD_SYNONYM(word)) {
 	WORD_SYNONYM(word) = word;
-    } else if (IS_IMMEDIATE(WORD_SYNONYM(word)) 
-	    || IS_ROPE(WORD_SYNONYM(word))) {
-	WORD_SYNONYM(word) = UpconvertWord(WORD_SYNONYM(word));
+    } else if (!HasSynonymField(WORD_SYNONYM(word))) {
+	AddSynonymField(&WORD_SYNONYM(word));
 	WORD_SYNONYM(WORD_SYNONYM(word)) = word;
     }
     if (!WORD_SYNONYM(synonym)) {
 	WORD_SYNONYM(synonym) = synonym;
-    } else if (IS_IMMEDIATE(WORD_SYNONYM(synonym)) 
-	    || IS_ROPE(WORD_SYNONYM(synonym))) {
-	WORD_SYNONYM(synonym) = UpconvertWord(WORD_SYNONYM(synonym));
+    } else if (!HasSynonymField(WORD_SYNONYM(synonym))) {
+	AddSynonymField(&WORD_SYNONYM(synonym));
 	WORD_SYNONYM(WORD_SYNONYM(synonym)) = synonym;
     }
 
@@ -584,68 +488,8 @@ Col_AddWordSynonym(
 	WORD_SYNONYM(word) = WORD_SYNONYM(synonym);
 	WORD_SYNONYM(synonym) = tmp;
     }
-    Col_SetModified((void *) word);
-    Col_SetModified((void *) synonym);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * UpconvertWord --
- *
- *	Convert immediate value or rope to full-fledged word. Argument must not
- *	be one itself (no test is done).
- *
- * Results:
- *	The new word.
- *
- * Side effects:
- *	Allocate a new word.
- *
- *---------------------------------------------------------------------------
- */
-
-static Col_Word
-UpconvertWord(
-    Col_Word word)		/* The word to upconvert. */
-{
-    Col_WordData data;
-    Col_Word converted;
-    
-    converted = (Col_Word) AllocCells(1);
-    switch ((intptr_t) Col_GetWordInfo(word, &data)) {
-	case (intptr_t) COL_INT:
-	    WORD_INT_INIT(converted, data.i);
-	    break;
-
-	case (intptr_t) COL_CHAR:
-	    if (data.ch <= USHRT_MAX) {
-		unsigned short ch2 = (unsigned short) data.ch; 
-		WORD_STRING_INIT(converted, Col_NewRope(COL_UCS2, &ch2, 2), 
-			NULL);
-	    } else {
-		WORD_STRING_INIT(converted, Col_NewRope(COL_UCS4, &data.ch, 4),
-			NULL);
-	    }
-	    break;
-
-	case (intptr_t) COL_SMALL_STRING:
-	    WORD_STRING_INIT(converted, Col_NewRope(COL_UCS1, data.str.data, 
-		    data.str.length), NULL);
-	    break;
-
-	case (intptr_t) COL_LIST:
-	    ASSERT(WORD_TYPE(word) == WORD_TYPE_VOID_LIST);
-
-	    WORD_LIST_INIT(converted, WORD_VOID_LIST_NEW(data.vector.length), 0);
-	    break;
-
-	case (intptr_t) COL_ROPE:
-	    WORD_STRING_INIT(converted, data.rope, NULL);
-	    break;
-    }
-
-    return converted;
+    Col_WordSetModified(word);
+    Col_WordSetModified(synonym);
 }
 
 /*
@@ -671,19 +515,14 @@ Col_ClearWordSynonym(
 {
     Col_Word synonym;
 
-    if (!word || IS_IMMEDIATE(word) || IS_ROPE(word)) {
-	/*
-	 * Ropes or immediate values have no synonyms.
-	 */
-
+    if (!HasSynonymField(word)) {
 	return;
     }
 
     synonym = WORD_SYNONYM(word);
-    if (!synonym || synonym == word || IS_IMMEDIATE(synonym) 
-	    || IS_ROPE(synonym)) {
+    if (!HasSynonymField(synonym)) {
 	/*
-	 * No synonym chain. Simply clear word's synonym.
+	 * No synonym chain. Simply clear word's synonym field.
 	 */
 
 	WORD_SYNONYM(word) = WORD_NIL;
@@ -697,8 +536,9 @@ Col_ClearWordSynonym(
 
     while (WORD_SYNONYM(synonym) != word) {
 	synonym = WORD_SYNONYM(synonym);
+	ASSERT(HasSynonymField(synonym));
     }
     WORD_SYNONYM(synonym) = WORD_SYNONYM(word);
-    Col_SetModified((void *) synonym);
+    Col_WordSetModified(synonym);
     WORD_SYNONYM(word) = WORD_NIL;
 }

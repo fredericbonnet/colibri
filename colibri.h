@@ -152,8 +152,9 @@ typedef void * Col_ClientData;
 
 #include "colUtils.h"
 
-#include "colRope.h"
 #include "colWord.h"
+
+#include "colRope.h"
 
 #include "colVector.h"
 #include "colList.h"
@@ -183,7 +184,7 @@ typedef enum {
     COL_FATAL,
     COL_ERROR
 } Col_ErrorLevel;
-typedef void (Col_ErrorProc)(Col_ErrorLevel level, const char *format, 
+typedef void (Col_ErrorProc) (Col_ErrorLevel level, const char *format, 
 			     va_list args);
 
 EXTERN void		Col_Error(Col_ErrorLevel level, const char *format, 
@@ -199,12 +200,6 @@ EXTERN void		Col_SetErrorProc(Col_ErrorProc *proc);
 
 EXTERN void		Col_PauseGC(void);
 EXTERN void		Col_ResumeGC(void);
-
-/*
- * Child declaration needed by the generational GC.
- */
-
-EXTERN void		Col_SetModified(void *cell);
 
 /*
  * end block for C++

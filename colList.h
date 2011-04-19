@@ -12,14 +12,6 @@
  */
 
 /*
- * References are used to build self-referential immutable structures. They
- * are created first and bound later once the referenced structures are created.
- */
-
-EXTERN Col_Word		Col_NewReference();
-EXTERN void		Col_BindReference(Col_Word reference, Col_Word source);
-
-/*
  * Lists are immutable structures built by composition of other lists and 
  * vectors. Immutable vectors can be used in place of immutable lists. Mutable
  * lists' content is frozen, and mutable vectors are copied.
@@ -34,8 +26,6 @@ EXTERN Col_Word		Col_ConcatListsA(size_t number, const Col_Word * words);
 EXTERN Col_Word		Col_ConcatListsNV(size_t number, ...);
 #define Col_ConcatListsV(...) \
     Col_ConcatListsNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
-EXTERN Col_Word		Col_ConcatListsL(Col_Word list, size_t first, 
-			    size_t last);
 EXTERN Col_Word		Col_LoopList(Col_Word list);
 EXTERN size_t		Col_ListLoopLength(Col_Word list);
 
@@ -49,7 +39,7 @@ EXTERN size_t		Col_ListLoopLength(Col_Word list);
 EXTERN Col_Word		Col_NewMList();
 EXTERN void		Col_FreezeMList(Col_Word mlist);
 EXTERN void		Col_MListSetLength(Col_Word mlist, size_t length);
-EXTERN void		Col_MListLoop(Col_Word mlist, size_t loopLength);
+EXTERN void		Col_MListSetLoop(Col_Word mlist, size_t loopLength);
 EXTERN void		Col_MListSetAt(Col_Word mlist, size_t index, 
 			    Col_Word element);
 EXTERN void		Col_MListInsert(Col_Word into, size_t index, 
@@ -106,21 +96,24 @@ EXTERN void		Col_MListReplace(Col_Word mlist, size_t first,
  * lists and vectors.
  */
 
-typedef int (Col_ListChunksEnumProc) (const Col_Word *elements, size_t length,
-	Col_ClientData clientData);
+typedef int (Col_ListChunksTraverseProc) (size_t index, size_t length, 
+	size_t number, const Col_Word **elements, Col_ClientData clientData);
+EXTERN int		Col_TraverseListChunks(size_t number, Col_Word *lists, 
+			    size_t start, size_t max, 
+			    Col_ListChunksTraverseProc *proc, 
+			    Col_ClientData clientData, size_t *lengthPtr);
 
-EXTERN int		Col_TraverseListChunks(Col_Word list, size_t start, 
-			    size_t max, Col_ListChunksEnumProc *proc, 
-			    Col_ClientData clientData, size_t *sizePtr);
+#define COL_LISTCHUNK_VOID	((void *)-1)
 
 /*
- * Iteration over individual list elements. Each iterator takes 8 words on the 
+ * Iteration over individual list elements. Each iterator takes 9 words on the 
  * stack.
  *
  * Works with mutable or immutable lists and vectors, however modifying a 
  * mutable list during iteration results in undefined behavior.
  */
 
+typedef Col_Word (ColListIterLeafAtProc) (Col_Word leaf, size_t index);
 typedef struct Col_ListIterator {
     Col_Word list;		/* List being iterated. */
     size_t index;		/* Current position. */
@@ -130,16 +123,20 @@ typedef struct Col_ListIterator {
 	size_t offset;		/*  - Index offset wrt. root. */
 	Col_Word leaf;		/*  - Leaf (deepest) word, i.e. vector or void list. */ 
 	size_t index;		/*  - Index within leaf. */
+	ColListIterLeafAtProc *proc;
+				/*  - Access proc within leaf. */
     } traversal;
 } Col_ListIterator;
+
+EXTERN void		ColListIterUpdateTraversalInfo(Col_ListIterator *it);
 
 #define Col_ListIterEnd(it)	(!(it)->list)
 #define Col_ListIterList(it)	((it)->list)
 #define Col_ListIterIndex(it)	((it)->index)
+#define Col_ListIterAt(it)	(!(it)->traversal.leaf?ColListIterUpdateTraversalInfo(it),0:0,(it)->traversal.proc((it)->traversal.leaf, (it)->traversal.index))
 	
 EXTERN int		Col_ListIterBegin(Col_Word list, size_t index, 
 			    Col_ListIterator *it);
-EXTERN Col_Word		Col_ListIterAt(Col_ListIterator *it);
 EXTERN int		Col_ListIterCompare(Col_ListIterator *it1, 
 			    Col_ListIterator *it2);
 EXTERN int		Col_ListIterMoveTo(Col_ListIterator *it, size_t index);

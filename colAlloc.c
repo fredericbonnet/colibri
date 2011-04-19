@@ -330,7 +330,7 @@ PoolAllocPages(
 
 	/* Flags. */
 	PAGE_GENERATION(page) = (unsigned char) pool->generation;
-	PAGE_CHILDGENERATION(page) = (unsigned char) pool->generation;
+	PAGE_PARENT(page) = 0;
 	PAGE_SYSTEMSIZE(page) = (unsigned char) nbSysPages;
 	PAGE_LAST(page) = 0;
 
@@ -422,8 +422,7 @@ PoolFreeEmptyPages(
 			/* Flags. */
 			PAGE_GENERATION(page) 
 				= (unsigned char) pool->generation;
-			PAGE_CHILDGENERATION(page) 
-				= (unsigned char) pool->generation;
+			PAGE_PARENT(page) = 0;
 			PAGE_SYSTEMSIZE(page) = 1;
 			PAGE_LAST(page) = 0;
 
@@ -896,9 +895,9 @@ TestCell(
 {
 #if CELLS_PER_PAGE == 64
 #   ifdef COL_BIGENDIAN
-	return (*(uint64_t*) PAGE_BITMASK(page) & (((uint64_t)1)<<(63-index));
+	return (*(uint64_t*) PAGE_BITMASK(page) & (((uint64_t)1)<<(63-index))?1:0;
 #   else
-	return (*(uint64_t*) PAGE_BITMASK(page) & (((uint64_t)1)<<index));
+	return (*(uint64_t*) PAGE_BITMASK(page) & (((uint64_t)1)<<index))?1:0;
 #   endif
 #else
     unsigned char *mask = PAGE_BITMASK(page);

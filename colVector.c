@@ -32,7 +32,7 @@
 size_t
 Col_GetMaxVectorLength()
 {
-    return VECTOR_MAX_LENGTH;
+    return VECTOR_MAX_LENGTH(SIZE_MAX);
 }
 
 /*
@@ -66,14 +66,14 @@ Col_NewVector(
 	return WORD_NIL;
     }
 
-    if (length > VECTOR_MAX_LENGTH) {
+    if (length > VECTOR_MAX_LENGTH(SIZE_MAX)) {
 	/*
 	 * Too large.
 	 */
 
 	Col_Error(COL_ERROR, 
 		"Length %u exceeds the maximum allowed value for vectors (%u)", 
-		length, VECTOR_MAX_LENGTH);
+		length, VECTOR_MAX_LENGTH(SIZE_MAX));
 	return WORD_NIL;
     }
 
@@ -82,7 +82,7 @@ Col_NewVector(
 	 * Use immediate value.
 	 */
 
-	return WORD_EMPTY;
+	return WORD_LIST_EMPTY;
     }
 
     /*
@@ -114,17 +114,17 @@ Col_NewVectorNV(
 	 * Use immediate value.
 	 */
 
-	return WORD_EMPTY;
+	return WORD_LIST_EMPTY;
     }
     
-    if (length > VECTOR_MAX_LENGTH) {
+    if (length > VECTOR_MAX_LENGTH(SIZE_MAX)) {
 	/*
 	 * Too large.
 	 */
 
 	Col_Error(COL_ERROR, 
 		"Length %u exceeds the maximum allowed value for vectors (%u)", 
-		length, VECTOR_MAX_LENGTH);
+		length, VECTOR_MAX_LENGTH(SIZE_MAX));
 	return WORD_NIL;
     }
 
@@ -165,7 +165,7 @@ Col_NewVectorNV(
 size_t
 Col_GetMaxMVectorLength()
 {
-    return MVECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE);
+    return VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE);
 }
 
 /*
@@ -206,14 +206,14 @@ Col_NewMVector(
     if (maxLength < length) {
 	maxLength = length;
     }
-    if (maxLength > MVECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE)) {
+    if (maxLength > VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE)) {
 	/*
 	 * Too large.
 	 */
 
 	Col_Error(COL_ERROR, 
 		"Length %u exceeds the maximum allowed value for mutable vectors (%u)", 
-		maxLength, MVECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE));
+		maxLength, VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE) * CELL_SIZE);
 	return WORD_NIL;
     }
 
@@ -284,7 +284,7 @@ Col_FreezeMVector(
 	     */
 
 	    int pinned = WORD_PINNED(mvector);
-	    WORD_SET_TYPE_ID(mvector, WORD_TYPE_VECTOR);
+	    WORD_SET_TYPEID(mvector, WORD_TYPE_VECTOR);
 	    if (pinned) {
 		WORD_SET_PINNED(mvector);
 	    }
@@ -328,7 +328,7 @@ Col_MVectorSetLength(
 	return;
     }
 
-    maxLength = MVECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(mvector));
+    maxLength = VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(mvector) * CELL_SIZE);
     if (length > maxLength) {
 	/*
 	 * Too large.

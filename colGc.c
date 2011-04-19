@@ -37,16 +37,13 @@ static GcMemInfo gcMemInfo;
  * Prototypes for functions used only in this file.
  */
 
-static size_t		GetNbCells(const void *cell);
-static void		PreserveCell(Cell *cell);
-static void		ReleaseCell(Cell *cell);
+static size_t		GetNbCells(Col_Word word);
 static void		PerformGC(void);
 static void		ClearPoolBitmasks(GcMemInfo *info, 
 			    unsigned int generation);
 static void		MarkReachableCellsFromRoots(GcMemInfo *info);
-static void		MarkReachableCellsFromParents(GcMemInfo *info);
-static void		MarkRope(GcMemInfo *info, Col_Rope *ropePtr, 
-			    Page *parentPage);
+static void		MarkReachableCellsFromParents(GcMemInfo *info,
+			    Cell *parents);
 static void		MarkWord(GcMemInfo *info, Col_Word *wordPtr, 
 			    Page *parentPage);
 static void		SweepUnreachableCells(GcMemInfo *info);
@@ -113,117 +110,47 @@ GcCleanup()
 
 static size_t
 GetNbCells(
-    const void *cell)		/* The first cell of the rope or word. */
+    Col_Word word)		/* The word. */
 {
-    if (CELL_TYPE(cell) /* word */) {
-	Col_Word word = (Col_Word) cell;
-	Col_WordType * typeInfo;
+    /*
+     * Get number of cells taken by word.
+     * Note: word is not immediate.
+     */
 
-	/*
-	 * Get number of cells taken by word.
-	 * Note: word is neither immediate nor rope.
-	 */
+    switch (WORD_TYPE(word)) {
+	case WORD_TYPE_UCSSTR:
+	    return UCSSTR_SIZE(WORD_UCSSTR_LENGTH(word)
+		    * WORD_UCSSTR_FORMAT(word));
 
-	switch (WORD_TYPE(word)) {
-	    case WORD_TYPE_VECTOR:
-		return VECTOR_SIZE(WORD_VECTOR_LENGTH(word));
+	case WORD_TYPE_UTF8STR:
+	    return UTF8STR_SIZE(WORD_UTF8STR_BYTELENGTH(word));
 
-	    case WORD_TYPE_MVECTOR:
-		return WORD_MVECTOR_SIZE(word);
+	case WORD_TYPE_VECTOR:
+	    return VECTOR_SIZE(WORD_VECTOR_LENGTH(word));
 
-	    case WORD_TYPE_REGULAR:
-		WORD_GET_TYPE_ADDR(word, typeInfo);
-		return NB_CELLS(WORD_HEADER_SIZE + typeInfo->sizeProc(word)
-			+ (typeInfo->freeProc?WORD_TRAILER_SIZE:0));
+	case WORD_TYPE_MVECTOR:
+	    return WORD_MVECTOR_SIZE(word);
 
-	    case WORD_TYPE_INTHASHMAP:
-		return WORD_INTHASHMAP_NBCELLS(word);
-
-	    /* WORD_TYPE_UNKNOWN */
-
-	    default:
-		return 1;
+	case WORD_TYPE_CUSTOM: {
+	    Col_CustomWordType *typeInfo = WORD_TYPEINFO(word);
+	    return WORD_CUSTOM_SIZE(typeInfo->sizeProc(word), typeInfo);
 	}
-    } else {
-	Col_Rope rope = cell;
 
-	/*
-	 * Get number of cells taken by rope.
-	 * Note: rope is not C string, NULL or empty.
-	 */
+	case WORD_TYPE_STRHASHMAP:
+	case WORD_TYPE_INTHASHMAP:
+	    return HASHMAP_NBCELLS;
 
-	switch (ROPE_TYPE(rope)) {
-	    case ROPE_TYPE_UCS1:
-		return UCS_SIZE(ROPE_UCS_LENGTH(rope));
+	/* WORD_TYPE_UNKNOWN */
 
-	    case ROPE_TYPE_UCS2:
-		return UCS_SIZE(ROPE_UCS_LENGTH(rope)*2);
-
-	    case ROPE_TYPE_UCS4:
-		return UCS_SIZE(ROPE_UCS_LENGTH(rope)*4);
-
-	    case ROPE_TYPE_UTF8:
-		return UTF8_SIZE(ROPE_UTF8_BYTELENGTH(rope));
-
-	    case ROPE_TYPE_CUSTOM:
-		return NB_CELLS(ROPE_CUSTOM_HEADER_SIZE + ROPE_CUSTOM_SIZE(rope) 
-			+ (ROPE_CUSTOM_TYPE(rope)->freeProc?ROPE_CUSTOM_TRAILER_SIZE:0));
-
-	    /* ROPE_TYPE_UNKNOWN */
-
-	    default:
-		return 1;
-	}
+	default:
+	    return 1;
     }
 }
 
 /*
  *---------------------------------------------------------------------------
  *
- * ResolveRedirectRope --
- * ResolveRedirectWord --
- *
- *	Resolve redirect cell until a regular cell is reached. The source 
- *	pointer is overwritten with the resolved cell pointer so that future 
- *	traversals will reach the final cell directly.
- *
- * Results:
- *	The referenced word or rope via wordPtr resp. ropePtr.
- *
- * Side effects:
- *	Overwrite references to redirect cells.
- *
- *---------------------------------------------------------------------------
- */
-
-#ifdef PROMOTE_COMPACT
-#   define ResolveRedirectRope(ropePtr)			\
-{							\
-    if (ROPE_TYPE(*(ropePtr)) == ROPE_TYPE_REDIRECT) {	\
-	*(ropePtr) = ROPE_REDIRECT_SOURCE(*(ropePtr));	\
-    }							\
-}
-#   define ResolveRedirectWord(wordPtr)			\
-{							\
-    switch (WORD_TYPE(*(wordPtr))) {			\
-	case WORD_TYPE_ROPE: {				\
-	    Col_Rope _rope_ = WORD_ROPE_GET(*(wordPtr));\
-	    ResolveRedirectRope(&_rope_);		\
-	    *(wordPtr) = WORD_ROPE_NEW(_rope_);		\
-	    break;					\
-	}						\
-							\
-	case WORD_TYPE_REDIRECT:			\
-	    *(wordPtr) = (Col_Word) WORD_REDIRECT_SOURCE(*wordPtr);	\
-	    break;					\
-    }							\
-}
-#endif /* PROMOTE_COMPACT */
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_SetModified --
+ * Col_WordSetModified --
  *
  *	Mark cell as modified.
  *
@@ -243,8 +170,8 @@ GetNbCells(
  */
 
 EXTERN void
-Col_SetModified(
-    void *cell)			/* Modified rope or word. */
+Col_WordSetModified(
+    Col_Word word)			/* Modified word. */
 {
     GcMemInfo *info = GetGcMemInfo();
     unsigned int generation;
@@ -260,9 +187,9 @@ Col_SetModified(
 	return;
     }
 
-    page = CELL_PAGE(cell);
+    page = CELL_PAGE(word);
     generation = PAGE_GENERATION(page);
-    if (PAGE_CHILDGENERATION(page) < generation) {
+    if (PAGE_PARENT(page)) {
 	/*
 	 * Already a parent.
 	 */
@@ -278,30 +205,24 @@ Col_SetModified(
     }
 
     /* 
-     * Create a new parent root, and insert at head of parent root list for the 
-     * cell generation. Reset child generation to 0, the actual value will be
-     * computed during next GC.
+     * Create a new parent root, and insert at head of parent root list.
      */
 
-    PAGE_CHILDGENERATION(page) = 0;
+    PAGE_PARENT(page) = 1;
     root = PoolAllocCells(&info->pools[0], 1);
-    PARENT_INIT(root, info->pools[generation].parents, page);
-    info->pools[generation].parents = root;
+    PARENT_INIT(root, info->parents, page, generation);
+    info->parents = root;
 }
 
 /*
  *---------------------------------------------------------------------------
  *
- * Col_PreserveRope --
- * Col_ReleaseRope --
  * Col_PreserveWord --
  * Col_ReleaseWord --
- * PreserveCell --
- * ReleaseCell --
  *
- *	Preserve (resp. release) a persistent reference to a rope or word, 
- *	which prevents its collection. This allows ropes or words to be safely 
- *	stored in external structures regardless of memory management cycles.
+ *	Preserve (resp. release) a persistent reference to a word, which 
+ *	prevents its collection. This allows words to be safely stored in 
+ *	external structures regardless of memory management cycles.
  *
  *	Calls can be nested. A reference count is updated accordingly. Once the 
  *	count drops below 1, the root becomes stale.
@@ -318,95 +239,12 @@ Col_SetModified(
  */
 
 void
-Col_PreserveRope(
-    Col_Rope rope)		/* The rope to preserve. */
-{
-    switch (ROPE_TYPE(rope)) {
-	case ROPE_TYPE_NULL:
-	case ROPE_TYPE_C:
-	case ROPE_TYPE_EMPTY:
-	    /* 
-	     * Unmanaged strings. 
-	     */
-
-	    return;
-    }
-
-    PreserveCell((Cell *) rope);
-}
-
-void
-Col_ReleaseRope(
-    Col_Rope rope)		/* The rope to release. */
-{
-    switch (ROPE_TYPE(rope)) {
-	case ROPE_TYPE_NULL:
-	case ROPE_TYPE_C:
-	case ROPE_TYPE_EMPTY:
-	    /* 
-	     * Unmanaged strings. 
-	     */
-
-	    return;
-    }
-
-    ReleaseCell((Cell *) rope);
-}
-
-void
 Col_PreserveWord(
     Col_Word word)		/* The word to preserve. */
 {
-    switch (WORD_TYPE(word)) {
-	case WORD_TYPE_NIL:
-	case WORD_TYPE_SMALL_INT:
-	case WORD_TYPE_CHAR:
-	case WORD_TYPE_SMALL_STRING:
-	case WORD_TYPE_VOID_LIST:
-	    /* 
-	     * Immediate values. 
-	     */
-
-	    return;
-
-	case WORD_TYPE_ROPE:
-	    PreserveCell((Cell *) WORD_ROPE_GET(word));
-	    return;
-    }
-
-    PreserveCell((Cell *) word);
-}
-
-void
-Col_ReleaseWord(
-    Col_Word word)		/* The word to release. */
-{
-    switch (WORD_TYPE(word)) {
-	case WORD_TYPE_NIL:
-	case WORD_TYPE_SMALL_INT:
-	case WORD_TYPE_CHAR:
-	case WORD_TYPE_SMALL_STRING:
-	case WORD_TYPE_VOID_LIST:
-	    /* 
-	     * Immediate values. 
-	     */
-
-	    return;
-
-	case WORD_TYPE_ROPE:
-	    ReleaseCell((Cell *) WORD_ROPE_GET(word));
-	    return;
-    }
-
-    ReleaseCell((Cell *) word);
-}
-
-static void
-PreserveCell(
-    Cell *cell)			/* The cell to preserve. */
-{
     GcMemInfo *info = GetGcMemInfo();
-    Cell *node, *leaf, *parent, *newParent, *leafSource;
+    Cell *node, *leaf, *parent, *newParent;
+    Col_Word leafSource;
     uintptr_t mask;
 
     if (!info->pauseGC) {
@@ -418,6 +256,23 @@ PreserveCell(
 	return;
     }
 
+    /* 
+     * Rule out immediate values. 
+     */
+
+    switch (WORD_TYPE(word)) {
+	case WORD_TYPE_NIL:
+	case WORD_TYPE_SMALLINT:
+	case WORD_TYPE_CHAR:
+	case WORD_TYPE_SMALLSTR:
+	case WORD_TYPE_VOIDLIST:
+	    /* 
+	     * Immediate values. 
+	     */
+
+	    return;
+    }
+
     /*
      * Search for matching entry in root trie.
      */
@@ -425,7 +280,7 @@ PreserveCell(
     node = info->roots;
     while (node) {
 	if (!ROOT_IS_LEAF(node)) {
-	    if ((uintptr_t) cell & ROOT_NODE_MASK(node)) {
+	    if ((uintptr_t) word & ROOT_NODE_MASK(node)) {
 		/*
 		 * Recurse on right.
 		 */
@@ -448,12 +303,12 @@ PreserveCell(
 	ASSERT(ROOT_IS_LEAF(node));
 	node = ROOT_GET_NODE(node);
 	leafSource = ROOT_LEAF_SOURCE(node);
-	if (cell == leafSource) {
+	if (word == leafSource) {
 	    /*
 	     * Found! Increment reference count.
 	     */
 
-	    ASSERT(CELL_TYPE(cell)?WORD_PINNED(cell):ROPE_PINNED(cell));
+	    ASSERT(WORD_PINNED(word));
 	    ROOT_LEAF_REFCOUNT(node)++;
 	    return;
 	}
@@ -461,18 +316,14 @@ PreserveCell(
     }
 
     /*
-     * Not found, insert. Pin the cell so that its address doesn't change 
+     * Not found, insert. Pin the word so that its address doesn't change 
      * during compaction.
      */
 
-    if (CELL_TYPE(cell)) {
-	WORD_SET_PINNED(cell);
-    } else {
-	ROPE_SET_PINNED(cell);
-    }
+    WORD_SET_PINNED(word);
 
-    leaf = AllocCells(1);
-    ROOT_LEAF_INIT(leaf, NULL, PAGE_GENERATION(CELL_PAGE(cell)), 1, cell);
+    leaf = PoolAllocCells(&info->pools[0], 1);
+    ROOT_LEAF_INIT(leaf, NULL, PAGE_GENERATION(CELL_PAGE(word)), 1, word);
 
     if (!info->roots) {
 	/*
@@ -489,14 +340,16 @@ PreserveCell(
      * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 
      */
 
-    mask = (uintptr_t) cell ^ (uintptr_t) leafSource;
+    mask = (uintptr_t) word ^ (uintptr_t) leafSource;
+    ASSERT(mask);
     mask |= mask >> 1;
     mask |= mask >> 2;
     mask |= mask >> 4;
     mask |= mask >> 8;
     mask |= mask >> 16;
-    mask++;
     mask >>= 1;
+    mask++;
+    ASSERT(mask);
 
     /*
      * Find insertion point.
@@ -505,7 +358,7 @@ PreserveCell(
     node = info->roots;
     while (node) {
 	if (!ROOT_IS_LEAF(node) && mask < ROOT_NODE_MASK(node)) {
-	    if ((uintptr_t) cell & ROOT_NODE_MASK(node)) {
+	    if ((uintptr_t) word & ROOT_NODE_MASK(node)) {
 		/*
 		 * Recurse on right.
 		 */
@@ -529,8 +382,8 @@ PreserveCell(
      */
 
     parent = ROOT_PARENT(ROOT_GET_NODE(node));
-    newParent = AllocCells(1);
-    if ((uintptr_t) cell & mask) {
+    newParent = PoolAllocCells(&info->pools[0], 1);
+    if ((uintptr_t) word & mask) {
 	/*
 	 * Leaf is right.
 	 */
@@ -551,16 +404,16 @@ PreserveCell(
 	 */
 
 	info->roots = newParent;
-    } else if ((uintptr_t) cell & ROOT_NODE_MASK(parent)) {
+    } else if ((uintptr_t) word & ROOT_NODE_MASK(parent)) {
 	ROOT_NODE_RIGHT(parent) = newParent;
     } else {
 	ROOT_NODE_LEFT(parent) = newParent;
     }
 }
 
-static void
-ReleaseCell(
-    Cell *cell)			/* The cell to release. */
+void
+Col_ReleaseWord(
+    Col_Word word)		/* The word to release. */
 {
     GcMemInfo *info = GetGcMemInfo();
     Cell *node, *sibling, *parent, *grandParent;
@@ -574,7 +427,24 @@ ReleaseCell(
 	return;
     }
 
-    if (!(CELL_TYPE(cell)?WORD_PINNED(cell):ROPE_PINNED(cell))) {
+    /* 
+     * Rule out immediate values. 
+     */
+
+    switch (WORD_TYPE(word)) {
+	case WORD_TYPE_NIL:
+	case WORD_TYPE_SMALLINT:
+	case WORD_TYPE_CHAR:
+	case WORD_TYPE_SMALLSTR:
+	case WORD_TYPE_VOIDLIST:
+	    /* 
+	     * Immediate values. 
+	     */
+
+	    return;
+    }
+
+    if (!WORD_PINNED(word)) {
 	/*
 	 * Roots are always pinned.
 	 */
@@ -592,7 +462,7 @@ ReleaseCell(
     node = info->roots;
     while (node) {
 	if (!ROOT_IS_LEAF(node)) {
-	    if ((uintptr_t) cell & ROOT_NODE_MASK(node)) {
+	    if ((uintptr_t) word & ROOT_NODE_MASK(node)) {
 		/*
 		 * Recurse on right.
 		 */
@@ -614,7 +484,7 @@ ReleaseCell(
 
 	ASSERT(ROOT_IS_LEAF(node));
 	node = ROOT_GET_NODE(node);
-	if (cell != ROOT_LEAF_SOURCE(node)) {
+	if (word != ROOT_LEAF_SOURCE(node)) {
 	    /*
 	     * Source doesn't match.
 	     */
@@ -638,14 +508,12 @@ ReleaseCell(
     }
 
     /*
-     * Remove leaf. Unpin cell as well.
+     * Remove leaf. Unpin word as well.
      */
 
-    if (CELL_TYPE(cell)) {
-	WORD_CLEAR_PINNED(cell);
-    } else {
-	ROPE_CLEAR_PINNED(cell);
-    }
+    ASSERT(TestCell(CELL_PAGE(node), CELL_INDEX(node)));
+    ClearCells(CELL_PAGE(node), CELL_INDEX(node), 1);
+    WORD_CLEAR_PINNED(word);
 
     parent = ROOT_PARENT(node);
     if (!parent) {
@@ -658,10 +526,12 @@ ReleaseCell(
     }
 
     /*
-     * Replace parent by sibling.
+     * Remove parent and replace by sibling.
      */
 
-    if ((uintptr_t) cell & ROOT_NODE_MASK(parent)) {
+    ASSERT(TestCell(CELL_PAGE(parent), CELL_INDEX(parent)));
+    ClearCells(CELL_PAGE(parent), CELL_INDEX(parent), 1);
+    if ((uintptr_t) word & ROOT_NODE_MASK(parent)) {
 	sibling = ROOT_NODE_LEFT(parent);
     } else {
 	sibling = ROOT_NODE_RIGHT(parent);
@@ -674,7 +544,7 @@ ReleaseCell(
 	 */
 
 	info->roots = sibling;
-    } else if ((uintptr_t) cell & ROOT_NODE_MASK(grandParent)) {
+    } else if ((uintptr_t) word & ROOT_NODE_MASK(grandParent)) {
 	ROOT_NODE_RIGHT(grandParent) = sibling;
     } else {
 	ROOT_NODE_LEFT(grandParent) = sibling;
@@ -687,57 +557,37 @@ ReleaseCell(
 /*
  *---------------------------------------------------------------------------
  *
- * DeclareCustomRope --
- * DeclareWord --
+ * DeclareCustomWord --
  *
- *	Remember custom ropes and words needing freeing upon deletion. This 
- *	chains such ropes in their order of creation, latest being inserted at 
- *	the head of the list. This implies that cleanup can stop traversing 
- *	the list at the first custom rope that belongs to a non GC'd pool.
+ *	Remember custom words needing freeing upon deletion. This chains such 
+ *	words in their order of creation, latest being inserted at the head of 
+ *	the list. This implies that cleanup can stop traversing the list at the 
+ *	first custom rope that belongs to a non GC'd pool.
  *
  * Results:
  *	None.
  *
  * Side effects:
- *	Rope and word fields may be updated.
+ *	Word fields may be updated.
  *
  *---------------------------------------------------------------------------
  */
 
 void 
-DeclareCustomRope(
-    Col_Rope rope)		/* The rope to declare. */
-{
-    if (ROPE_CUSTOM_TYPE(rope)->freeProc) {
-	/*
-	 * Type needs freeing. Remember by inserting at head of list.
-	 */
-
-	GcMemInfo *info = GetGcMemInfo();
-	unsigned int generation = PAGE_GENERATION(CELL_PAGE(rope));
-	ROPE_CUSTOM_NEXT(rope, ROPE_CUSTOM_SIZE(rope)) 
-		= info->pools[generation].sweepables;
-	info->pools[generation].sweepables = (Cell *) rope;
-    }
-}
-
-void 
-DeclareWord(
+DeclareCustomWord(
     Col_Word word)		/* The word to declare. */
 {
-    Col_WordType * typeInfo;
-    if (WORD_TYPE(word) == WORD_TYPE_REGULAR) {
-	WORD_GET_TYPE_ADDR(word, typeInfo);
+    if (WORD_TYPE(word) == WORD_TYPE_CUSTOM) {
+	Col_CustomWordType *typeInfo = WORD_TYPEINFO(word);
 	if (typeInfo->freeProc) {
 	    /*
 	     * Type needs freeing. Remember by inserting at head of list.
 	     */
 
-	GcMemInfo *info = GetGcMemInfo();
+	    GcMemInfo *info = GetGcMemInfo();
 	    unsigned int generation = PAGE_GENERATION(CELL_PAGE(word));
-	    WORD_NEXT(word, typeInfo->sizeProc(word))
-		= info->pools[generation].sweepables;
-	    info->pools[generation].sweepables = (Cell *) word;
+	    WORD_CUSTOM_NEXT(word) = info->pools[generation].sweepables;
+	    info->pools[generation].sweepables = word;
 	}
     }
 }
@@ -876,13 +726,14 @@ PerformGC()
     unsigned int generation;
     size_t threshold;
     size_t i;
+    Cell *parents;
 
     /*
-     * Traverse pools to check whether they must be collected. Root and eden 
-     * pools are always collected. Clear the collected pools' bitmask.
+     * Traverse pools to check whether they must be collected. Eden pool is
+     * always collected. Root pool uses specific management.
      */
 
-    for (generation = 0; generation < GC_MAX_GENERATIONS; generation++) {
+    for (generation = 1; generation < GC_MAX_GENERATIONS; generation++) {
 	if (generation > 1) {
 	    if (generation+1 < GC_MAX_GENERATIONS) {
 		/*
@@ -919,7 +770,7 @@ PerformGC()
 	info->maxCollectedGeneration = generation;
 
 	/* 
-	 * Clear bitmasks on pool. Reachable ropes will be marked again in the
+	 * Clear bitmasks on pool. Reachable words will be marked again in the
 	 * next step.
 	 */
 
@@ -938,13 +789,21 @@ PerformGC()
     }
 #endif
 
+    /*
+     * Reset the parent page list, the actual list will be rebuilt during the
+     * mark phase.
+     */
+
+    parents = info->parents;
+    info->parents = NULL;
+
     /* 
      * Mark all cells that are reachable from known roots and from parents of 
      * uncollected pools. This also marks still valid roots in the process.
      */
 
     MarkReachableCellsFromRoots(info);
-    MarkReachableCellsFromParents(info);
+    MarkReachableCellsFromParents(info, parents);
 
     /*
      * Perform cleanup on all custom ropes and words that need sweeping.
@@ -1017,8 +876,7 @@ ClearPoolBitmasks(
 
     for (page = info->pools[generation].pages; page; page = PAGE_NEXT(page)) {
 	ASSERT(PAGE_GENERATION(page) == generation);
-	ASSERT(PAGE_CHILDGENERATION(page) <= generation);
-	PAGE_CHILDGENERATION(page) = generation;
+	PAGE_PARENT(page) = 0;
 	ClearAllCells(page);
     }
 }
@@ -1047,11 +905,12 @@ static void
 MarkReachableCellsFromRoots(
     GcMemInfo *info)		/* Thread local info. */
 {
-    Cell *node, *leaf, *parent, *source;
+    Cell *node, *leaf, *parent;
+    Col_Word source;
 
     node = info->roots;
     while (node) {
-	SetCells(CELL_PAGE(node), CELL_INDEX(node), 1);
+	ASSERT(TestCell(CELL_PAGE(node), CELL_INDEX(node)));
 	if (!ROOT_IS_LEAF(node)) {
 	    /*
 	     * Descend into left subtrie.
@@ -1064,11 +923,11 @@ MarkReachableCellsFromRoots(
 	leaf = ROOT_GET_NODE(node);
 	source = ROOT_LEAF_SOURCE(leaf);
 	if (ROOT_LEAF_GENERATION(leaf) <= info->maxCollectedGeneration) {
-	    if (CELL_TYPE(source)) {
-		MarkWord(info, (Col_Word *) &source, CELL_PAGE(source));
-	    } else {
-		MarkRope(info, (Col_Rope *) &source, CELL_PAGE(source));
-	    }
+	    /*
+	     * Follow root from collected generation.
+	     */
+
+	    MarkWord(info, &source, CELL_PAGE(source));
 	    if (ROOT_LEAF_GENERATION(leaf)+1 < GC_MAX_GENERATIONS) {
 		ROOT_LEAF_GENERATION(leaf)++;
 	    }
@@ -1112,129 +971,65 @@ MarkReachableCellsFromRoots(
 
 static void 
 MarkReachableCellsFromParents(
-    GcMemInfo *info)		/* Thread local info. */
+    GcMemInfo *info,		/* Thread local info. */
+    Cell *parents)		/* Parent list. */
 {
     unsigned int generation;
-    Cell *root, **previousPtr, *cell;
+    Col_Word word;
     Page *page;
     size_t index, nbCells;
 
     /*
-     * Iterate in reverse so that existing lists don't get overwritten.
+     * Follow cells in parent pages from uncollected generations, destroying
+     * the list in the process (i.e. clearing the cells) since the actual list
+     * is rebuilt during the mark phase.
      */
 
-    /*
-     * First, follow cells in parent pages from uncollected generations.
-     */
+    while (parents) {
+	ASSERT(TestCell(CELL_PAGE(parents), CELL_INDEX(parents)));
+	ClearCells(CELL_PAGE(parents), CELL_INDEX(parents), 1);
 
-    for (generation = GC_MAX_GENERATIONS-1; 
-	    generation > info->maxCollectedGeneration; generation--) {
-	for (previousPtr = &info->pools[generation].parents, 
-		root = info->pools[generation].parents; root; 
-		root = *previousPtr) {
-	    page = PARENT_PAGE(root);
+	page = PARENT_PAGE(parents);
+	generation = PARENT_GENERATION(parents);
 
-	    /*
-	     * Iterate over cells in page and get min child generation.
-	     */
+	parents = PARENT_NEXT(parents);
 
-	    ASSERT(PAGE_GENERATION(page) == generation);
-	    ASSERT(PAGE_CHILDGENERATION(page) <= generation);
-	    PAGE_CHILDGENERATION(page) = generation;
-	    for (index = RESERVED_CELLS; index < AVAILABLE_CELLS; 
-		    index += nbCells) {
-		if (!TestCell(page, index)) {
-		    nbCells = 1;
-		    continue;
-		}
-
-		cell = PAGE_CELL(page, index);
-		nbCells = GetNbCells(cell);
-
-		/*
-		 * Follow parent. Clearing the first cell is sufficient, as it will 
-		 * be set again during the mark phase. 
-		 */
-
-		ClearCells(page, index, 1);
-		if (CELL_TYPE(cell)) {
-		    MarkWord(info, (Col_Word *) &cell, page);
-		} else {
-		    MarkRope(info, (Col_Rope *) &cell, page);
-		}
-	    }
-
-	    if (PAGE_CHILDGENERATION(page) < generation) {
-		/*
-		 * Still a parent, keep root.
-		 */
-
-		SetCells(CELL_PAGE(root), CELL_INDEX(root), 1);
-		previousPtr = &PARENT_NEXT(root);
-	    } else {
-		/*
-		 * Remove obsolete parent root from list.
-		 */
-
-		*previousPtr = PARENT_NEXT(root);
-	    }
-	}
-    }
-
-    /*
-     * At this point all reachable cells have been marked, either by direct 
-     * roots or from their parents from uncollected generations. Now handle
-     * collected parent pages, and move surviving parent roots to the next 
-     * generation.
-     */
-
-    for (/* use last value of generation */; generation > 0; generation--) {
-	for (previousPtr = &info->pools[generation].parents, 
-		root = info->pools[generation].parents; root; 
-		root = *previousPtr) {
-	    page = PARENT_PAGE(root);
-	    ASSERT(PAGE_GENERATION(page) == generation);
-	    ASSERT(PAGE_CHILDGENERATION(page) <= generation);
-	    if (PAGE_CHILDGENERATION(page) < generation) {
-		/*
-		 * Still a parent, keep root.
-		 */
-
-		SetCells(CELL_PAGE(root), CELL_INDEX(root), 1);
-		previousPtr = &PARENT_NEXT(root);
-	    } else {
-		/*
-		 * Remove obsolete parent root from list.
-		 */
-
-		*previousPtr = PARENT_NEXT(root);
-	    }
+	if (generation <= info->maxCollectedGeneration) {
+	    continue;
 	}
 
 	/*
-	 * Move still valid parent roots to the next generation: add to front.
+	 * Iterate over cells in page.
 	 */
 
-	if (generation+1 >= GC_MAX_GENERATIONS) {
+	ASSERT(PAGE_PARENT(page));
+	PAGE_PARENT(page) = 0;
+	for (index = RESERVED_CELLS; index < CELLS_PER_PAGE; index += nbCells) {
+	    if (!TestCell(page, index)) {
+		nbCells = 1;
+		continue;
+	    }
+
+	    word = (Col_Word) PAGE_CELL(page, index);
+	    nbCells = GetNbCells(word);
+
 	    /*
-	     * Can't promote past the last possible generation.
+	     * Follow parent. Clearing the first cell is sufficient, as it will 
+	     * be set again during the mark phase. 
 	     */
 
-	    continue;
+	    ClearCells(page, index, 1);
+	    MarkWord(info, &word, page);
 	}
-	*previousPtr = info->pools[generation+1].parents;
-	info->pools[generation+1].parents = info->pools[generation].parents;
-	info->pools[generation].parents = NULL;
     }
 }
 
 /*
  *---------------------------------------------------------------------------
  *
- * MarkRope --
  * MarkWord --
  *
- *	Mark rope or word and all its children as reachable.
+ *	Mark word and all its children as reachable.
  *
  *	The algorithm is recursive and stops when it reaches an already set 
  *	cell. This handles loops and references to older pools, where cells are
@@ -1243,8 +1038,8 @@ MarkReachableCellsFromParents(
  *	To limit stack growth, tail recursive using an infinite loop with 
  *	conditional return.
  *
- *	The rope or word is passed by pointer so that it can be updated in
- *	case of redirection.
+ *	The word is passed by pointer so that it can be updated in case of 
+ *	redirection.
  *
  *	If generationPtr is non-NULL, overwritten by the cell's generation if
  *	younger than caller.
@@ -1257,149 +1052,6 @@ MarkReachableCellsFromParents(
  *
  *---------------------------------------------------------------------------
  */
-
-static void
-MarkRopeCustomChild(
-    Col_Rope rope,
-    Col_Rope *childPtr,
-    Col_ClientData clientData)
-{
-    MarkRope((GcMemInfo *) clientData, childPtr, CELL_PAGE(rope));
-}
-static void 
-MarkRope(
-    GcMemInfo *info,		/* Thread local info. */
-    Col_Rope *ropePtr,		/* Rope to mark and follow. */
-    Page *parentPage)		/* Youngest generation upon return. */
-{
-    int type;
-    size_t nbCells, index;
-    Page *page;
-
-    /*
-     * Entry point for tail recursive calls.
-     */
-
-#undef TAIL_RECURSE
-#define TAIL_RECURSE(_ropePtr, _parentPage) \
-    ropePtr = (_ropePtr); parentPage = (_parentPage); goto start;
-
-start:
-
-    type = ROPE_TYPE(*ropePtr);
-    switch (type) {
-	case ROPE_TYPE_NULL:
-	case ROPE_TYPE_C:
-	case ROPE_TYPE_EMPTY:
-	    /* 
-	     * No cell to mark. 
-	     */
-
-	    return;
-
-#ifdef PROMOTE_COMPACT
-	case ROPE_TYPE_REDIRECT:
-	    /* 
-	     * Overwrite reference and tail recurse on source.
-	     */
-
-	    *ropePtr = ROPE_REDIRECT_SOURCE(*ropePtr);
-	    TAIL_RECURSE(ropePtr, parentPage);
-#endif /* PROMOTE_COMPACT */
-    }
-
-    page = CELL_PAGE(*ropePtr);
-    if (PAGE_CHILDGENERATION(parentPage) > PAGE_GENERATION(page)) {
-	PAGE_CHILDGENERATION(parentPage) = PAGE_GENERATION(page);
-    }
-
-    /* 
-     * Stop if cell is already marked. 
-     */
-
-    index = CELL_INDEX(*ropePtr);
-    if (TestCell(page, index)) {
-	return;
-    }
-
-    nbCells = GetNbCells(*ropePtr);
-    
-#ifdef PROMOTE_COMPACT
-    if (PAGE_GENERATION(page) == info->compactGeneration 
-	    && !ROPE_PINNED(*ropePtr)) {
-	/*
-	 * Unpinned ropes are moved to the next generation.
-	 */
-
-	Col_Rope promoted = (Col_Rope) PoolAllocCells(
-		&info->pools[info->compactGeneration+1], nbCells);
-	memcpy((void *) promoted, *ropePtr, nbCells * CELL_SIZE);
-
-	/*
-	 * Replace original by redirect.
-	 */
-
-	ROPE_SET_TYPE(*ropePtr, ROPE_TYPE_REDIRECT);
-	ROPE_REDIRECT_SOURCE(*ropePtr) = promoted;
-
-	/*
-	 * Tail recurse on promoted. Clearing the first cell is sufficient, as 
-	 * it will be set again during the mark phase. 
-	 */
-
-	ClearCells(CELL_PAGE(promoted), CELL_INDEX(promoted), 1);
-	*ropePtr = promoted;
-	TAIL_RECURSE(ropePtr, parentPage);
-    }
-#endif
-
-    SetCells(page, index, (index+nbCells < CELLS_PER_PAGE ? nbCells 
-	    : CELLS_PER_PAGE-index));
-
-    /*
-     * Follow children.
-     *
-     * Note: by construction, children of ropes other than custom are never
-     * younger.
-     */
-
-    switch (type) {
-	case ROPE_TYPE_SUBROPE:
-	    /* 
-	     * Tail recurse on source.
-	     */
-
-	    TAIL_RECURSE(&ROPE_SUBROPE_SOURCE(*ropePtr), page);
-    	    
-	case ROPE_TYPE_CONCAT:
-	    /* 
-	     * Follow left arm and tail recurse on right. 
-	     */
-
-	    MarkRope(info, &ROPE_CONCAT_LEFT(*ropePtr), page);
-	    TAIL_RECURSE(&ROPE_CONCAT_RIGHT(*ropePtr), page);
-
-	case ROPE_TYPE_CUSTOM:
-	    if (ROPE_CUSTOM_TYPE(*ropePtr)->childrenProc) {
-		/*
-		 * Follow children.
-		 */
-
-		ROPE_CUSTOM_TYPE(*ropePtr)->childrenProc(*ropePtr, 
-			MarkRopeCustomChild, info);
-	    }
-	    return;
-
-	/* ROPE_TYPE_UNKNOWN */
-
-	default:
-	    /*
-	     * Stop recursion.
-	     */
-
-	    return;
-    }
-}
 
 static void
 MarkWordChild(
@@ -1415,7 +1067,6 @@ MarkWord(
     Col_Word *wordPtr,		/* Word to mark and follow. */
     Page *parentPage)		/* Youngest generation upon return. */
 {
-    Col_WordType * typeInfo;
     int type;
     size_t nbCells, index;
     Page *page;
@@ -1424,11 +1075,8 @@ MarkWord(
      * Entry point for tail recursive calls.
      */
 
-#undef TAIL_RECURSE
 #define TAIL_RECURSE(_wordPtr, _parentPage) \
     wordPtr = (_wordPtr); parentPage = (_parentPage); goto start;
-//#undef TAIL_RECURSE
-//#define TAIL_RECURSE(_wordPtr, _parentPage) MarkWord(info, (_wordPtr), (_parentPage)); return;
 
 start:
 
@@ -1441,33 +1089,29 @@ start:
     }
 
     type = WORD_TYPE(*wordPtr);
-    switch (type) {
-	case WORD_TYPE_ROPE:
-	    /*
-	     * Word is rope.
-	     */
-
-	    {
-		Col_Rope rope = WORD_ROPE_GET(*wordPtr);
-		MarkRope(info, &rope, parentPage);
-		*wordPtr = WORD_ROPE_NEW(rope);
-	    }
-	    return;
-
 #ifdef PROMOTE_COMPACT
-	case WORD_TYPE_REDIRECT:
-	    /* 
-	     * Overwrite reference and tail recurse on source.
-	     */
+    if (type == WORD_TYPE_REDIRECT) {
+	/* 
+	 * Overwrite reference and tail recurse on source.
+	 */
 
-	    *wordPtr = WORD_REDIRECT_SOURCE(*wordPtr);
-	    TAIL_RECURSE(wordPtr, parentPage);
-#endif /* PROMOTE_COMPACT */
+	*wordPtr = WORD_REDIRECT_SOURCE(*wordPtr);
+	TAIL_RECURSE(wordPtr, parentPage);
     }
+#endif /* PROMOTE_COMPACT */
 
     page = CELL_PAGE(*wordPtr);
-    if (PAGE_CHILDGENERATION(parentPage) > PAGE_GENERATION(page)) {
-	PAGE_CHILDGENERATION(parentPage) = PAGE_GENERATION(page);
+    if (PAGE_GENERATION(page) < PAGE_GENERATION(parentPage) 
+	    && !PAGE_PARENT(parentPage)) {
+	/* 
+	 * Create a new parent root, and insert at head of parent root list.
+	 */
+
+	Cell *root = PoolAllocCells(&info->pools[0], 1);
+	PAGE_PARENT(parentPage) = 1;
+	PARENT_INIT(root, info->parents, parentPage, 
+		PAGE_GENERATION(parentPage));
+	info->parents = root;
     }
 
     /* 
@@ -1479,7 +1123,7 @@ start:
 	return;
     }
 
-    nbCells = GetNbCells((const void *) *wordPtr);
+    nbCells = GetNbCells(*wordPtr);
     
 #ifdef PROMOTE_COMPACT
     if (PAGE_GENERATION(page) == info->compactGeneration
@@ -1496,7 +1140,7 @@ start:
 	 * Replace original by redirect.
 	 */
 
-	WORD_SET_TYPE_ID(*wordPtr, WORD_TYPE_REDIRECT);
+	WORD_SET_TYPEID(*wordPtr, WORD_TYPE_REDIRECT);
 	WORD_REDIRECT_SOURCE(*wordPtr) = promoted;
 
 	/*
@@ -1505,22 +1149,56 @@ start:
 	 */
 
 	ClearCells(CELL_PAGE(promoted), CELL_INDEX(promoted), 1);
+	ASSERT(!TestCell(CELL_PAGE(promoted), CELL_INDEX(promoted)));
 	*wordPtr = promoted;
 	TAIL_RECURSE(wordPtr, parentPage);
     }
 #endif
 
+    ASSERT(!TestCell(page, index));
     SetCells(page, index, (index+nbCells < CELLS_PER_PAGE ? nbCells 
 	    : CELLS_PER_PAGE-index));
+    ASSERT(TestCell(page, index));
 
     /*
      * Follow children.
-     *
-     * Note: by construction, children of words other than custom are never
-     * younger.
      */
 
     switch (type) {
+	case WORD_TYPE_WRAP:
+	    /*
+	     * Follow source and tail recurse on synonym.
+	     */
+
+	    MarkWord(info, &WORD_WRAP_SOURCE(*wordPtr), page);
+	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
+
+	case WORD_TYPE_UCSSTR:
+	case WORD_TYPE_UTF8STR:
+	    return;
+
+	case WORD_TYPE_SUBROPE:
+	    /* 
+	     * Tail recurse on source.
+	     */
+
+	    TAIL_RECURSE(&WORD_SUBROPE_SOURCE(*wordPtr), page);
+    	    
+	case WORD_TYPE_CONCATROPE:
+	    /* 
+	     * Follow left arm and tail recurse on right. 
+	     */
+
+	    MarkWord(info, &WORD_CONCATROPE_LEFT(*wordPtr), page);
+	    TAIL_RECURSE(&WORD_CONCATROPE_RIGHT(*wordPtr), page);
+
+	case WORD_TYPE_INT:
+	    /*
+	     * Tail recurse on synonym.
+	     */
+
+	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
+
 	case WORD_TYPE_VECTOR:
 	case WORD_TYPE_MVECTOR: {
 	    /* 
@@ -1532,27 +1210,17 @@ start:
 	    for (i = 0; i < length; i++) {
 		MarkWord(info, elements+i, page);
 	    }
-
-	    /*
-	     * Continued below on synonym.
-	     */
-
-	    break;
+	    return;
 	}
 
 	case WORD_TYPE_LIST:
 	case WORD_TYPE_MLIST:
 	    /* 
-	     * Follow list root.
+	     * Follow list root and tail recurse on synonym.
 	     */
 
 	    MarkWord(info, &WORD_LIST_ROOT(*wordPtr), page);
-
-	    /*
-	     * Continued below on synonym.
-	     */
-
-	    break;
+	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 
 	case WORD_TYPE_SUBLIST:
 	    /* 
@@ -1570,66 +1238,60 @@ start:
 	    MarkWord(info, &WORD_CONCATLIST_LEFT(*wordPtr), page);
 	    TAIL_RECURSE(&WORD_CONCATLIST_RIGHT(*wordPtr), page);
 
-	case WORD_TYPE_REFERENCE:
-	    /* 
-	     * Follow source.
-	     */
-
-	    MarkWord(info, &WORD_REFERENCE_SOURCE(*wordPtr), page);
-
-	    /*
-	     * Continued below on synonym.
-	     */
-
-	    break;
-
+	case WORD_TYPE_STRHASHMAP:
 	case WORD_TYPE_INTHASHMAP:
-	    if (WORD_INTHASHMAP_BUCKETS(*wordPtr)) {
+	    if (WORD_HASHMAP_BUCKETS(*wordPtr)) {
 		/*
 		 * Buckets are stored in a separate word.
 		 */
 
-		MarkWord(info, &WORD_INTHASHMAP_BUCKETS(*wordPtr), page);
+		MarkWord(info, &WORD_HASHMAP_BUCKETS(*wordPtr), page);
 	    } else {
 		/*
 		 * Buckets are stored inline.
 		 */
 
-		size_t i, length = WORD_INTHASHMAP_STATICBUCKETS_SIZE(*wordPtr);
-		Col_Word *buckets = WORD_INTHASHMAP_STATICBUCKETS(*wordPtr);
-		for (i = 0; i < length; i++) {
+		size_t i;
+		Col_Word *buckets = WORD_HASHMAP_STATICBUCKETS(*wordPtr);
+		for (i = 0; i < HASHMAP_STATICBUCKETS_SIZE; i++) {
 		    MarkWord(info, buckets+i, page);
 		}
 	    }
 
 	    /*
-	     * Continued below on synonym.
+	     * Tail recurse on synonym.
 	     */
 
-	    break;
+	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 
-	case WORD_TYPE_INTHASHENTRY:
+	case WORD_TYPE_MAPENTRY:
+	    /*
+	     * Follow key & value and tail recurse on next.
+	     */
+
+	    MarkWord(info, &WORD_MAPENTRY_KEY(*wordPtr), page);
+	    MarkWord(info, &WORD_MAPENTRY_VALUE(*wordPtr), page);
+	    TAIL_RECURSE(&WORD_MAPENTRY_NEXT(*wordPtr), page);
+
+	case WORD_TYPE_INTMAPENTRY:
 	    /*
 	     * Follow value and tail recurse on next.
 	     */
 
-	    MarkWord(info, &WORD_INTHASHENTRY_VALUE(*wordPtr), page);
-	    TAIL_RECURSE(&WORD_INTHASHENTRY_NEXT(*wordPtr), page);
+	    MarkWord(info, &WORD_MAPENTRY_VALUE(*wordPtr), page);
+	    TAIL_RECURSE(&WORD_MAPENTRY_NEXT(*wordPtr), page);
 
+	case WORD_TYPE_STRTRIEMAP:
 	case WORD_TYPE_INTTRIEMAP:
 	    /* 
-	     * Follow trie root.
+	     * Follow trie root and tail recurse on synonym.
 	     */
 
 	    MarkWord(info, &WORD_TRIEMAP_ROOT(*wordPtr), page);
+	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 
-	    /*
-	     * Continued below on synonym.
-	     */
-
-	    break;
-
-	case WORD_TYPE_TRIENODE:
+	case WORD_TYPE_STRTRIENODE:
+	case WORD_TYPE_INTTRIENODE:
 	    /* 
 	     * Follow left arm and tail recurse on right. 
 	     */
@@ -1637,15 +1299,8 @@ start:
 	    MarkWord(info, &WORD_TRIENODE_LEFT(*wordPtr), page);
 	    TAIL_RECURSE(&WORD_TRIENODE_RIGHT(*wordPtr), page);
 
-	case WORD_TYPE_INTTRIELEAF:
-	    /*
-	     * Tail recurse on value.
-	     */
-
-	    TAIL_RECURSE(&WORD_INTTRIELEAF_VALUE(*wordPtr), page);
-
-	case WORD_TYPE_REGULAR:
-	    WORD_GET_TYPE_ADDR(*wordPtr, typeInfo);
+	case WORD_TYPE_CUSTOM: {
+	    Col_CustomWordType *typeInfo = WORD_TYPEINFO(*wordPtr);
 	    if (typeInfo->childrenProc) {
 		/*
 		 * Follow children.
@@ -1653,28 +1308,16 @@ start:
 
 		typeInfo->childrenProc(*wordPtr, MarkWordChild, info);
 	    }
-
-	    /*
-	     * Continued below on synonym.
-	     */
-
-	    break;
+	    return;
+	}
 
 	/* WORD_TYPE_UNKNOWN */
 
 	default:
-	    /*
-	     * Stop recursion.
-	     */
-
+	    /* CANTHAPPEN */
+	    ASSERT(0);
 	    return;
     }
-
-    /*
-     * Tail recurse on synonym.
-     */
-
-    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 }
 
 /*
@@ -1698,98 +1341,72 @@ SweepUnreachableCells(
     GcMemInfo *info)		/* Thread local info. */
 {
     unsigned int generation;
-    Cell *cell, **previousPtr;
+    Col_Word word, *previousPtr;
+    Col_CustomWordType *typeInfo;
 
-    for (generation = 1; generation <= info->maxCollectedGeneration; 
-	    generation++) {
+    for (generation = info->maxCollectedGeneration; generation > 0;
+	    generation--) {
 	for (previousPtr = &info->pools[generation].sweepables, 
-		cell = info->pools[generation].sweepables; cell; 
-		cell = *previousPtr) {
+		word = info->pools[generation].sweepables; word; 
+		word = *previousPtr) {
 	    /*
-	     * Note: by construction, freeable words are custom ropes or regular 
-	     * words (i.e. with a type pointer).
+	     * Note: by construction, freeable words are custom words (i.e. 
+	     * with a type pointer).
 	     */
 
-	    if (CELL_TYPE(cell) /* word */) {
-		Col_Word word = (Col_Word) cell;
-		Col_WordType * typeInfo;
-
 #ifdef PROMOTE_COMPACT
-		if (generation == info->compactGeneration) {
-		    /* 
-		     * Word was potentially redirected.
-		     */
+	    if (generation == info->compactGeneration 
+		    && WORD_TYPE(word) == WORD_TYPE_REDIRECT) {
+		/* 
+		 * Word was redirected.
+		 */
 
-		    ResolveRedirectWord(&word);
-		}
+		word = WORD_REDIRECT_SOURCE(word);
+	    }
 #endif
-		ASSERT(WORD_TYPE(word) == WORD_TYPE_REGULAR);
-		WORD_GET_TYPE_ADDR(word, typeInfo);
+	    ASSERT(WORD_TYPE(word) == WORD_TYPE_CUSTOM);
+	    typeInfo = WORD_TYPEINFO(word);
+	    ASSERT(typeInfo->freeProc);
 
-		if (!TestCell(CELL_PAGE(word), CELL_INDEX(word))) {
-		    /*
-		     * Cleanup.
-		     */
+	    if (!TestCell(CELL_PAGE(word), CELL_INDEX(word))) {
+		/*
+		 * Cleanup.
+		 */
 
-		    typeInfo->freeProc(word);
+		typeInfo->freeProc(word);
 
-		    /* 
-		     * Remove from list. 
-		     */
+		/* 
+		 * Remove from list. 
+		 */
 
-		    *previousPtr = WORD_NEXT(word, typeInfo->sizeProc(word));
-		} else {
-		    /*
-		     * Keep, updating reference in case of redirection.
-		     */
-
-		    *previousPtr = (Cell *) word;
-
-		    previousPtr = &WORD_NEXT(word, typeInfo->sizeProc(word));
-		}
+		*previousPtr = WORD_CUSTOM_NEXT(word);
 	    } else {
-		Col_Rope rope = (Col_Rope) cell;
+		/*
+		 * Keep, updating reference in case of redirection.
+		 */
 
-#ifdef PROMOTE_COMPACT
-		if (generation == info->compactGeneration) {
-		    /* 
-		     * Rope was potentially redirected.
-		     */
+		*previousPtr = word;
 
-		    ResolveRedirectRope(&rope);
-		}
-#endif
-
-		ASSERT(ROPE_TYPE(rope) == ROPE_TYPE_CUSTOM);
-
-		if (!TestCell(CELL_PAGE(rope), CELL_INDEX(rope))) {
-		    /*
-		     * Cleanup.
-		     */
-
-		    ROPE_CUSTOM_TYPE(rope)->freeProc(rope);
-
-		    /* 
-		     * Remove from list. 
-		     */
-
-		    *previousPtr = (Cell *) ROPE_CUSTOM_NEXT(rope, 
-			    ROPE_CUSTOM_SIZE(rope));
-		} else {
-		    /*
-		     * Keep, updating reference in case of redirection.
-		     */
-
-		    *previousPtr = (Cell *) rope;
-
-		    previousPtr = &ROPE_CUSTOM_NEXT(rope, 
-			    ROPE_CUSTOM_SIZE(rope));
-		}
+		previousPtr = &WORD_CUSTOM_NEXT(word);
 	    }
 	}
-    }
 
-    /*FIXME: promote surviving sweepables! */
+	/*
+	 * Move still valid freeable words to the next generation: add to front.
+	 */
+
+	if (generation+1 >= GC_MAX_GENERATIONS) {
+	    /*
+	     * Can't promote past the last possible generation.
+	     */
+
+	    continue;
+	}
+	*previousPtr = info->pools[generation+1].sweepables;
+	info->pools[generation+1].sweepables 
+		= info->pools[generation].sweepables;
+	info->pools[generation].sweepables = WORD_NIL;
+    }
 }
 
 /*
@@ -1841,9 +1458,7 @@ PromotePages(
 
     for (page = info->pools[generation].pages; page; page = PAGE_NEXT(page)) {
 	ASSERT(PAGE_GENERATION(page) == generation);
-	ASSERT(PAGE_CHILDGENERATION(page) <= generation);
 	PAGE_GENERATION(page)++;
-	PAGE_CHILDGENERATION(page)++;
     }
 
     /*
@@ -1870,4 +1485,5 @@ PromotePages(
     info->pools[generation].lastPage = NULL;
     info->pools[generation].nbPages = 0;
     info->pools[generation].nbAlloc = 0;
-    info->pools[generation].nbSetCells = 0;}
+    info->pools[generation].nbSetCells = 0;
+}
