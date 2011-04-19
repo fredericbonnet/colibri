@@ -1,8 +1,21 @@
 /*
- * Vectors implemented as words.
+ * File: colVector.c
  *
- * Vectors are flat arrays of words that are directly addressable. They come
- * in mutable and immutable versions.
+ *	This file implements the vector handling features of Colibri.
+ *
+ *	Vectors are arrays of words that are directly accessible through a
+ *	pointer value. 
+ *
+ *	They come in both immutable and mutable forms:
+ *
+ *	- Immutable vectors are flat arrays of bounded length.
+ *
+ *	- Mutable vectors are flat arrays that can grow up to a maximum length, 
+ *	whose content is directly modifiable through a C pointer. They can be
+ *	"frozen" and turned into immutable versions.
+ *
+ * See also:
+ *	<colVector.h>
  */
 
 #include "colibri.h"
@@ -13,21 +26,18 @@
 #include <string.h>
 
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_GetMaxVectorLength --
+/****************************************************************************
+ * Group: Immutable Vector Creation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_GetMaxVectorLength
  *
  *	Get the maximum length of a vector word.
  *
- * Results:
+ * Result:
  *	The max vector length.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 size_t
 Col_GetMaxVectorLength()
@@ -35,29 +45,28 @@ Col_GetMaxVectorLength()
     return VECTOR_MAX_LENGTH(SIZE_MAX);
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_NewVector --
- * Col_NewVectorNV --
+/*---------------------------------------------------------------------------
+ * Function: Col_NewVector
  *
  *	Create a new vector word.
- *	Col_NewVectorWordV is a variadic version of Col_NewVectorWord.
  *
- * Results:
- *	If the given length is zero, empty.
- *	Else the new word (which may be empty).
+ * Arguments:
+ *	length		- Length of below array.
+ *	elements	- Array of words to populate vector with, or NULL. In
+ *			  the latter case, elements are initialized to nil.
+ *
+ * Result:
+ *	If the given length is larger than the maximum length allowed, nil.
+ *	Else the new word.
  *
  * Side effects:
  *	May allocate memory cells.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_NewVector(
-    size_t length,		/* Length of below array. */
-    const Col_Word * elements)	/* Array of words to populate vector with. */
+    size_t length,
+    const Col_Word * elements)
 {
     Col_Word vector;		/* Resulting word in the general case. */
 
@@ -87,23 +96,50 @@ Col_NewVector(
 
     /*
      * Create a new vector word.
-     *
-     * Note: no need to declare children as by construction they are older than
-     * the newly created vector.
      */
 
     vector = (Col_Word) AllocCells(VECTOR_SIZE(length));
     WORD_VECTOR_INIT(vector, length);
-    memcpy(WORD_VECTOR_ELEMENTS(vector), elements, length * sizeof(Col_Word));
+    if (elements) {
+	/*
+	 * Copy elements.
+	 */
+
+	memcpy(WORD_VECTOR_ELEMENTS(vector), elements, length 
+		* sizeof(Col_Word));
+    } else {
+	/*
+	 * Initialize elements to nil.
+	 */
+
+	memset(WORD_VECTOR_ELEMENTS(vector), 0, length 
+		* sizeof(Col_Word));
+    }
 
     return vector;
 }
 
+/*---------------------------------------------------------------------------
+ * Function: Col_NewVectorNV
+ *
+ *	Create a new vector word from a list of arguments.
+ *
+ * Arguments:
+ *	length	- Number of arguments.
+ *	...	- Remaining arguments, i.e. words to add in order.
+ *
+ * Result:
+ *	If the given length is larger than the maximum length allowed, nil.
+ *	Else the new word.
+ *
+ * Side effects:
+ *	May allocate memory cells.
+ *---------------------------------------------------------------------------*/
+
 Col_Word
 Col_NewVectorNV(
-    size_t length,		/* Number of arguments. */
-    ...)			/* Remaining arguments, i.e. words to add in 
-				 * order. */
+    size_t length,
+    ...)
 {
     size_t i;
     va_list args;
@@ -146,21 +182,19 @@ Col_NewVectorNV(
     return vector;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_GetMaxMVectorLength --
+
+/****************************************************************************
+ * Group: Mutable Vector Creation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_GetMaxMVectorLength
  *
  *	Get the maximum length of a mutable vector word.
  *
- * Results:
+ * Result:
  *	The max vector length.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 size_t
 Col_GetMaxMVectorLength()
@@ -168,10 +202,8 @@ Col_GetMaxMVectorLength()
     return VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE);
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_NewMVector --
+/*---------------------------------------------------------------------------
+ * Function: Col_NewMVector
  *
  *	Create a new mutable vector word, and optionally populate with the
  *	given elements.
@@ -179,25 +211,29 @@ Col_GetMaxMVectorLength()
  *	Note that the actual maximum length will be rounded up to fit an even
  *	number of cells.
  *
- * Results:
+ * Arguments:
+ *	maxLength	- Maximum length of mutable vector.
+ *	length		- Length of below array.
+ *	elements	- Array of words to populate vector with, or NULL. In
+ *			  the latter case, elements are initialized to nil.
+ *
+ * Result:
  *	If the given length is larger than the maximum length allowed, nil.
  *	Else the new word.
  *
  * Side effects:
  *	May allocate memory cells.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_NewMVector(
-    size_t maxLength,		/* Maximum length of vector. */
-    size_t length,		/* Actual length of vector. */
-    const Col_Word * elements)	/* Array of words to populate vector with or 
-				 * NULL. */
+    size_t maxLength,
+    size_t length,
+    const Col_Word * elements)
 {
     Col_Word mvector;		/* Resulting word in the general case. */
-    size_t size;
+    size_t size;		/* Number of allocated cells storing a minimum
+				 * of maxLength elements. */
 
     /*
      * Quick cases.
@@ -205,6 +241,13 @@ Col_NewMVector(
 
     if (maxLength < length) {
 	maxLength = length;
+    }
+    if (maxLength == 0) {
+	/* 
+	 * Mutable vector will always be empty. Use immediate value.
+	 */
+
+	return WORD_LIST_EMPTY;
     }
     if (maxLength > VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE)) {
 	/*
@@ -228,9 +271,6 @@ Col_NewMVector(
 	if (elements) {
 	    /*
 	     * Copy elements.
-	     *
-	     * Note: no need to declare children as by construction they are older than 
-	     * the newly created vector.
 	     */
 
 	    memcpy(WORD_VECTOR_ELEMENTS(mvector), elements, length 
@@ -248,74 +288,25 @@ Col_NewMVector(
     return mvector;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_FreezeMVector --
- *
- *	Turn a mutable vector immutable. If an immutable vector is given,
- *	does nothing.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	The mutable vector becomes immutable.
- *
- *---------------------------------------------------------------------------
- */
 
-void
-Col_FreezeMVector(
-    Col_Word mvector)		/* The mutable vector to freeze. */
-{
-    switch (WORD_TYPE(mvector)) {
-	case WORD_TYPE_VECTOR:
-	    /*
-	     * No-op.
-	     */
+/****************************************************************************
+ * Group: Mutable Vector Operations
+ ****************************************************************************/
 
-	    break;
-
-	case WORD_TYPE_MVECTOR: {
-	    /*
-	     * Simply change type ID. Don't mark extraneous cells, they will
-	     * be collected during GC.
-	     */
-
-	    int pinned = WORD_PINNED(mvector);
-	    WORD_SET_TYPEID(mvector, WORD_TYPE_VECTOR);
-	    if (pinned) {
-		WORD_SET_PINNED(mvector);
-	    }
-	    break;
-	}
-
-	default:
-	    Col_Error(COL_ERROR, "%x is not a mutable vector", mvector);
-    }
-}
-
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_MVectorSetLength
  *
- * Col_MVectorSetLength --
+ *	Resize the mutable vector. Newly added elements are set to nil.
  *
- *	Resize the mutable vector.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	The actual length is modified. Newly added elements are set to nil.
- *
- *---------------------------------------------------------------------------
- */
+ * Arguments:
+ *	mvector	- Mutable vector to resize.
+ *	length	- New length. Must not exceed max length set at creation.
+ *---------------------------------------------------------------------------*/
 
 void
 Col_MVectorSetLength(
-    Col_Word mvector,		/* Mutable vector to resize. */
-    size_t length)		/* New length. */
+    Col_Word mvector,
+    size_t length)
 {
     size_t maxLength, oldLength;
 
@@ -350,4 +341,45 @@ Col_MVectorSetLength(
 		- oldLength)*sizeof(Col_Word));
     }
     WORD_VECTOR_LENGTH(mvector) = length;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_FreezeMVector
+ *
+ *	Turn a mutable vector immutable. If an immutable vector is given,
+ *	does nothing.
+ *
+ * Argument:
+ *	mvector	- Mutable vector to freeze. 
+ *---------------------------------------------------------------------------*/
+
+void
+Col_FreezeMVector(
+    Col_Word mvector)
+{
+    switch (WORD_TYPE(mvector)) {
+	case WORD_TYPE_VECTOR:
+	    /*
+	     * No-op.
+	     */
+
+	    break;
+
+	case WORD_TYPE_MVECTOR: {
+	    /*
+	     * Simply change type ID. Don't mark extraneous cells, they will
+	     * be collected during GC.
+	     */
+
+	    int pinned = WORD_PINNED(mvector);
+	    WORD_SET_TYPEID(mvector, WORD_TYPE_VECTOR);
+	    if (pinned) {
+		WORD_SET_PINNED(mvector);
+	    }
+	    break;
+	}
+
+	default:
+	    Col_Error(COL_ERROR, "%x is not a mutable vector", mvector);
+    }
 }

@@ -1,3 +1,9 @@
+/*
+ * Internal File: colAlloc.c
+ *
+ *	This file implements the memory allocation features of Colibri.
+ */
+
 #include "colibri.h"
 #include "colInternal.h"
 #include "colPlatform.h"
@@ -6,22 +12,25 @@
 #include <string.h>
 
 /*
- * System page size. Should be a multiple of PAGE_SIZE on every possible 
- * platform.
+ * Prototypes for functions used only in this file.
  */
 
-size_t systemPageSize;
+static Cell *		PageAllocCells(size_t number, Cell *firstCell);
+static size_t		FindFreeCells(void *page, size_t number, size_t index);
 
 
-/* 
- *----------------------------------------------------------------
- * Lookup tables for bitmasks. 
- *----------------------------------------------------------------
- */
+/****************************************************************************
+ * Internal Group: Bit Handling
+ ****************************************************************************/
 
-/* 
- * Position of the first zero bit sequence of a given length in byte.
- */
+/*---------------------------------------------------------------------------
+ * Internal Variable: firstZeroBitSequence
+ *
+ *	Position of the first zero-bit sequence of a given length in byte.
+ *	First index is length of zero-bit sequence to look for, minus 1. Second 
+ *	index is value of byte in which to search. Result is index of the first 
+ *	bit in matching zero-bit sequence, or -1 if none.
+ *---------------------------------------------------------------------------*/
 
 const char firstZeroBitSequence[7][256] = {
     { /* single bit */
@@ -150,12 +159,15 @@ const char firstZeroBitSequence[7][256] = {
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
     }
-    /* 8-bit need no table, just test for zero byte */
+    /* 8-bit sequences need no table, just test for zero byte */
 };
 
-/* 
- * Longest leading zero bit sequence in byte.
- */
+/*---------------------------------------------------------------------------
+ * Internal Variable: longestLeadingZeroBitSequence
+ *
+ *	Longest leading zero-bit sequence in byte. Index is value of byte.
+ *	Result is number of consecutive cleared bytes starting at MSB.
+ *---------------------------------------------------------------------------*/
 
 const char longestLeadingZeroBitSequence[256] = {
     8, 7, 6, 6, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4, 
@@ -176,9 +188,12 @@ const char longestLeadingZeroBitSequence[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
-/*
- *  Number of bits set in byte.
- */
+/*---------------------------------------------------------------------------
+ * Internal Variable: nbBitsSet
+ *
+ *	Number of bits set in byte. Index is value of byte. Result is number of
+ *	set bits.
+ *---------------------------------------------------------------------------*/
 
 const char nbBitsSet[256] = {
     0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 
@@ -199,43 +214,45 @@ const char nbBitsSet[256] = {
     4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8
 };
 
-/*
- * Prototypes for functions used only in this file.
- */
 
-static Cell *		PageAllocCells(size_t number, Cell *firstCell);
-static size_t		FindFreeCells(void *page, size_t number, size_t index);
+/****************************************************************************
+ * Internal Group: Memory Pools
+ ****************************************************************************/
 
-
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: PoolInit
  *
- * PoolInit --
- * PoolCleanup --
+ *	Initialize memory pool.
  *
- *	Initialize/cleanup memory pool.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Structure is initialized or cleaned up.
- *
- *---------------------------------------------------------------------------
- */
+ * Arguments:
+ *	pool		- Pool to initialize.
+ *	generation	- Generation number; 0 = youngest.
+ *---------------------------------------------------------------------------*/
 
 void
 PoolInit(
-    MemoryPool *pool,		/* The pool to initialize. */
-    unsigned int generation)	/* Generation number; 0 = youngest. */
+    MemoryPool *pool,
+    unsigned int generation)
 {
     memset(pool, 0, sizeof(*pool));
     pool->generation = generation;
 }
 
+/*---------------------------------------------------------------------------
+ * Internal Function: PoolCleanup
+ *
+ *	Cleanup memory pool.
+ *
+ * Argument:
+ *	pool		- Pool to clenup.
+ *
+ * See also:
+ *	<PlatSysPageFree>
+ *---------------------------------------------------------------------------*/
+
 void
 PoolCleanup(
-    MemoryPool *pool)		/* The pool to cleanup. */
+    MemoryPool *pool)
 {
     Page *base, *next, *page;
 
@@ -251,28 +268,38 @@ PoolCleanup(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+
+/****************************************************************************
+ * Internal Group: Page Allocation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Variable: systemPageSize
  *
- * PoolAllocPages --
+ *	System page size in bytes. Allocated by platform specific code.
+ *---------------------------------------------------------------------------*/
+
+size_t systemPageSize;
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PoolAllocPages
  *
  *	Allocate pages in pool. Pages are inserted after the given page. This
  *	guarantees better performances by avoiding the traversal of previous
  *	pages.
  *
- * Results:
- *	None.
+ * Arguments:
+ *	pool	- Pool to allocate pages into.
+ *	number	- Number of pages to allocate.
  *
- * Side effects:
- *	Memory allocated and initialized.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<PlatSysPageAlloc>
+ *---------------------------------------------------------------------------*/
 
 void 
 PoolAllocPages(
-    MemoryPool *pool,		/* The pool to alloc page into. */
-    size_t number)		/* Number of pages to allocate. */
+    MemoryPool *pool,
+    size_t number)
 {
     Page *base, *page, *prev;
     const size_t nbPagesPerSysPage = systemPageSize/PAGE_SIZE;
@@ -294,7 +321,7 @@ PoolAllocPages(
 
 	div_t d = div((int) number, (int) nbPagesPerSysPage);
 	nbSysPages = d.quot + (d.rem?1:0);
-	if (number >= LARGE_PAGE_SIZE) {
+	if (nbSysPages >= LARGE_PAGE_SIZE) {
 	    nbPages = 1;
 	} else {
 	    nbPages = (nbSysPages * nbPagesPerSysPage) - number + 1;
@@ -342,25 +369,21 @@ PoolAllocPages(
     PAGE_FLAGS(prev) |= PAGE_FLAG_LAST;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * PoolFreeEmptyPages --
+/*---------------------------------------------------------------------------
+ * Internal Function: PoolFreeEmptyPages
  *
  *	Free empty system pages in pool. Refresh page count in the process.
  *
- * Results:
- *	None.
+ * Argument:
+ *	pool	- Pool with pages to free.
  *
- * Side effects:
- *	Memory deallocated.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<PlatSysPageFree>
+ *---------------------------------------------------------------------------*/
 
 void 
 PoolFreeEmptyPages(
-    MemoryPool *pool)		/* The pool with pages to free. */
+    MemoryPool *pool)
 {
     Page *page, *base, *prev, *next;
     const size_t nbPagesPerSysPage = systemPageSize/PAGE_SIZE;
@@ -468,27 +491,37 @@ PoolFreeEmptyPages(
     pool->lastPage = prev;
 }
 
-/*
- *---------------------------------------------------------------------------
+
+/****************************************************************************
+ * Internal Group: Cell Allocation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PoolAllocCells
  *
- * PoolAllocCells --
+ *	Allocate cells in a pool, allocating new pages if needed. Traverse and
+ *	search all existing pages for a free cell sequence of the given length, 
+ *	and if none is found, allocate new pages.
  *
- *	Allocate cells in a pool, allocating new pages if needed. 
+ * Arguments:
+ *	pool	- Pool to allocate cells into.
+ *	number	- Number of cells to allocate.
  *
- * Results:
+ * Result:
  *	If successful, a pointer to the first allocated cell. Else NULL.
  *	
  * Side effects:
- *	Alloc structures are updated, and memory pages may be allocated. The
- *	memory pool's alloc counter is incremented in the latter case.
+ *	Memory pages may be allocated. This may trigger the GC later once we
+ *	leave the GC-protected section.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<PageAllocCells>, <PoolAllocPages>
+ *---------------------------------------------------------------------------*/
 
 Cell * 
 PoolAllocCells(
-    MemoryPool *pool,		/* Pool into which to allocate cells. */
-    size_t number)		/* Number of cells to allocate. */
+    MemoryPool *pool,
+    size_t number)
 {
     Cell *cells;
     Page *tail;
@@ -594,26 +627,27 @@ PoolAllocCells(
     return cells;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: PageAllocCells
  *
- * PageAllocCells --
+ *	Allocate cells in existing pages. Traverse and search all existing pages
+ *	for a free cell sequence of the given length, and if found, set cells.
  *
- *	Allocate cells in page or in next pages.
+ * Arguments:
+ *	number		- Number of cells to allocate.
+ *	firstCell	- First cell to consider.
  *
- * Results:
- *	First allocated cell, or NULL if failure.
+ * Result:
+ *	First allocated cell, or NULL if none found.
  *
- * Side effects:
- *	Page bitmask may be modified.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<FindFreeCells>
+ *---------------------------------------------------------------------------*/
 
 static Cell * 
 PageAllocCells(
-    size_t number,		/* Number of cells to allocate. */
-    Cell *firstCell)		/* First page to traverse. */
+    size_t number,
+    Cell *firstCell)
 {
     Page *page;
     size_t first;
@@ -663,27 +697,25 @@ PageAllocCells(
     return (Cell *) page + first;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * FindFreeCells --
+/*---------------------------------------------------------------------------
+ * Internal Function: FindFreeCells
  *
  *	Find sequence of free cells in page. 
  *
+ * Arguments:
+ *	page	- Page to look into.
+ *	number	- Number of cells to look for.
+ *	index	- First cell to consider.
+ *
  * Results:
  *	Index of first cell of sequence, or -1 if none found.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 static size_t 
 FindFreeCells(
-    void *page,			/* Page to look into. */
-    size_t number,		/* Number of cells to look for. */
-    size_t index)		/* First cell to consider. */
+    void *page,
+    size_t number,
+    size_t index)
 {
     size_t i, first = (size_t)-1, remaining;
     char seq;
@@ -784,29 +816,22 @@ FindFreeCells(
     return (size_t)-1;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: SetCells
  *
- * SetCells --
- * ClearCells --
- * ClearAllCells --
+ *	Set the page bitmask for a given sequence of cells.
  *
- *	Set or clear a page bitmask.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Bitmask altered.
- *
- *---------------------------------------------------------------------------
- */
+ * Arguments:
+ *	page	- The page.
+ *	first	- Index of first cell.
+ *	number	- Number of cells in sequence.
+ *---------------------------------------------------------------------------*/
 
 void 
 SetCells(
-    Page *page,			/* The page. */
-    size_t first,		/* Index of first cell. */
-    size_t number)		/* Number of cells in sequence. */
+    Page *page,
+    size_t first,
+    size_t number)
 {
 #if CELLS_PER_PAGE == 64
 #   ifdef COL_BIGENDIAN
@@ -823,11 +848,22 @@ SetCells(
 #endif
 }
 
+/*---------------------------------------------------------------------------
+ * Internal Function: ClearCells
+ *
+ *	Clear the page bitmask for a given sequence of cells.
+ *
+ * Arguments:
+ *	page	- The page.
+ *	first	- Index of first cell.
+ *	number	- Number of cells in sequence.
+ *---------------------------------------------------------------------------*/
+
 void 
 ClearCells(
-    Page *page,			/* The page. */
-    size_t first,		/* Index of first cell. */
-    size_t number)		/* Number of cells in sequence. */
+    Page *page,
+    size_t first,
+    size_t number)
 {
 #if CELLS_PER_PAGE == 64
 #   ifdef COL_BIGENDIAN
@@ -844,9 +880,18 @@ ClearCells(
 #endif
 }
 
+/*---------------------------------------------------------------------------
+ * Internal Function: ClearAllCells
+ *
+ *	Clear the page bitmask.
+ *
+ * Argument:
+ *	page	- The page.
+ *---------------------------------------------------------------------------*/
+
 void 
 ClearAllCells(
-    Page *page)			/* The page for which to clear all cells. */
+    Page *page)
 {
 #if CELLS_PER_PAGE == 64
 #   ifdef COL_BIGENDIAN
@@ -869,26 +914,23 @@ ClearAllCells(
 #endif
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: TestCell
  *
- * TestCell --
+ *	Test the page bitmap for a given cell.
  *
- *	Test a cell page bitmask.
+ * Arguments:
+ *	page	- The page.
+ *	index	- Index of cell.
  *
- * Results:
+ * Result:
  *	Whether the cell is set.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 int 
 TestCell(
-    Page *page,			/* The page. */
-    size_t index)		/* Index of cell to set. */
+    Page *page,
+    size_t index)
 {
 #if CELLS_PER_PAGE == 64
 #   ifdef COL_BIGENDIAN
@@ -902,27 +944,23 @@ TestCell(
 #endif
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * NbSetCells --
+/*---------------------------------------------------------------------------
+ * Internal Function: NbSetCells
  *
  *	Get the number of cells set in a page.
  *
- * Results:
+ * Argument:
+ *	page	- The page.
+ *
+ * Result:
  *	Number of set cells.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 size_t
 NbSetCells(
-    Page *page)			/* The page. */
+    Page *page)
 {
-#if CELLS_PER_PAGE == 640
+#if 0 && CELLS_PER_PAGE == 64 //FIXME?
     /*
      * Hamming weight on bitstring.
      *

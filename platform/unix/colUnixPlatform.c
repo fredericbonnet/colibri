@@ -1,3 +1,14 @@
+/*
+ * Internal File: colUnixPlatform.c
+ *
+ *	This Unix-specific file implements the generic features needing 
+ *	platform-specific implementations, as well as the Unix-specific
+ *	features.
+ *
+ * See also:
+ *	<colPlatform.h>, <colUnixPlatform.h>
+ */
+
 #include "../../colibri.h"
 #include "../../colInternal.h"
 #include "../../colPlatform.h"
@@ -7,13 +18,6 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <pthread.h>
-
-/*
- * Thread-local data.
- */
-
-static pthread_once_t once = PTHREAD_ONCE_INIT;
-pthread_key_t tsdKey;
 
 /*
  * Bit twiddling hack for computing the log2 of a power of 2.
@@ -37,118 +41,102 @@ static void *		GcThreadProc(void *arg);
 static void		Init(void);
 
 
-/*
- *----------------------------------------------------------------
- * System page allocator.
- *----------------------------------------------------------------
- */
+/****************************************************************************
+ * Internal Group: Thread-Specific Data
+ ****************************************************************************/
 
-/*
- * Memory is allocated with mmap in anonymous mode, which manages single pages.
- */
+/*---------------------------------------------------------------------------
+ * Internal Variable: tsdKey
+ *
+ *	Thread-speficic data identifier. Used to get thread-specific data.
+ *
+ * See also:
+ *	<ThreadData>, <Init>
+ *---------------------------------------------------------------------------*/
 
-static size_t shiftPage;
+pthread_key_t tsdKey;
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Typedef: PlatGroupData
  *
- * PlatSysPageAlloc --
+ *	Platform-specific group data.
  *
- *	Allocate system pages.
+ * Fields:
+ *	data			- Generic <GroupData> structure.
+ *	next			- Next active group in list.
+ *	mutexRoots		- Mutex protecting root management.
+ *	mutexDirties		- Mutex protecting dirty page management.
+ *	mutexGc			- Critical section protecting GC from worker 
+ *				  threads.
+ *	condGcScheduled		- Triggers GC thread.
+ *	condGcDone		- Barrier for worker threads.
+ *	scheduled		- Flag for when a GC is scheduled.
+ *	terminated		- Flag for thread group destruction.
+ *	nbActive		- Active worker thread counter.
+ *	threadGc		- GC thread.
  *
- * Results:
- *	The allocated system pages' base address.
- *
- * Side effects:
- *	New pages are allocated.
- *
- *---------------------------------------------------------------------------
- */
-
-void * 
-PlatSysPageAlloc(
-    size_t number)		/* Number of pages to alloc. */
-{
-    void * page = mmap(NULL, number << shiftPage, PROT_READ | PROT_WRITE, 
-	    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (page == MAP_FAILED) {
-	/* TODO: exception handling. */
-	return NULL;
-    }
-
-    return page;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatSysPageFree --
- *
- *	Free system pages.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	The pages are freed.
- *
- *---------------------------------------------------------------------------
- */
-
-void 
-PlatSysPageFree(
-    void * page,		/* Base address of the pages to free. */
-    size_t number)		/* Number of pages to free. */
-{
-    munmap(page, number << shiftPage);
-}
-
-
-/*
- *----------------------------------------------------------------
- * Process & threads.
- *----------------------------------------------------------------
- */
+ * See also:
+ *	<ThreadData>, <GroupData>, <Init>, <AllocGroupData>, <FreeGroupData>
+ *---------------------------------------------------------------------------*/
 
 typedef struct PlatGroupData {
-    GroupData data;		/* Generic structure. */
-    struct PlatGroupData *next;	/* Next active group in list. */
-
-    pthread_mutex_t mutexRoots;	/* Protect root management. */
+    GroupData data;
+    struct PlatGroupData *next;
+    pthread_mutex_t mutexRoots;
     pthread_mutex_t mutexDirties;
-				/* Protect dirty page management. */
 
-    pthread_mutex_t mutexGc;	/* Protect GC from worker threads. */
-    pthread_cond_t condGcScheduled;	
-				/* Triggers GC thread. */
-    pthread_cond_t condGcDone;	/* Barrier for worker threads. */
-    int scheduled;		/* Flag for when a GC is scheduled. */
-    int terminated;		/* Flag for thread group destruction. */
-    int nbActive;		/* Active worker thread counter. */
-    pthread_t threadGc;		/* GC thread. */
+    pthread_mutex_t mutexGc;
+    pthread_cond_t condGcScheduled;
+    pthread_cond_t condGcDone;
+    int scheduled;
+    int terminated;
+    int nbActive;
+    pthread_t threadGc;
 } PlatGroupData;
+
+/*---------------------------------------------------------------------------
+ * Internal Variable: sharedGroups
+ *
+ *	List of active groups in process.
+ *
+ * See also:
+ *	<PlatGroupData>, <AllocGroupData>, <FreeGroupData>
+ *---------------------------------------------------------------------------*/
+
 static PlatGroupData *sharedGroups;
+
+/*---------------------------------------------------------------------------
+ * Internal Variable: mutexSharedGroups
+ *
+ *	Mutex protecting <sharedGroups>.
+ *
+ * See also:
+ *	<sharedGroups>
+ *---------------------------------------------------------------------------*/
+
 static pthread_mutex_t mutexSharedGroups = PTHREAD_MUTEX_INITIALIZER;
 
-/*
- *---------------------------------------------------------------------------
- *
- * AllocGroupData --
+/*---------------------------------------------------------------------------
+ * Internal Function: AllocGroupData
  *
  *	Allocate and initialize a thread group data structure.
  *
- * Results:
+ * Argument:
+ *	model	- Threading model.
+ *
+ * Result:
  *	The newly allocated structure.
  *
  * Side effects:
  *	Memory allocated and system objects created.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<Threading Models>, <PlatGroupData>, <FreeGroupData>
+ *---------------------------------------------------------------------------*/
 
 static PlatGroupData *
 AllocGroupData(
-    unsigned int model)		/* Threading model. */
+    unsigned int model)
 {
     PlatGroupData *groupData = (PlatGroupData *) malloc(sizeof(PlatGroupData));
     memset(groupData, 0, sizeof(PlatGroupData));
@@ -178,25 +166,24 @@ AllocGroupData(
     return groupData;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * FreeGroupData --
+/*---------------------------------------------------------------------------
+ * Internal Function: FreeGroupData
  *
  *	Free a thread group data structure.
  *
- * Results:
- *	None.
+ * Argument:
+ *	groupData	- Structure to free.
  *
  * Side effects:
  *	Memory freed and system objects deleted.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<PlatGroupData>, <AllocGroupData>
+ *---------------------------------------------------------------------------*/
 
 static void
 FreeGroupData(
-    PlatGroupData *groupData)	/* Structure to free. */
+    PlatGroupData *groupData)
 {
     if (groupData->data.model != COL_SINGLE) {
 	/*
@@ -228,25 +215,43 @@ FreeGroupData(
     free(groupData);
 }
 
-/*
- *---------------------------------------------------------------------------
+
+/****************************************************************************
+ * Internal Group: Process & Threads
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Variable: once
  *
- * PlatEnter --
+ *	Ensure that per-process initialization only occurs once.
  *
- *	Enter the thread.
+ * See also:
+ *	<PlatEnter>, <Init>
+ *---------------------------------------------------------------------------*/
+
+static pthread_once_t once = PTHREAD_ONCE_INIT;
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatEnter
  *
- * Results:
+ *	Enter the thread. If this is the first nested call, initialize thread
+ *	data. If this is the first thread in its group, initialize group data
+ *	as well.
+ *
+ * Argument:
+ *	model	- Threading model.
+ *
+ * Result:
  *	Non-zero if this is the first nested call, else 0.
  *
- * Side effects:
- *	Global data is initialized; decrement nesting count.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<Threading Models>, <ThreadData>, <PlatGroupData>, <PlatLeave>, 
+ *	<Col_Init>
+ *---------------------------------------------------------------------------*/
 
 int
 PlatEnter(
-    unsigned int model)		/* Threading model. */
+    unsigned int model)
 {
     ThreadData *data;
 
@@ -323,21 +328,19 @@ PlatEnter(
     return 1;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatLeave
  *
- * PlatLeave --
+ *	Leave the thread. If this is the first nested call, cleanup thread
+ *	data. If this is the last thread in its group, cleanup group data
+ *	as well.
  *
- *	Leave the thread.
- *
- * Results:
+ * Result:
  *	Non-zero if this is the last nested call, else 0.
  *
- * Side effects:
- *	Decrement nesting count.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<ThreadData>, <PlatGroupData>, <PlatEnter>, <Col_Cleanup>
+ *---------------------------------------------------------------------------*/
 
 int
 PlatLeave()
@@ -403,22 +406,24 @@ PlatLeave()
     return 1;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * GcThreadProc --
+/*---------------------------------------------------------------------------
+ * Internal Function: GcThreadProc
  *
  *	Thread dedicated to the GC process. Activated when one of the worker
  *	threads in the group triggers the GC.
  *
- * Results:
- *	None (always zero).
+ * Argument:
+ *	lpParameter	- <PlatGroupData>.
+ *
+ * Result:
+ *	Always zero.
  *
  * Side effects:
- *	Calls PerformGC.
+ *	Calls <PerformGC>.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<AllocGroupData>, <PerformGC>
+ *---------------------------------------------------------------------------*/
 
 static void *
 GcThreadProc(
@@ -442,22 +447,20 @@ GcThreadProc(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatSyncPauseGC
  *
- * PlatSyncPauseGC --
+ *	Called when a worker thread calls the outermost <Col_PauseGC>.
  *
- *	Called when a worker thread calls the outermost Col_PauseGC.
- *	May block as long as a GC is underway (see GcThreadProc).
- *
- * Results:
- *	None.
+ * Argument:
+ *	data	- Group-specific data.
  *
  * Side effects:
- *	Update internal structures.
- *
- *---------------------------------------------------------------------------
- */
+ *	May block as long as a GC is underway.
+ * 
+ * See also:
+ *	<GcThreadProc>, <SyncPauseGC>, <Col_PauseGC>
+ *---------------------------------------------------------------------------*/
 
 void
 PlatSyncPauseGC(
@@ -473,6 +476,21 @@ PlatSyncPauseGC(
     }
     pthread_mutex_unlock(&groupData->mutexGc);
 }
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatTrySyncPauseGC
+ *
+ *	Called when a worker thread calls the outermost <Col_TryPauseGC>.
+ *
+ * Argument:
+ *	data	- Group-specific data.
+ *
+ * Results:
+ *	Non-zero if successful.
+ * 
+ * See also:
+ *	<GcThreadProc>, <TrySyncPauseGC>, <Col_TryPauseGC>
+ *---------------------------------------------------------------------------*/
 
 int
 PlatTrySyncPauseGC(
@@ -491,32 +509,33 @@ PlatTrySyncPauseGC(
     return 1;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatSyncResumeGC
  *
- * PlatSyncResumeGC --
+ *	Called when a worker thread calls the outermost <Col_ResumeGC>.
  *
- *	Called when a worker thread calls the outermost Col_ResumeGC.
- *
- * Results:
- *	None.
+ * Arguments:
+ *	data		- Group-specific data.
+ *	performGc	- Whether to perform GC. 
  *
  * Side effects:
- *	If last thread in group, may trigger the GC if previously scheduled.
- *	This will block further calls to Col_PauseGC/PlatSyncPauseGC.
+ *	If last thread in group, may trigger the GC in the dedicated thread if 
+ *	previously scheduled. This will block further calls to 
+ *	<Col_PauseGC>/<PlatSyncPauseGC>.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<GcThreadProc>, <SyncResumeGC>, <Col_ResumeGC>
+ *---------------------------------------------------------------------------*/
 
 void
 PlatSyncResumeGC(
     GroupData *data,
-    int schedule) 
+    int performGc) 
 {
     PlatGroupData *groupData = (PlatGroupData *) data;
     pthread_mutex_lock(&groupData->mutexGc);
     {
-	if (schedule) {
+	if (performGc) {
 	    groupData->scheduled = 1;
 	}
 	--groupData->nbActive;
@@ -527,21 +546,20 @@ PlatSyncResumeGC(
     pthread_mutex_unlock(&groupData->mutexGc);
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Macro: PlatEnterProtectRoots
  *
- * PlatEnterProtectRoots --
+ *	Enter protected section around root management structures.
  *
- *	Enter protected section for root management.
- *
- * Results:
- *	None.
+ * Argument:
+ *	data	- Group-specific data.
  *
  * Side effects:
  *	Blocks until no thread owns the section.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<PlatLeaveProtectRoots>, <EnterProtectRoots>
+ *---------------------------------------------------------------------------*/
 
 void
 PlatEnterProtectRoots(
@@ -551,21 +569,20 @@ PlatEnterProtectRoots(
     pthread_mutex_lock(&groupData->mutexRoots);
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Macro: PlatLeaveProtectRoots
  *
- * PlatLeaveProtectRoots --
+ *	Leave protected section around root management structures.
  *
- *	Leave protected section for root management.
- *
- * Results:
- *	None.
+ * Argument:
+ *	data	- Group-specific data.
  *
  * Side effects:
  *	May unblock any thread waiting for the section.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<PlatEnterProtectRoots>, <LeaveProtectRoots>
+ *---------------------------------------------------------------------------*/
 
 void
 PlatLeaveProtectRoots(GroupData *data)
@@ -574,21 +591,20 @@ PlatLeaveProtectRoots(GroupData *data)
     pthread_mutex_unlock(&groupData->mutexRoots);
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Macro: PlatEnterProtectDirties
  *
- * PlatEnterProtectDirties --
+ *	Enter protected section around dirty page management structures.
  *
- *	Enter protected section for dirty page management.
- *
- * Results:
- *	None.
+ * Argument:
+ *	data	- Group-specific data.
  *
  * Side effects:
  *	Blocks until no thread owns the section.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<PlatLeaveProtectDirties>, <EnterProtectDirtiess>
+ *---------------------------------------------------------------------------*/
 
 void
 PlatEnterProtectDirties(GroupData *data)
@@ -597,21 +613,20 @@ PlatEnterProtectDirties(GroupData *data)
     pthread_mutex_lock(&groupData->mutexDirties);
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Macro: PlatLeaveProtectDirties
  *
- * PlatLeaveProtectRoots --
+ *	Leave protected section around dirty page management structures.
  *
- *	Leave protected section for root management.
- *
- * Results:
- *	None.
+ * Argument:
+ *	data	- Group-specific data.
  *
  * Side effects:
  *	May unblock any thread waiting for the section.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<PlatEnterProtectDirties>, <LeaveProtectDirties>
+ *---------------------------------------------------------------------------*/
 
 void
 PlatLeaveProtectDirties(GroupData *data)
@@ -620,21 +635,84 @@ PlatLeaveProtectDirties(GroupData *data)
     pthread_mutex_unlock(&groupData->mutexDirties);
 }
 
-/*
- *---------------------------------------------------------------------------
+
+/****************************************************************************
+ * Internal Group: System Page Allocation
  *
- * Init --
+ *  Memory is allocated with mmap in anonymous mode, which manages single pages.
+ ****************************************************************************/
+
+static size_t shiftPage;
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatSysPageAlloc
  *
- *	Initialization routine. Called through pthread_once.
+ *	Allocate system pages.
  *
- * Results:
- *	True.
+ * Argument:
+ *	number	- Number of system pages to alloc.
+ *
+ * Result:
+ *	The allocated system pages' base address.
+ *
+ * See also:
+ *	<PlatSysPageFree>
+ *---------------------------------------------------------------------------*/
+
+void * 
+PlatSysPageAlloc(
+    size_t number)
+{
+    void * page = mmap(NULL, number << shiftPage, PROT_READ | PROT_WRITE, 
+	    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (page == MAP_FAILED) {
+	/* TODO: exception handling. */
+	return NULL;
+    }
+
+    return page;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatSysPageFree
+ *
+ *	Free system pages.
+ *
+ * Arguments:
+ *	page	- Base address of the pages to free.
+ *	number	- Number of pages to free.
+ *
+ * Side Effects:
+ *	May release virtual ranges.
+ *
+ * See also:
+ *	<PlatSysPageAlloc>
+ *---------------------------------------------------------------------------*/
+
+void 
+PlatSysPageFree(
+    void * page,
+    size_t number)
+{
+    munmap(page, number << shiftPage);
+}
+
+
+/****************************************************************************
+ * Internal Group: Initialization/Cleanup
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: Init
+ *
+ *	Initialization routine. Called through pthread_once on <once>.
  *
  * Side effects:
- *	Create thread-local storage key. Note: key is never freed.
+ *	Create thread-specific data key <tsdKey> (never freed).
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<PlatEnter>
+ *---------------------------------------------------------------------------*/
 
 static void
 Init()
@@ -646,4 +724,3 @@ Init()
     systemPageSize = sysconf(_SC_PAGESIZE);
     shiftPage = LOG2(systemPageSize);
 }
-

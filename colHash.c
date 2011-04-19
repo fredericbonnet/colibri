@@ -1,3 +1,17 @@
+/*
+ * File: colHash.c
+ *
+ *	This file implements the hash map handling features of Colibri.
+ *
+ *	Hash maps are an implementation of generic maps that uses key hashing 
+ *	and flat bucket arrays for string and integer keys.
+ *
+ *	They are always mutable.
+ *
+ * See also:
+ *	<colHash.h>
+ */
+
 #include "colibri.h"
 #include "colInternal.h"
 
@@ -5,24 +19,68 @@
 #include <limits.h>
 #include <string.h>
 
-
 /*
- * Integer key "randomization" by multiplication with a large prime. Given that 
- * multiplication by an odd number is reversible, this guarantees no collision.
+ * Prototypes for functions used only in this file.
  */
 
-#define RANDOMIZE_KEY(i) (((unsigned int) (i))*1610612741)
+static Col_RopeChunksTraverseProc HashChunkProc;
+static Col_HashProc HashString;
+static void		AllocBuckets(Col_Word map, size_t capacity);
+static int		GrowHashMap(Col_Word map, Col_HashProc proc);
+static int		GrowIntHashMap(Col_Word map);
 
-/*
- * Constants controlling the behavior of hash tables.
- */
 
-#define LOAD_FACTOR 1
-#define GROW_FACTOR 4
+/****************************************************************************
+ * Internal Group: Internal Definitions
+ ****************************************************************************/
 
-/*
- * Bucket access.
- */
+/*---------------------------------------------------------------------------
+ * Internal Macro: RANDOMIZE_KEY
+ *
+ *	Integer key "randomization" by multiplication with a large prime. Given 
+ *	that multiplication by an odd number is reversible on 2's complement
+ *	integer representations, this guarantees no collision.
+ *---------------------------------------------------------------------------*/
+
+#define RANDOMIZE_KEY(i) \
+    (((uintptr_t) (i))*1610612741)
+
+/*---------------------------------------------------------------------------
+ * Internal Constants: Bucket Array Growth Control
+ *
+ *	Constants controlling the behavior of hash tables.
+ *
+ *  LOAD_FACTOR	- Grow bucket container when size exceeds bucket size times
+ *		  this load factor.
+ *  GROW_FACTOR - When growing bucket container, multiply current size by this
+ *		  grow factor.
+ *
+ * See also:
+ *	<GrowHashMap>, <GrowIntHashMap>
+ *---------------------------------------------------------------------------*/
+
+#define LOAD_FACTOR \
+    1
+#define GROW_FACTOR \
+    4
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: GET_BUCKETS
+ *
+ *	Bucket access. Get bucket array regardless of whether it is stored in 
+ *	static space or in a separate vector word.
+ *
+ * Arguments:
+ *	map		- Map to get bucket array for.
+ *	nBuckets	- Size of bucket array.
+ *	buckets		- Bucket array.
+ *	bucketParent	- Parent word of bucket container. Used during 
+ *			  modification (see <Col_WordSetModified>).
+ *
+ * Results:
+ *	Bucket array info through nbBuckets, buckets and bucketParent argument 
+ *	variables.
+ *---------------------------------------------------------------------------*/
 
 #define GET_BUCKETS(map, nbBuckets, buckets, bucketParent) \
     if (WORD_HASHMAP_BUCKETS(map)) { \
@@ -36,37 +94,46 @@
 	(bucketParent) = map; \
     }
 
-/*
- * Prototypes for functions used only in this file.
- */
-
-static Col_RopeChunksTraverseProc HashChunkProc;
-static Col_HashProc HashString;
-static void		AllocBuckets(Col_Word map, size_t capacity);
-static int		GrowStringHashMap(Col_Word map);
-static int		GrowIntHashMap(Col_Word map);
-
-
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Macro: STRING_HASH
  *
- * HashChunkProc --
+ *	String hash value computation. Uses the same algorithm as Tcl's string 
+ *	hash tables (HashStringKey).
  *
- *	Rope traversal proc that computes its hash value.
+ * Arguments:
+ *	hash	- Hash value.
+ *	c	- Character codepoint.
  *
- *	Uses the same algorithm as Tcl's string hash tables (HashStringKey).
+ * Result:
+ *	Hash value through hash argument variable.
  *
- * Results:
- *	Always zero.
- *
- * Side effects:
- *	Modifies unsigned int value pointed to by clientData.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<HashChunkProc>
+ *---------------------------------------------------------------------------*/
 
 #define STRING_HASH(hash, c) \
     (hash) += ((hash)<<3)+(c)
+
+/*---------------------------------------------------------------------------
+ * Internal Function: HashChunkProc
+ *
+ *	Rope traversal proc that computes its hash value. Called on 
+ *	<Col_TraverseRopeChunks> by <HashString>. Follows 
+ *	<Col_RopeChunksTraverseProc> signature.
+ *
+ * Arguments:
+ *	index		- Rope-relative index where chunks begin.
+ *	length		- Length of chunks.
+ *	number		- Number of chunks. Always 1.
+ *	chunks		- Array of chunks. First element never NULL.
+ *	clientData	- Points to hash value.
+ *
+ * Result:
+ *	Always zero, hash value returned through clientData.
+ *
+ * See also:
+ *	<STRING_HASH>, <HashString>, <Col_TraverseRopeChunks>
+ *---------------------------------------------------------------------------*/
 
 static int 
 HashChunkProc(
@@ -77,7 +144,7 @@ HashChunkProc(
     Col_ClientData clientData)
 {
     size_t i;
-    unsigned int hash = *(unsigned int *) clientData;
+    intptr_t hash = *(uintptr_t *) clientData;
     ASSERT(number == 1);
     switch (chunks->format) {
 	case COL_UCS1: {
@@ -113,111 +180,59 @@ HashChunkProc(
 	    break;
 	}
     }
-    *(unsigned int *) clientData = hash;
+    *(uintptr_t *) clientData = hash;
     return 0;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: HashString
  *
- * HashString --
+ *	Compute a string key hash value. Uses <Col_TraverseRopeChunks> with
+ *	traversal proc <HashChunkProc>. Follows <Col_HashProc> signature.
  *
- *	Compute a string key hash value.
- *
- * Results:
+ * Result:
  *	The given rope's hash value.
  *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<HashString>, <Col_TraverseRopeChunks>
+ *---------------------------------------------------------------------------*/
 
-static unsigned int 
+static uintptr_t 
 HashString(
     Col_Word key)
 {
-    unsigned int hash = 0;
+    uintptr_t hash = 0;
     Col_TraverseRopeChunks(1, &key, 0, SIZE_MAX, HashChunkProc, &hash, NULL);
     return hash;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: GrowHashMap
  *
- * AllocBuckets --
+ *	Resize a hash map bucket container. Size won't grow past a given limit.
+ *	As the bucket container is a mutable vector, this limit matches the 
+ *	maximum mutable vector length.
  *
- *	Allocate bucket container having the given minimum capacity, rounded
- *	up to a power of 2.
+ * Arguments:
+ *	map	- Hash map to grow.
+ *	proc	- Hash proc to apply on keys.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	May allocate memory cells, modifies given cells.
- *
- *---------------------------------------------------------------------------
- */
-
-static void
-AllocBuckets(
-    Col_Word map,		/* Map to allocate buckets for. */
-    size_t capacity)		/* Initial bucket size. */
-{
-    if (capacity <= HASHMAP_STATICBUCKETS_SIZE) {
-	/*
-	 * Use static buckets.
-	 */
-
-	Col_Word *buckets = WORD_HASHMAP_STATICBUCKETS(map);
-	memset(buckets, 0, sizeof(*buckets) * HASHMAP_STATICBUCKETS_SIZE);
-    } else {
-	/*
-	 * Store buckets in mutable vector (round capacity to the next power of 
-	 * 2).
-	 * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 
-	 */
-
-	capacity--;
-	capacity |= capacity >> 1;
-	capacity |= capacity >> 2;
-	capacity |= capacity >> 4;
-	capacity |= capacity >> 8;
-	capacity |= capacity >> 16;
-	capacity++;
-
-	WORD_HASHMAP_BUCKETS(map) = Col_NewMVector(capacity, capacity, NULL);
-	ASSERT(WORD_TYPE(WORD_HASHMAP_BUCKETS(map)) == WORD_TYPE_MVECTOR);
-    }
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * GrowStringHashMap --
- * GrowIntHashMap --
- *
- *	Resize a string hash map bucket container. Size won't grow past a
- *	given limit. As the bucket container is a mutable vector, this limit 
- *	matches the maximum mutable vector length.
- *
- * Results:
+ * Result:
  *	Whether the bucket container was resized or not. 
  *
  * Side effects:
  *	Bucket container may be resized.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 static int
-GrowStringHashMap(
-    Col_Word map)		/* String hash map to grow. */
+GrowHashMap(
+    Col_Word map,
+    Col_HashProc proc)
 {
     Col_Word *buckets, *newBuckets, newBucketContainer, entry, dummy;
     size_t nbBuckets, newNbBuckets;
-    unsigned int hash, index, newIndex;
-    int key;
+    uintptr_t hash, index, newIndex;
+    Col_Word key;
 
     /*
      * Create a new bucket container.
@@ -256,9 +271,9 @@ GrowStringHashMap(
 
 	    buckets[index] = WORD_MAPENTRY_NEXT(entry);
 
-	    key = WORD_INTMAPENTRY_KEY(entry);
+	    key = WORD_MAPENTRY_KEY(entry);
 	    //TODO: optimize hash computation when possible by combining masked & modulo values?
-	    hash = HashString(key);
+	    hash = proc(key);
 	    newIndex = hash & (newNbBuckets-1);
 	    WORD_MAPENTRY_NEXT(entry) = newBuckets[newIndex];
 	    newBuckets[newIndex] = entry;
@@ -274,14 +289,31 @@ GrowStringHashMap(
     return 1;
 }
 
+/*---------------------------------------------------------------------------
+ * Internal Function: GrowIntHashMap
+ *
+ *	Resize an integer hash map bucket container. Size won't grow past a 
+ *	given limit. As the bucket container is a mutable vector, this limit 
+ *	matches the maximum mutable vector length.
+ *
+ * Arguments:
+ *	map	- Integer hash map to grow.
+ *
+ * Result:
+ *	Whether the bucket container was resized or not. 
+ *
+ * Side effects:
+ *	Bucket container may be resized.
+ *---------------------------------------------------------------------------*/
+
 static int
 GrowIntHashMap(
-    Col_Word map)		/* Integer hash map to grow. */
+    Col_Word map)
 {
     Col_Word *buckets, *newBuckets, newBucketContainer, entry, dummy;
     size_t nbBuckets, newNbBuckets;
-    unsigned int index, newIndex;
-    int key;
+    uintptr_t index, newIndex;
+    intptr_t key;
 
     /*
      * Create a new bucket container.
@@ -336,25 +368,79 @@ GrowIntHashMap(
     return 1;
 }
 
-/*
- *---------------------------------------------------------------------------
+
+/****************************************************************************
+ * Group: Hash Map Creation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: AllocBuckets
  *
- * Col_NewStringHashMap --
+ *	Allocate bucket container having the given minimum capacity, rounded
+ *	up to a power of 2.
+ *
+ * Arguments:
+ *	map		- Map to allocate buckets for.
+ *	capacity	- Initial bucket size.
+ *
+ * Side effects:
+ *	May allocate memory cells.
+ *
+ * See also:
+ *	<Col_NewStringHashMap>, <Col_NewIntHashMap>
+ *---------------------------------------------------------------------------*/
+
+static void
+AllocBuckets(
+    Col_Word map,
+    size_t capacity)
+{
+    if (capacity <= HASHMAP_STATICBUCKETS_SIZE) {
+	/*
+	 * Use static buckets.
+	 */
+
+	Col_Word *buckets = WORD_HASHMAP_STATICBUCKETS(map);
+	memset(buckets, 0, sizeof(*buckets) * HASHMAP_STATICBUCKETS_SIZE);
+    } else {
+	/*
+	 * Store buckets in mutable vector (round capacity to the next power of 
+	 * 2).
+	 * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 
+	 */
+
+	capacity--;
+	capacity |= capacity >> 1;
+	capacity |= capacity >> 2;
+	capacity |= capacity >> 4;
+	capacity |= capacity >> 8;
+	capacity |= capacity >> 16;
+	capacity++;
+
+	WORD_HASHMAP_BUCKETS(map) = Col_NewMVector(capacity, capacity, NULL);
+	ASSERT(WORD_TYPE(WORD_HASHMAP_BUCKETS(map)) == WORD_TYPE_MVECTOR);
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_NewStringHashMap
  *
  *	Create a new string hash map word.
  *
- * Results:
+ * Argument:
+ *	capacity	- Initial bucket size. Rounded up to the next power of
+ *			  2.
+ *
+ * Result:
  *	The new word.
  *
  * Side effects:
  *	Allocates memory cells.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_NewStringHashMap(
-    size_t capacity)		/* Initial bucket size. */
+    size_t capacity)
 {
     Col_Word map;
     
@@ -365,27 +451,59 @@ Col_NewStringHashMap(
     return map;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_NewIntHashMap
  *
- * Col_StringHashMapGet --
+ *	Create a new integer hash map word.
+ *
+ * Argument:
+ *	capacity	- Initial bucket size. Rounded up to the next power of
+ *			  2.
+ *
+ * Result:
+ *	The new word.
+ *
+ * Side effects:
+ *	Allocates memory cells.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_NewIntHashMap(
+    size_t capacity)
+{
+    Col_Word map;
+    
+    map = (Col_Word) AllocCells(HASHMAP_NBCELLS);
+    WORD_INTHASHMAP_INIT(map);
+    AllocBuckets(map, capacity);
+
+    return map;
+}
+
+/****************************************************************************
+ * Group: Hash Map Access
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_StringHashMapGet
  *
  *	Get value mapped to the given string key if present.
  *
- * Results:
- *	Whether the key was found in the map.
+ * Arguments:
+ *	map		- String hash map to get entry from.
+ *	key		- String entry key.
+ *	valuePtr	- Returned entry value, if found.
  *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ * Result:
+ *	Whether the key was found in the map. In this case the value is returned
+ *	through valuePtr.
+ *---------------------------------------------------------------------------*/
 
 int
 Col_StringHashMapGet(
-    Col_Word map,		/* String hash map to get entry from. */ 
-    Col_Word key, 		/* Entry key. */
-    Col_Word *valuePtr)		/* Pointer to entry value, if found. */
+    Col_Word map,
+    Col_Word key,
+    Col_Word *valuePtr)
 {
     Col_Word entry = Col_StringHashMapFindEntry(map, key, NULL);
     if (entry) {
@@ -397,27 +515,59 @@ Col_StringHashMapGet(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_IntHashMapGet
  *
- * Col_StringHashMapSet --
+ *	Get value mapped to the given integer key if present.
  *
- *	Map the value to the key, replacing any existing.
+ * Arguments:
+ *	map		- Integer hash map to get entry from.
+ *	key		- Integer entry key.
+ *	valuePtr	- Returned entry value, if found.
  *
- * Results:
+ * Result:
+ *	Whether the key was found in the map. In this case the value is returned
+ *	through valuePtr.
+ *---------------------------------------------------------------------------*/
+
+int
+Col_IntHashMapGet(
+    Col_Word map,
+    intptr_t key,
+    Col_Word *valuePtr)
+{
+    Col_Word entry = Col_IntHashMapFindEntry(map, key, NULL);
+    if (entry) {
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+	*valuePtr = WORD_MAPENTRY_VALUE(entry);
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_StringHashMapSet
+ *
+ *	Map the value to the string key, replacing any existing.
+ *
+ * Arguments:
+ *	map	- String hash map to insert entry into.
+ *	key	- String entry key.
+ *	value	- Entry value.
+ *
+ * Result:
  *	Whether a new entry was created.
  *
  * Side effects:
- *	May allocate cells or replace value in the map.
- *
- *---------------------------------------------------------------------------
- */
+ *	May allocate memory cells.
+ *---------------------------------------------------------------------------*/
 
 int
 Col_StringHashMapSet(
-    Col_Word map, 		/* String hash map to insert entry into. */
-    Col_Word key, 		/* Entry key. */
-    Col_Word value)		/* Entry value. */
+    Col_Word map,
+    Col_Word key,
+    Col_Word value)
 {
     int create = 1;
     Col_Word entry = Col_StringHashMapFindEntry(map, key, &create);
@@ -428,30 +578,59 @@ Col_StringHashMapSet(
     return create;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_IntHashMapSet
  *
- * Col_StringHashMapUnset --
+ *	Map the value to the integer key, replacing any existing.
  *
- *	Remove any value mapped to the given key.
+ * Arguments:
+ *	map	- Integer hash map to insert entry into.
+ *	key	- Integer entry key.
+ *	value	- Entry value.
  *
- * Results:
- *	Whether an existing entry was removed.
+ * Result:
+ *	Whether a new entry was created.
  *
  * Side effects:
- *	May remove value in the map.
+ *	May allocate memory cells.
+ *---------------------------------------------------------------------------*/
+
+int
+Col_IntHashMapSet(
+    Col_Word map,
+    intptr_t key,
+    Col_Word value)
+{
+    int create = 1;
+    Col_Word entry = Col_IntHashMapFindEntry(map, key, &create);
+    ASSERT(entry);
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+    Col_WordSetModified(entry);
+    WORD_MAPENTRY_VALUE(entry) = value;
+    return create;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_StringHashMapUnset
  *
- *---------------------------------------------------------------------------
- */
+ *	Remove any value mapped to the given string key.
+ *
+ * Arguments:
+ *	map	- String hash map to remove entry from.
+ *	key	- String entry key.
+ *
+ * Result:
+ *	Whether an existing entry was removed.
+ *---------------------------------------------------------------------------*/
 
 int
 Col_StringHashMapUnset(
-    Col_Word map, 		/* String hash map to remove entry from. */
-    Col_Word key) 		/* Entry key. */
+    Col_Word map,
+    Col_Word key)
 {
     Col_Word *buckets, parent, *prevPtr, entry;
     size_t nbBuckets;
-    unsigned int hash, index;
+    uintptr_t hash, index;
 
     if (WORD_TYPE(map) != WORD_TYPE_STRHASHMAP) {
 	Col_Error(COL_ERROR, "%x is not a string hash map", map);
@@ -497,36 +676,97 @@ Col_StringHashMapUnset(
     return 0;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_IntHashMapUnset
  *
- * Col_StringHashMapFindEntry --
+ *	Remove any value mapped to the given integer key.
  *
- *	Find or create the entry mapped to the given key.
+ * Arguments:
+ *	map	- Integer hash map to remove entry from.
+ *	key	- Integer entry key.
  *
- * Results:
+ * Result:
+ *	Whether an existing entry was removed.
+ *---------------------------------------------------------------------------*/
+
+int
+Col_IntHashMapUnset(
+    Col_Word map,
+    intptr_t key)
+{
+    Col_Word *buckets, parent, *prevPtr, entry;
+    size_t nbBuckets;
+    uintptr_t index;
+
+    if (WORD_TYPE(map) != WORD_TYPE_INTHASHMAP) {
+	Col_Error(COL_ERROR, "%x is not an integer hash map", map);
+	return 0;
+    }
+
+    /*
+     * Search for matching entry.
+     *
+     * Note: bucket size is always a power of 2.
+     */
+
+    GET_BUCKETS(map, nbBuckets, buckets, parent);
+    ASSERT(!(nbBuckets & (nbBuckets-1)));
+    index = RANDOMIZE_KEY(key) & (nbBuckets-1);
+    prevPtr = &buckets[index];
+    while (*prevPtr) {
+	entry = *prevPtr;
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+
+	if (WORD_INTMAPENTRY_KEY(entry) == key) {
+	    /*
+	     * Found! Unlink & remove entry.
+	     */
+
+	    *prevPtr = WORD_MAPENTRY_NEXT(entry);
+	    Col_WordSetModified(parent);
+	    WORD_HASHMAP_SIZE(map)--;
+	    return 1;
+	}
+
+	parent = entry;
+	prevPtr = &WORD_MAPENTRY_NEXT(entry);
+    }
+
+    /*
+     * Not found.
+     */
+
+    return 0;
+}
+
+/****************************************************************************
+ * Group: Hash Map Entries
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_StringHashMapFindEntry
+ *
+ *	Find or create in string hash map the entry mapped to the given key.
+ *
+ * Arguments:
+ *	map		- String hash map to find or create entry into.
+ *	key		- String entry key.
+ *	createPtr	- In: if non-NULL, whether to create entry if absent.
+ *			  Out: if non-NULL, whether a new entry was created. 
+ *
+ * Result:
  *	The entry if found or created, else nil.
- *
- * Side effects:
- *	If createPtr is non-NULL and the pointed value is non-zero, set to 1 
- *	if a new entry was created, else zero.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_StringHashMapFindEntry(
-    Col_Word map, 		/* Integer hash map to find or create entry 
-				 * into. */
-    Col_Word key, 		/* Entry key. */
-    int *createPtr)		/* In: if non-NULL, whether to create entry if 
-				 * absent.
-				 * Out: if non-NULL, whether a new entry was 
-				 * created. */
+    Col_Word map,
+    Col_Word key,
+    int *createPtr)
 {
     Col_Word *buckets, bucketParent, entry;
     size_t nbBuckets;
-    unsigned int hash, index;
+    uintptr_t hash, index;
 
     if (WORD_TYPE(map) != WORD_TYPE_STRHASHMAP) {
 	Col_Error(COL_ERROR, "%x is not a string hash map", map);
@@ -570,7 +810,7 @@ Col_StringHashMapFindEntry(
     *createPtr = 1;
 
     if (WORD_HASHMAP_SIZE(map) >= nbBuckets * LOAD_FACTOR
-	    && GrowStringHashMap(map)) {
+	    && GrowHashMap(map, HashString)) {
 	/*
 	 * Grow map and insert again.
 	 */
@@ -592,194 +832,30 @@ Col_StringHashMapFindEntry(
     return entry;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_IntHashMapFindEntry
  *
- * Col_NewIntHashMap --
+ *	Find or create in integer hash map the entry mapped to the given key.
  *
- *	Create a new integer hash map word.
+ * Arguments:
+ *	map		- Integer hash map to find or create entry into.
+ *	key		- Integer entry key.
+ *	createPtr	- In: if non-NULL, whether to create entry if absent.
+ *			  Out: if non-NULL, whether a new entry was created. 
  *
- * Results:
- *	The new word.
- *
- * Side effects:
- *	Allocates memory cells.
- *
- *---------------------------------------------------------------------------
- */
-
-Col_Word
-Col_NewIntHashMap(
-    size_t capacity)		/* Initial bucket size. */
-{
-    Col_Word map;
-    
-    map = (Col_Word) AllocCells(HASHMAP_NBCELLS);
-    WORD_INTHASHMAP_INIT(map);
-    AllocBuckets(map, capacity);
-
-    return map;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_IntHashMapGet --
- *
- *	Get value mapped to the given integer key if present.
- *
- * Results:
- *	Whether the key was found in the map.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
-
-int
-Col_IntHashMapGet(
-    Col_Word map,		/* Integer hash map to get entry from. */ 
-    int key, 			/* Entry key. */
-    Col_Word *valuePtr)		/* Pointer to entry value, if found. */
-{
-    Col_Word entry = Col_IntHashMapFindEntry(map, key, NULL);
-    if (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
-	*valuePtr = WORD_MAPENTRY_VALUE(entry);
-	return 1;
-    } else {
-	return 0;
-    }
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_IntHashMapSet --
- *
- *	Map the value to the key, replacing any existing.
- *
- * Results:
- *	Whether a new entry was created.
- *
- * Side effects:
- *	May allocate cells or replace value in the map.
- *
- *---------------------------------------------------------------------------
- */
-
-int
-Col_IntHashMapSet(
-    Col_Word map, 		/* Integer hash map to insert entry into. */
-    int key, 			/* Entry key. */
-    Col_Word value)		/* Entry value. */
-{
-    int create = 1;
-    Col_Word entry = Col_IntHashMapFindEntry(map, key, &create);
-    ASSERT(entry);
-    ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
-    Col_WordSetModified(entry);
-    WORD_MAPENTRY_VALUE(entry) = value;
-    return create;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_IntHashMapUnset --
- *
- *	Remove any value mapped to the given key.
- *
- * Results:
- *	Whether an existing entry was removed.
- *
- * Side effects:
- *	May remove value in the map.
- *
- *---------------------------------------------------------------------------
- */
-
-int
-Col_IntHashMapUnset(
-    Col_Word map, 		/* Integer hash map to remove entry from. */
-    int key) 			/* Entry key. */
-{
-    Col_Word *buckets, parent, *prevPtr, entry;
-    size_t nbBuckets;
-    unsigned int index;
-
-    if (WORD_TYPE(map) != WORD_TYPE_INTHASHMAP) {
-	Col_Error(COL_ERROR, "%x is not an integer hash map", map);
-	return 0;
-    }
-
-    /*
-     * Search for matching entry.
-     *
-     * Note: bucket size is always a power of 2.
-     */
-
-    GET_BUCKETS(map, nbBuckets, buckets, parent);
-    ASSERT(!(nbBuckets & (nbBuckets-1)));
-    index = RANDOMIZE_KEY(key) & (nbBuckets-1);
-    prevPtr = &buckets[index];
-    while (*prevPtr) {
-	entry = *prevPtr;
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
-
-	if (WORD_INTMAPENTRY_KEY(entry) == key) {
-	    /*
-	     * Found! Unlink & remove entry.
-	     */
-
-	    *prevPtr = WORD_MAPENTRY_NEXT(entry);
-	    Col_WordSetModified(parent);
-	    WORD_HASHMAP_SIZE(map)--;
-	    return 1;
-	}
-
-	parent = entry;
-	prevPtr = &WORD_MAPENTRY_NEXT(entry);
-    }
-
-    /*
-     * Not found.
-     */
-
-    return 0;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_IntTrieMapFindEntry --
- *
- *	Find or create the entry mapped to the given key.
- *
- * Results:
+ * Result:
  *	The entry if found or created, else nil.
- *
- * Side effects:
- *	If createPtr is non-NULL and the pointed value is non-zero, set to 1 
- *	if a new entry was created, else zero.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_IntHashMapFindEntry(
-    Col_Word map, 		/* Integer hash map to find or create entry 
-				 * into. */
-    int key, 			/* Entry key. */
-    int *createPtr)		/* In: if non-NULL, whether to create entry if 
-				 * absent.
-				 * Out: if non-NULL, whether a new entry was 
-				 * created. */
+    Col_Word map,
+    intptr_t key,
+    int *createPtr)
 {
     Col_Word *buckets, bucketParent, entry;
     size_t nbBuckets;
-    unsigned int index;
+    uintptr_t index;
 
     if (WORD_TYPE(map) != WORD_TYPE_INTHASHMAP) {
 	Col_Error(COL_ERROR, "%x is not an integer hash map", map);
@@ -842,27 +918,25 @@ Col_IntHashMapFindEntry(
     return entry;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_HashMapIterBegin --
+/****************************************************************************
+ * Group: Hash Map Iterators
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_HashMapIterBegin
  *
  *	Initialize the hash map iterator so that it points to the first entry
  *	within the map.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	Iterator will point to the first entry in map.
- *
- *---------------------------------------------------------------------------
- */
+ * Arguments:
+ *	map	- Hash map to iterate over.
+ *	it	- Iterator to initialize.
+ *---------------------------------------------------------------------------*/
 
 void
 Col_HashMapIterBegin(
-    Col_Word map,		/* Map to iterate over. */
-    Col_MapIterator *it)	/* Iterator to initialize. */
+    Col_Word map,
+    Col_MapIterator *it)
 {
     Col_Word *buckets, dummy;
     size_t nbBuckets, i;
@@ -906,25 +980,18 @@ Col_HashMapIterBegin(
     it->map = WORD_NIL;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_HashMapIterNext --
+/*---------------------------------------------------------------------------
+ * Function: Col_HashMapIterNext
  *
  *	Move the iterator to the next element.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	Update the iterator.
- *
- *---------------------------------------------------------------------------
- */
+ * Argument:
+ *	it	- The iterator to move.
+ *---------------------------------------------------------------------------*/
 
 void
 Col_HashMapIterNext(
-    Col_MapIterator *it)	/* The iterator to move. */
+    Col_MapIterator *it)
 {
     Col_Word *buckets, dummy;
     size_t nbBuckets, i;

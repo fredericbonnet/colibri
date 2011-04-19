@@ -1,20 +1,42 @@
+/*
+ * File: colUtils.h
+ *
+ *	This header file defines various utility macros used throughout Colibri.
+ */
+
 #ifndef _COLIBRI_UTILS
 #define _COLIBRI_UTILS
 
-/*
- * Various macro utilities.
- */
+/*---------------------------------------------------------------------------
+ * Macro: COL_STRINGIZE
+ *
+ *	Turn argument into a C string.
+ *---------------------------------------------------------------------------*/
 
-#define COL_STRINGIZE(arg) #arg
+#define COL_STRINGIZE(arg) \
+    #arg
 
-#define COL_CONCATENATE(arg1, arg2)   COL_CONCATENATE1(arg1, arg2)
-#define COL_CONCATENATE1(arg1, arg2)  COL_CONCATENATE2(arg1, arg2)
-#define COL_CONCATENATE2(arg1, arg2)  arg1##arg2
+/*---------------------------------------------------------------------------
+ * Macro: COL_CONCATENATE
+ *
+ *	Concatenates both arguments.
+ *---------------------------------------------------------------------------*/
 
-/*
- * Macro hackery for getting the number of args in a variadic macro (limited to
- * 63) and iterating over these args. See:
- *	http://groups.google.com/group/comp.std.c/browse_thread/thread/77ee8c8f92e4a3fb/346fc464319b1ee5?pli=1
+#define COL_CONCATENATE(arg1, arg2) \
+    COL_CONCATENATE1(arg1, arg2)
+#define COL_CONCATENATE1(arg1, arg2) \
+    COL_CONCATENATE2(arg1, arg2)
+#define COL_CONCATENATE2(arg1, arg2) \
+    arg1##arg2
+
+/*---------------------------------------------------------------------------
+ * Macro: COL_ARGCOUNT
+ *
+ *	Macro hackery for getting the number of args in a variadic macro 
+ *	(limited to 63) and iterating over these args. 
+ *
+ * See:
+ *	<http://groups.google.com/group/comp.std.c/browse_thread/thread/77ee8c8f92e4a3fb/346fc464319b1ee5?pli=1>
  */
 
 #define COL_LASTARG( \

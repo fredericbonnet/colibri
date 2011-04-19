@@ -1,0 +1,124 @@
+Format: 1.51
+
+
+Title: Colibri
+SubTitle: Internal Documentation
+
+Footer: Copyright (C) 2010 Frédéric Bonnet
+
+# You can add a timestamp to your documentation like one of these:
+# Timestamp: Generated on month day, year
+# Timestamp: Updated mm/dd/yyyy
+# Timestamp: Last updated mon day
+#
+#   m     - One or two digit month.  January is "1"
+#   mm    - Always two digit month.  January is "01"
+#   mon   - Short month word.  January is "Jan"
+#   month - Long month word.  January is "January"
+#   d     - One or two digit day.  1 is "1"
+#   dd    - Always two digit day.  1 is "01"
+#   day   - Day with letter extension.  1 is "1st"
+#   yy    - Two digit year.  2006 is "06"
+#   yyyy  - Four digit year.  2006 is "2006"
+#   year  - Four digit year.  2006 is "2006"
+
+
+# --------------------------------------------------------------------------
+# 
+# Cut and paste the lines below to change the order in which your files
+# appear on the menu.  Don't worry about adding or removing files, Natural
+# Docs will take care of that.
+# 
+# You can further organize the menu by grouping the entries.  Add a
+# "Group: [name] {" line to start a group, and add a "}" to end it.
+# 
+# You can add text and web links to the menu by adding "Text: [text]" and
+# "Link: [name] ([URL])" lines, respectively.
+# 
+# The formatting and comments are auto-generated, so don't worry about
+# neatness when editing the file.  Natural Docs will clean it up the next
+# time it is run.  When working with groups, just deal with the braces and
+# forget about the indentation and comments.
+# 
+# --------------------------------------------------------------------------
+
+
+Group: Public Headers  {
+
+   Group: General  {
+
+      Text: Including <colibri.h> will include all other files.
+      File: colibri.h  (colibri.h)
+      File: colUtils.h  (colUtils.h)
+      }  # Group: General
+
+   Group: Words  {
+
+      File: colWord.h  (colWord.h)
+      }  # Group: Words
+
+   Group: Strings and Ropes  {
+
+      File: colRope.h  (colRope.h)
+      }  # Group: Strings and Ropes
+
+   Group: Containers  {
+
+      Group: Vectors and Lists  {
+
+         File: colVector.h  (colVector.h)
+         File: colList.h  (colList.h)
+         }  # Group: Vectors and Lists
+
+      Group: Maps  {
+
+         File: colMap.h  (colMap.h)
+         File: colHash.h  (colHash.h)
+         File: colTrie.h  (colTrie.h)
+         }  # Group: Maps
+
+      }  # Group: Containers
+
+   }  # Group: Public Headers
+
+Group: Internal Headers  {
+
+   File: colConf.h  (colConf.h)
+   File: colInternal.h  (colInternal.h)
+   File: colPlatform.h  (colPlatform.h)
+   }  # Group: Internal Headers
+
+Group: Source Files  {
+
+   File: colAlloc.c  (colAlloc.c)
+   File: colGc.c  (colGc.c)
+   File: colHash.c  (colHash.c)
+   File: colList.c  (colList.c)
+   File: colMap.c  (colMap.c)
+   File: colRope.c  (colRope.c)
+   File: colTrie.c  (colTrie.c)
+   File: colVector.c  (colVector.c)
+   File: colWord.c  (colWord.c)
+   File: colibri.c  (colibri.c)
+   }  # Group: Source Files
+
+Group: Platform-Specific Files  {
+
+   File: colUnixPlatform.c  (platform\unix\colUnixPlatform.c)
+   File: colUnixPlatform.h  (platform\unix\colUnixPlatform.h)
+   File: colWin32Platform.c  (platform\win32\colWin32Platform.c)
+   File: colWin32Platform.h  (platform\win32\colWin32Platform.h)
+   }  # Group: Platform-Specific Files
+
+Group: Index  {
+
+   Index: Everything
+   Constant Index: Constants
+   File Index: Files
+   Function Index: Functions
+   Macro Index: Macros
+   Type Index: Types
+   Variable Index: Variables
+   }  # Group: Index
+
+Link: Built with Natural Docs  (http://www.naturaldocs.org)

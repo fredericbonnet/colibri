@@ -28,6 +28,7 @@
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
+				CommandLine=""
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
@@ -86,6 +87,8 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
+				Description="Generating documentation..."
+				CommandLine="doc.bat"
 			/>
 		</Configuration>
 		<Configuration
@@ -101,6 +104,7 @@
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
+				CommandLine=""
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
@@ -160,6 +164,8 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
+				Description="Generating documentation..."
+				CommandLine="doc.bat"
 			/>
 		</Configuration>
 	</Configurations>
@@ -204,6 +210,26 @@
 				>
 			</File>
 			<File
+				RelativePath=".\platform\unix\colUnixPlatform.c"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
 				RelativePath=".\colVector.c"
 				>
 			</File>
@@ -217,14 +243,10 @@
 			</File>
 		</Filter>
 		<Filter
-			Name="Header Files"
+			Name="Public Header Files"
 			Filter="h;hpp;hxx;hm;inl;inc;xsd"
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
-			<File
-				RelativePath=".\colConf.h"
-				>
-			</File>
 			<File
 				RelativePath=".\colHash.h"
 				>
@@ -234,19 +256,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\colInternal.h"
-				>
-			</File>
-			<File
 				RelativePath=".\colList.h"
 				>
 			</File>
 			<File
 				RelativePath=".\colMap.h"
-				>
-			</File>
-			<File
-				RelativePath=".\colPlatform.h"
 				>
 			</File>
 			<File
@@ -266,13 +280,89 @@
 				>
 			</File>
 			<File
-				RelativePath=".\platform\win32\colWin32Platform.h"
-				>
-			</File>
-			<File
 				RelativePath=".\colWord.h"
 				>
 			</File>
+		</Filter>
+		<Filter
+			Name="Internal Header Files"
+			>
+			<File
+				RelativePath=".\colConf.h"
+				>
+			</File>
+			<File
+				RelativePath=".\colInternal.h"
+				>
+			</File>
+			<File
+				RelativePath=".\colPlatform.h"
+				>
+			</File>
+			<File
+				RelativePath=".\platform\unix\colUnixPlatform.h"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath=".\platform\win32\colWin32Platform.h"
+				>
+			</File>
+		</Filter>
+		<Filter
+			Name="Documentation"
+			>
+			<File
+				RelativePath=".\doc.bat"
+				>
+			</File>
+			<Filter
+				Name="Internal"
+				>
+				<File
+					RelativePath=".\InternalDocs\Languages.txt"
+					>
+				</File>
+				<File
+					RelativePath=".\InternalDocs\Menu.txt"
+					>
+				</File>
+				<File
+					RelativePath=".\InternalDocs\Topics.txt"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="Public"
+				>
+				<File
+					RelativePath=".\PublicDocs\Languages.txt"
+					>
+				</File>
+				<File
+					RelativePath=".\PublicDocs\Menu.txt"
+					>
+				</File>
+				<File
+					RelativePath=".\PublicDocs\Topics.txt"
+					>
+				</File>
+			</Filter>
 		</Filter>
 	</Files>
 	<Globals>

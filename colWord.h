@@ -1,48 +1,61 @@
+/*
+ * File: colWord.h
+ *
+ *	This header file defines the word handling features of Colibri.
+ *
+ *	Words are a generic abstract datatype framework used in conjunction with
+ *	the exact generational garbage collector and the cell-based allocator.
+ */
+
 #ifndef _COLIBRI_WORD
 #define _COLIBRI_WORD
 
 #include <stddef.h> /* For size_t, uintptr_t and the like */
-#include <limits.h> /* For INT_MIN */
 
 
-/* 
- * Colibri words are opaque types.
- */
+/****************************************************************************
+ * Group: Word Types
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_Word
+ *
+ *	Colibri words are opaque types.
+ *---------------------------------------------------------------------------*/
 
 typedef uintptr_t Col_Word;
 
-/*
- * Nil is a valid word.
- */
+/*---------------------------------------------------------------------------
+ * Constant: WORD_NIL
+ *
+ *	Nil is a valid word.
+ *---------------------------------------------------------------------------*/
 
 #define WORD_NIL		((Col_Word) 0)
 
-/*
- * String characters use the 32-bit Unicode encoding.
- */
-
-typedef unsigned int Col_Char;
-#define COL_CHAR_INVALID	((Col_Char) -1)
-
-/* 
- * Strings can use various formats. 
+/*---------------------------------------------------------------------------
+ * Enum: Col_WordType
  *
- * Note: we assume that UTF-8 data is always well-formed. It is up to the 
- * caller responsibility to validate and ensure well-formedness of UTF-8 data, 
- * notably for security reasons. 
- */
-
-typedef uint8_t Col_Char1;
-typedef uint16_t Col_Char2;
-typedef uint32_t Col_Char4;
-
-typedef enum Col_StringFormat {
-    COL_UTF8=0, COL_UCS1=1, COL_UCS2=2, COL_UCS4=4
-} Col_StringFormat;
-
-/*
- * Word data types.
- */
+ *	Data types recognized by Colibri.
+ *
+ *  COL_NIL	- Nil.
+ *  COL_CUSTOM	- Custom data type.
+ *  COL_CHAR	- Character.
+ *  COL_STRING	- String (including ropes).
+ *  COL_ROPE	- Custo rope type.
+ *  COL_INT	- Integer
+ *  COL_VECTOR	- Vector.
+ *  COL_MVECTOR	- Mutable vector.
+ *  COL_LIST	- List.
+ *  COL_MLIST	- Mutable list.
+ *  COL_MAP	- Map.
+ *  COL_STRMAP	- String-keyed map.
+ *  COL_INTMAP	- Integer-keyed map.
+ *  COL_HASHMAP	- Custom hash map type.
+ *
+ * See also:
+ *	<Col_GetWordInfo>, <Col_FindWordInfo>
+ *---------------------------------------------------------------------------*/
 
 typedef enum {
     COL_NIL,
@@ -61,75 +74,185 @@ typedef enum {
     COL_HASHMAP
 } Col_WordType;
 
-/*
- * Function types and structures for word types.
- */
-
-typedef size_t (Col_CustomWordSizeProc) (Col_Word word);
-typedef void (Col_CustomWordFreeProc) (Col_Word word);
-typedef void (Col_CustomWordChildEnumProc) (Col_Word word, Col_Word *childPtr, 
-    Col_ClientData clientData);
-typedef void (Col_CustomWordChildrenProc) (Col_Word word, 
-    Col_CustomWordChildEnumProc *proc, Col_ClientData clientData);
-
-typedef struct Col_CustomWordType {
-    Col_WordType type;		/* Type identifier. */
-    const char *name;		/* Name of the type, e.g. "int". */
-    Col_CustomWordSizeProc *sizeProc;	
-				/* Called to get the size of the word. Must 
-				 * be constant during the whole lifetime. */
-    Col_CustomWordFreeProc *freeProc;	
-				/* Called once the word gets collected. NULL if
-				 * not necessary. */
-    Col_CustomWordChildrenProc *childrenProc;
-				/* Called to iterate over the words owned by
-				 * the word, in no special order. Called during
-				 * the garbage collection. Words are movable, 
-				 * so pointer values may be modified in the 
-				 * process. If NULL, do nothing. */
-} Col_CustomWordType;
+/*---------------------------------------------------------------------------
+ * Typedef: Col_WordData
+ *
+ *	Colibri words are opaque types, this structure can be used to get the 
+ *	underlying data of predefined types.
+ *
+ *	This type is a union so only the member matching the actual type is 
+ *	valid.
+ *
+ * Fields:
+ *	ch			- <COL_CHAR>.
+ *	i			- <COL_INT>.
+ *	string			- <COL_STRING>:
+ *	string.format		- Format of the string. See <Col_StringFormat>.
+ *	string.data		- Pointer to format-specific data.
+ *	string.bytelength	- Data length in bytes.
+ *	vector			- <COL_VECTOR>:
+ *	vector.length		- Length of vector.
+ *	vector.elements		- Array of word elements.
+ *	mvector			- <COL_MVECTOR>:
+ *	mvector.maxLength	- Maximum length of vector.
+ *	mvector.length		- Actual length of vector.
+ *	mvector.elements	- Array of word elements.
+ *	custom			- Custom types:
+ *	custom.type		- The word type.
+ *	custom.data		- Pointer to the allocated data.
+ *
+ * See also:
+ *	<Col_WordType>, <Col_GetWordInfo>, <Col_FindWordInfo>
+ *---------------------------------------------------------------------------*/
 
 typedef union {
-    Col_Char ch;		/* COL_CHAR. */
-    int i;			/* COL_INT. */
-    struct {			/* COL_STRING. */
+    Col_Char ch;
+    intptr_t i;
+    struct {
 	Col_StringFormat format;
 	const void *data;
 	size_t byteLength;
 	Col_Word _smallData;
     } string;
-    struct {			/* COL_VECTOR. */
+    struct {
 	size_t length;
 	const Col_Word *elements;
     } vector;
-    struct {			/* COL_MVECTOR. */
+    struct {
 	size_t maxLength;
 	size_t length;
 	Col_Word *elements;
     } mvector;
-				/* Other predefined types use accessors and iterators. */
     struct {
-	Col_CustomWordType *type;
+	struct Col_CustomWordType *type;
 	void *data;
-    } custom;			/* Custom words. */
+    } custom;
 } Col_WordData;
 
-/*
- * Predefined words.
- */
 
-EXTERN Col_Word		Col_NewIntWord(int value);
+/****************************************************************************
+ * Group: Custom Word Types
+ ****************************************************************************/
 
-/*
- * Custom words.
- */
+/*---------------------------------------------------------------------------
+ * Typedef: Col_CustomWordSizeProc
+ *
+ *	Function signature of custom word size procs.
+ *
+ * Arguments:
+ *	word	- Custom word to get size for.
+ *
+ * Result:
+ *	The custom word size in bytes.
+ *
+ * See also: 
+ *	<Col_CustomWordType>
+ *---------------------------------------------------------------------------*/
 
+typedef size_t (Col_CustomWordSizeProc) (Col_Word word);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_CustomWordFreeProc
+ *
+ *	Function signature of custom word cleanup procs. Called on collected 
+ *	words during the sweep phase of the garbage collection.
+ *
+ * Arguments:
+ *	word	- Custom word to cleanup.
+ *
+ * See also: 
+ *	<Col_CustomWordType>
+ *---------------------------------------------------------------------------*/
+
+typedef void (Col_CustomWordFreeProc) (Col_Word word);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_CustomWordChildEnumProc
+ *
+ *	Function signature of custom word child enumeration procs. Called during
+ *	the mark phase of the garbage collection. Words are movable, so pointer 
+ *	values may be modified in the process. 
+ *
+ * Arguments:
+ *	word		- Custom word whose child is being followed.
+ *	childPtr	- Pointer to child, may be overwritten if moved.
+ *	clientData	- Opaque client data. Same value as passed to 
+ *			  <Col_CustomWordChildrenProc>
+ *
+ * See also: 
+ *	<Col_CustomWordType>, <Col_CustomWordChildrenProc>
+ *---------------------------------------------------------------------------*/
+
+typedef void (Col_CustomWordChildEnumProc) (Col_Word word, Col_Word *childPtr, 
+    Col_ClientData clientData);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_CustomWordChildrenProc
+ *
+ *	Function signature of custom word child enumeration procs. Called during
+ *	the mark phase of the garbage collection.
+ *
+ * Arguments:
+ *	word		- Custom word to follow children for.
+ *	proc		- Callback proc called at each child.
+ *	clientData	- Opaque data passed as is to above proc.
+ *
+ * See also: 
+ *	<Col_CustomWordType>, <Col_CustomWordChildEnumProc>
+ *---------------------------------------------------------------------------*/
+
+typedef void (Col_CustomWordChildrenProc) (Col_Word word, 
+    Col_CustomWordChildEnumProc *proc, Col_ClientData clientData);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_CustomWordType
+ *
+ *	Custom word type descriptor.
+ *
+ * Fields:
+ *	type		- Type identifier. 
+ *	name		- Name of the type, e.g. "int".
+ *	sizeProc	- Called to get the size in bytes of the word. Must be 
+ *			  constant during the whole lifetime.
+ *	freeProc	- Called once the word gets collected. NULL if not 
+ *			  necessary.
+ *	childrenProc	- Called during the garbage collection to iterate over 
+ *			  the words owned by the word, in no special order. If 
+ *			  NULL, do nothing.
+ *
+ * See also:
+ *	<Col_CustomWordSizeProc>, <Col_CustomWordFreeProc>, 
+ *	<Col_CustomWordChildrenProc>
+ *---------------------------------------------------------------------------*/
+
+typedef struct Col_CustomWordType {
+    Col_WordType type;
+    const char *name;
+    Col_CustomWordSizeProc *sizeProc;
+    Col_CustomWordFreeProc *freeProc;
+    Col_CustomWordChildrenProc *childrenProc;
+} Col_CustomWordType;
+
+
+/****************************************************************************
+ * Group: Word Creation
+ *
+ * Declarations:
+ *	<Col_NewIntWord>, <Col_NewCustomWord>
+ ****************************************************************************/
+
+EXTERN Col_Word		Col_NewIntWord(intptr_t value);
 EXTERN Col_Word		Col_NewCustomWord(Col_CustomWordType *type, size_t size, 
 			    void **dataPtr);
 
-/*
- * Word values.
- */
+
+/****************************************************************************
+ * Group: Word Access and Synonyms
+ *
+ * Declarations:
+ *	<Col_GetWordInfo>, <Col_FindWordInfo>, <Col_GetWordSynonym>,
+ *	<Col_AddWordSynonym>, <Col_ClearWordSynonym>
+ ****************************************************************************/
 
 EXTERN Col_WordType	Col_GetWordInfo(Col_Word word, Col_WordData *dataPtr);
 EXTERN Col_Word		Col_FindWordInfo(Col_Word word, Col_WordType type, 
@@ -139,19 +262,15 @@ EXTERN void		Col_AddWordSynonym(Col_Word *wordPtr, Col_Word synonym,
 			    Col_Word parent);
 EXTERN void		Col_ClearWordSynonym(Col_Word word);
 
-/*
- * Child declaration needed by the generational GC.
- */
+
+/****************************************************************************
+ * Group: Word Modification and Lifetime Management
+ *
+ * Declarations:
+ *	<Col_WordSetModified>, <Col_PreserveWord>, <Col_ReleaseWord>
+ ****************************************************************************/
 
 EXTERN void		Col_WordSetModified(Col_Word word);
-
-
-/* 
- *----------------------------------------------------------------
- * Lifetime management. 
- *----------------------------------------------------------------
- */
-
 EXTERN void		Col_PreserveWord(Col_Word word);
 EXTERN void		Col_ReleaseWord(Col_Word word);
 

@@ -1,3 +1,10 @@
+/*
+ * File: colibri.c
+ *
+ *	This file implements the string, initialization/cleanup, and error
+ *	handling functions.
+ */
+
 #include "colibri.h"
 #include "colInternal.h"
 #include "colPlatform.h"
@@ -6,75 +13,211 @@
 #include <stdlib.h>
 
 
-/*
- * Thread-local storage.
- */
+/****************************************************************************
+ * Group: Strings
+ ****************************************************************************/
 
-#define GetErrorProcPtr PlatGetErrorProcPtr
-
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_Utf8CharAddr
  *
- * Col_Init --
- * Col_Cleanup --
+ *	Find the index-th char in a UTF-8 byte sequence. 
  *
- *	Initialize/cleanup the library. Must be called in every thread.
+ *	Iterate over char boundaries from the beginning or end of the string, 
+ *	whichever is closest, until the char is reached.
  *
- *	Several threading models are possible:
+ *	Assume input is OK.
  *
- *	 - COL_SINGLE : strict appartment + stop-the-world model. GC is done 
- *	   synchronously when client thread resumes GC (Col_ResumeGC).
- *	 - COL_ASYNC : strict appartment model with asynchronous GC. GC uses a 
- *	   dedicated thread for asynchronous processing, the client thread 
- *	   cannot pause a running GC and is blocked until completion.
- *	 - COL_SHARED : shared multithreaded model with GC-preference. Data can 
- *	   be shared across client threads of the same group (COL_SHARED is the 
- *	   base index value). GC uses a dedicated thread for asynchronous 
- *	   processing.; GC process starts once all client threads get out of 
- *	   pause, no client thread can pause a scheduled GC.
+ * Arguments:
+ *	data		- UTF-8 byte sequence.
+ *	index		- Index of char to find.
+ *	length		- Char length of sequence.
+ *	bytelength	- Byte length of sequence.
  *
  * Results:
- *	None.
+ *	Pointer to the character.
+ *---------------------------------------------------------------------------*/
+
+const char * 
+Col_Utf8CharAddr(
+    const char * data,
+    size_t index,
+    size_t length,
+    size_t byteLength)
+{
+    /* 
+     * Don't check bounds; assume input values are OK. 
+     */
+
+    if (index <= length/2) {
+	/* 
+	 * First half; search from beginning. 
+	 */
+
+	size_t i = 0;
+	while (i != index) {
+	    i++;		/* Increment char index. */
+	    COL_UTF8_NEXT(data);
+	}
+	return data;
+    } else {
+	/* 
+	 * Second half; search backwards from end. 
+	 */
+
+	size_t i = length;
+	while (i != index) {
+	    i--;		/* Decrement char index. */
+	    COL_UTF8_PREVIOUS(data);
+	}
+	return data;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_Utf8CharAt
+ *
+ *	Get the char codepoint of a UTF-8 sequence.
+ *
+ * Argument:
+ *	data		- UTF-8 byte sequence.
+ *
+ * Results:
+ *	32-bit Unicode codepoint of the char.
+ *---------------------------------------------------------------------------*/
+
+Col_Char 
+Col_Utf8CharAt(
+    const char * data)
+{
+    if (*data < 0x80) {
+	/* 
+	 * Single byte, 0-7F codepoints. 
+	 */
+
+	return *data;
+    } else if (*data < 0xE0) {
+	/* 
+	 * 2-byte sequence, 80-7FF codepoints. 
+	 */
+
+	return   ((data[0] & 0x1F) << 6)
+	       |  (data[1] & 0x3F);
+    } else if (*data < 0xF0) {
+	/* 
+	 * 3-byte sequence, 800-FFFF codepoints. 
+	 */
+
+	return   ((data[0] & 0x0F) << 12)
+	       | ((data[1] & 0x3F) << 6)
+	       |  (data[2] & 0x3F);
+    } else if (*data < 0xF8) {
+	/* 
+	 * 4-byte sequence, 10000-1FFFFF codepoints. 
+	 */
+
+	return   ((data[0] & 0x07) << 18)
+	       | ((data[1] & 0x3F) << 12)
+	       | ((data[2] & 0x3F) << 6)
+	       |  (data[3] & 0x3F);
+    } else if (*data < 0xFC) {
+	/* 
+	 * 5-byte sequence, 200000-3FFFFFF codepoints. 
+	 */
+
+	return   ((data[0] & 0x03) << 24)
+	       | ((data[1] & 0x3F) << 18)
+	       | ((data[2] & 0x3F) << 12)
+	       | ((data[3] & 0x3F) << 6)
+	       |  (data[4] & 0x3F);
+    } else if (*data < 0xFE) {
+	/* 
+	 * 6-byte sequence, 4000000-7FFFFFFF codepoints. 
+	 */
+
+	return   ((data[0] & 0x03) << 30)
+	       | ((data[1] & 0x3F) << 24)
+	       | ((data[2] & 0x3F) << 18)
+	       | ((data[3] & 0x3F) << 12)
+	       | ((data[4] & 0x3F) << 6)
+	       |  (data[5] & 0x3F);
+    }
+
+    /* 
+     * Invalid sequence.
+     */
+
+    return COL_CHAR_INVALID;
+}
+
+
+/****************************************************************************
+ * Group: Initialization/Cleanup
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_Init
+ *
+ *	Initialize the library. Must be called in every thread.
+ *
+ * Argument:
+ *	model	- Threading model.
  *
  * Side effects:
- *	Initialize/cleanup the garbage collector.
+ *	Initialize the memory allocator & garbage collector.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<Threading Models>
+ *---------------------------------------------------------------------------*/
 
 void 
 Col_Init(
-    unsigned int model)		/* Threading model. */
+    unsigned int model)
 {
     PlatEnter(model);
 }
+
+/*---------------------------------------------------------------------------
+ * Function: Col_Cleanup
+ *
+ *	Cleanup the library. Must be called in every thread.
+ *
+ * Side effects:
+ *	Cleanup the memory allocator & garbage collector.
+ *---------------------------------------------------------------------------*/
+
 void 
 Col_Cleanup() 
 {
     PlatLeave();
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_Error --
+
+/****************************************************************************
+ * Group: Error Handling
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_Error
  *
  *	Signal an error condition.
  *
- * Results:
- *	None.
+ * Arguments:
+ *	level	- Error level.
+ *	format	- Format string fed to fprintf().
+ *	...	- Remaining arguments fed to fprintf().
  *
  * Side effects:
  *	Default implementation exits the processus when level is critical.
  *
- *---------------------------------------------------------------------------
- */
+ * See also: 
+ *	<Col_SetErrorProc>
+ *---------------------------------------------------------------------------*/
 
 void
 Col_Error(
-    Col_ErrorLevel level,	/* Error level. */
-    const char *format,		/* Format string fed to fprintf. */
-    ...)			/* Remaining arguments fed to fprintf. */
+    Col_ErrorLevel level,
+    const char *format,
+    ...)
 {
     va_list args;
     ThreadData *data = PlatGetThreadData();
@@ -109,25 +252,21 @@ Col_Error(
     abort();
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_SetErrorProc
  *
- * Col_SetErrorProc --
+ *	Set or reset the thread's custom error proc.
  *
- *	Set a custom error proc (which may be NULL).
+ * Argument:
+ *	proc	- The new error proc (may be NULL).
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	Replace current error proc (default is NULL).
- *
- *---------------------------------------------------------------------------
- */
+ * See also: 
+ *	<Col_Error>
+ *---------------------------------------------------------------------------*/
 
 void
 Col_SetErrorProc(
-    Col_ErrorProc *proc)	/* The new error proc. */
+    Col_ErrorProc *proc)
 {
     PlatGetThreadData()->errorProc = proc;
 }

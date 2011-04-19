@@ -1,18 +1,22 @@
 /*
- * Mark-and-sweep, generational, exact GC.
+ * File: colGc.c
+ * 
+ *	This file implements the mark-and-sweep, generational, exact GC that is
+ *	at the heart of Colibri.
  *
- * Newer cells are born in "Eden", i.e. generation 1 pool, and are promoted to 
- * older pools when they survive more than one collection.
+ *	Newer cells are born in "Eden", i.e. generation 1 pool, and are promoted
+ *	to older pools when they survive more than one collection.
  *
- * A GC is triggered after a number of page allocations have been made resulting
- * from cell allocation failures. They are only triggered outside of 
- * GC-protected sections to avoid collecting the newly allocated cells.
+ *	A GC is triggered after a number of page allocations have been made 
+ *	resulting from cell allocation failures. They are only triggered outside
+ *	of GC-protected sections to avoid collecting the newly allocated cells.
  *
- * Younger pools are collected more often than older ones. Completing a given 
- * number of GCs on a pool will include the previous generation to the next GC. 
- * For example, if this generational factor is 10, then generation x will be 
- * collected every 10 collections of generation x-1. So gen-x collections will 
- * occur every 10 gen-(x-1) collection, i.e. every 10^x gen-0 collection. 
+ *	Younger pools are collected more often than older ones. Completing a 
+ *	given number of GCs on a pool will include the previous generation to 
+ *	the next GC. For example, if this generational factor is 10, then 
+ *	generation x will be collected every 10 collections of generation x-1. 
+ *	So gen-x collections will occur every 10 gen-(x-1) collection, i.e. 
+ *	every 10^x gen-0 collection. 
  */
 
 #include "colibri.h"
@@ -38,26 +42,27 @@ static void		SweepUnreachableCells(GroupData *data,
 			    MemoryPool *pool);
 static void		PromotePages(GroupData *data, MemoryPool *pool);
 static void		ResetPool(MemoryPool *pool);
+static Col_CustomWordChildEnumProc MarkWordChild;
 
 
-/*
- *---------------------------------------------------------------------------
+/****************************************************************************
+ * Internal Group: Process & Threads
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: GcInitThread
  *
- * GcInitThread --
- * GcInitGroup --
- * GcCleanupThread --
- * GcCleanupGroup --
+ *	Per-thread GC-related initialization.
  *
- *	Initialize/cleanup the garbage collector.
- *
- * Results:
- *	None.
+ * Argument:
+ *	data	- Thread-specific data.
  *
  * Side effects:
- *	Platform-specific -- see respective implementations of callees.
+ *	Initialize the eden pool (which is always thread-specific).
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<ThreadData>
+ *---------------------------------------------------------------------------*/
 
 void 
 GcInitThread(
@@ -65,6 +70,21 @@ GcInitThread(
 {
     PoolInit(&data->eden, 1);
 }
+
+/*---------------------------------------------------------------------------
+ * Internal Function: GcInitGroup
+ *
+ *	Per-group GC-related initialization.
+ *
+ * Argument:
+ *	data	- Group-specific data.
+ *
+ * Side effects:
+ *	Initialize all memory pools but eden.
+ *
+ * See also:
+ *	<GroupData>
+ *---------------------------------------------------------------------------*/
 
 void 
 GcInitGroup(
@@ -77,12 +97,42 @@ GcInitGroup(
     }
 }
 
+/*---------------------------------------------------------------------------
+ * Internal Function: GcCleanupThread
+ *
+ *	Per-thread GC-related cleanup.
+ *
+ * Argument:
+ *	data	- Thread-specific data.
+ *
+ * Side effects:
+ *	Cleanup the eden pool (which is always thread-specific).
+ *
+ * See also:
+ *	<ThreadData>
+ *---------------------------------------------------------------------------*/
+
 void 
 GcCleanupThread(
     ThreadData *data)
 {
     PoolCleanup(&data->eden);
 }
+
+/*---------------------------------------------------------------------------
+ * Internal Function: GcCleanupGroup
+ *
+ *	Per-group GC-related cleanup.
+ *
+ * Argument:
+ *	data	- Group-specific data.
+ *
+ * Side effects:
+ *	Cleanup all memory pools but eden.
+ *
+ * See also:
+ *	<GroupData>
+ *---------------------------------------------------------------------------*/
 
 void 
 GcCleanupGroup(
@@ -95,25 +145,26 @@ GcCleanupGroup(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * GetNbCells --
+
+/****************************************************************************
+ * Group: Word Modification and Lifetime Management
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: GetNbCells
  *
  *	Get the number of cells taken by a word.
  *
- * Results:
+ * Argument:
+ *	word	- The word.
+ *
+ * Result:
  *	The number of cells.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 static size_t
 GetNbCells(
-    Col_Word word)		/* The word. */
+    Col_Word word)
 {
     /*
      * Get number of cells taken by word.
@@ -150,10 +201,8 @@ GetNbCells(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_WordSetModified --
+/*---------------------------------------------------------------------------
+ * Function: Col_WordSetModified
  *
  *	Mark cell as modified.
  *
@@ -163,18 +212,16 @@ GetNbCells(
  *	page is marked as dirty, and its cells must be followed during the next 
  *	GC in any case so that their children don't get collected by mistake.
  *
- * Results:
- *	None.
+ * Argument:
+ *	word	- Modified word.
  *
  * Side effects:
- *	Memory cells may be created.
- *
- *---------------------------------------------------------------------------
- */
+ *	May allocate memory cells.
+ *---------------------------------------------------------------------------*/
 
-EXTERN void
+void
 Col_WordSetModified(
-    Col_Word word)			/* Modified word. */
+    Col_Word word)
 {
     ThreadData *data = PlatGetThreadData();
     unsigned int generation;
@@ -216,33 +263,31 @@ Col_WordSetModified(
     LeaveProtectDirties(data->groupData);
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_PreserveWord
  *
- * Col_PreserveWord --
- * Col_ReleaseWord --
+ *	Preserve a persistent reference to a word, making it a root. This allows
+ *	words to be safely stored in external structures regardless of memory 
+ *	management cycles. More specifically, they can't be collected and their
+ *	address remains constant.
  *
- *	Preserve (resp. release) a persistent reference to a word, which 
- *	prevents its collection. This allows words to be safely stored in 
- *	external structures regardless of memory management cycles.
- *
- *	Calls can be nested. A reference count is updated accordingly. Once the 
- *	count drops below 1, the root becomes stale.
+ *	Calls can be nested. A reference count is updated accordingly.
  *
  *	Roots are stored in a trie indexed by the root source addresses.
  *
- * Results:
- *	None.
+ * Arguments:
+ *	word	- The word to preserve.
  *
  * Side effects:
- *	Fields may be updated, and memory cells may be allocated.
+ *	May allocate memory cells. Marks word as pinned.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<Col_ReleaseWord>
+ *---------------------------------------------------------------------------*/
 
 void
 Col_PreserveWord(
-    Col_Word word)		/* The word to preserve. */
+    Col_Word word)
 {
     ThreadData *data = PlatGetThreadData();
     Cell *node, *leaf, *parent, *newParent;
@@ -418,9 +463,27 @@ end:
     LeaveProtectRoots(data->groupData);
 }
 
+/*---------------------------------------------------------------------------
+ * Function: Col_ReleaseWord
+ *
+ *	Release a root word previously made by <Col_PreserveWord>.
+ *
+ *	Calls can be nested. A reference count is updated accordingly. Once the 
+ *	count drops below 1, the root becomes stale.
+ *
+ * Arguments:
+ *	word	- The root word to release.
+ *
+ * Side effects:
+ *	May release memory cells. Unpin word.
+ *
+ * See also:
+ *	<Col_PreserveWord>
+ *---------------------------------------------------------------------------*/
+
 void
 Col_ReleaseWord(
-    Col_Word word)		/* The word to release. */
+    Col_Word word)
 {
     ThreadData *data = PlatGetThreadData();
     Cell *node, *sibling, *parent, *grandParent;
@@ -564,29 +627,26 @@ end:
     LeaveProtectRoots(data->groupData);
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: DeclareCustomWord
  *
- * DeclareCustomWord --
- *
- *	Remember custom words needing freeing upon deletion. This chains such 
- *	words in their order of creation, latest being inserted at the head of 
+ *	Remember custom words needing cleanup upon deletion. Such words are 
+ *	chained in their order of creation, latest being inserted at the head of 
  *	the list. This implies that cleanup can stop traversing the list at the 
  *	first custom word that belongs to a non GC'd pool.
  *
- * Results:
- *	None.
+ * Arguments:
+ *	word	- The word to declare.
+ *	type	- The word type.
  *
- * Side effects:
- *	Word fields may be updated.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<Col_CustomWordType>, <Col_CustomWordFreeProc>, <Col_NewCustomWord>
+ *---------------------------------------------------------------------------*/
 
 void 
 DeclareCustomWord(
-    Col_Word word,		/* The word to declare. */
-    Col_CustomWordType *type)	/* The word type. */
+    Col_Word word,
+    Col_CustomWordType *type)
 {
     ASSERT(WORD_TYPE(word) == WORD_TYPE_CUSTOM);
     if (type->freeProc) {
@@ -601,29 +661,31 @@ DeclareCustomWord(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+
+/****************************************************************************
+ * Internal Group: Cell Allocation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: AllocCells
  *
- * AllocCells --
- *
- *	Allocate cells in the youngest pool (i.e. generation 1). 
- *
- *	The maximum number of cells is AVAILABLE_CELLS.
+ *	Allocate cells in the eden pool.
  *
  *	Fails if outside a GC protected section.
  *
- * Results:
+ * Arguments:
+ *	number	- Number of cells to allocate.
+ *
+ * Result:
  *	If successful, a pointer to the first allocated cell. Else NULL.
  *
- * Side effects:
- *	Alloc structures are updated, and memory pages may be allocated.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<PoolAllocCells>
+ *---------------------------------------------------------------------------*/
 
 Cell *
 AllocCells(
-    size_t number)		/* Number of cells to allocate. */
+    size_t number)
 {
     ThreadData *data = PlatGetThreadData();
 
@@ -643,37 +705,24 @@ AllocCells(
     return PoolAllocCells(&data->eden, number);
 }
 
-/*
- *---------------------------------------------------------------------------
+
+/****************************************************************************
+ * Group: GC-Protected sections
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_PauseGC
  *
- * Col_PauseGC --
- * Col_TryPauseGC --
- * Col_ResumeGC --
- *
- *	Pause/resume the automatic garbage collection. Calls can be nested. 
- *	Code between the outermost pause and resume calls define a GC-protected 
+ *	Pause the automatic garbage collection. Calls can be nested. Code 
+ *	between the outermost pause and resume calls define a GC-protected 
  *	section.
  *
- *	Col_PauseGC blocks until the GC is paused.
- *	Col_TryPauseGC is non-blocking.
+ *	When the threading model isn't <COL_SINGLE>, blocks as long as a GC is 
+ *	underway.
  *
- *	GC-protected sections allow the caller to create many words with the 
- *	guaranty that they won't be collected too early. This gives a chance 
- *	to pass them around or keep references by creating roots.
- *
- *	Leaving a GC-protected section potentially triggers a GC. Outside of a 
- *	GC-protected section, a GC can occur at any moment, invalidating newly
- *	allocated words.
- *
- * Results:
- *	Col_TryPauseGC: non-zero if successful.
- *
- * Side effects:
- *	GC-protected sections can be entered and left. In the latter case, GC 
- *	can occur.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<Col_TryPauseGC>, <Col_ResumeGC>
+ *---------------------------------------------------------------------------*/
 
 void 
 Col_PauseGC() 
@@ -684,6 +733,20 @@ Col_PauseGC()
     }
     data->pauseGC++;
 }
+
+/*---------------------------------------------------------------------------
+ * Function: Col_TryPauseGC
+ *
+ *	Try to pause the automatic garbage collection. Calls can be nested.
+ *
+ * Result:
+ *	1 if successful, 0 if a GC is underway (this implies the threading model
+ *	isn't <COL_SINGLE>). In the latter case the caller must try again later
+ *	or use the blocking version.
+ *
+ * See also:
+ *	<Col_PauseGC>, <Col_ResumeGC>
+ *---------------------------------------------------------------------------*/
 
 int 
 Col_TryPauseGC()
@@ -697,8 +760,22 @@ Col_TryPauseGC()
     }
 }
 
+/*---------------------------------------------------------------------------
+ * Function: Col_ResumeGC
+ *
+ *	Resume the automatic garbage collection. Calls can be nested.
+ *
+ *	Leaving a GC-protected section potentially triggers a GC.
+ *
+ * Side effects:
+ *	May trigger the garbage collection.
+ *
+ * See also:
+ *	<Col_PauseGC>, <Col_TryPauseGC>
+ *---------------------------------------------------------------------------*/
+
 void 
-Col_ResumeGC(void)
+Col_ResumeGC()
 {
     ThreadData *data = PlatGetThreadData();
     if (data->pauseGC > 1) {
@@ -730,27 +807,32 @@ Col_ResumeGC(void)
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+
+/****************************************************************************
+ * Internal Group: Garbage Collection
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PerformGC
  *
- * PerformGC --
+ *	Perform a garbage collection.
  *
- *	Perform a GC starting from the Eden pool. This can propagate to older 
- *	generations each time their GC count reaches GC_GEN_FACTOR.
- *
- * Results:
- *	None.
+ * Argument:
+ *	data	- Group-specific data.
  *
  * Side effects:
- *	Cells and pages can be freed. New pages can be allocated, or a new 
- *	pool created, when promoting surviving words to older generations.
+ *	May free cells or pages, promote words across pools, or allocate new 
+ *	pages during promotion.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<ClearPoolBitmasks>, <MarkReachableCellsFromRoots>, 
+ *	<MarkReachableCellsFromParents>, <SweepUnreachableCells>,
+ *	<PromotePages>, <ResetPool>
+ *---------------------------------------------------------------------------*/
 
 void 
 PerformGC(
-    GroupData *data)		/* Thread group data. */
+    GroupData *data)
 {
     unsigned int generation;
     Cell *dirties;
@@ -820,7 +902,7 @@ PerformGC(
 		    * PROMOTE_PAGE_FILL_RATIO) {
 	data->compactGeneration = data->maxCollectedGeneration;
     } else {
-	data->compactGeneration = SIZE_MAX;
+	data->compactGeneration = UINT_MAX;
     }
 #endif
 
@@ -901,25 +983,18 @@ PerformGC(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * ClearPoolBitmasks --
+/*---------------------------------------------------------------------------
+ * Internal Function: ClearPoolBitmasks
  *
  *	Clear all bitmasks in the pool's pages.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	Clear all bitmasks in the pool's page.
- *
- *---------------------------------------------------------------------------
- */
+ * Argument:
+ *	pool	- The pool to traverse.
+ *---------------------------------------------------------------------------*/
 
 static void 
 ClearPoolBitmasks(
-    MemoryPool *pool)		/* The pool to traverse. */
+    MemoryPool *pool)
 {
     void * page;
 
@@ -934,10 +1009,8 @@ ClearPoolBitmasks(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * MarkReachableCellsFromRoots --
+/*---------------------------------------------------------------------------
+ * Internal Function: MarkReachableCellsFromRoots
  *
  *	Mark all cells reachable from the valid roots.
  *
@@ -945,18 +1018,16 @@ ClearPoolBitmasks(
  *	pools having children in collected pools will be traversed in the
  *	next phase (MarkReachableCellsFromParents).
  *
- * Results:
- *	None.
+ * Argument:
+ *	data	- Group-specific data.
  *
- * Side effects:
- *	Set all reachable cells in page bitmasks.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<MarkWord>
+ *---------------------------------------------------------------------------*/
 
 static void 
 MarkReachableCellsFromRoots(
-    GroupData *data)		/* Thread group data. */
+    GroupData *data)
 {
     Cell *node, *leaf, *parent;
     Col_Word source;
@@ -1005,27 +1076,24 @@ MarkReachableCellsFromRoots(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * MarkReachableCellsFromParents --
+/*---------------------------------------------------------------------------
+ * Internal Function: MarkReachableCellsFromParents
  *
  *	Mark all cells reachable from cells in pages with potentially younger
  *	children.
  *
- * Results:
- *	None.
+ * Arguments:
+ *	data	- Group-specific data.
+ *	dirties	- Dirty page list.
  *
- * Side effects:
- *	Set all reachable cells in page bitmasks.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<MarkWord>
+ *---------------------------------------------------------------------------*/
 
 static void 
 MarkReachableCellsFromParents(
-    GroupData *data,		/* Thread group data. */
-    Cell *dirties)		/* Dirty page list. */
+    GroupData *data,
+    Cell *dirties)
 {
     unsigned int generation;
     Col_Word word;
@@ -1077,34 +1145,21 @@ MarkReachableCellsFromParents(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: MarkWordChild
  *
- * MarkWord --
+ *	Word children enumeration function used to follow all children of a
+ *	reachable word during GC. Follows <Col_CustomWordChildEnumProc> 
+ *	signature.
  *
- *	Mark word and all its children as reachable.
+ * Arguments:
+ *	word		- Custom word whose child is being followed.
+ *	childPtr	- Pointer to child, may be overwritten if moved.
+ *	clientData	- Points to <GroupData>.
  *
- *	The algorithm is recursive and stops when it reaches an already set 
- *	cell. This handles loops and references to older pools, where cells are
- *	already set.
- *
- *	To limit stack growth, tail recursive using an infinite loop with 
- *	conditional return.
- *
- *	The word is passed by pointer so that it can be updated in case of 
- *	redirection.
- *
- *	If generationPtr is non-NULL, overwritten by the cell's generation if
- *	younger than caller.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Set all reachable cells in page bitmasks.
- *
- *---------------------------------------------------------------------------
- */
+ * See also: 
+ *	<Col_CustomWordType>, <Col_CustomWordChildrenProc>, <MarkWord>
+ *---------------------------------------------------------------------------*/
 
 static void
 MarkWordChild(
@@ -1114,11 +1169,31 @@ MarkWordChild(
 {
     MarkWord((GroupData *) clientData, childPtr, CELL_PAGE(word));
 }
+
+/*---------------------------------------------------------------------------
+ * Internal Function: MarkWord
+ *
+ *	Mark word and all its children as reachable.
+ *
+ *	The algorithm is recursive and stops when it reaches an already set 
+ *	cell. This handles loops and references to older pools, where cells are
+ *	already set.
+ *
+ *	To limit stack growth, tail recurses when possible using an infinite 
+ *	loop with conditional return.
+ *
+ * Arguments:
+ *	data	    - Group-specific data.
+ *	wordPtr	    - Word to mark and follow, overwritten if promoted.
+ *	parentPage  - Page containing wordPtr, will be set as modified if 
+ *		      overwritten.
+ *---------------------------------------------------------------------------*/
+
 static void 
 MarkWord(
-    GroupData *data,		/* Thread group data. */
-    Col_Word *wordPtr,		/* Word to mark and follow. */
-    Page *parentPage)		/* Youngest generation upon return. */
+    GroupData *data,
+    Col_Word *wordPtr,
+    Page *parentPage)
 {
     int type;
     size_t nbCells, index;
@@ -1373,26 +1448,26 @@ start:
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: SweepUnreachableCells
  *
- * SweepUnreachableCells --
+ *	Perform cleanup for all collected custom words that need sweeping.
  *
- *	Perform cleanup for all custom words that need sweeping.
- *
- * Results:
- *	None.
+ * Arguments:
+ *	data	    - Group-specific data.
+ *	pool	    - The pool to sweep.
  *
  * Side effects:
- *	Calls each cleaned cell's freeProc.
+ *	Calls each cleaned word's freeProc.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<Col_CustomWordType>, <Col_CustomWordFreeProc>, <WORD_CUSTOM_NEXT>
+ *---------------------------------------------------------------------------*/
 
 static void 
 SweepUnreachableCells(
-    GroupData *data,		/* Thread group data. */
-    MemoryPool *pool)		/* The pool to sweep. */
+    GroupData *data,
+    MemoryPool *pool)
 {
     Col_Word word, *previousPtr;
     Col_CustomWordType *typeInfo;
@@ -1453,29 +1528,21 @@ SweepUnreachableCells(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: PromotePages
  *
- * PromotePages --
+ *	Promote non-empty pages to the next pool. This simply move the pool's 
+ *	pages to the target pool.
  *
- *	Promote non-empty pages to the next pool.
- *
- *	This simply adds the pool's pages to the target pool.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Move pages to an older pool and update their generation info. Update
- *	page counters as well.
- *
- *---------------------------------------------------------------------------
- */
+ * Arguments:
+ *	data	    - Group-specific data.
+ *	pool	    - The pool to promote page for.
+ *---------------------------------------------------------------------------*/
 
 static void 
 PromotePages(
-    GroupData *data,		/* Thread group data. */
-    MemoryPool *pool)		/* The pool to promote page for. */
+    GroupData *data,
+    MemoryPool *pool)
 {
     void *page;
     size_t i;
@@ -1532,25 +1599,18 @@ PromotePages(
     pool->nbSetCells = 0;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * ResetPool --
+/*---------------------------------------------------------------------------
+ * Internal Function: ResetPool
  *
  *	Reset GC-related info and fast cell pointers.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	Reset some pool fields.
- *
- *---------------------------------------------------------------------------
- */
+ * Argument:
+ *	pool	- The pool to reset fields for.
+ *---------------------------------------------------------------------------*/
 
 static void 
 ResetPool(
-    MemoryPool *pool)		/* The pool to reset counters for. */
+    MemoryPool *pool)
 {
     size_t i;
 

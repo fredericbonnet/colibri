@@ -1,40 +1,38 @@
 /*
- * List data structures implemented as words.
+ * File: colList.c
  *
- * Lists are made of vectors assembled in a binary tree structure, in the same 
- * fashion as ropes with string chunks. The present code is actually an 
- * adaptation of the rope implementation.
+ *	This file implements the list handling features of Colibri.
  *
- * Lists come in mutable and immutable versions.
+ *	Lists are a collection datatype that allows for fast insertion, 
+ *	extraction and composition of other lists. Internally they use 
+ *	self-balanced binary trees, like ropes, except that they use vectors
+ *	as basic containers instead of character arrays.
+ *
+ *	They come in both immutable and mutable forms: 
+ *	
+ *	- Immutable lists can be composed of immutable vectors and lists. 
+ *	Immutable vectors can themselves be used in place of immutable lists. 
+ *
+ *	- Mutable lists can be composed of either mutable or immutable lists and
+ *	vectors. They can be "frozen" and turned into immutable versions.
+ *	Mutable vectors *cannot* be used in place of mutable lists, as the 
+ *	latter can grow indefinitely whereas the former have a maximum length 
+ *	set at creation time.
+ *
+ * Note:
+ *	The present code is largely adapted from the rope implementation.
+ *
+ * See also: 
+ *	<colList.h>, <colRope.c>
  */
 
 #include "colibri.h"
 #include "colInternal.h"
 
 #include <stdlib.h>
-#include <limits.h>
 #include <string.h>
+#include <limits.h>
 #include <malloc.h> /* For alloca */
-
-/* 
- * Max nb cells/length of short list created with sublist or concat. 
- */
-
-#define MAX_SHORT_LIST_SIZE		3
-#define MAX_SHORT_LIST_LENGTH		VECTOR_MAX_LENGTH(MAX_SHORT_LIST_SIZE*CELL_SIZE)
-
-/*
- * Max nb cells/length of mutable vectors during lazy conversions of void lists.
- */
-
-#define MAX_SHORT_MVECTOR_SIZE		10
-#define MAX_SHORT_MVECTOR_LENGTH	VECTOR_MAX_LENGTH(MAX_SHORT_MVECTOR_SIZE*CELL_SIZE)
-
-/*
- * Max depth of subnodes in iterators.
- */
-
-#define MAX_ITERATOR_SUBNODE_DEPTH	3
 
 /*
  * Prototypes for functions used only in this file.
@@ -45,7 +43,7 @@ static Col_Word		NewListWord(Col_Word root, size_t loop);
 static void		GetArms(Col_Word node, Col_Word * leftPtr, 
 			    Col_Word * rightPtr);
 static void		FreezeMList(Col_Word mlist);
-static void		FreezeMListNode(Col_Word * mlistPtr);
+static void		FreezeMListContent(Col_Word * mlistPtr);
 static void		MListSetAt(Col_Word * nodePtr, size_t index, 
 			    Col_Word element, Col_Word parent);
 static void		ConvertToMutableAt(Col_Word *nodePtr, Col_Word parent, 
@@ -62,28 +60,84 @@ static void		MListRemove(Col_Word * nodePtr, size_t first,
 static ColListIterLeafAtProc IterAtVector, IterAtVoid;
 
 
-/*
- *---------------------------------------------------------------------------
+/****************************************************************************
+ * Internal Group: Internal Definitions
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Constants: Short Lists
  *
- * NewListWord --
+ *	Constants controlling the creation of short lists during sublist/
+ *	concatenation. Lists built this way normally use sublist and concat 
+ *	nodes, but to avoid fragmentation, multiple short lists are flattened 
+ *	into a single vector.
+ *
+ *  MAX_SHORT_LIST_SIZE		- Maximum number of cells a short list can take.
+ *  MAX_SHORT_LIST_LENGTH	- Maximum number of elements a short list can 
+ *				  take.
+ *---------------------------------------------------------------------------*/
+
+#define MAX_SHORT_LIST_SIZE \
+    3
+#define MAX_SHORT_LIST_LENGTH \
+    VECTOR_MAX_LENGTH(MAX_SHORT_LIST_SIZE*CELL_SIZE)
+
+/*---------------------------------------------------------------------------
+ * Internal Constants: Short Mutable Vectors
+ *
+ *	Constants controlling the creation of short mutable vectors during 
+ *	immutable list conversions. When setting an element of a mutable list,
+ *	if the leaf node containing this element is immutable we convert it to
+ *	a mutable node of this size in case nearby elements get modified later.
+ *	This amortizes the conversion overhead over time.
+ *
+ *  MAX_SHORT_MVECTOR_SIZE	- Maximum number of cells a short mutable vector
+ *				  can take.
+ *  MAX_SHORT_MVECTOR_LENGTH	- Maximum number of elements a short mutable
+ *				  vector can take.
+ *---------------------------------------------------------------------------*/
+
+#define MAX_SHORT_MVECTOR_SIZE \
+    10
+#define MAX_SHORT_MVECTOR_LENGTH \
+    VECTOR_MAX_LENGTH(MAX_SHORT_MVECTOR_SIZE*CELL_SIZE)
+
+/*---------------------------------------------------------------------------
+ * Internal Constant: MAX_ITERATOR_SUBNODE_DEPTH
+ *
+ *	Max depth of subnodes in iterators.
+ *---------------------------------------------------------------------------*/
+
+#define MAX_ITERATOR_SUBNODE_DEPTH \
+    3
+
+
+/****************************************************************************
+ * Group: Immutable List Creation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: NewListWord
  *
  *	Utility proc used to wrap a list around a list word. This is needed
  *	when resulting list is circular, i.e. the given loop-length is nonzero,
  *	or when it needs a synonym field.
  *
- * Results:
+ * Arguments:
+ *	root	- List root.
+ *	loop	- Loop length (zero for non-cyclic).
+ *
+ * Result:
  *	The new word.
  *
  * Side effects:
  *	May allocate memory cells.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 static Col_Word	
 NewListWord(
-    Col_Word root,		/* List root. */
-    size_t loop)		/* Loop length (zero for non-cyclic). */
+    Col_Word root,
+    size_t loop)
 {
     Col_Word list;
 
@@ -103,32 +157,30 @@ NewListWord(
     return list;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_NewList --
+/*---------------------------------------------------------------------------
+ * Function: Col_NewList
  *
  *	Create a new list word.
  *
  *	Short lists are created as vectors. Larger lists are recursively split
  *	in half and assembled in a tree.
  *
- *	If elements pointer is NULL, build a void list (ie. whose elements are
- *	all nil).
+ * Arguments:
+ *	length		- Length of below array.
+ *	elements	- Array of words to populate list with. If NULL, build
+ *			  a void list (i.e. whose elements are all nil).
  *
- * Results:
+ * Result:
  *	The new word, or empty when length is zero.
  *
  * Side effects:
  *	May allocate memory cells.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_NewList(
-    size_t length,		/* Length of below array. */
-    const Col_Word * elements)	/* Array of words to populate list with. */
+    size_t length,
+    const Col_Word * elements)
 {
     size_t half=0;		/* Index of the split point. */
 
@@ -161,25 +213,26 @@ Col_NewList(
     return Col_NewVector(length, elements);
 }
 
-/*
- *---------------------------------------------------------------------------
+
+/****************************************************************************
+ * Group: Immutable List Access
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListLength
  *
- * Col_ListLength --
+ *	Get the length of the list. Also works with vectors.
  *
- *	Get or compute the length of the list.
+ * Argument:
+ *	list	- List to get length for.
  *
- * Results:
- *	The length.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ * Result:
+ *	The list length.
+ *---------------------------------------------------------------------------*/
 
 size_t 
 Col_ListLength(
-    Col_Word list)		/* List to get length for. */
+    Col_Word list)
 {
     switch (WORD_TYPE(list)) {
 	case WORD_TYPE_WRAP:
@@ -219,44 +272,134 @@ Col_ListLength(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_ListLoopLength
  *
- * MergeChunksProc --
+ *	Get the loop length of the list.
  *
- *	Traversal procedure used to concatenate all portions of lists into
- *	one to fit wthin one vector word.
+ * Argument:
+ *	list	- List to get length for.
  *
- * Results:
- *	0.
- *
- * Side effects:
- *	Copy the vector data into the associated MergeChunksInfo fields.
- *
- *---------------------------------------------------------------------------
- */
+ * Result:
+ *	If the list is cyclic, the terminal loop length. Else zero.
+ *---------------------------------------------------------------------------*/
 
-/* 
- * Structure used to collect data during the traversal. 
- */
+size_t 
+Col_ListLoopLength(
+    Col_Word list)
+{
+    switch (WORD_TYPE(list)) {
+	case WORD_TYPE_WRAP:
+	    return Col_ListLoopLength(WORD_WRAP_SOURCE(list));
+
+	case WORD_TYPE_VOIDLIST:
+	case WORD_TYPE_VECTOR:
+	case WORD_TYPE_MVECTOR:
+	case WORD_TYPE_CONCATLIST:
+	case WORD_TYPE_MCONCATLIST:
+	case WORD_TYPE_SUBLIST:
+	    return 0;
+
+	case WORD_TYPE_LIST:
+	case WORD_TYPE_MLIST:
+	    return WORD_LIST_LOOP(list);
+
+	/* WORD_TYPE_UNKNOWN */
+
+	default:
+	    /*
+	     * Invalid type.
+	     */
+
+	    Col_Error(COL_ERROR, "%x is not a list", list);
+	    return 0;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListAt
+ *
+ *	Get the element of a list at a given position. 
+ *
+ * Argument:
+ *	list	- List to get element from.
+ *	index	- Element index.
+ *
+ * Result:
+ *	If the index is past the end of the list, nil, else the element.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_ListAt(
+    Col_Word list,
+    size_t index)
+{
+    Col_ListIterator it;
+    
+    Col_ListIterBegin(list, index, &it);
+    return Col_ListIterAt(&it);
+}
+
+
+/****************************************************************************
+ * Group: Immutable List Operations
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Typedef: MergeChunksInfo
+ *
+ *	Structure used to collect data during the traversal of lists to merge
+ *	into one vector.
+ *
+ * Fields:
+ *	length	- Length so far.
+ *	vector	- Vector word to copy elements into.
+ *
+ * See also:
+ *	<MergeChunksProc>
+ *---------------------------------------------------------------------------*/
 
 typedef struct MergeChunksInfo {
-    size_t length;		/* Length so far. */
-    Col_Word vector;		/* Vector word. */
+    size_t length;
+    Col_Word vector;
 } MergeChunksInfo;
+
+/*---------------------------------------------------------------------------
+ * Internal Function: MergeChunksProc
+ *
+ *	List traversal procedure used to concatenate all portions of lists into
+ *	one to fit wthin one vector word. Follows <Col_ListChunksTraverseProc> 
+ *	signature.
+ *
+ * Arguments:
+ *	index		- List-relative index where chunks begin.
+ *	length		- Length of chunks.
+ *	number		- Number of chunks. Always 1.
+ *	chunks		- Array of chunks. First element never NULL.
+ *	clientData	- Points to <MergeChunksInfo>.
+ *
+ * Result:
+ *	Always zero, info returned through clientData.
+ *
+ * Side effects:
+ *	Copy the vector data into the associated <MergeChunksInfo> fields.
+ *
+ * See also:
+ *	<MergeChunksInfo>, <Col_TraverseListChunks>
+ *---------------------------------------------------------------------------*/
 
 static int 
 MergeChunksProc(
     size_t index,
     size_t length,
     size_t number, 
-    const Col_Word **elements, 
+    const Col_Word **chunks, 
     Col_ClientData clientData) 
 {
     MergeChunksInfo *info = (MergeChunksInfo *) clientData;
 
     ASSERT(number == 1);
-    if (*elements != COL_LISTCHUNK_VOID
+    if (*chunks != COL_LISTCHUNK_VOID
 	    && WORD_TYPE(info->vector) == WORD_TYPE_VOIDLIST) {
 	/*
 	 * Allocate vector and initialize existing elements to nil.
@@ -269,20 +412,20 @@ MergeChunksProc(
 	memset(WORD_VECTOR_ELEMENTS(info->vector), 0, sizeof(Col_Word) 
 		* vectorLength);
     }
-    if (*elements != COL_LISTCHUNK_VOID) {
+    if (*chunks != COL_LISTCHUNK_VOID) {
 	/* 
 	 * Set elements. 
 	 */
 
-	memcpy(WORD_VECTOR_ELEMENTS(info->vector)+info->length, *elements, 
-		length * sizeof(**elements));
+	memcpy(WORD_VECTOR_ELEMENTS(info->vector)+info->length, *chunks, 
+		length * sizeof(**chunks));
     } else if (WORD_TYPE(info->vector) != WORD_TYPE_VOIDLIST) {
 	/* 
 	 * Initialize elements to nil. 
 	 */
 
 	memset(WORD_VECTOR_ELEMENTS(info->vector)+info->length, 0, 
-		length * sizeof(**elements));
+		length * sizeof(**chunks));
     }
     info->length += length;
     ASSERT(info->length <= Col_ListLength(info->vector));
@@ -290,10 +433,63 @@ MergeChunksProc(
     return 0;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: GetArms
  *
- * Col_Sublist --
+ *	Get the left and right arms of a list node, i.e. a concat or one of 
+ *	its sublists.
+ *
+ * Arguments:
+ *	node		- List node to extract arms from. Either a sublist or
+ *			  concat node.
+ *	leftPtr		- Returned left arm.
+ *	rightPtr	- Returned right arm.
+ *
+ * Results:
+ *	leftPtr and rightPtr will hold the left and right arms.
+ *
+ * Side effects:
+ *	May create new words.
+ *
+ * See also:
+ *	<Col_ConcatLists>
+ *---------------------------------------------------------------------------*/
+
+static void 
+GetArms(
+    Col_Word node,
+    Col_Word * leftPtr,
+    Col_Word * rightPtr)
+{
+    if (WORD_TYPE(node) == WORD_TYPE_SUBLIST) {
+	/* Create one sublist for each list node arm. */
+	Col_Word source = WORD_SUBLIST_SOURCE(node);
+	size_t leftLength;
+
+	ASSERT(WORD_SUBLIST_DEPTH(node) >= 1);
+	ASSERT(WORD_TYPE(source) == WORD_TYPE_CONCATLIST);
+	ASSERT(WORD_CONCATLIST_DEPTH(source) == WORD_SUBLIST_DEPTH(node));
+
+	leftLength = WORD_CONCATLIST_LEFT_LENGTH(source);
+	if (leftLength == 0) {
+	    leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(source));
+	}
+	*leftPtr = Col_Sublist(WORD_CONCATLIST_LEFT(source), 
+		WORD_SUBLIST_FIRST(node), leftLength-1);
+	*rightPtr = Col_Sublist(WORD_CONCATLIST_RIGHT(source), 0, 
+		WORD_SUBLIST_LAST(node)-leftLength);
+    } else {
+	ASSERT(WORD_CONCATLIST_DEPTH(node) >= 1);
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_CONCATLIST
+		|| WORD_TYPE(node) == WORD_TYPE_MCONCATLIST);
+
+	*leftPtr  = WORD_CONCATLIST_LEFT(node);
+	*rightPtr = WORD_CONCATLIST_RIGHT(node);
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_Sublist
  *
  *	Create a new list which is a sublist of another.
  *
@@ -303,21 +499,24 @@ MergeChunksProc(
  *	 - sublists of sublists point to original list.
  *	 - sublists of concats point to the deepest superset sublist.
  *
- * Results:
+ * Arguments:
+ *	list		- The list to extract the sublist from.
+ *	first, last	- Range of sublist.
+ *
+ * Result:
  *	When first is past the end of the (non-cyclic) list, or last is before 
- *	first, empty.
+ *	first, an empty list.
  *	Else, a list representing the sublist.
  *
  * Side effects:
- *	Memory cells may be allocated.
- *
- *---------------------------------------------------------------------------
- */
+ *	May allocate memory cells.
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_Sublist(
-    Col_Word list,		/* The list to extract the sublist from. */
-    size_t first, size_t last)	/* Range of sublist. */
+    Col_Word list,
+    size_t first, 
+    size_t last)
 {
     Col_Word sublist;		/* Resulting list node in the general case. */
     size_t listLength;		/* Length of source list. */
@@ -433,7 +632,7 @@ Col_Sublist(
 	 * Identity. 
 	 */
 
-	FreezeMListNode(&list);
+	FreezeMListContent(&list);
 	return list;
     }
 
@@ -512,103 +711,91 @@ Col_Sublist(
      * General case: build a sublist node.
      */
 
-    FreezeMListNode(&list);
+    FreezeMListContent(&list);
     sublist = (Col_Word) AllocCells(1);
     WORD_SUBLIST_INIT(sublist, depth, list, first, last);
 
     return sublist;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * GetArms --
- *
- *	Get the left and right arms of a list node, i.e. a concat or one of 
- *	its sublists.
- *
- * Results:
- *	leftPtr and rightPtr will hold the left and right arms.
- *
- * Side effects:
- *	New words may be created.
- *
- *---------------------------------------------------------------------------
- */
-
-static void 
-GetArms(
-    Col_Word node,		/* List node to extract arms from. */
-    Col_Word * leftPtr,		/* Returned left arm. */
-    Col_Word * rightPtr)	/* Returned right arm. */
-{
-    if (WORD_TYPE(node) == WORD_TYPE_SUBLIST) {
-	/* Create one sublist for each list node arm. */
-	Col_Word source = WORD_SUBLIST_SOURCE(node);
-	size_t leftLength;
-
-	ASSERT(WORD_SUBLIST_DEPTH(node) >= 1);
-	ASSERT(WORD_TYPE(source) == WORD_TYPE_CONCATLIST);
-	ASSERT(WORD_CONCATLIST_DEPTH(source) == WORD_SUBLIST_DEPTH(node));
-
-	leftLength = WORD_CONCATLIST_LEFT_LENGTH(source);
-	if (leftLength == 0) {
-	    leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(source));
-	}
-	*leftPtr = Col_Sublist(WORD_CONCATLIST_LEFT(source), 
-		WORD_SUBLIST_FIRST(node), leftLength-1);
-	*rightPtr = Col_Sublist(WORD_CONCATLIST_RIGHT(source), 0, 
-		WORD_SUBLIST_LAST(node)-leftLength);
-    } else {
-	ASSERT(WORD_CONCATLIST_DEPTH(node) >= 1);
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_CONCATLIST
-		|| WORD_TYPE(node) == WORD_TYPE_MCONCATLIST);
-
-	*leftPtr  = WORD_CONCATLIST_LEFT(node);
-	*rightPtr = WORD_CONCATLIST_RIGHT(node);
-    }
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_ConcatLists --
- * Col_ConcatListsA --
- * Col_ConcatListsNV --
- * Col_ConcatListsL --
+/*---------------------------------------------------------------------------
+ * Function: Col_ConcatLists
  *
  *	Concatenate lists.
- *	Col_ConcatLists concatenates two lists.
- *	Col_ConcatListsA concatenates several lists given in an array, by 
- *	recursive halvings until it contains one or two elements. 
- *	Col_ConcatListsNV is a variadic version of Col_ConcatListsA.
- *	Col_ConcatListsL takes a list of lists as input.
  *
  *	Concatenation forms self-balanced binary trees. Each node has a depth 
  *	level. Concat nodes have a depth > 1. Sublist nodes have a depth equal
  *	to that of their source node. Other nodes have a depth of 0. 
  *
- *	The resulting concat will have a depth equal to the largest of both 
- *	left and right arms' depth plus 1. If they differ by more than 1, then 
- *	the tree is rebalanced.
+ * Arguments:
+ *	left	- Left part.
+ *	right	- Right part.
  *
- * Results:
+ * Result:
  *	If the resulting list would exceed the maximum length, nil. Else, a 
  *	list representing the concatenation of both lists.
- *	Array and variadic versions return nil when concatenating zero lists,
- *	and the source list when concatenating a single one.
  *
  * Side effects:
- *	Memory cells may be allocated.
+ *	May allocate memory cells.
  *
- *---------------------------------------------------------------------------
- */
+ * Note on rebalancing:
+ *	The resulting concat will have a depth equal to the largest of both 
+ *	left and right arms' depth plus 1. If they differ by more than 1, then 
+ *	the tree is recursively rebalanced. There are four major cases, two if 
+ *	we consider symmetry:
+ *
+ *	- Deepest subtree is an outer branch (i.e. the left resp. right child of
+ *	  the left resp. right arm). In this case the tree is rotated: the
+ *	  opposite child is moved and concatenated with the opposite arm.
+ *	  For example, with left being deepest:
+ *
+ * (start diagram)
+ * Before:
+ *            concat = (left1 + left2) + right
+ *           /      \
+ *         left    right
+ *        /    \
+ *     left1  left2
+ *    /     \
+ *   ?       ?
+ *
+ *
+ * After:
+ *           concat = left1 + (left2 + right)
+ *          /      \
+ *     left1        concat
+ *    /     \      /      \
+ *   ?       ?   left2   right
+ * (end)
+ *
+ *	- Deepest subtree is an inner branch (i.e. the right resp. left child of
+ *	  the left resp. right arm). In this case the subtree is split 
+ *	  between both arms. For example, with left being deepest:
+ *
+ * (start diagram)
+ *  Before:
+ *          concat = (left1 + (left21+left22)) + right
+ *         /      \
+ *       left    right
+ *      /    \
+ *   left1  left2
+ *         /     \
+ *      left21  left22
+ *
+ *
+ * After:
+ *              concat = (left1 + left21) + (left22 + right)
+ *             /      \
+ *       concat        concat
+ *      /      \      /      \
+ *   left1  left21  left22  right
+ * (end)
+ *---------------------------------------------------------------------------*/
 
-/* - Binary version. */
 Col_Word
 Col_ConcatLists(
-    Col_Word left,		/* Left part. */
-    Col_Word right)		/* Right part. */
+    Col_Word left,
+    Col_Word right)
 {
     Col_Word concatNode;	/* Resulting list node in the general case. */
     unsigned char leftDepth=0, rightDepth=0; 
@@ -675,14 +862,14 @@ Col_ConcatLists(
 	 * Concat is a no-op on right. 
 	 */
 
-	FreezeMListNode(&right);
+	FreezeMListContent(&right);
 	return right;
     } else if (rightLength == 0) {
 	/* 
 	 * Concat is a no-op on left.
 	 */
 
-	FreezeMListNode(&left);
+	FreezeMListContent(&left);
 	return left;
     }
 
@@ -775,8 +962,8 @@ Col_ConcatLists(
      * Assume the input lists are well balanced by construction. Build a list 
      * that is balanced as well, i.e. where left and right depths don't differ 
      * by more that 1 level.
-
-    /* Note that a sublist with depth >= 1 always points to a concat node, as 
+     *
+     * Note that a sublist with depth >= 1 always points to a concat node, as 
      * by construction it cannot point to another sublist (see Col_Sublist). 
      * Likewise, the arms cannot be list root words.
      */
@@ -805,22 +992,6 @@ Col_ConcatLists(
 	if (left1Depth < left2Depth) {
 	    /* 
 	     * Left2 is deeper, split it between both arms. 
-	     *
-	     * Before:
-	     *          concat = (left1 + (left21+left22)) + right
-	     *         /      \
-	     *       left    right
-	     *      /    \
-	     *   left1  left2
-	     *         /     \
-	     *      left21  left22
-	     *
-	     * After:
-	     *              concat = (left1 + left21) + (left22 + right)
-	     *             /      \
-	     *       concat        concat
-	     *      /      \      /      \
-	     *   left1  left21  left22  right
 	     */
 
 	    Col_Word left21, left22;
@@ -831,22 +1002,6 @@ Col_ConcatLists(
 	} else {
 	    /* 
 	     * Left1 is deeper or at the same level, rotate to right.
-	     *
-	     * Before:
-	     *            concat = (left1 + left2) + right
-	     *           /      \
-	     *         left    right
-	     *        /    \
-	     *     left1  left2
-	     *    /     \
-	     *   ?       ?
-	     *
-	     * After:
-	     *           concat = left1 + (left2 + right)
-	     *          /      \
-	     *     left1        concat
-	     *    /     \      /      \
-	     *   ?       ?   left2   right
 	     */
 
 	    concatNode = Col_ConcatLists(left1, Col_ConcatLists(left2, right));
@@ -876,22 +1031,6 @@ Col_ConcatLists(
 	if (right2Depth < right1Depth) {
 	    /* 
 	     * Right1 is deeper, split it between both arms. 
-	     *
-	     * Before:
-	     *          concat = left + ((right11+right12) + right2)
-	     *         /      \
-	     *       left    right
-	     *              /     \
-	     *           right1  right2
-	     *          /      \
-	     *      right11  right12
-	     *
-	     * After:
-	     *               concat = (left + right11) + (right12 + right2)
-	     *             /        \
-	     *       concat          concat
-	     *      /      \        /      \
-	     *    left  right11  right12  right2
 	     */
 
 	    Col_Word right11, right12;
@@ -902,22 +1041,6 @@ Col_ConcatLists(
 	} else {
 	    /* 
 	     * Right2 is deeper or at the same level, rotate to left.
-	     *
-	     * Before:
-	     *          concat = left + (right1 + right2)
-	     *         /      \
-	     *       left    right
-	     *              /     \
-	     *           right1  right2
-	     *                  /      \
-	     *                 ?        ?
-	     *
-	     * After:
-	     *            concat = (left + right1) + right2
-	     *           /      \
-	     *     concat        right2
-	     *    /      \      /      \
-	     *  left   right1  ?        ?
 	     */
 
 	    concatNode = Col_ConcatLists(Col_ConcatLists(left, right1), right2);
@@ -929,8 +1052,8 @@ Col_ConcatLists(
      * General case: build a concat node.
      */
 
-    FreezeMListNode(&left);
-    FreezeMListNode(&right);
+    FreezeMListContent(&left);
+    FreezeMListContent(&right);
     concatNode = (Col_Word) AllocCells(1);
     WORD_CONCATLIST_INIT(concatNode, (leftDepth>rightDepth?leftDepth:rightDepth)
 	    + 1, leftLength + rightLength, leftLength, left, right);
@@ -938,11 +1061,30 @@ Col_ConcatLists(
     return NewListWord(concatNode, loop);
 }
 
-/* - Array version. */
+/*---------------------------------------------------------------------------
+ * Function: Col_ConcatListsA
+ *
+ *	Concatenate several lists given in an array. Concatenation is done 
+ *	recursively, by halving the array until it contains one or two elements,
+ *	at this point we respectively return the element or use 
+ *	<Col_ConcatLists>.
+ *
+ * Arguments:
+ *	number	- Number of lists in below array.
+ *	lists	- Lists to concatenate in order.
+ *
+ * Result:
+ *	If the array is empty or the resulting list would exceed the maximum 
+ *	length, nil. Else, a list representing the concatenation of all lists.
+ *
+ * Side effects:
+ *	See <Col_ConcatLists>.
+ *---------------------------------------------------------------------------*/
+
 Col_Word
 Col_ConcatListsA(
-    size_t number,		/* Number of lists in below array. */
-    const Col_Word * lists)	/* Lists to concatenate in order. */
+    size_t number,
+    const Col_Word * lists)
 {
     size_t half;
     Col_Word l1, l2;
@@ -979,12 +1121,29 @@ Col_ConcatListsA(
 }
 
 
-/* - Variadic version. */
+/*---------------------------------------------------------------------------
+ * Function: Col_ConcatListsNV
+ *
+ *	Concatenate lists given as arguments. The argument list is first 
+ *	copied into a stack-allocated array then passed to <Col_ConcatListsA>.
+ *
+ * Arguments:
+ *	number	- Number of arguments.
+ *	...	- Remaining arguments, i.e. lists to concatenate in order.
+ *
+ * Result:
+ *	If the number of arguments is zero or the resulting list would exceed 
+ *	the maximum length, nil. Else, a list representing the concatenation of
+ *	all lists.
+ *
+ * Side effects:
+ *	See <Col_ConcatListsA>.
+ *---------------------------------------------------------------------------*/
+
 Col_Word
 Col_ConcatListsNV(
-    size_t number,		/* Number of arguments. */
-    ...)			/* Remaining arguments, i.e. lists to 
-				 * concatenate in order. */
+    size_t number,
+    ...)
 {
     size_t i;
     va_list args;
@@ -1003,25 +1162,111 @@ Col_ConcatListsNV(
     return Col_ConcatListsA(number, lists);
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_RepeatList
  *
- * Col_LoopList --
+ *	Create a list formed by the repetition of a source list.
+ *
+ *	This method is based on recursive concatenations of the list
+ *	following the bit pattern of the count factor. Doubling a list simply 
+ *	consists of a concat with itself. In the end the resulting tree is 
+ *	very compact, and only a minimal number of extraneous cells are 
+ *	allocated during the balancing process (and will be eventually 
+ *	collected).
+ *
+ * Arguments:
+ *	list	- The list to repeat.
+ *	count	- Repetition factor.
+ *
+ * Result:
+ *	If count is zero or the resulting list would exceed the maximum length,
+ *	nil. Else, a list representing the repetition of the source list.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_RepeatList(
+    Col_Word list,
+    size_t count)
+{
+    Col_Word listRoot;		/* Actual root node. */
+
+    switch (WORD_TYPE(list)) {
+	case WORD_TYPE_WRAP:
+	    return Col_RepeatList(WORD_WRAP_SOURCE(list), count);
+
+	case WORD_TYPE_VOIDLIST:
+	case WORD_TYPE_VECTOR:
+	case WORD_TYPE_MVECTOR:
+	case WORD_TYPE_CONCATLIST:
+	case WORD_TYPE_SUBLIST:
+	    listRoot = list;
+	    break;
+
+	case WORD_TYPE_LIST:
+	case WORD_TYPE_MLIST:
+	    if (WORD_LIST_LOOP(list)) {
+		/*
+		 * List is cyclic, won't repeat.
+		 */
+
+		return list;
+	    }
+	    break;
+
+	/* WORD_TYPE_UNKNOWN */
+
+	default:
+	    /*
+	     * Invalid type.
+	     */
+
+	    Col_Error(COL_ERROR, "%x is not an immutable list", list);
+	    return WORD_NIL;
+    }
+
+    if (Col_ListLength(listRoot) == 0) {
+	/*
+	 * No-op.
+	 */
+
+	return WORD_LIST_EMPTY;
+    }
+
+    /* 
+     * Quick cases. 
+     */
+
+    if (count == 0) {return WORD_NIL;}
+    if (count == 1) {return list;}
+    if (count == 2) {return Col_ConcatLists(list, list);}
+
+    if (count & 1) {
+	/* Odd.*/
+	return Col_ConcatLists(list, Col_RepeatList(list, count-1));
+    } else {
+	/* Even. */
+	return Col_RepeatList(Col_ConcatLists(list, list), count>>1);
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_LoopList
  *
  *	Create a cyclic list from a regular list.
  *
- * Results:
+ * Argument:
+ *	list	- The list to loop.
+ *
+ * Result:
  *	If the list is not already cyclic, a new cyclic list.
  *
  * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ *	May allocate memory cells.
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_LoopList(
-    Col_Word list)		/* The list to loop. */
+    Col_Word list)
 {
     size_t length;
 
@@ -1052,7 +1297,7 @@ Col_LoopList(
 
 		return WORD_LIST_EMPTY;
 	    }
-	    FreezeMListNode(&list);
+	    FreezeMListContent(&list);
 	    return NewListWord(list, length);
 
 	case WORD_TYPE_LIST:
@@ -1072,7 +1317,7 @@ Col_LoopList(
 
 		return list;
 	    }
-	    FreezeMListNode(&list);
+	    FreezeMListContent(&list);
 	    return NewListWord(list, length);
 
 	/* WORD_TYPE_UNKNOWN */
@@ -1087,58 +1332,315 @@ Col_LoopList(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_ListInsert
  *
- * Col_ListLoopLength --
+ *	Insert a list into another one, just before the given insertion point, 
+ *	taking cyclicity into account. As target list is immutable, this results
+ *	in a new list.
  *
- *	Get the loop length of the list.
+ *	Insertion past the end of the list results in a concatenation.
  *
- * Results:
- *	If the list is cyclic, the terminal loop length. Else zero.
+ *
+ * Arguments:
+ *	into	- Where to insert.
+ *	index	- Index of insertion point.
+ *	list	- List to insert.
+ *
+ * Note:
+ *	Only perform minimal tests to prevent overflow, basic ops should 
+ *	perform further optimizations anyway.
+ *
+ * Result:
+ *	The resulting list.
  *
  * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ *	May allocate memory cells.
+ *---------------------------------------------------------------------------*/
 
-size_t 
-Col_ListLoopLength(
-    Col_Word list)		/* List to get length for. */
+Col_Word
+Col_ListInsert(
+    Col_Word into,
+    size_t index,
+    Col_Word list)
 {
-    switch (WORD_TYPE(list)) {
-	case WORD_TYPE_WRAP:
-	    return Col_ListLoopLength(WORD_WRAP_SOURCE(list));
+    size_t length, loop, listLength, listLoop;
+    Col_Word listRoot;
 
-	case WORD_TYPE_VOIDLIST:
-	case WORD_TYPE_VECTOR:
-	case WORD_TYPE_MVECTOR:
-	case WORD_TYPE_CONCATLIST:
-	case WORD_TYPE_MCONCATLIST:
-	case WORD_TYPE_SUBLIST:
-	    return 0;
+    listLength = Col_ListLength(list);
+    if (listLength == 0) {
+	/*
+	 * No-op.
+	 */
 
-	case WORD_TYPE_LIST:
-	case WORD_TYPE_MLIST:
-	    return WORD_LIST_LOOP(list);
-
-	/* WORD_TYPE_UNKNOWN */
-
-	default:
-	    /*
-	     * Invalid type.
-	     */
-
-	    Col_Error(COL_ERROR, "%x is not a list", list);
-	    return 0;
+	return into;
     }
+
+    if (index == 0) {
+	/*
+	 * Insert at beginning.
+	 */
+
+	return Col_ConcatLists(list, into);
+    }
+
+    length = Col_ListLength(into);
+    loop = Col_ListLoopLength(into);
+    if (loop == 0 && index >= length) {
+	/*
+	 * Insertion past the end of non-cyclic list is concatenation.
+	 */
+
+	return Col_ConcatLists(into, list);
+    }
+
+    if (loop > 0 && index > length-loop) {
+	/*
+	 * Insertion within loop. Normalize index and increase loop length.
+	 */
+
+	index = (index - (length-loop)) % loop + (length-loop);
+	if (index == length-loop) index = length;
+	loop += listLength;
+    }
+
+    listRoot = Col_ConcatLists(Col_Sublist(into, 0, index-1), list);
+
+    listLoop = Col_ListLoopLength(list);
+    if (listLoop) {
+	/*
+	 * Inserted list is cyclic, its loop closes the resulting list.
+	 */
+
+	return NewListWord(listRoot, listLoop);
+    }
+    
+    if (index <= length-1) {
+	/*
+	 * Append trailing sublist.
+	 */
+
+	listRoot = Col_ConcatLists(listRoot, Col_Sublist(into, index, 
+		length-1));
+    }
+    return NewListWord(listRoot, loop);
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_ListRemove
  *
- * Col_NewMList --
+ *	Remove a range of elements from a list, taking cyclicity into account. 
+ *	As target list is immutable, this results in a new list.
+ *
+ * Arguments:
+ *	list		- List to remove sequence from.
+ *	first, last	- Range of elements to remove.
+ *
+ * Note:
+ *	Only perform minimal tests to prevent overflow, basic ops should 
+ *	perform further optimizations anyway.
+ *
+ * Result:
+ *	The resulting list.
+ *
+ * Side effects:
+ *	May allocate memory cells.
+ *---------------------------------------------------------------------------*/
+
+Col_Word 
+Col_ListRemove(
+    Col_Word list,
+    size_t first, 
+    size_t last)
+{
+    size_t length, loop;
+    Col_Word listRoot;
+
+    if (first > last) {
+	/* 
+	 * No-op. 
+	 */
+
+	return list;
+    }
+
+    length = Col_ListLength(list);
+    if (length == 0) {
+	/*
+	 * No-op.
+	 */
+
+	return list;
+    }
+
+    loop = Col_ListLoopLength(list);
+    if (loop == 0 && first >= length) {
+	/*
+	 * Removal past the end of non-cyclic list is no-op.
+	 */
+
+	return list;
+    }
+
+    if (loop > 0) {
+	/*
+	 * Normalize indices.
+	 */
+
+	if (first > length-loop) {
+	    first = (first - (length-loop)) % loop + (length-loop);
+	    if (first == length-loop) {
+		/* 
+		 * Keep within loop.
+		 */
+
+		first = length;
+	    }
+	}
+	if (last > length-loop) {
+	    last = (last - (length-loop)) % loop + (length-loop);
+	}
+
+	if (first > length-loop && last-first+1 == 0) {
+	    /*
+	     * Removal of a multiple of loop is no-op.
+	     */
+
+	    return list;
+	}
+    }
+
+    listRoot = WORD_LIST_EMPTY;
+    if (first > 0) {
+	/*
+	 * Keep beginning of list.
+	 */
+
+	listRoot = Col_Sublist(list, 0, first-1);
+    }
+
+    if (last < first) {
+	/*
+	 * Keep inner part of loop (shorten it as it's already part of listRoot,
+	 * see above).
+	 */
+
+	ASSERT(loop > 0);
+	ASSERT(first > length-loop);
+	ASSERT(last >= length-loop);
+
+	loop = first-last-1;
+    } else {
+	if (last < length-1) {
+	    /* 
+	     * Keep end of list.
+	     */
+
+	    listRoot = Col_ConcatLists(listRoot, Col_Sublist(list, last+1, 
+		    length-1));
+	}
+	if (first > length-loop) {
+	    /*
+	     * Shorten loop.
+	     */
+
+	    loop -= (last-first+1);
+	} else if (last >= length-loop) {
+	    /*
+	     * Append beginning of loop.
+	     */
+
+	    listRoot = Col_ConcatLists(listRoot, Col_Sublist(list, length-loop, 
+		    last));
+	}
+    }
+
+    return NewListWord(listRoot, loop);
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListReplace
+ *
+ *	Replace a range of elements in a list with another, taking cyclicity
+ *	into account. As target list is immutable, this results in a new list.
+ *
+ *	Replacement is a combination of remove and insert.
+ *
+ * Arguments:
+ *	list		- Original list.
+ *	first, last	- Inclusive range of elements to replace.
+ *	with		- Replacement list.
+ *
+ * Note:
+ *	Only perform minimal tests to prevent overflow, basic ops should 
+ *	perform further optimizations anyway.
+ *
+ * Result:
+ *	The resulting list.
+ *
+ * Side effects:
+ *	May allocate memory cells.
+ *
+ * See also:
+ *	<Col_ListInsert>, <Col_ListRemove>
+ *---------------------------------------------------------------------------*/
+
+Col_Word 
+Col_ListReplace(
+    Col_Word list,
+    size_t first, 
+    size_t last,
+    Col_Word with)
+{
+    size_t length, loop;
+    Col_Word result;
+
+    if (first > last) {
+	/* 
+	 * No-op. 
+	 */
+
+	return list;
+    }
+
+    length = Col_ListLength(list);
+    loop = Col_ListLoopLength(list);
+
+    /*
+     * First remove range to replace...
+     */
+
+    result = Col_ListRemove(list, first, last);
+
+    if (loop > 0 && first > length) {
+	/*
+	 * Insertion point may have moved. Normalize indices.
+	 */
+
+	first = (first - (length-loop)) % loop + (length-loop);
+	if (first == length-loop) {
+	    /* 
+	     * Keep within loop.
+	     */
+
+	    first = length;
+	}
+    }
+
+    /* 
+     * .. then insert list at beginning of range.
+     */
+
+    return Col_ListInsert(result, first, with);
+}
+
+
+/****************************************************************************
+ * Group: Mutable List Creation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_NewMList
  *
  *	Create a new mutable list word.
  *
@@ -1147,9 +1649,7 @@ Col_ListLoopLength(
  *
  * Side effects:
  *	Allocates memory cells.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_NewMList()
@@ -1162,28 +1662,34 @@ Col_NewMList()
     return mlist;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_FreezeMList --
+
+/****************************************************************************
+ * Group: Mutable List Operations
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_FreezeMList
  *
  *	Turn a mutable list immutable. If an immutable list is given,
  *	does nothing.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	The mutable list becomes immutable.
- *
- *---------------------------------------------------------------------------
- */
+ * Argument:
+ *	mlist	- The mutable list to freeze.
+ *---------------------------------------------------------------------------*/
 
 void
 Col_FreezeMList(
-    Col_Word mlist)		/* The mutable list to freeze. */
+    Col_Word mlist)
 {
     switch (WORD_TYPE(mlist)) {
+	case WORD_TYPE_WRAP:
+	    Col_FreezeMList(WORD_WRAP_SOURCE(mlist));
+	    break;
+
+	case WORD_TYPE_VECTOR:
+	case WORD_TYPE_VOIDLIST:
+	case WORD_TYPE_SUBLIST:
+	case WORD_TYPE_CONCATLIST:
 	case WORD_TYPE_LIST:
 	    /*
 	     * No-op.
@@ -1191,7 +1697,8 @@ Col_FreezeMList(
 
 	    break;
 
-	case WORD_TYPE_MLIST: {
+	case WORD_TYPE_MLIST:
+	case WORD_TYPE_MCONCATLIST: {
 	    /*
 	     * Change type ID and recursively freeze subnodes.
 	     */
@@ -1209,6 +1716,18 @@ Col_FreezeMList(
 	    Col_Error(COL_ERROR, "%x is not a mutable list", mlist);
     }
 }
+
+/*---------------------------------------------------------------------------
+ * Internal Function: FreezeMList
+ *
+ *	Freeze mutable list nodes recursively.
+ *
+ * Argument:
+ *	mlist	- The mutable list to freeze.
+ *
+ * See also:
+ *	<Col_FreezeMList>, <FreezeMListContent>
+ *---------------------------------------------------------------------------*/
 
 static void
 FreezeMList(
@@ -1265,8 +1784,27 @@ start:
     goto start;
 }
 
+/*---------------------------------------------------------------------------
+ * Internal Function: FreezeMListContent
+ *
+ *	Freeze mutable list *content* recursively except for mutable vector 
+ *	leaves, which are copied to immutable vectors instead. Leave root 
+ *	untouched.
+ *
+ * Argument:
+ *	mlistPtr	- Points to the mutable list whose content to freeze.
+ *			  Upon return, points to the frozen content or an
+ *			  immutable copy.
+ *
+ * Side effects:
+ *	May allocate memory cells.
+ *
+ * See also:
+ *	<Col_FreezeMList>, <FreezeMList>
+ *---------------------------------------------------------------------------*/
+
 static void
-FreezeMListNode(
+FreezeMListContent(
     Col_Word *mlistPtr)
 {
     switch (WORD_TYPE(*mlistPtr)) {
@@ -1306,26 +1844,21 @@ FreezeMListNode(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_MListSetLength
  *
- * Col_MListSetLength --
+ *	Resize the mutable list. Newly added elements are set to nil.
  *
- *	Resize the mutable list.
+ * Arguments:
+ *	mlist	- Mutable list to resize.
+ *	length	- New length.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	The actual length is modified. Newly added elements are set to nil.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 void
 Col_MListSetLength(
-    Col_Word mlist,		/* Mutable list to resize. */
-    size_t length)		/* New length. */
+    Col_Word mlist,
+    size_t length)
 {
     size_t listLength = Col_ListLength(mlist);
     if (listLength < length) {
@@ -1344,26 +1877,20 @@ Col_MListSetLength(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_MListSetLoop --
+/*---------------------------------------------------------------------------
+ * Function: Col_MListSetLoop
  *
  *	Make a mutable list cyclic, or break cycle if given length is zero.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	The mutable list is looped or unlooped.
- *
- *---------------------------------------------------------------------------
- */
+ * Arguments:
+ *	mlist		- The mutable list to loop.
+ *	loopLength	- Length of the terminal loop.
+ *---------------------------------------------------------------------------*/
 
 void
 Col_MListSetLoop(
-    Col_Word mlist,		/* The mutable list to loop. */
-    size_t loopLength)		/* Length of the terminal loop. */
+    Col_Word mlist,
+    size_t loopLength)
 
 {
     size_t length;
@@ -1381,27 +1908,22 @@ Col_MListSetLoop(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_MListSetAt --
+/*---------------------------------------------------------------------------
+ * Function: Col_MListSetAt
  *
  *	Set the element of a mutable list at a given position. 
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	The list is modified.
- *
- *---------------------------------------------------------------------------
- */
+ * Arguments:
+ *	mlist	- Mutable list to modify.
+ *	index	- Element index.
+ *	element	- New element.
+ *---------------------------------------------------------------------------*/
 
 void
 Col_MListSetAt(
-    Col_Word mlist,		/* Mutable list to modify. */
-    size_t index,		/* Element index. */
-    Col_Word element)		/* New element. */
+    Col_Word mlist,
+    size_t index,
+    Col_Word element)
 {
     size_t length;
 
@@ -1432,6 +1954,21 @@ Col_MListSetAt(
     }
     MListSetAt(&WORD_LIST_ROOT(mlist), index, element, mlist);
 }
+
+/*---------------------------------------------------------------------------
+ * Internal Function: MListSetAt
+ *
+ *	Set the element of a mutable list at a given position, converting nodes
+ *	to mutable forms in the process.
+ *
+ * Arguments:
+ *	nodePtr	- Mutable list node to modify. May be overwritten if it gets
+ *		  converted to mutable.
+ *	index	- Element index.
+ *	element	- New element.
+ *	parent	- nodePtr parent. Set as modified in case nodePtr is converted
+ *		  (see <Col_WordSetModified>).
+ *---------------------------------------------------------------------------*/
 
 static void
 MListSetAt(
@@ -1524,6 +2061,20 @@ start:
     }
 }
 
+/*---------------------------------------------------------------------------
+ * Internal Function: ConvertToMutableAt
+ *
+ *	Convert an immutable node (vector, void list or sublist) to mutable
+ *	around a given index. The original is not modified, a mutable copy is 
+ *	made.
+ *
+ * Arguments:
+ *	nodePtr	- Mutable list node to convert. Gets overwritten upon return.
+ *	parent	- nodePtr parent. Set as modified upon return (see 
+ *		  <Col_WordSetModified>).
+ *	index	- Element index.
+ *---------------------------------------------------------------------------*/
+
 static void
 ConvertToMutableAt(
     Col_Word *nodePtr,
@@ -1610,6 +2161,18 @@ ConvertToMutableAt(
     Col_WordSetModified(parent);
 }
 
+/*---------------------------------------------------------------------------
+ * Internal Function: ConvertToMConcatNode
+ *
+ *	Convert an immutable node (concat or sublist) to a mutable concat list.
+ *	The original is not modified, a mutable copy is made.
+ *
+ * Arguments:
+ *	nodePtr	- Mutable list node to convert. Gets overwritten upon return.
+ *	parent	- nodePtr parent. Set as modified upon return (see 
+ *		  <Col_WordSetModified>).
+ *---------------------------------------------------------------------------*/
+
 static void
 ConvertToMConcatNode(
     Col_Word *nodePtr,
@@ -1676,6 +2239,20 @@ ConvertToMConcatNode(
     Col_WordSetModified(parent);
 }
 
+/*---------------------------------------------------------------------------
+ * Internal Function: UpdateMConcatNode
+ *
+ *	Update (depth, left length...) & rebalance mutable concat list node.
+ *
+ * Arguments:
+ *	node	- Mutable concat list.
+ *
+ * Note on rebalancing:
+ *	Rebalancing works as for immutable lists (see <Col_ConcatLists>)
+ *	except that it is done in place whereas for the latter new concat nodes
+ *	are created in the process. Consequently no extraneous word is created.
+ *---------------------------------------------------------------------------*/
+
 static void
 UpdateMConcatNode(
     Col_Word node)
@@ -1735,22 +2312,6 @@ start:
 	if (left1Depth < left2Depth) {
 	    /* 
 	     * Left2 is deeper, split it between both arms. 
-	     *
-	     * Before:
-	     *          node = (left1 + (left21+left22)) + right
-	     *         /    \
-	     *       left  right
-	     *      /    \
-	     *   left1  left2
-	     *         /     \
-	     *      left21  left22
-	     *
-	     * After:
-	     *              node = (left1 + left21) + (left22 + right)
-	     *             /    \
-	     *         left      left2
-	     *        /    \    /     \
-	     *    left1 left21 left22 right
 	     */
 
 	    Col_Word left21, left22;
@@ -1810,22 +2371,6 @@ start:
 	} else {
 	    /* 
 	     * Left1 is deeper or at the same level, rotate to right.
-	     *
-	     * Before:
-	     *            node = (left1 + left2) + right
-	     *           /    \
-	     *         left   right
-	     *        /    \
-	     *     left1  left2
-	     *    /     \
-	     *   ?       ?
-	     *
-	     * After:
-	     *           node = left1 + (left2 + right)
-	     *          /    \
-	     *     left1      left
-	     *    /     \    /    \
-	     *   ?       ? left2 right
 	     */
 
 	    unsigned char left2Depth=0;
@@ -1884,22 +2429,6 @@ start:
 	if (right2Depth < rightDepth-1) {
 	    /* 
 	     * Right1 is deeper, split it between both arms. 
-	     *
-	     * Before:
-	     *          node = left + ((right11+right12) + right2)
-	     *         /    \
-	     *       left  right
-	     *            /     \
-	     *         right1  right2
-	     *        /      \
-	     *    right11  right12
-	     *
-	     * After:
-	     *               node = (left + right11) + (right12 + right2)
-	     *             /      \
-	     *       right1        right
-	     *      /      \      /     \
-	     *    left right11 right12 right2
 	     */
 
 	    Col_Word right11, right12;
@@ -1960,22 +2489,6 @@ start:
 	} else {
 	    /* 
 	     * Right2 is deeper or at the same level, rotate to left.
-	     *
-	     * Before:
-	     *          node = left + (right1 + right2)
-	     *         /    \
-	     *       left  right
-	     *            /     \
-	     *         right1  right2
-	     *                /      \
-	     *               ?        ?
-	     *
-	     * After:
-	     *            node = (left + right1) + right2
-	     *           /    \
-	     *      right      right2
-	     *     /     \    /      \
-	     *   left right1 ?        ?
 	     */
 
 	    unsigned char right1Depth=0;
@@ -2032,29 +2545,23 @@ start:
      goto start;
 }
 
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_MListInsert --
+/*---------------------------------------------------------------------------
+ * Function: Col_MListInsert
  *
  *	Insert a list into a mutable list, just before the given insertion 
- *	point.
+ *	point, taking cyclicity into account.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	The target list is modified.
- *
- *---------------------------------------------------------------------------
- */
+ * Arguments:
+ *	into	- Mutable list to insert into.
+ *	index	- Index of insertion point.
+ *	list	- List to insert.
+ *---------------------------------------------------------------------------*/
 
 void
 Col_MListInsert(
-    Col_Word into,		/* Mutable list to insert into. */
-    size_t index,		/* Index of insertion point. */
-    Col_Word list)		/* List to insert. */
+    Col_Word into,
+    size_t index,
+    Col_Word list)
 {
     size_t length, loop, listLength, listLoop;
 
@@ -2092,7 +2599,7 @@ Col_MListInsert(
 	 * Target is empty, replace content with input.
 	 */
 
-	FreezeMListNode(&list);
+	FreezeMListContent(&list);
 	WORD_LIST_ROOT(into) = list;
 	WORD_LIST_LOOP(into) = listLoop;
 	return;
@@ -2135,6 +2642,24 @@ Col_MListInsert(
     MListInsert(&WORD_LIST_ROOT(into), index, list, into);
     WORD_LIST_LOOP(into) = loop;
 }
+
+/*---------------------------------------------------------------------------
+ * Internal Function: MListInsert
+ *
+ *	Insert a list into a mutable list node, just before the given insertion 
+ *	point. Recursively descend into containing node.
+ *
+ * Arguments:
+ *	nodePtr	- Mutable list node to insert into. May be overwritten in the
+ *		  process (e.g. if it gets converted to mutable).
+ *	index	- Index of insertion point.
+ *	list	- List to insert.
+ *	parent	- nodePtr parent. Set as modified in case nodePtr is itself
+ *		  modified (see <Col_WordSetModified>).
+ *
+ * See also:
+ *	<Col_MListInsert>
+ *---------------------------------------------------------------------------*/
 
 static void
 MListInsert(
@@ -2357,6 +2882,18 @@ start:
     }
 }
 
+/*---------------------------------------------------------------------------
+ * Internal Function: SplitMutableAt
+ *
+ *	Split a mutable list node at a given index.
+ *
+ * Arguments:
+ *	nodePtr	- Mutable list node to split. Gets overwritten upon return.
+ *	parent	- nodePtr parent. Set as modified upon return (see 
+ *		  <Col_WordSetModified>).
+ *	index	- Index of split point.
+ *---------------------------------------------------------------------------*/
+
 static void
 SplitMutableAt(
     Col_Word *nodePtr, 
@@ -2428,26 +2965,21 @@ SplitMutableAt(
     Col_WordSetModified(parent);
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_MListRemove --
+/*---------------------------------------------------------------------------
+ * Function: Col_MListRemove
  *
  *	Remove a range of elements from a mutable list.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	The target list is modified.
- *
- *---------------------------------------------------------------------------
- */
+ * Arguments:
+ *	mlist		- Mutable list to modify.
+ *	first, last	- Range of elements to remove.
+ *---------------------------------------------------------------------------*/
 
 void
 Col_MListRemove(
-    Col_Word mlist,		/* Mutable list to modify. */
-    size_t first, size_t last)	/* Range of chars to remove. */
+    Col_Word mlist,
+    size_t first, 
+    size_t last)
 {
     size_t length, loop;
 
@@ -2561,6 +3093,23 @@ Col_MListRemove(
     }
     WORD_LIST_LOOP(mlist) = loop;
 }
+
+/*---------------------------------------------------------------------------
+ * Internal Function: MListRemove
+ *
+ *	Remove a range of elements from a mutable list. Recursively descend into
+ *	containing nodes.
+ *
+ * Arguments:
+ *	nodePtr		- Mutable list node to modify. May be overwritten in the
+ *			  process (e.g. if it gets converted to mutable).
+ *	first, last	- Range of elements to remove.
+ *	parent		- nodePtr parent. Set as modified in case nodePtr is 
+ *			  itself modified (see <Col_WordSetModified>).
+ *
+ * See also:
+ *	<Col_MListRemove>
+ *---------------------------------------------------------------------------*/
 
 static void
 MListRemove(
@@ -2749,435 +3298,27 @@ start:
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_MListReplace
  *
- * Col_ListAt --
+ *	Replace a range of elements in a mutable list with another.
  *
- *	Get the element of a list at a given position. 
+ *	Replacement is a combination of remove and insert.
  *
- * Results:
- *	If the index is past the end of the list, nil, else the element.
+ * Arguments:
+ *	mlist		- Mutable list to modify.
+ *	first, last	- Inclusive range of elements to replace.
+ *	with		- Replacement list.
  *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
-
-Col_Word
-Col_ListAt(
-    Col_Word list,		/* List to get element from. */
-    size_t index)		/* Element index. */
-{
-    Col_ListIterator it;
-    
-    Col_ListIterBegin(list, index, &it);
-    return Col_ListIterAt(&it);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_RepeatList --
- *
- *	Create a list formed by the repetition of a source list.
- *
- *	This method is based on recursive concatenations of the list
- *	following the bit pattern of the count factor. Doubling a list simply 
- *	consists of a concat with itself. In the end the resulting tree is 
- *	very compact, and only a minimal number of extraneous cells are 
- *	allocated during the balancing process (and will be eventually 
- *	collected).
- *
- * Results:
- *	Nil if count is zero.
- *	Else, the repetition of the source list.
- *
- * Side effects:
- *	New lists may be created.
- *
- *---------------------------------------------------------------------------
- */
-
-Col_Word
-Col_RepeatList(
-    Col_Word list,		/* The list to repeat. */
-    size_t count)		/* Repetition factor. */
-{
-    Col_Word listRoot;		/* Actual root node. */
-
-    switch (WORD_TYPE(list)) {
-	case WORD_TYPE_WRAP:
-	    return Col_RepeatList(WORD_WRAP_SOURCE(list), count);
-
-	case WORD_TYPE_VOIDLIST:
-	case WORD_TYPE_VECTOR:
-	case WORD_TYPE_MVECTOR:
-	case WORD_TYPE_CONCATLIST:
-	case WORD_TYPE_SUBLIST:
-	    listRoot = list;
-	    break;
-
-	case WORD_TYPE_LIST:
-	case WORD_TYPE_MLIST:
-	    if (WORD_LIST_LOOP(list)) {
-		/*
-		 * List is cyclic, won't repeat.
-		 */
-
-		return list;
-	    }
-	    break;
-
-	/* WORD_TYPE_UNKNOWN */
-
-	default:
-	    /*
-	     * Invalid type.
-	     */
-
-	    Col_Error(COL_ERROR, "%x is not an immutable list", list);
-	    return WORD_NIL;
-    }
-
-    if (Col_ListLength(listRoot) == 0) {
-	/*
-	 * No-op.
-	 */
-
-	return WORD_LIST_EMPTY;
-    }
-
-    /* 
-     * Quick cases. 
-     */
-
-    if (count == 0) {return WORD_NIL;}
-    if (count == 1) {return list;}
-    if (count == 2) {return Col_ConcatLists(list, list);}
-
-    if (count & 1) {
-	/* Odd.*/
-	return Col_ConcatLists(list, Col_RepeatList(list, count-1));
-    } else {
-	/* Even. */
-	return Col_RepeatList(Col_ConcatLists(list, list), count>>1);
-    }
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_ListInsert --
- *
- *	Insert a list into another one, just before the given insertion point.
- *
- *	Only perform minimal tests to prevent overflow, basic ops should 
- *	perform further optimizations anyway.
- *
- *	As list are immutable, the result is a new list.
- *
- *	Insertion past the end of the list results in a concatenation.
- *
- * Results:
- *	The resulting list.
- *
- * Side effects:
- *	New lists may be created.
- *
- *---------------------------------------------------------------------------
- */
-
-Col_Word
-Col_ListInsert(
-    Col_Word into,		/* Where to insert. */
-    size_t index,		/* Index of insertion point. */
-    Col_Word list)		/* List to insert. */
-{
-    size_t length, loop, listLength, listLoop;
-    Col_Word listRoot;
-
-    listLength = Col_ListLength(list);
-    if (listLength == 0) {
-	/*
-	 * No-op.
-	 */
-
-	return into;
-    }
-
-    if (index == 0) {
-	/*
-	 * Insert at beginning.
-	 */
-
-	return Col_ConcatLists(list, into);
-    }
-
-    length = Col_ListLength(into);
-    loop = Col_ListLoopLength(into);
-    if (loop == 0 && index >= length) {
-	/*
-	 * Insertion past the end of non-cyclic list is concatenation.
-	 */
-
-	return Col_ConcatLists(into, list);
-    }
-
-    if (loop > 0 && index > length-loop) {
-	/*
-	 * Insertion within loop. Normalize index and increase loop length.
-	 */
-
-	index = (index - (length-loop)) % loop + (length-loop);
-	if (index == length-loop) index = length;
-	loop += listLength;
-    }
-
-    listRoot = Col_ConcatLists(Col_Sublist(into, 0, index-1), list);
-
-    listLoop = Col_ListLoopLength(list);
-    if (listLoop) {
-	/*
-	 * Inserted list is cyclic, its loop closes the resulting list.
-	 */
-
-	return NewListWord(listRoot, listLoop);
-    }
-    
-    if (index <= length-1) {
-	/*
-	 * Append trailing sublist.
-	 */
-
-	listRoot = Col_ConcatLists(listRoot, Col_Sublist(into, index, 
-		length-1));
-    }
-    return NewListWord(listRoot, loop);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_ListRemove --
- *
- *	Remove a range of elements from a list.
- *
- *	Only perform minimal tests to prevent overflow, basic ops should 
- *	perform further optimizations anyway.
- *
- *	As lists are immutable, the result is a new list.
- *
- * Results:
- *	The resulting list.
- *
- * Side effects:
- *	New lists may be created.
- *
- *---------------------------------------------------------------------------
- */
-
-Col_Word 
-Col_ListRemove(
-    Col_Word list,		/* List to remove sequence from. */
-    size_t first, size_t last)	/* Range of chars to remove. */
-{
-    size_t length, loop;
-    Col_Word listRoot;
-
-    if (first > last) {
-	/* 
-	 * No-op. 
-	 */
-
-	return list;
-    }
-
-    length = Col_ListLength(list);
-    if (length == 0) {
-	/*
-	 * No-op.
-	 */
-
-	return list;
-    }
-
-    loop = Col_ListLoopLength(list);
-    if (loop == 0 && first >= length) {
-	/*
-	 * Removal past the end of non-cyclic list is no-op.
-	 */
-
-	return list;
-    }
-
-    if (loop > 0) {
-	/*
-	 * Normalize indices.
-	 */
-
-	if (first > length-loop) {
-	    first = (first - (length-loop)) % loop + (length-loop);
-	    if (first == length-loop) {
-		/* 
-		 * Keep within loop.
-		 */
-
-		first = length;
-	    }
-	}
-	if (last > length-loop) {
-	    last = (last - (length-loop)) % loop + (length-loop);
-	}
-
-	if (first > length-loop && last-first+1 == 0) {
-	    /*
-	     * Removal of a multiple of loop is no-op.
-	     */
-
-	    return list;
-	}
-    }
-
-    listRoot = WORD_LIST_EMPTY;
-    if (first > 0) {
-	/*
-	 * Keep beginning of list.
-	 */
-
-	listRoot = Col_Sublist(list, 0, first-1);
-    }
-
-    if (last < first) {
-	/*
-	 * Keep inner part of loop (shorten it as it's already part of listRoot,
-	 * see above).
-	 */
-
-	ASSERT(loop > 0);
-	ASSERT(first > length-loop);
-	ASSERT(last >= length-loop);
-
-	loop = first-last-1;
-    } else {
-	if (last < length-1) {
-	    /* 
-	     * Keep end of list.
-	     */
-
-	    listRoot = Col_ConcatLists(listRoot, Col_Sublist(list, last+1, 
-		    length-1));
-	}
-	if (first > length-loop) {
-	    /*
-	     * Shorten loop.
-	     */
-
-	    loop -= (last-first+1);
-	} else if (last >= length-loop) {
-	    /*
-	     * Append beginning of loop.
-	     */
-
-	    listRoot = Col_ConcatLists(listRoot, Col_Sublist(list, length-loop, 
-		    last));
-	}
-    }
-
-    return NewListWord(listRoot, loop);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_ListReplace --
- *
- *	Replace a range of characters in a list with another.
- *
- *	Only perform minimal tests to prevent overflow, basic ops should 
- *	perform further optimizations anyway.
- *
- *	As lists are immutable, the result is a new list.
- *
- * Results:
- *	The resulting list.
- *
- * Side effects:
- *	New lists may be created.
- *
- *---------------------------------------------------------------------------
- */
-
-Col_Word 
-Col_ListReplace(
-    Col_Word list,		/* Original list. */
-    size_t first, size_t last,	/* Inclusive range of chars to replace. */
-    Col_Word with)		/* Replacement list. */
-{
-    size_t length, loop;
-    Col_Word result;
-
-    if (first > last) {
-	/* 
-	 * No-op. 
-	 */
-
-	return list;
-    }
-
-    length = Col_ListLength(list);
-    loop = Col_ListLoopLength(list);
-
-    /*
-     * First remove range to replace...
-     */
-
-    result = Col_ListRemove(list, first, last);
-
-    if (loop > 0 && first > length) {
-	/*
-	 * Insertion point may have moved. Normalize indices.
-	 */
-
-	first = (first - (length-loop)) % loop + (length-loop);
-	if (first == length-loop) {
-	    /* 
-	     * Keep within loop.
-	     */
-
-	    first = length;
-	}
-    }
-
-    /* 
-     * .. then insert list at beginning of range.
-     */
-
-    return Col_ListInsert(result, first, with);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_MListReplace --
- *
- *	Replace a range of characters in a mutable list with another.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	The target list is modified.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<Col_MListInsert>, <Col_MListRemove>
+ *---------------------------------------------------------------------------*/
 
 void
 Col_MListReplace(
-    Col_Word mlist,		/* Mutable list to modify. */
-    size_t first, size_t last,	/* Inclusive range of chars to replace. */
-    Col_Word with)		/* Replacement list. */
+    Col_Word mlist,
+    size_t first, size_t last,
+    Col_Word with)
 {
     size_t length, loop;
 
@@ -3225,10 +3366,13 @@ Col_MListReplace(
     Col_MListInsert(mlist, first, with);
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_TraverseListChunks --
+
+/****************************************************************************
+ * Group: List Traversal
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_TraverseListChunks
  *
  *	Iterate over the chunks of a number of lists.
  *
@@ -3236,32 +3380,35 @@ Col_MListReplace(
  *	well as the position within the lists. If it returns a non-zero result 
  *	then the iteration ends. 
  *
+ * Note:
  *	The algorithm is naturally recursive but this implementation avoids
  *	recursive calls thanks to a stack-allocated backtracking structure.
  *
+ * Arguments:
+ *	number		- Number of lists to traverse.
+ *	lists		- Lists to traverse.
+ *	start		- Index of first element.
+ *	max		- Max number of elements.
+ *	proc		- Callback proc called on each chunk.
+ *	clientData	- Opaque data passed as is to above proc.
+ *	lengthPtr	- If non-NULL, incremented by the total number of 
+ *			  elements traversed upon completion.
+ *
  * Results:
  *	The return value of the last called proc, or -1 if no traversal was
- *	performed.
- *	If non-NULL, the value pointed by lengthPtr is incremented by the total
- *	length of the traversed lists, i.e. the number of elements.
- *
- * Side effects:
- *	If non-NULL, the value pointed to by lengthPtr is updated.
- *
- *---------------------------------------------------------------------------
- */
+ *	performed. If non-NULL, the value pointed by lengthPtr is incremented by
+ *	the total length of the traversed lists, i.e. the number of elements.
+ *---------------------------------------------------------------------------*/
 
 int 
 Col_TraverseListChunks(
-    size_t number,		/* Number of lists to traverse. */
-    Col_Word *lists,		/* Lists to traverse. */
-    size_t start,		/* Index of first element. */
-    size_t max,			/* Max number of elements. */
-    Col_ListChunksTraverseProc *proc,	
-				/* Callback proc called on each chunk. */
-    Col_ClientData clientData,	/* Opaque data passed as is to above proc. */
-    size_t *lengthPtr)		/* If non-NULL, incremented by the total number 
-				 * of elements traversed upon completion. */
+    size_t number,
+    Col_Word *lists,
+    size_t start,
+    size_t max,
+    Col_ListChunksTraverseProc *proc,
+    Col_ClientData clientData,
+    size_t *lengthPtr)
 {
     struct {
 	/*
@@ -3525,103 +3672,65 @@ Col_TraverseListChunks(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+
+/****************************************************************************
+ * Group: List Iterators
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: IterAtVector
  *
- * Col_ListIterBegin --
+ *	Element access proc for vector leaves from iterators. Follows
+ *	<ColListIterLeafAtProc> signature.
  *
- *	Initialize the list iterator so that it points to the index-th
- *	element within the list.
+ * Arguments:
+ *	leaf	- Leaf node.
+ *	index	- Leaf-relative index of element.
  *
- * Results:
- *	Whether the iterator looped or not.
+ * Result:
+ *	Element at given index.
  *
- * Side effects:
- *	If index points past the end of the list, the iterator is initialized 
- *	to the end iterator (i.e. whose list field is nil), else it points 
- *	to the element within the list.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<ColListIterLeafAtProc>, <ColListIterator>, 
+ *	<ColListIterUpdateTraversalInfo>
+ *---------------------------------------------------------------------------*/
 
-int
-Col_ListIterBegin(
-    Col_Word list,		/* List to iterate over. */
-    size_t index,		/* Index of element. */
-    Col_ListIterator *it)	/* Iterator to initialize. */
-{
-    size_t length;
-    int looped=0;
-
-    length = Col_ListLength(list);
-    if (index >= length) {
-	size_t loop = Col_ListLoopLength(list);
-	if (!loop) {
-	    /*
-	     * End of list.
-	     */
-
-	    it->list = WORD_NIL;
-	    return looped;
-	}
-
-	/*
-	 * Cyclic list. Normalize index.
-	 */
-
-	looped = 1;
-	index = (index - (length-loop)) % loop + (length-loop);
-    }
-
-    it->list = list;
-    it->index = index;
-
-    /*
-     * Traversal info will be lazily computed.
-     */
-
-    it->traversal.subnode = WORD_NIL;
-    it->traversal.leaf = WORD_NIL;
-
-    return looped;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * IterAtVector --
- * IterAtVoid --
- *
- *	Element accessors for list iterators.
- *
- * Results:
- *	The element at the given position in the leaf.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
-
-static Col_Word IterAtVector(
+static Col_Word 
+IterAtVector(
     Col_Word leaf, 
-    size_t index
-)
+    size_t index)
 {
     return WORD_VECTOR_ELEMENTS(leaf)[index];
 }
-static Col_Word IterAtVoid(
+
+/*---------------------------------------------------------------------------
+ * Internal Function: IterAtVoid
+ *
+ *	Element access proc for void list leaves from iterators. Follows
+ *	<ColListIterLeafAtProc> signature.
+ *
+ * Arguments:
+ *	leaf	- Leaf node.
+ *	index	- Leaf-relative index of element.
+ *
+ * Result:
+ *	Always nil.
+ *
+ * See also:
+ *	<ColListIterLeafAtProc>, <ColListIterator>, 
+ *	<ColListIterUpdateTraversalInfo>
+ *---------------------------------------------------------------------------*/
+
+static Col_Word 
+IterAtVoid(
     Col_Word leaf, 
-    size_t index
-)
+    size_t index)
 {
     return WORD_NIL;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * ColListIterUpdateTraversalInfo --
+/*---------------------------------------------------------------------------
+ * Internal Function: ColListIterUpdateTraversalInfo
  *
  *	Get the deepest subnodes needed to access the current element 
  *	designated by the iterator.
@@ -3641,18 +3750,13 @@ static Col_Word IterAtVoid(
  *	complex list is no more computationally intensive than over a flat 
  *	array.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	Iterator is updated.
- *
- *---------------------------------------------------------------------------
- */
+ * Argument:
+ *	it	- The iterator to update.
+ *---------------------------------------------------------------------------*/
 
 void
 ColListIterUpdateTraversalInfo(
-    Col_ListIterator *it)	/* The iterator to update. */
+    Col_ListIterator *it)
 {
     Col_Word node;
     size_t first, last, offset;
@@ -3790,28 +3894,84 @@ ColListIterUpdateTraversalInfo(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterBegin
  *
- * Col_ListIterCompare --
+ *	Initialize the list iterator so that it points to the index-th
+ *	element within the list. If index points past the end of the list, the
+ *	iterator is initialized to the end iterator (i.e. whose list field is 
+ *	nil).
+ *
+ * Arguments:
+ *	list	- List to iterate over.
+ *	index	- Index of element.
+ *	it	- Iterator to initialize.
+ *
+ * Result:
+ *	Whether the iterator looped or not.
+ *---------------------------------------------------------------------------*/
+
+int
+Col_ListIterBegin(
+    Col_Word list,
+    size_t index,
+    Col_ListIterator *it)
+{
+    size_t length;
+    int looped=0;
+
+    length = Col_ListLength(list);
+    if (index >= length) {
+	size_t loop = Col_ListLoopLength(list);
+	if (!loop) {
+	    /*
+	     * End of list.
+	     */
+
+	    it->list = WORD_NIL;
+	    return looped;
+	}
+
+	/*
+	 * Cyclic list. Normalize index.
+	 */
+
+	looped = 1;
+	index = (index - (length-loop)) % loop + (length-loop);
+    }
+
+    it->list = list;
+    it->index = index;
+
+    /*
+     * Traversal info will be lazily computed.
+     */
+
+    it->traversal.subnode = WORD_NIL;
+    it->traversal.leaf = WORD_NIL;
+
+    return looped;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterCompare
  *
  *	Compare two iterators by their respective positions.
  *
- * Results:
+ * Arguments:
+ *	it1	- First iterator.
+ *	it2	- Second iterator.
+ *
+ * Result:
  *	-  < 0 if it1 is before it2
  *	-  > 0 if it1 is after it2
  *	-  0 if they are equal
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 int
 Col_ListIterCompare(
-    Col_ListIterator *it1,	/* First iterator. */
-    Col_ListIterator *it2)	/* Second iterator. */
+    Col_ListIterator *it1,
+    Col_ListIterator *it2)
 {
     if (Col_ListIterEnd(it1)) {
 	if (Col_ListIterEnd(it2)) {
@@ -3830,26 +3990,51 @@ Col_ListIterCompare(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterMoveTo
  *
- * Col_ListIterForward --
+ *	Move the iterator to the given absolute position.
+ *
+ * Arguments:
+ *	it	- The iterator to move.
+ *	index	- Position.
+ *
+ * Result:
+ *	Whether the iterator looped or not.
+ *---------------------------------------------------------------------------*/
+
+int
+Col_ListIterMoveTo(
+    Col_ListIterator *it,
+    size_t index)
+{
+    if (index > it->index) {
+	return Col_ListIterForward(it, index - it->index);
+    } else if (index < it->index) {
+	Col_ListIterBackward(it, it->index - index);
+	return 0;
+    } else {
+	return 0;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterForward
  *
  *	Move the iterator to the nb-th next element.
  *
- * Results:
+ * Arguments:
+ *	it	- The iterator to move.
+ *	nb	- Offset.
+ *
+ * Result:
  *	Whether the iterator looped or not.
- *
- * Side effects:
- *	Update the iterator.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 int
 Col_ListIterForward(
-    Col_ListIterator *it,	/* The iterator to move. */
-    size_t nb)			/* Offset. */
+    Col_ListIterator *it,
+    size_t nb)
 {
     size_t length;
     int looped=0;
@@ -3974,26 +4159,20 @@ Col_ListIterForward(
     return looped;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_ListIterBackward --
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterBackward
  *
  *	Move the iterator to the nb-th previous element.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	Update the iterator.
- *
- *---------------------------------------------------------------------------
- */
+ * Arguments:
+ *	it	- The iterator to move.
+ *	nb	- Offset.
+ *---------------------------------------------------------------------------*/
 
 void
 Col_ListIterBackward(
-    Col_ListIterator *it,	/* The iterator to move. */
-    size_t nb)			/* Offset. */
+    Col_ListIterator *it,
+    size_t nb)
 {
     if (Col_ListIterEnd(it)) {
 	Col_Error(COL_ERROR, "Invalid list iterator");
@@ -4054,35 +4233,4 @@ Col_ListIterBackward(
      */
 
     it->traversal.index -= nb;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_ListIterMoveTo --
- *
- *	Move the iterator to the given absolute position.
- *
- * Results:
- *	Whether the iterator looped or not.
- *
- * Side effects:
- *	Update the iterator.
- *
- *---------------------------------------------------------------------------
- */
-
-int
-Col_ListIterMoveTo(
-    Col_ListIterator *it,	/* The iterator to move. */
-    size_t index)		/* Position. */
-{
-    if (index > it->index) {
-	return Col_ListIterForward(it, index - it->index);
-    } else if (index < it->index) {
-	Col_ListIterBackward(it, it->index - index);
-	return 0;
-    } else {
-	return 0;
-    }
 }

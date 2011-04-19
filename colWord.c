@@ -1,3 +1,15 @@
+/*
+ * File: colWord.c
+ *
+ *	This file implements the word handling features of Colibri.
+ *
+ *	Words are a generic abstract datatype framework used in conjunction with
+ *	the exact generational garbage collector and the cell-based allocator.
+ *
+ * See also:
+ *	<colWord.h>
+ */
+
 #include "colibri.h"
 #include "colInternal.h"
 
@@ -12,28 +24,31 @@ static int		HasSynonymField(Col_Word word);
 static void		AddSynonymField(Col_Word *wordPtr);
 
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_NewIntWord --
+/****************************************************************************
+ * Group: Word Creation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_NewIntWord
  *
  *	Create a new integer word.
  *
- *	If the integer value is sufficiently small, return an immediate 
- *	value instead of allocating memory.
+ *	If the integer value is sufficiently small, return an immediate value 
+ *	instead of allocating memory.
  *
- * Results:
- *	The new word.
+ * Argument:
+ *	value	- Integer value of the word to create.
+ *
+ * Result:
+ *	The new integer word.
  *
  * Side effects:
- *	May allocate memory cells.
- *
- *---------------------------------------------------------------------------
- */
+ *	Allocates memory cells if word is not immediate.
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_NewIntWord(
-    int value)			/* Integer value of the word to create. */
+    intptr_t value)
 {
     Col_Word word;		/* Resulting word in the general case. */
 
@@ -55,27 +70,28 @@ Col_NewIntWord(
     return word;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_NewCustomWord --
+/*---------------------------------------------------------------------------
+ * Function: Col_NewCustomWord
  *
  *	Create a new custom word.
  *
- * Results:
+ * Arguments:
+ *	type	- The word type.
+ *	size	- Size of data.
+ *	dataPtr	- Will hold a pointer to the allocated data.
+ *
+ * Result:
  *	A new word of the given size.
  *
  * Side effects:
- *	Memory cells are allocated.
- *
- *---------------------------------------------------------------------------
- */
+ *	Allocates memory cells.
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_NewCustomWord(
-    Col_CustomWordType *type,	/* The word type. */
-    size_t size,		/* Size of data. */
-    void **dataPtr)		/* Will hold a pointer to the allocated data. */
+    Col_CustomWordType *type,
+    size_t size,
+    void **dataPtr)
 {
     Col_Word word = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(size, type));
     WORD_CUSTOM_INIT(word, type);
@@ -86,26 +102,28 @@ Col_NewCustomWord(
     return word;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_GetWordInfo --
+
+/****************************************************************************
+ * Group: Word Access and Synonyms
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_GetWordInfo
  *
  *	Get information about a word (type and data).
  *
+ * Arguments:
+ *	word	- The word to get info for.
+ *	dataPtr	- Returned data.
+ *
  * Results:
- *	A type ID or pointer, and additional info in dataPtr.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ *	A type ID or pointer, and additional type-specific info in dataPtr.
+ *---------------------------------------------------------------------------*/
 
 Col_WordType
 Col_GetWordInfo(
-    Col_Word word,		/* The word to get info for. */
-    Col_WordData *dataPtr)	/* Returned data. */
+    Col_Word word,
+    Col_WordData *dataPtr)
 {
     switch (WORD_TYPE(word)) {
 	/*
@@ -208,27 +226,26 @@ Col_GetWordInfo(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_FindWordInfo
  *
- * Col_FindWordInfo --
+ *	Find data for a word with the given type.
  *
- *	Find the value of a word with the given type.
+ * Arguments:
+ *	word	- The word to get data from.
+ *	type	- The required type.
+ *	dataPtr	- Returned data.
  *
  * Results:
- *	The word or nil if not found, and additional info in dataPtr.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ *	The word or nil if not found, and additional info type-specific in 
+ *	dataPtr.
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_FindWordInfo(
-    Col_Word word,		/* The word to get value from. */
-    Col_WordType type,		/* The required type. */
-    Col_WordData *dataPtr)	/* Returned data. */
+    Col_Word word,
+    Col_WordType type,
+    Col_WordData *dataPtr)
 {
     Col_Word synonym;
 
@@ -262,25 +279,21 @@ Col_FindWordInfo(
     return WORD_NIL;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * HasSynonymField --
+/*---------------------------------------------------------------------------
+ * Internal Function: HasSynonymField
  *
  *	Test whether the word has a synonym field.
  *
- * Results:
+ * Argument:
+ *	word	- The word to test.
+ *
+ * Result:
  *	Whether the word has a synonym field.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 static int
 HasSynonymField(
-    Col_Word word)		/* The word to test. */
+    Col_Word word)
 {
     switch (WORD_TYPE(word)) {
 	case WORD_TYPE_WRAP:
@@ -300,26 +313,25 @@ HasSynonymField(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * AddSynonymField --
+/*---------------------------------------------------------------------------
+ * Internal Function: AddSynonymField
  *
  *	Return a word that is semantically identical to the given one and has
  *	a synonym field.
  *
- * Results:
+ * Argument:
+ *	wordPtr	- Point to the word to convert.
+ *
+ * Result:
  *	A word with a synonym field.
  *
  * Side effects:
  *	Allocates memory cells.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 static void
 AddSynonymField(
-    Col_Word *wordPtr)		/* Point to the word to convert. */
+    Col_Word *wordPtr)
 {
     Col_Word converted;
 
@@ -356,32 +368,25 @@ AddSynonymField(
     *wordPtr = converted;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_GetWordSynonym --
+/*---------------------------------------------------------------------------
+ * Function: Col_GetWordSynonym
  *
  *	Get a synonym for the word.
  *
- *	Words form chains of synonyms, i.e. circular linked lists, except 
- *	when a word only has one synonym that is an immediate value or a rope
- *	(as they have no such concept). 
- *	To iterate over the chain, simply call this function several times 
- *	with the intermediary results until it returns nil.
+ *	Words may form chains of synonyms, i.e. circular linked lists. To
+ *	iterate over the chain, simply call this function several times on the 
+ *	intermediary results until it returns nil or the first word.
  *
- * Results:
- *	The word synonym, which can be a rope, an immediate value, or 
- *	another word.
+ * Argument:
+ *	word	- The word to get synonym for.
  *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ * Result:
+ *	The word synonym, which may be nil.
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_GetWordSynonym(
-    Col_Word word)		/* The word to get synonym for. */
+    Col_Word word)
 {
     if (!HasSynonymField(word)) {
 	return WORD_NIL;
@@ -390,29 +395,28 @@ Col_GetWordSynonym(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_AddWordSynonym --
+/*---------------------------------------------------------------------------
+ * Function: Col_AddWordSynonym
  *
  *	Add a synonym to a word.
  *
- * Results:
- *	None.
+ * Arguments:
+ *	wordPtr	- Point to the word to add synonym to. May be modified in the
+ *		  process (in this case the original word will be part of the
+ *		  returned word's synonym chain).
+ *	synonym	- The synonym to add.
+ *	parent	- If non-nil, parent of the given word. It will be marked as
+ *		  modified is wordPtr is overwritten.
  *
  * Side effects:
- *	Modify the chain of synonyms, may allocate new words. If the word is
- *	an immediate value, it may be upconverted to a regular word, and
- *	declared as child if the parent is given.
- *
- *---------------------------------------------------------------------------
- */
+ *	Modifies the chain of synonyms, may allocate new words.
+ *---------------------------------------------------------------------------*/
 
 void
 Col_AddWordSynonym(
-    Col_Word *wordPtr,		/* Point to the word to add synonym to. */
-    Col_Word synonym,		/* The synonym to add. */
-    Col_Word parent)		/* If non-nil, parent of the given word. */
+    Col_Word *wordPtr,
+    Col_Word synonym,
+    Col_Word parent)
 {
     Col_Word word;
 
@@ -492,26 +496,19 @@ Col_AddWordSynonym(
     Col_WordSetModified(synonym);
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_ClearWordSynonym --
+/*---------------------------------------------------------------------------
+ * Function: Col_ClearWordSynonym
  *
  *	Clear a word's synonym. This removes the word from the synonym chain 
  *	it belongs to.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ * Argument:
+ *	word	- The word to clear synonym for.
+ *---------------------------------------------------------------------------*/
 
 void
 Col_ClearWordSynonym(
-    Col_Word word)		/* The word to clear synonym for. */
+    Col_Word word)
 {
     Col_Word synonym;
 

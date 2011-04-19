@@ -1,15 +1,20 @@
+/*
+ * Internal File: colWin32Platform.c
+ *
+ *	This Win32-specific file implements the generic features needing 
+ *	platform-specific implementations, as well as the Win32-specific
+ *	features.
+ *
+ * See also:
+ *	<colPlatform.h>, <colWin32Platform.h>
+ */
+
 #include "../../colibri.h"
 #include "../../colInternal.h"
 #include "../../colPlatform.h"
 
 #include <windows.h>
 #include <sys/types.h>
-
-/*
- * Thread-local data.
- */
-
-DWORD tlsToken;
 
 /*
  * Bit twiddling hack for computing the log2 of a power of 2.
@@ -41,57 +46,638 @@ static DWORD WINAPI	GcThreadProc(LPVOID lpParameter);
 static BOOL		Init(void);
 
 
-/*
- *----------------------------------------------------------------
- * System page allocator.
- *----------------------------------------------------------------
- */
+/****************************************************************************
+ * Internal Group: Thread-Local Storage
+ ****************************************************************************/
 
-/*
- * Contrary to most other platforms where individual pages can be allocated and
- * freed (for example using mmap/munmap), the Windows VirtualAlloc API restricts 
- * address reservation to a granularity of SYSTEM_INFO.dwAllocationGranularity 
- * (65536 on IA32), although it can commit and decommit individual pages with a 
- * size of SYSTEM_INFO.dwPageSize (4096 on IA32). Besides, behaving as if 
- * system pages had a size of SYSTEM_INFO.dwAllocationGranularity proved to be
- * too CPU and memory intensive. So if we want to keep the system page small, 
- * this implies that each page is itself part of a larger address range.
+/*---------------------------------------------------------------------------
+ * Internal Variable: tlsToken
  *
- * Achieving single page granularity involves a lot of bookkeeping, as Windows 
- * doesn't provide an efficient query API (VirtualQuery is very CPU intensive 
- * and is known to be even slower on Win64). So large address ranges are 
- * reserved, and individual pages are committed within these ranges.
+ *	Thread-local storage identifier. Used to get thread-specific data.
  *
- * When the number of pages to allocate exceeds a certain size (defined as 
- * LARGE_PAGE_SIZE), a dedicated address range is reserved and committed, which 
- * must be freed all at once. Else,pages are allocated within larger address 
- * ranges using the following scheme:
+ * See also:
+ *	<ThreadData>, <Init>
+ *---------------------------------------------------------------------------*/
+
+DWORD tlsToken;
+
+/*---------------------------------------------------------------------------
+ * Internal Typedef: PlatGroupData
  *
- * Address ranges are reserved in geometrically increasing sizes up to a 
- * maximum size (the first being a multiple of the allocation granularity). 
- * Ranges form a singly-linked list in allocation order (so that search times 
- * are geometrically increasing too). A descriptor structure is malloc'd along 
- * with the range and consists of a pointer to the next descrptor, the base 
- * address of the range, the total and free numbers of pages and the index of 
- * the first free page in range, and a bitmask table for allocated pages (much 
- * alike regular Colibri pages).
+ *	Platform-specific group data.
  *
- * To allocate a group of pages in an address range, the bitmask is scanned 
- * until a large enough group of free pages is found. To free a group of
- * pages, the containing address range is found by scanning all ranges (even
- * VirtualQuery is too slow for this simple purpose!). In either case the 
- * descriptor is updated accordingly. If a containing range is not found we 
- * assume that it was a dedicated range and we attempt to release it at once.
+ * Fields:
+ *	data			- Generic <GroupData> structure.
+ *	next			- Next active group in list.
+ *	csRoots			- Critical section protecting root management.
+ *	csDirties		- Critical section protecting dirty page 
+ *				  management.
+ *	csGc			- Critical section protecting GC from worker 
+ *				  threads.
+ *	eventGcScheduled	- Triggers GC thread.
+ *	eventGcDone		- Barrier for worker threads.
+ *	scheduled		- Flag for when a GC is scheduled.
+ *	terminated		- Flag for thread group destruction.
+ *	nbActive		- Active worker thread counter.
+ *	threadGc		- GC thread.
  *
- * The allocation scheme may not look optimal at first sight (especially the
- * bitmask scanning step), but keep in mind that the typical use case only 
- * involves single page allocations. Multiple page allocations only occur when 
- * allocating large, multiple cell-based objects, and most objects are single 
- * cell sized. And very large pages will end up in their own dedicated range
- * with no page management. Moreover stress tests have shown that this scheme 
- * yielded similar or better performances than the previous scheme that was 
- * limited to granularity-sized address ranges.
- */
+ * See also:
+ *	<ThreadData>, <GroupData>, <Init>, <AllocGroupData>, <FreeGroupData>
+ *---------------------------------------------------------------------------*/
+
+typedef struct PlatGroupData {
+    GroupData data;
+    struct PlatGroupData *next;
+    CRITICAL_SECTION csRoots;
+    CRITICAL_SECTION csDirties;
+
+    CRITICAL_SECTION csGc;
+    HANDLE eventGcScheduled;
+    HANDLE eventGcDone;
+    int scheduled;
+    int terminated;
+    int nbActive;
+    HANDLE threadGc;
+} PlatGroupData;
+
+/*---------------------------------------------------------------------------
+ * Internal Variable: sharedGroups
+ *
+ *	List of active groups in process.
+ *
+ * See also:
+ *	<PlatGroupData>, <AllocGroupData>, <FreeGroupData>
+ *---------------------------------------------------------------------------*/
+
+static PlatGroupData *sharedGroups;
+
+/*---------------------------------------------------------------------------
+ * Internal Variable: csSharedGroups
+ *
+ *	Critical section protecting <sharedGroups>.
+ *
+ * See also:
+ *	<sharedGroups>
+ *---------------------------------------------------------------------------*/
+
+static CRITICAL_SECTION csSharedGroups;
+
+/*---------------------------------------------------------------------------
+ * Internal Function: AllocGroupData
+ *
+ *	Allocate and initialize a thread group data structure.
+ *
+ * Argument:
+ *	model	- Threading model.
+ *
+ * Result:
+ *	The newly allocated structure.
+ *
+ * Side effects:
+ *	Memory allocated and system objects created.
+ *
+ * See also:
+ *	<Threading Models>, <PlatGroupData>, <FreeGroupData>
+ *---------------------------------------------------------------------------*/
+
+static PlatGroupData *
+AllocGroupData(
+    unsigned int model)
+{
+    PlatGroupData *groupData = (PlatGroupData *) malloc(sizeof(PlatGroupData));
+    memset(groupData, 0, sizeof(PlatGroupData));
+    groupData->data.model = model;
+    GcInitGroup((GroupData *) groupData);
+
+    if (model != COL_SINGLE) {
+	/*
+	 * Create synchronization objects.
+	 */
+
+	//TODO error handling.
+	InitializeCriticalSection(&groupData->csRoots);
+	InitializeCriticalSection(&groupData->csDirties);
+
+	InitializeCriticalSection(&groupData->csGc);
+	groupData->eventGcDone = CreateEvent(NULL, TRUE, TRUE, NULL);
+	groupData->eventGcScheduled = CreateEvent(NULL, FALSE, FALSE, NULL);
+
+	/*
+	 * Create GC thread.
+	 */
+
+	groupData->threadGc = CreateThread(NULL, 0, GcThreadProc, groupData,
+		0, NULL);
+    }
+
+    return groupData;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: FreeGroupData
+ *
+ *	Free a thread group data structure.
+ *
+ * Argument:
+ *	groupData	- Structure to free.
+ *
+ * Side effects:
+ *	Memory freed and system objects deleted.
+ *
+ * See also:
+ *	<PlatGroupData>, <AllocGroupData>
+ *---------------------------------------------------------------------------*/
+
+static void
+FreeGroupData(
+    PlatGroupData *groupData)
+{
+    if (groupData->data.model != COL_SINGLE) {
+	/*
+	 * Signal and wait for termination of GC thread.
+	 */
+
+	//TODO error handling.
+	groupData->terminated = 1;
+	SignalObjectAndWait(groupData->eventGcScheduled, groupData->threadGc,
+	    INFINITE, FALSE);
+
+	/*
+	 * Destroy synchronization objects.
+	 */
+
+	DeleteObject(groupData->eventGcScheduled);
+	DeleteObject(groupData->eventGcDone);
+	DeleteCriticalSection(&groupData->csGc);
+
+	DeleteCriticalSection(&groupData->csDirties);
+	DeleteCriticalSection(&groupData->csRoots);
+    }
+
+    GcCleanupGroup((GroupData *) groupData);
+    free(groupData);
+}
+
+
+/****************************************************************************
+ * Internal Group: Process & Threads
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatEnter
+ *
+ *	Enter the thread. If this is the first nested call, initialize thread
+ *	data. If this is the first thread in its group, initialize group data
+ *	as well.
+ *
+ * Argument:
+ *	model	- Threading model.
+ *
+ * Result:
+ *	Non-zero if this is the first nested call, else 0.
+ *
+ * See also:
+ *	<Threading Models>, <ThreadData>, <PlatGroupData>, <PlatLeave>, 
+ *	<Col_Init>
+ *---------------------------------------------------------------------------*/
+
+int
+PlatEnter(
+    unsigned int model)
+{
+    ThreadData *data = PlatGetThreadData();
+    if (data) {
+	/* 
+	 * Increment nest count. 
+	 */
+
+	return ((++data->nestCount) == 1);
+    }
+
+    /*
+     * Initialize thread data.
+     */
+
+    data = (ThreadData *) malloc(sizeof(ThreadData));
+    memset(data, 0, sizeof(*data));
+    data->nestCount = 1;
+    GcInitThread(data);
+    TlsSetValue(tlsToken, data);
+
+    if (model == COL_SINGLE || model == COL_ASYNC) {
+	/*
+	 * Allocate dedicated group.
+	 */
+
+	data->groupData = (GroupData *) AllocGroupData(model);
+	data->groupData->first = data;
+	data->next = data;
+    } else {
+	/*
+	 * Try to find shared group with same model value.
+	 */
+
+	EnterCriticalSection(&csSharedGroups);
+	{
+	    PlatGroupData *groupData = sharedGroups;
+	    while (groupData && groupData->data.model != model) {
+		groupData = groupData->next;
+	    }
+	    if (!groupData) {
+		/*
+		 * Allocate new group and insert at head.
+		 */
+
+		groupData = AllocGroupData(model);
+		groupData->next = sharedGroups;
+		sharedGroups = groupData;
+	    }
+
+	    /*
+	     * Add thread to group.
+	     */
+
+	    data->groupData = (GroupData *) groupData;
+	    if (data->groupData->first) {
+		data->next = data->groupData->first->next;
+		data->groupData->first->next = data;
+	    } else {
+		data->groupData->first = data;
+		data->next = data;
+	    }
+	}
+	LeaveCriticalSection(&csSharedGroups);
+    }
+
+    return 1;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatLeave
+ *
+ *	Leave the thread. If this is the first nested call, cleanup thread
+ *	data. If this is the last thread in its group, cleanup group data
+ *	as well.
+ *
+ * Result:
+ *	Non-zero if this is the last nested call, else 0.
+ *
+ * See also:
+ *	<ThreadData>, <PlatGroupData>, <PlatEnter>, <Col_Cleanup>
+ *---------------------------------------------------------------------------*/
+
+int
+PlatLeave()
+{
+    ThreadData *data = PlatGetThreadData();
+    if (!data) {
+	/* TODO: exception ? */
+	return 0;
+    }
+
+    /*
+     * Decrement nest count.
+     */
+
+    if (--data->nestCount) {
+	return 0;
+    }
+    
+    /*
+     * This is the last nested call, free structures.
+     */
+
+    if (data->groupData->model == COL_SINGLE || data->groupData->model 
+	    == COL_ASYNC) {
+	/*
+	 * Free dedicated group as well.
+	 */
+
+	FreeGroupData((PlatGroupData *) data->groupData);
+    } else {
+	/*
+	 * Remove from shared group.
+	 */
+
+	EnterCriticalSection(&csSharedGroups);
+	{
+	    if (data->next == data) {
+		/*
+		 * Free group as well.
+		 */
+
+		FreeGroupData((PlatGroupData *) data->groupData);
+	    } else {
+		/*
+		 * Unlink.
+		 */
+
+		ThreadData *prev = data->next;
+		while (prev->next != data) {
+		    prev = prev->next;
+		}
+		prev->next = data->next;
+		data->groupData->first = prev;
+	    }
+	}
+	LeaveCriticalSection(&csSharedGroups);
+    }
+
+    GcCleanupThread(data);
+    free(data);
+    TlsSetValue(tlsToken, 0);
+
+    return 1;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: GcThreadProc
+ *
+ *	Thread dedicated to the GC process. Activated when one of the worker
+ *	threads in the group triggers the GC.
+ *
+ * Argument:
+ *	lpParameter	- <PlatGroupData>.
+ *
+ * Result:
+ *	Always zero.
+ *
+ * Side effects:
+ *	Calls <PerformGC>.
+ *
+ * See also:
+ *	<AllocGroupData>, <PerformGC>
+ *---------------------------------------------------------------------------*/
+
+static DWORD WINAPI
+GcThreadProc(
+    LPVOID lpParameter)
+{
+    PlatGroupData *groupData = (PlatGroupData *) lpParameter;
+    for (;;) {
+	WaitForSingleObject(groupData->eventGcScheduled, INFINITE);
+	EnterCriticalSection(&groupData->csGc);
+	{
+	    if (groupData->scheduled) {
+		groupData->scheduled = 0;
+		PerformGC((GroupData *) groupData);
+	    }
+	    SetEvent(groupData->eventGcDone);
+	}
+	LeaveCriticalSection(&groupData->csGc);
+	if (groupData->terminated) {
+	    ExitThread(0);
+	}
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatSyncPauseGC
+ *
+ *	Called when a worker thread calls the outermost <Col_PauseGC>.
+ *
+ * Argument:
+ *	data	- Group-specific data.
+ *
+ * Side effects:
+ *	May block as long as a GC is underway.
+ * 
+ * See also:
+ *	<GcThreadProc>, <SyncPauseGC>, <Col_PauseGC>
+ *---------------------------------------------------------------------------*/
+
+void
+PlatSyncPauseGC(
+    GroupData *data) 
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    ASSERT(groupData->data.model != COL_SINGLE);
+    WaitForSingleObject(groupData->eventGcDone, INFINITE);
+    EnterCriticalSection(&groupData->csGc);
+    {
+	groupData->nbActive++;
+    }
+    LeaveCriticalSection(&groupData->csGc);
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatTrySyncPauseGC
+ *
+ *	Called when a worker thread calls the outermost <Col_TryPauseGC>.
+ *
+ * Argument:
+ *	data	- Group-specific data.
+ *
+ * Results:
+ *	Non-zero if successful.
+ * 
+ * See also:
+ *	<GcThreadProc>, <TrySyncPauseGC>, <Col_TryPauseGC>
+ *---------------------------------------------------------------------------*/
+
+int
+PlatTrySyncPauseGC(
+    GroupData *data) 
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    ASSERT(groupData->data.model != COL_SINGLE);
+    if (WaitForSingleObject(groupData->eventGcDone, 0) 
+	    != WAIT_OBJECT_0) {
+	return 0;
+    }
+    EnterCriticalSection(&groupData->csGc);
+    {
+	groupData->nbActive++;
+    }
+    LeaveCriticalSection(&groupData->csGc);
+    return 1;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatSyncResumeGC
+ *
+ *	Called when a worker thread calls the outermost <Col_ResumeGC>.
+ *
+ * Arguments:
+ *	data		- Group-specific data.
+ *	performGc	- Whether to perform GC. 
+ *
+ * Side effects:
+ *	If last thread in group, may trigger the GC in the dedicated thread if 
+ *	previously scheduled. This will block further calls to 
+ *	<Col_PauseGC>/<PlatSyncPauseGC>.
+ *
+ * See also:
+ *	<GcThreadProc>, <SyncResumeGC>, <Col_ResumeGC>
+ *---------------------------------------------------------------------------*/
+
+void
+PlatSyncResumeGC(
+    GroupData *data,
+    int performGc) 
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    ASSERT(groupData->data.model != COL_SINGLE);
+    EnterCriticalSection(&groupData->csGc);
+    {
+	if (performGc && !groupData->scheduled) {
+	    ResetEvent(groupData->eventGcDone);
+	    groupData->scheduled = 1;
+	}
+	--groupData->nbActive;
+	if (!groupData->nbActive && groupData->scheduled) {
+	    SetEvent(groupData->eventGcScheduled);
+	}
+    }
+    LeaveCriticalSection(&groupData->csGc);
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: PlatEnterProtectRoots
+ *
+ *	Enter protected section around root management structures.
+ *
+ * Argument:
+ *	data	- Group-specific data.
+ *
+ * Side effects:
+ *	Blocks until no thread owns the section.
+ *
+ * See also:
+ *	<PlatLeaveProtectRoots>, <EnterProtectRoots>
+ *---------------------------------------------------------------------------*/
+
+void
+PlatEnterProtectRoots(
+    GroupData *data)
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    ASSERT(groupData->data.model >= COL_SHARED);
+    EnterCriticalSection(&groupData->csRoots);
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: PlatLeaveProtectRoots
+ *
+ *	Leave protected section around root management structures.
+ *
+ * Argument:
+ *	data	- Group-specific data.
+ *
+ * Side effects:
+ *	May unblock any thread waiting for the section.
+ *
+ * See also:
+ *	<PlatEnterProtectRoots>, <LeaveProtectRoots>
+ *---------------------------------------------------------------------------*/
+
+void
+PlatLeaveProtectRoots(GroupData *data)
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    ASSERT(groupData->data.model >= COL_SHARED);
+    LeaveCriticalSection(&groupData->csRoots);
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: PlatEnterProtectDirties
+ *
+ *	Enter protected section around dirty page management structures.
+ *
+ * Argument:
+ *	data	- Group-specific data.
+ *
+ * Side effects:
+ *	Blocks until no thread owns the section.
+ *
+ * See also:
+ *	<PlatLeaveProtectDirties>, <EnterProtectDirtiess>
+ *---------------------------------------------------------------------------*/
+
+void
+PlatEnterProtectDirties(GroupData *data)
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    ASSERT(groupData->data.model >= COL_SHARED);
+    EnterCriticalSection(&groupData->csDirties);
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: PlatLeaveProtectDirties
+ *
+ *	Leave protected section around dirty page management structures.
+ *
+ * Argument:
+ *	data	- Group-specific data.
+ *
+ * Side effects:
+ *	May unblock any thread waiting for the section.
+ *
+ * See also:
+ *	<PlatEnterProtectDirties>, <LeaveProtectDirties>
+ *---------------------------------------------------------------------------*/
+
+void
+PlatLeaveProtectDirties(GroupData *data)
+{
+    PlatGroupData *groupData = (PlatGroupData *) data;
+    ASSERT(groupData->data.model >= COL_SHARED);
+    LeaveCriticalSection(&groupData->csDirties);
+}
+
+
+/****************************************************************************
+ * Internal Group: System Page Allocation
+ *
+ *	Granularity-free system page allocation based on VirtualAlloc.
+ *
+ *	Contrary to most other platforms where individual pages can be allocated 
+ *	and freed (for example using mmap/munmap), the Windows VirtualAlloc API 
+ *	restricts address reservation to a granularity of 
+ *	SYSTEM_INFO.dwAllocationGranularity (65536 on IA32), although it can 
+ *	commit and decommit individual pages with a size of 
+ *	SYSTEM_INFO.dwPageSize (4096 on IA32). Besides, behaving as if system 
+ *	pages had a size of SYSTEM_INFO.dwAllocationGranularity proved to be too 
+ *	CPU and memory intensive. So if we want to keep the system page small, 
+ *	this implies that each page is itself part of a larger address range. 
+ *	
+ *	Achieving single page granularity involves a lot of bookkeeping, as 
+ *	Windows doesn't provide an efficient query API (VirtualQuery is very CPU 
+ *	intensive and is known to be even slower on Win64). So large address 
+ *	ranges are reserved, and individual pages are committed within these 
+ *	ranges. 
+ *	
+ *	When the number of pages to allocate exceeds a certain size (defined as 
+ *	<LARGE_PAGE_SIZE>), a dedicated address range is reserved and committed, 
+ *	which must be freed all at once. Else,pages are allocated within larger 
+ *	address ranges using the following scheme: 
+ *	
+ *	Address ranges are reserved in geometrically increasing sizes up to a 
+ *	maximum size (the first being a multiple of the allocation granularity). 
+ *	Ranges form a singly-linked list in allocation order (so that search 
+ *	times are geometrically increasing too). A descriptor structure is 
+ *	malloc'd along with the range and consists of a pointer to the next 
+ *	descrptor, the base address of the range, the total and free numbers of 
+ *	pages and the index of the first free page in range, and a bitmask table 
+ *	for allocated pages (much alike regular Colibri pages). 
+ *	
+ *	To allocate a group of pages in an address range, the bitmask is scanned 
+ *	until a large enough group of free pages is found. To free a group of 
+ *	pages, the containing address range is found by scanning all ranges 
+ *	(even VirtualQuery is too slow for this simple purpose!). In either case 
+ *	the descriptor is updated accordingly. If a containing range is not 
+ *	found we assume that it was a dedicated range and we attempt to release 
+ *	it at once. 
+ *	
+ *	The allocation scheme may not look optimal at first sight (especially 
+ *	the bitmask scanning step), but keep in mind that the typical use case 
+ *	only involves single page allocations. Multiple page allocations only 
+ *	occur when allocating large, multiple cell-based objects, and most 
+ *	objects are single cell sized. And very large pages will end up in their 
+ *	own dedicated range with no page management. Moreover stress tests have 
+ *	shown that this scheme yielded similar or better performances than the 
+ *	previous scheme that was limited to granularity-sized address ranges. 
+ ****************************************************************************/
 
 static SYSTEM_INFO systemInfo;
 static size_t shiftPage;
@@ -112,19 +698,18 @@ static CRITICAL_SECTION csPageAlloc;
 #define FIRST_RANGE_SIZE	256	/* 1 MB */
 #define MAX_RANGE_SIZE		32768	/* 128 MB */
 
-/*
- *---------------------------------------------------------------------------
+
+/*---------------------------------------------------------------------------
+ * Internal Functions: Bit Handling
  *
- * FindClearedBits --
- * SetBit --
- * SetBits --
- * ClearBits --
- * TestBit --
+ *	Bit manipulation routines. Adapted from <colAlloc.c>.
  *
- *	Bit manipulation routines. Adapted from colAlloc.c.
- *
- *---------------------------------------------------------------------------
- */
+ *  FindClearedBits	- See <FindFreeCells>.
+ *  SetBit		- See <SetCells>.
+ *  SetBits		- See <SetCells>.
+ *  ClearBits		- Set <ClearCells>.
+ *  TestBit		- Set <TestCell>.
+ *---------------------------------------------------------------------------*/
 
 static size_t 
 FindClearedBits(
@@ -270,25 +855,27 @@ TestBit(
     return mask[index>>3] & (1<<(index&7));
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * PlatSysPageAlloc --
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatSysPageAlloc
  *
  *	Allocate system pages.
  *
- * Results:
+ * Argument:
+ *	number	- Number of system pages to alloc.
+ *
+ * Result:
  *	The allocated system pages' base address.
  *
  * Side effects:
- *	New pages are allocated.
+ *	May reserve new virtual ranges.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<PlatSysPageFree>
+ *---------------------------------------------------------------------------*/
 
 void * 
 PlatSysPageAlloc(
-    size_t number)		/* Number of pages to alloc. */
+    size_t number)
 {
     void *addr = NULL;
     AddressRange *range, **prevPtr;
@@ -460,26 +1047,26 @@ end:
     return addr;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * PlatSysPageFree --
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatSysPageFree
  *
  *	Free system pages.
  *
- * Results:
- *	None.
+ * Arguments:
+ *	page	- Base address of the pages to free.
+ *	number	- Number of pages to free.
  *
- * Side effects:
- *	The pages are freed.
+ * Side Effects:
+ *	May release virtual ranges.
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<PlatSysPageAlloc>
+ *---------------------------------------------------------------------------*/
 
 void 
 PlatSysPageFree(
-    void * page,		/* Base address of the pages to free. */
-    size_t number)		/* Number of pages to free. */
+    void * page,
+    size_t number)
 {
     size_t index;
     AddressRange * range;
@@ -577,527 +1164,22 @@ end:
     LeaveCriticalSection(&csPageAlloc);
 }
 
-/*
- *----------------------------------------------------------------
- * Process & threads.
- *----------------------------------------------------------------
- */
 
-typedef struct PlatGroupData {
-    GroupData data;		/* Generic structure. */
-    struct PlatGroupData *next;	/* Next active group in list. */
+/****************************************************************************
+ * Internal Group: Initialization/Cleanup
+ ****************************************************************************/
 
-    CRITICAL_SECTION csRoots;	/* Protect root management. */
-    CRITICAL_SECTION csDirties;	/* Protect dirty page management. */
-
-    CRITICAL_SECTION csGc;	/* Protect GC from worker threads. */
-    HANDLE eventGcScheduled;	/* Triggers GC thread. */
-    HANDLE eventGcDone;		/* Barrier for worker threads. */
-    int scheduled;		/* Flag for when a GC is scheduled. */
-    int terminated;		/* Flag for thread group destruction. */
-    int nbActive;		/* Active worker thread counter. */
-    HANDLE threadGc;		/* GC thread. */
-} PlatGroupData;
-static PlatGroupData *sharedGroups;
-static CRITICAL_SECTION csSharedGroups;
-
-/*
- *---------------------------------------------------------------------------
- *
- * AllocGroupData --
- *
- *	Allocate and initialize a thread group data structure.
- *
- * Results:
- *	The newly allocated structure.
- *
- * Side effects:
- *	Memory allocated and system objects created.
- *
- *---------------------------------------------------------------------------
- */
-
-static PlatGroupData *
-AllocGroupData(
-    unsigned int model)		/* Threading model. */
-{
-    PlatGroupData *groupData = (PlatGroupData *) malloc(sizeof(PlatGroupData));
-    memset(groupData, 0, sizeof(PlatGroupData));
-    groupData->data.model = model;
-    GcInitGroup((GroupData *) groupData);
-
-    if (model != COL_SINGLE) {
-	/*
-	 * Create synchronization objects.
-	 */
-
-	//TODO error handling.
-	InitializeCriticalSection(&groupData->csRoots);
-	InitializeCriticalSection(&groupData->csDirties);
-
-	InitializeCriticalSection(&groupData->csGc);
-	groupData->eventGcDone = CreateEvent(NULL, TRUE, TRUE, NULL);
-	groupData->eventGcScheduled = CreateEvent(NULL, FALSE, FALSE, NULL);
-
-	/*
-	 * Create GC thread.
-	 */
-
-	groupData->threadGc = CreateThread(NULL, 0, GcThreadProc, groupData,
-		0, NULL);
-    }
-
-    return groupData;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * FreeGroupData --
- *
- *	Free a thread group data structure.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Memory freed and system objects deleted.
- *
- *---------------------------------------------------------------------------
- */
-
-static void
-FreeGroupData(
-    PlatGroupData *groupData)	/* Structure to free. */
-{
-    if (groupData->data.model != COL_SINGLE) {
-	/*
-	 * Signal and wait for termination of GC thread.
-	 */
-
-	//TODO error handling.
-	groupData->terminated = 1;
-	SignalObjectAndWait(groupData->eventGcScheduled, groupData->threadGc,
-	    INFINITE, FALSE);
-
-	/*
-	 * Destroy synchronization objects.
-	 */
-
-	DeleteObject(groupData->eventGcScheduled);
-	DeleteObject(groupData->eventGcDone);
-	DeleteCriticalSection(&groupData->csGc);
-
-	DeleteCriticalSection(&groupData->csDirties);
-	DeleteCriticalSection(&groupData->csRoots);
-    }
-
-    GcCleanupGroup((GroupData *) groupData);
-    free(groupData);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatEnter --
- *
- *	Enter the thread.
- *
- * Results:
- *	Non-zero if this is the first nested call, else 0.
- *
- * Side effects:
- *	Global data is initialized; decrement nesting count.
- *
- *---------------------------------------------------------------------------
- */
-
-int
-PlatEnter(
-    unsigned int model)		/* Threading model. */
-{
-    ThreadData *data = PlatGetThreadData();
-    if (data) {
-	/* 
-	 * Increment nest count. 
-	 */
-
-	return ((++data->nestCount) == 1);
-    }
-
-    /*
-     * Initialize thread data.
-     */
-
-    data = (ThreadData *) malloc(sizeof(ThreadData));
-    memset(data, 0, sizeof(*data));
-    data->nestCount = 1;
-    GcInitThread(data);
-    TlsSetValue(tlsToken, data);
-
-    if (model == COL_SINGLE || model == COL_ASYNC) {
-	/*
-	 * Allocate dedicated group.
-	 */
-
-	data->groupData = (GroupData *) AllocGroupData(model);
-	data->groupData->first = data;
-	data->next = data;
-    } else {
-	/*
-	 * Try to find shared group with same model value.
-	 */
-
-	EnterCriticalSection(&csSharedGroups);
-	{
-	    PlatGroupData *groupData = sharedGroups;
-	    while (groupData && groupData->data.model != model) {
-		groupData = groupData->next;
-	    }
-	    if (!groupData) {
-		/*
-		 * Allocate new group and insert at head.
-		 */
-
-		groupData = AllocGroupData(model);
-		groupData->next = sharedGroups;
-		sharedGroups = groupData;
-	    }
-
-	    /*
-	     * Add thread to group.
-	     */
-
-	    data->groupData = (GroupData *) groupData;
-	    if (data->groupData->first) {
-		data->next = data->groupData->first->next;
-		data->groupData->first->next = data;
-	    } else {
-		data->groupData->first = data;
-		data->next = data;
-	    }
-	}
-	LeaveCriticalSection(&csSharedGroups);
-    }
-
-    return 1;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatLeave --
- *
- *	Leave the thread.
- *
- * Results:
- *	Non-zero if this is the last nested call, else 0.
- *
- * Side effects:
- *	Decrement nesting count.
- *
- *---------------------------------------------------------------------------
- */
-
-int
-PlatLeave()
-{
-    ThreadData *data = PlatGetThreadData();
-    if (!data) {
-	/* TODO: exception ? */
-	return 0;
-    }
-
-    /*
-     * Decrement nest count.
-     */
-
-    if (--data->nestCount) {
-	return 0;
-    }
-    
-    /*
-     * This is the last nested call, free structures.
-     */
-
-    if (data->groupData->model == COL_SINGLE || data->groupData->model 
-	    == COL_ASYNC) {
-	/*
-	 * Free dedicated group as well.
-	 */
-
-	FreeGroupData((PlatGroupData *) data->groupData);
-    } else {
-	/*
-	 * Remove from shared group.
-	 */
-
-	EnterCriticalSection(&csSharedGroups);
-	{
-	    if (data->next == data) {
-		/*
-		 * Free group as well.
-		 */
-
-		FreeGroupData((PlatGroupData *) data->groupData);
-	    } else {
-		/*
-		 * Unlink.
-		 */
-
-		ThreadData *prev = data->next;
-		while (prev->next != data) {
-		    prev = prev->next;
-		}
-		prev->next = data->next;
-		data->groupData->first = prev;
-	    }
-	}
-	LeaveCriticalSection(&csSharedGroups);
-    }
-
-    GcCleanupThread(data);
-    free(data);
-    TlsSetValue(tlsToken, 0);
-
-    return 1;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * GcThreadProc --
- *
- *	Thread dedicated to the GC process. Activated when one of the worker
- *	threads in the group triggers the GC.
- *
- * Results:
- *	None (always zero).
- *
- * Side effects:
- *	Calls PerformGC.
- *
- *---------------------------------------------------------------------------
- */
-
-static DWORD WINAPI
-GcThreadProc(
-    LPVOID lpParameter)
-{
-    PlatGroupData *groupData = (PlatGroupData *) lpParameter;
-    for (;;) {
-	WaitForSingleObject(groupData->eventGcScheduled, INFINITE);
-	EnterCriticalSection(&groupData->csGc);
-	{
-	    if (groupData->scheduled) {
-		groupData->scheduled = 0;
-		PerformGC((GroupData *) groupData);
-	    }
-	    SetEvent(groupData->eventGcDone);
-	}
-	LeaveCriticalSection(&groupData->csGc);
-	if (groupData->terminated) {
-	    ExitThread(0);
-	}
-    }
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatSyncPauseGC --
- * PlatTrySyncPauseGC --
- *
- *	Called when a worker thread calls the outermost Col_PauseGC.
- *
- *	PlatSyncPauseGC may block as long as a GC is underway (see 
- *	GcThreadProc).
- *	PlatTrySyncPauseGC is non-blocking.
- *
- * Results:
- *	PlatTrySyncPauseGC: non-zero if successful.
- *
- * Side effects:
- *	Update internal structures.
- *
- *---------------------------------------------------------------------------
- */
-
-void
-PlatSyncPauseGC(
-    GroupData *data) 
-{
-    PlatGroupData *groupData = (PlatGroupData *) data;
-    WaitForSingleObject(groupData->eventGcDone, INFINITE);
-    EnterCriticalSection(&groupData->csGc);
-    {
-	groupData->nbActive++;
-    }
-    LeaveCriticalSection(&groupData->csGc);
-}
-
-int
-PlatTrySyncPauseGC(
-    GroupData *data) 
-{
-    PlatGroupData *groupData = (PlatGroupData *) data;
-    if (WaitForSingleObject(groupData->eventGcDone, 0) 
-	    != WAIT_OBJECT_0) {
-	return 0;
-    }
-    EnterCriticalSection(&groupData->csGc);
-    {
-	groupData->nbActive++;
-    }
-    LeaveCriticalSection(&groupData->csGc);
-    return 1;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatSyncResumeGC --
- *
- *	Called when a worker thread calls the outermost Col_ResumeGC.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	If last thread in group, may trigger the GC if previously scheduled.
- *	This will block further calls to Col_PauseGC/PlatSyncPauseGC.
- *
- *---------------------------------------------------------------------------
- */
-
-void
-PlatSyncResumeGC(
-    GroupData *data,
-    int schedule) 
-{
-    PlatGroupData *groupData = (PlatGroupData *) data;
-    EnterCriticalSection(&groupData->csGc);
-    {
-	if (schedule && !groupData->scheduled) {
-	    ResetEvent(groupData->eventGcDone);
-	    groupData->scheduled = 1;
-	}
-	--groupData->nbActive;
-	if (!groupData->nbActive && groupData->scheduled) {
-	    SetEvent(groupData->eventGcScheduled);
-	}
-    }
-    LeaveCriticalSection(&groupData->csGc);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatEnterProtectRoots --
- *
- *	Enter protected section for root management.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Blocks until no thread owns the section.
- *
- *---------------------------------------------------------------------------
- */
-
-void
-PlatEnterProtectRoots(
-    GroupData *data)
-{
-    PlatGroupData *groupData = (PlatGroupData *) data;
-    EnterCriticalSection(&groupData->csRoots);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatLeaveProtectRoots --
- *
- *	Leave protected section for root management.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	May unblock any thread waiting for the section.
- *
- *---------------------------------------------------------------------------
- */
-
-void
-PlatLeaveProtectRoots(GroupData *data)
-{
-    PlatGroupData *groupData = (PlatGroupData *) data;
-    LeaveCriticalSection(&groupData->csRoots);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatEnterProtectDirties --
- *
- *	Enter protected section for dirty page management.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Blocks until no thread owns the section.
- *
- *---------------------------------------------------------------------------
- */
-
-void
-PlatEnterProtectDirties(GroupData *data)
-{
-    PlatGroupData *groupData = (PlatGroupData *) data;
-    EnterCriticalSection(&groupData->csDirties);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatLeaveProtectRoots --
- *
- *	Leave protected section for root management.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	May unblock any thread waiting for the section.
- *
- *---------------------------------------------------------------------------
- */
-
-void
-PlatLeaveProtectDirties(GroupData *data)
-{
-    PlatGroupData *groupData = (PlatGroupData *) data;
-    LeaveCriticalSection(&groupData->csDirties);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * DllMain --
+/*---------------------------------------------------------------------------
+ * Internal Function: DllMain
  *
  *	Windows DLL entry point.
  *
- * Results:
- *	True.
+ * Result:
+ *	Always true.
  *
- * Side effects:
- *	Create thread-local storage token.
- *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<Init>
+ *---------------------------------------------------------------------------*/
 
 BOOL APIENTRY 
 DllMain( 
@@ -1116,21 +1198,21 @@ DllMain(
     return TRUE;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Internal Function: Init
  *
- * Init --
+ *	Initialization routine. Called through <DllMain>.
  *
- *	Initialization routine. Called through DllMain.
- *
- * Results:
- *	True.
+ * Result:
+ *	Always true.
  *
  * Side effects:
- *	Create thread-local storage key. Note: key is never freed.
+ *	Create thread-local storage key <tlsToken> (freed upon 
+ *	DLL_PROCESS_DETACH in <DllMain>).
  *
- *---------------------------------------------------------------------------
- */
+ * See also:
+ *	<DllMain>
+ *---------------------------------------------------------------------------*/
 
 static BOOL
 Init()

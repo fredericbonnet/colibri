@@ -1,3 +1,17 @@
+/*
+ * File: colTrie.c
+ *
+ *	This file implements the trie map handling features of Colibri.
+ *
+ *	Trie maps are an implementation of generic maps that uses crit-bit trees
+ *	for string and integer keys.
+ *
+ *	They are always mutable.
+ *
+ * See also:
+ *	<colTrie.h>
+ */
+
 #include "colibri.h"
 #include "colInternal.h"
 
@@ -6,21 +20,21 @@
 #include <string.h>
 
 
-/*
- *---------------------------------------------------------------------------
+/****************************************************************************
+ * Group: Trie Map Creation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_NewStringTrieMap
  *
- * Col_NewStringTrieMap --
+ *	Create a new string trie map word.
  *
- *	Create a new trie map word.
- *
- * Results:
+ * Result:
  *	The new word.
  *
  * Side effects:
  *	Allocates memory cells.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_NewStringTrieMap()
@@ -33,27 +47,54 @@ Col_NewStringTrieMap()
     return map;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_NewIntTrieMap
  *
- * Col_StringTrieMapGet --
+ *	Create a new integer trie map word.
+ *
+ * Results:
+ *	The new word.
+ *
+ * Side effects:
+ *	Allocates memory cells.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_NewIntTrieMap()
+{
+    Col_Word map;
+    
+    map = (Col_Word) AllocCells(1);
+    WORD_INTTRIEMAP_INIT(map);
+
+    return map;
+}
+
+
+/****************************************************************************
+ * Group: Trie Map Access
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_StringTrieMapGet
  *
  *	Get value mapped to the given string key if present.
  *
- * Results:
- *	Whether the key was found in the map.
+ * Arguments:
+ *	map		- String trie map to get entry from.
+ *	key		- String entry key.
+ *	valuePtr	- Returned entry value, if found.
  *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
+ * Result:
+ *	Whether the key was found in the map. In this case the value is returned
+ *	through valuePtr.
+ *---------------------------------------------------------------------------*/
 
 int
 Col_StringTrieMapGet(
-    Col_Word map,		/* Trie map to get entry from. */ 
-    Col_Word key, 		/* Entry key. */
-    Col_Word *valuePtr)		/* Pointer to entry value, if found. */
+    Col_Word map,
+    Col_Word key,
+    Col_Word *valuePtr)
 {
     Col_Word entry = Col_StringTrieMapFindEntry(map, key, NULL);
     if (entry) {
@@ -65,27 +106,59 @@ Col_StringTrieMapGet(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_IntTrieMapGet
  *
- * Col_StringTrieMapSet --
+ *	Get value mapped to the given integer key if present.
  *
- *	Map the value to the key, replacing any existing.
+ * Arguments:
+ *	map		- Integer trie map to get entry from.
+ *	key		- Integer entry key.
+ *	valuePtr	- Returned entry value, if found.
  *
- * Results:
+ * Result:
+ *	Whether the key was found in the map. In this case the value is returned
+ *	through valuePtr.
+ *---------------------------------------------------------------------------*/
+
+int
+Col_IntTrieMapGet(
+    Col_Word map,
+    intptr_t key,
+    Col_Word *valuePtr)
+{
+    Col_Word entry = Col_IntTrieMapFindEntry(map, key, NULL);
+    if (entry) {
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+	*valuePtr = WORD_MAPENTRY_VALUE(entry);
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_StringTrieMapSet
+ *
+ *	Map the value to the string key, replacing any existing.
+ *
+ * Arguments:
+ *	map	- String trie map to insert entry into.
+ *	key	- String entry key.
+ *	value	- Entry value.
+ *
+ * Result:
  *	Whether a new entry was created.
  *
  * Side effects:
- *	May allocate cells or replace value in the map.
- *
- *---------------------------------------------------------------------------
- */
+ *	May allocate memory cells.
+ *---------------------------------------------------------------------------*/
 
 int
 Col_StringTrieMapSet(
-    Col_Word map, 		/* Trie map to insert entry into. */
-    Col_Word key, 		/* Entry key. */
-    Col_Word value)		/* Entry value. */
+    Col_Word map,
+    Col_Word key,
+    Col_Word value)
 {
     int create = 1;
     Col_Word entry = Col_StringTrieMapFindEntry(map, key, &create);
@@ -96,26 +169,53 @@ Col_StringTrieMapSet(
     return create;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_IntTrieMapSet
  *
- * Col_StringTrieMapUnset --
+ *	Get value mapped to the given integer key if present.
  *
- *	Remove any value mapped to the given key.
+ * Arguments:
+ *	map		- Integer trie map to get entry from.
+ *	key		- Integer entry key.
+ *	valuePtr	- Returned entry value, if found.
  *
- * Results:
+ * Result:
+ *	Whether the key was found in the map. In this case the value is returned
+ *	through valuePtr.
+ *---------------------------------------------------------------------------*/
+
+int
+Col_IntTrieMapSet(
+    Col_Word map,
+    intptr_t key,
+    Col_Word value)
+{
+    int create = 1;
+    Col_Word entry = Col_IntTrieMapFindEntry(map, key, &create);
+    ASSERT(entry);
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+    Col_WordSetModified(entry);
+    WORD_MAPENTRY_VALUE(entry) = value;
+    return create;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_StringTrieMapUnset
+ *
+ *	Remove any value mapped to the given string key.
+ *
+ * Arguments:
+ *	map	- String trie map to remove entry from.
+ *	key	- String entry key.
+ *
+ * Result:
  *	Whether an existing entry was removed.
- *
- * Side effects:
- *	May remove value in the map.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 int
 Col_StringTrieMapUnset(
-    Col_Word map, 		/* Trie map to remove entry from. */
-    Col_Word key) 		/* Entry key. */
+    Col_Word map,
+    Col_Word key)
 {
     Col_Word node, *nodePtr, sibling, grandParent, *parentPtr, prev;
     Col_Char mask;
@@ -227,32 +327,146 @@ Col_StringTrieMapUnset(
     return 0;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_IntTrieMapUnset
  *
- * Col_StringTrieMapFindEntry --
+ *	Remove any value mapped to the given integer key.
  *
- *	Find or create the entry mapped to the given key.
+ * Arguments:
+ *	map	- Integer trie map to remove entry from.
+ *	key	- Integer entry key.
  *
- * Results:
+ * Result:
+ *	Whether an existing entry was removed.
+ *---------------------------------------------------------------------------*/
+
+int
+Col_IntTrieMapUnset(
+    Col_Word map,
+    intptr_t key)
+{
+    Col_Word node, *nodePtr, sibling, grandParent, *parentPtr, prev;
+    intptr_t mask;
+
+    if (WORD_TYPE(map) != WORD_TYPE_INTTRIEMAP) {
+	Col_Error(COL_ERROR, "%x is not an integer trie map", map);
+	return 0;
+    }
+
+    /*
+     * Search for matching entry.
+     */
+
+    parentPtr = NULL;
+    nodePtr = &WORD_TRIEMAP_ROOT(map);
+    prev = WORD_NIL;
+    while (*nodePtr) {
+	node = *nodePtr;
+	if (WORD_TYPE(node) == WORD_TYPE_INTTRIENODE) {
+	    if (parentPtr) {
+		grandParent = *parentPtr;
+	    } else {
+		grandParent = map;
+	    }
+	    parentPtr = nodePtr;
+	    mask = WORD_INTTRIENODE_MASK(node);
+	    if (mask ? (key & mask) : (key >= 0)) {
+		/*
+		 * Recurse on right, remember left for later deletion from 
+		 * chain.
+		 */
+
+		prev = WORD_TRIENODE_LEFT(node);
+		nodePtr = &WORD_TRIENODE_RIGHT(node);
+		sibling = WORD_TRIENODE_LEFT(node);
+	    } else {
+		/*
+		 * Recurse on left.
+		 */
+
+		nodePtr = &WORD_TRIENODE_LEFT(node);
+		sibling = WORD_TRIENODE_RIGHT(node);
+	    }
+	    continue;
+	}
+
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_INTMAPENTRY);
+	if (key == WORD_INTMAPENTRY_KEY(node)) {
+	    /*
+	     * Found!
+	     */
+
+	    if (parentPtr) {
+		/*
+		 * Replace parent by sibling.
+		 */
+
+		ASSERT(grandParent);
+		*parentPtr = sibling;
+		Col_WordSetModified(grandParent);
+	    } else {
+		/*
+		 * Entry was root.
+		 */
+
+		WORD_TRIEMAP_ROOT(map) = WORD_NIL;
+	    }
+
+	    /*
+	     * Remove from chain.
+	     */
+
+	    if (prev) {
+		/*
+		 * Remove after rightmost adjacent entry.
+		 */
+
+		while (WORD_TYPE(prev) == WORD_TYPE_INTTRIENODE) {
+		    prev = WORD_TRIENODE_RIGHT(prev);
+		}
+		ASSERT(WORD_TYPE(prev) == WORD_TYPE_INTMAPENTRY);
+		WORD_MAPENTRY_NEXT(prev) = WORD_MAPENTRY_NEXT(node);
+		Col_WordSetModified(prev);
+	    }
+
+	    WORD_TRIEMAP_SIZE(map)--;
+	    return 1;
+	}
+	break;
+    }
+
+    /*
+     * Not found.
+     */
+
+    return 0;
+}
+
+
+/****************************************************************************
+ * Group: Trie Map Entries
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_StringTrieMapFindEntry
+ *
+ *	Find or create in string trie map the entry mapped to the given key.
+ *
+ * Arguments:
+ *	map		- String trie map to find or create entry into.
+ *	key		- String entry key.
+ *	createPtr	- In: if non-NULL, whether to create entry if absent.
+ *			  Out: if non-NULL, whether a new entry was created. 
+ *
+ * Result:
  *	The entry if found or created, else nil.
- *
- * Side effects:
- *	If createPtr is non-NULL and the pointed value is non-zero, set to 1 
- *	if a new entry was created, else zero.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_StringTrieMapFindEntry(
-    Col_Word map, 		/* Integer trie map to find or create entry 
-				 * into. */
-    Col_Word key, 		/* Entry key. */
-    int *createPtr)		/* In: if non-NULL, whether to create entry if 
-				 * absent.
-				 * Out: if non-NULL, whether a new entry was 
-				 * created. */
+    Col_Word map,
+    Col_Word key,
+    int *createPtr)
 {
     Col_Word node, entry, parent, *nodePtr, prev, next;
     Col_RopeIterator itKey;
@@ -473,243 +687,29 @@ Col_StringTrieMapFindEntry(
     return entry;
 }
 
-/*
- *---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+ * Function: Col_IntTrieMapFindEntry
  *
- * Col_NewIntTrieMap --
+ *	Find or create in integer trie map the entry mapped to the given key.
  *
- *	Create a new integer trie map word.
+ * Arguments:
+ *	map		- Integer trie map to find or create entry into.
+ *	key		- Integer entry key.
+ *	createPtr	- In: if non-NULL, whether to create entry if absent.
+ *			  Out: if non-NULL, whether a new entry was created. 
  *
- * Results:
- *	The new word.
- *
- * Side effects:
- *	Allocates memory cells.
- *
- *---------------------------------------------------------------------------
- */
-
-Col_Word
-Col_NewIntTrieMap()
-{
-    Col_Word map;
-    
-    map = (Col_Word) AllocCells(1);
-    WORD_INTTRIEMAP_INIT(map);
-
-    return map;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_IntTrieMapGet --
- *
- *	Get value mapped to the given integer key if present.
- *
- * Results:
- *	Whether the key was found in the map.
- *
- * Side effects:
- *	None.
- *
- *---------------------------------------------------------------------------
- */
-
-int
-Col_IntTrieMapGet(
-    Col_Word map,		/* Integer trie map to get entry from. */ 
-    int key, 			/* Entry key. */
-    Col_Word *valuePtr)		/* Pointer to entry value, if found. */
-{
-    Col_Word entry = Col_IntTrieMapFindEntry(map, key, NULL);
-    if (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
-	*valuePtr = WORD_MAPENTRY_VALUE(entry);
-	return 1;
-    } else {
-	return 0;
-    }
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_IntTrieMapSet --
- *
- *	Map the value to the key, replacing any existing.
- *
- * Results:
- *	Whether a new entry was created.
- *
- * Side effects:
- *	May allocate cells or replace value in the map.
- *
- *---------------------------------------------------------------------------
- */
-
-int
-Col_IntTrieMapSet(
-    Col_Word map, 		/* Integer trie map to insert entry into. */
-    int key, 			/* Entry key. */
-    Col_Word value)		/* Entry value. */
-{
-    int create = 1;
-    Col_Word entry = Col_IntTrieMapFindEntry(map, key, &create);
-    ASSERT(entry);
-    ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
-    Col_WordSetModified(entry);
-    WORD_MAPENTRY_VALUE(entry) = value;
-    return create;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_IntTrieMapUnset --
- *
- *	Remove any value mapped to the given key.
- *
- * Results:
- *	Whether an existing entry was removed.
- *
- * Side effects:
- *	May remove value in the map.
- *
- *---------------------------------------------------------------------------
- */
-
-int
-Col_IntTrieMapUnset(
-    Col_Word map, 		/* Integer trie map to remove entry from. */
-    int key) 			/* Entry key. */
-{
-    Col_Word node, *nodePtr, sibling, grandParent, *parentPtr, prev;
-    int mask;
-
-    if (WORD_TYPE(map) != WORD_TYPE_INTTRIEMAP) {
-	Col_Error(COL_ERROR, "%x is not an integer trie map", map);
-	return 0;
-    }
-
-    /*
-     * Search for matching entry.
-     */
-
-    parentPtr = NULL;
-    nodePtr = &WORD_TRIEMAP_ROOT(map);
-    prev = WORD_NIL;
-    while (*nodePtr) {
-	node = *nodePtr;
-	if (WORD_TYPE(node) == WORD_TYPE_INTTRIENODE) {
-	    if (parentPtr) {
-		grandParent = *parentPtr;
-	    } else {
-		grandParent = map;
-	    }
-	    parentPtr = nodePtr;
-	    mask = WORD_INTTRIENODE_MASK(node);
-	    if (mask ? (key & mask) : (key >= 0)) {
-		/*
-		 * Recurse on right, remember left for later deletion from 
-		 * chain.
-		 */
-
-		prev = WORD_TRIENODE_LEFT(node);
-		nodePtr = &WORD_TRIENODE_RIGHT(node);
-		sibling = WORD_TRIENODE_LEFT(node);
-	    } else {
-		/*
-		 * Recurse on left.
-		 */
-
-		nodePtr = &WORD_TRIENODE_LEFT(node);
-		sibling = WORD_TRIENODE_RIGHT(node);
-	    }
-	    continue;
-	}
-
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_INTMAPENTRY);
-	if (key == WORD_INTMAPENTRY_KEY(node)) {
-	    /*
-	     * Found!
-	     */
-
-	    if (parentPtr) {
-		/*
-		 * Replace parent by sibling.
-		 */
-
-		ASSERT(grandParent);
-		*parentPtr = sibling;
-		Col_WordSetModified(grandParent);
-	    } else {
-		/*
-		 * Entry was root.
-		 */
-
-		WORD_TRIEMAP_ROOT(map) = WORD_NIL;
-	    }
-
-	    /*
-	     * Remove from chain.
-	     */
-
-	    if (prev) {
-		/*
-		 * Remove after rightmost adjacent entry.
-		 */
-
-		while (WORD_TYPE(prev) == WORD_TYPE_INTTRIENODE) {
-		    prev = WORD_TRIENODE_RIGHT(prev);
-		}
-		ASSERT(WORD_TYPE(prev) == WORD_TYPE_INTMAPENTRY);
-		WORD_MAPENTRY_NEXT(prev) = WORD_MAPENTRY_NEXT(node);
-		Col_WordSetModified(prev);
-	    }
-
-	    WORD_TRIEMAP_SIZE(map)--;
-	    return 1;
-	}
-	break;
-    }
-
-    /*
-     * Not found.
-     */
-
-    return 0;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * Col_IntTrieMapFindEntry --
- *
- *	Find or create the entry mapped to the given key.
- *
- * Results:
+ * Result:
  *	The entry if found or created, else nil.
- *
- * Side effects:
- *	If createPtr is non-NULL and the pointed value is non-zero, set to 1 
- *	if a new entry was created, else zero.
- *
- *---------------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_IntTrieMapFindEntry(
-    Col_Word map, 		/* Integer trie map to find or create entry 
-				 * into. */
-    int key, 			/* Entry key. */
-    int *createPtr)		/* In: if non-NULL, whether to create entry if 
-				 * absent.
-				 * Out: if non-NULL, whether a new entry was 
-				 * created. */
+    Col_Word map,
+    intptr_t key,
+    int *createPtr)
 {
     Col_Word node, entry, parent, *nodePtr, prev, next;
-    int entryKey = WORD_NIL, mask, newMask;
+    intptr_t entryKey = WORD_NIL, mask, newMask;
     
     if (WORD_TYPE(map) != WORD_TYPE_INTTRIEMAP) {
 	Col_Error(COL_ERROR, "%x is not an integer trie map", map);
@@ -898,27 +898,26 @@ Col_IntTrieMapFindEntry(
     return entry;
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_TrieMapIterBegin --
+
+/****************************************************************************
+ * Group: Trie Map Iterators
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_TrieMapIterBegin
  *
  *	Initialize the trie map iterator so that it points to the first entry
  *	within the map.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	Iterator will point to the first entry in map.
- *
- *---------------------------------------------------------------------------
- */
+ * Arguments:
+ *	map	- Trie map to iterate over.
+ *	it	- Iterator to initialize.
+ *---------------------------------------------------------------------------*/
 
 void
 Col_TrieMapIterBegin(
-    Col_Word map,		/* Map to iterate over. */
-    Col_MapIterator *it)	/* Iterator to initialize. */
+    Col_Word map,
+    Col_MapIterator *it)
 {
     Col_Word node;
 
@@ -963,25 +962,18 @@ Col_TrieMapIterBegin(
     }
 }
 
-/*
- *---------------------------------------------------------------------------
- *
- * Col_TrieMapIterNext --
+/*---------------------------------------------------------------------------
+ * Function: Col_TrieMapIterNext
  *
  *	Move the iterator to the next element.
  *
- * Results:
- *	None.
- *
- * Side effects:
- *	Update the iterator.
- *
- *---------------------------------------------------------------------------
- */
+ * Argument:
+ *	it	- The iterator to move.
+ *---------------------------------------------------------------------------*/
 
 void
 Col_TrieMapIterNext(
-    Col_MapIterator *it)	/* The iterator to move. */
+    Col_MapIterator *it)
 {
     if (Col_MapIterEnd(it)) {
 	Col_Error(COL_ERROR, "Invalid map iterator");
