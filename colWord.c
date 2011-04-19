@@ -6,13 +6,6 @@
 
 #define WORD_CHAR_MAX		0xFFFFFF
 
-/* 
- * Max byte size of words. A word can take no more than the available size of 
- * a page. Larger words must be built by concatenation of smaller ones. 
- */
-
-#define WORD_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-WORD_HEADER_SIZE)
-
 /*
  * Prototypes for functions used only in this file.
  */
@@ -59,7 +52,7 @@ Col_NewIntWord(
 
     word = AllocCells(1);
     WORD_SET_TYPE_ID(word, WORD_TYPE_INT);
-    WORD_VALUE(word) = NULL;
+    WORD_SYNONYM(word) = NULL;
     WORD_INT_DATA(word) = value;
 
     return word;
@@ -174,10 +167,10 @@ Col_NewStringWord(
     }
 
     /*
-     * Return a new rope.
+     * Return a new rope word.
      */
 
-    return Col_NewRope(format, data, byteLength);
+    return WORD_ROPE_NEW(Col_NewRope(format, data, byteLength));
 }
 
 /*
@@ -188,10 +181,9 @@ Col_NewStringWord(
  *	Create a new rope word.
  *
  *	If the rope is a C string, creates a new word that wraps this string.
- *	Regular ropes can be used as words.
  *
  * Results:
- *	A new word or the rope itself.
+ *	A new word or the rope itself wrapped as word.
  *
  * Side effects:
  *	May allocate memory cells.
@@ -208,9 +200,6 @@ Col_NewRopeWord(
 
     RESOLVE_ROPE(rope);
     switch (ROPE_TYPE(rope)) {
-	case ROPE_TYPE_NULL:
-	    return NULL;
-
 	case ROPE_TYPE_EMPTY:
 	    return WORD_SMALL_STRING_EMPTY;
 
@@ -226,14 +215,18 @@ Col_NewRopeWord(
 		return word;
 	    }
 
+	    /*
+	     * Wrap the C string.
+	     */
+
 	    word = AllocCells(1);
 	    WORD_SET_TYPE_ID(word, WORD_TYPE_STRING);
-	    WORD_VALUE(word) = NULL;
+	    WORD_SYNONYM(word) = NULL;
 	    WORD_STRING_DATA(word) = rope;
 	    return word;
 
-	default:
-	    return rope;
+	default: /* Including NULL */
+	    return WORD_ROPE_NEW(rope);
     }
 }
 
@@ -280,7 +273,7 @@ Col_NewWord(
     
     word = AllocCells(NB_CELLS(WORD_HEADER_SIZE+actualSize));
     WORD_SET_TYPE_ADDR(word, type);
-    WORD_VALUE(word) = NULL;
+    WORD_SYNONYM(word) = NULL;
     if (dataPtr) *dataPtr = WORD_DATA(word);
 
     DeclareWord(word);
@@ -338,6 +331,14 @@ Col_GetWordInfo(
 	    return COL_SMALL_STRING;
 
 	/*
+	 * Ropes.
+	 */
+
+	case WORD_TYPE_ROPE:
+	    dataPtr->rope = WORD_ROPE_GET(word);
+	    return COL_ROPE;
+
+	/*
 	 * Predefined types.
 	 */
 
@@ -349,10 +350,10 @@ Col_GetWordInfo(
 	    dataPtr->rope = WORD_STRING_DATA(word);
 	    return COL_ROPE;
 
-	case WORD_TYPE_ROPE:
-	    RESOLVE_ROPE((Col_Rope) word);
-	    dataPtr->rope = word;
-	    return COL_ROPE;
+	case WORD_TYPE_VECTOR:
+	    dataPtr->vector.length = WORD_VECTOR_LENGTH(word);
+	    dataPtr->vector.elements = WORD_VECTOR_ELEMENTS(word);
+	    return COL_VECTOR;
 
 	/*
 	 * Regular word.
@@ -390,30 +391,30 @@ Col_FindWordInfo(
     Col_WordType * type,	/* The required type. */
     Col_WordData *dataPtr)	/* Returned data. */
 {
-    Col_Word value;
+    Col_Word synonym;
 
     RESOLVE_WORD(word);
 
-    value = word;
-    while (value) {
-	if (Col_GetWordInfo(value, dataPtr) == type) {
+    synonym = word;
+    while (synonym) {
+	if (Col_GetWordInfo(synonym, dataPtr) == type) {
 	    /*
 	     * Found !
 	     */
 
-	    return value;
+	    return synonym;
 	}
 
-	if (IS_IMMEDIATE(value) || !IS_WORD(value)) {
+	if (IS_IMMEDIATE(synonym) || IS_ROPE(synonym)) {
 	    /*
-	     * End of chain.
+	     * Not a chain.
 	     */
 
 	    break;
 	}
 
-	value = WORD_VALUE(value);
-	if (value == word) {
+	synonym = WORD_SYNONYM(synonym);
+	if (synonym == word) {
 	    /*
 	     * Looped back.
 	     */
@@ -427,16 +428,19 @@ Col_FindWordInfo(
 /*
  *---------------------------------------------------------------------------
  *
- * Col_GetWordValue --
+ * Col_GetWordSynonym --
  *
- *	Get the word's underlying value.
+ *	Get a synonym for the word.
  *
- *	Values can be chained, i.e. the value can itself be a word with a
- *	value. To iterate over the chain, simply call this function several
- *	times with the intermediary results until it returns NULL.
+ *	Words form chains of synonyms, i.e. circular linked lists, except 
+ *	when a word only has one synonym that is an immediate value or a rope
+ *	(as they have no such concept). 
+ *	To iterate over the chain, simply call this function several times 
+ *	with the intermediary results until it returns NULL.
  *
  * Results:
- *	A value, which can be a rope, an immediate value, or another word.
+ *	The word synonym, which can be a rope, an immediate value, or 
+ *	another word.
  *
  * Side effects:
  *	None.
@@ -445,64 +449,64 @@ Col_FindWordInfo(
  */
 
 Col_Word
-Col_GetWordValue(
-    Col_Word word)		/* The word to get value for. */
+Col_GetWordSynonym(
+    Col_Word word)		/* The word to get synonym for. */
 {
-    if (IS_IMMEDIATE(word) || !IS_WORD(word)) {
+    if (IS_IMMEDIATE(word) || IS_ROPE(word)) {
 	/*
-	 * Ropes or immediate values have no underlying value.
+	 * Ropes or immediate values have no synonyms.
 	 */
 
 	return NULL;
     } else {
 	RESOLVE_WORD(word);
-	return WORD_VALUE(word);
+	return WORD_SYNONYM(word);
     }
 }
 
 /*
  *---------------------------------------------------------------------------
  *
- * Col_AddWordValue --
+ * Col_AddWordSynonym --
  *
- *	Add a value to a word.
+ *	Add a synonym to a word.
  *
  * Results:
  *	The modified word, which can be the original one. This in turn must be
  *	declared as child of its original container.
  *
  * Side effects:
- *	Modify the value chain, may allocate new words.
+ *	Modify the chain of synonyms, may allocate new words.
  *
  *---------------------------------------------------------------------------
  */
 
 Col_Word
-Col_AddWordValue(
-    Col_Word word,		/* The word to append value to. */
-    Col_Word value)		/* The value to append. */
+Col_AddWordSynonym(
+    Col_Word word,		/* The word to add synonym to. */
+    Col_Word synonym)		/* The synonym to add. */
 {
     /*
      * Quick cases.
      */
 
-    if (!value) {
+    if (!synonym) {
 	return word;
     } else if (!word) {
-	return value;
+	return synonym;
     }
 
-    if (IS_IMMEDIATE(word) || !IS_WORD(word)) {
-	if (!IS_IMMEDIATE(value) && IS_WORD(value)) {
+    if (IS_IMMEDIATE(word) || IS_ROPE(word)) {
+	if (!IS_IMMEDIATE(synonym) && !IS_ROPE(synonym)) {
 	    /*
-	     * Reverse: add word to value.
+	     * Reverse: add word to synonym.
 	     */
 
-	    return Col_AddWordValue(value, word);
+	    return Col_AddWordSynonym(synonym, word);
 	}
 
 	/*
-	 * Upconvert word so that it can store the value.
+	 * Upconvert word so that it can point to the synonym.
 	 */
 
 	word = UpconvertWord(word);
@@ -510,46 +514,50 @@ Col_AddWordValue(
 	RESOLVE_WORD(word);
     }
 
-    if (IS_IMMEDIATE(value) || !IS_WORD(value)) {
-	if (!WORD_VALUE(word)) {
+    if (IS_IMMEDIATE(synonym) || IS_ROPE(synonym)) {
+	if (!WORD_SYNONYM(word)) {
 	    /*
-	     * Word has no current value, simply add the new value.
+	     * Word has no current synonym, simply add the new one.
 	     */
 
-	    WORD_VALUE(word) = value;
-	    Col_DeclareChildWord(word, value);
+	    WORD_SYNONYM(word) = synonym;
+	    Col_DeclareChild(word, WORD_SYNONYM(word));
 	    return word;
 	}
 
 	/*
-	 * Upconvert value as well.
+	 * Upconvert synonym as well.
 	 */
 
-	value = UpconvertWord(value);
+	synonym = UpconvertWord(synonym);
     } else {
-	RESOLVE_WORD(value);
+	RESOLVE_WORD(synonym);
     }
 
     /*
-     * Valueless words have a NULL value. Words with one single immediate or 
-     * rope value simply store this value. Larger value chains must be circular 
-     * lists of real words. Here, ensure that both word and value's values are 
-     * circular lists.
+     * Synonym-less words have a NULL synonym pointer. Words with one single 
+     * immediate or rope value simply point to it. Larger synonym chains must be
+     * circular lists of real words. Here, ensure that both word and synonym's 
+     * synonym chains are circular lists.
+     *
+     * Note: No need to declare children here as it will be done anyway in the 
+     * final step.
+     *
      */
 
-    if (!WORD_VALUE(word)) {
-	WORD_VALUE(word) = word;
-    } else if (IS_IMMEDIATE(WORD_VALUE(word)) || !IS_WORD(WORD_VALUE(word))) {
-	WORD_VALUE(word) = UpconvertWord(WORD_VALUE(word));
-	WORD_VALUE(WORD_VALUE(word)) = word;
-	Col_DeclareChildWord(word, WORD_VALUE(word));
+    if (!WORD_SYNONYM(word)) {
+	WORD_SYNONYM(word) = word;
+    } else if (IS_IMMEDIATE(WORD_SYNONYM(word)) 
+	    || IS_ROPE(WORD_SYNONYM(word))) {
+	WORD_SYNONYM(word) = UpconvertWord(WORD_SYNONYM(word));
+	WORD_SYNONYM(WORD_SYNONYM(word)) = word;
     }
-    if (!WORD_VALUE(value)) {
-	WORD_VALUE(value) = value;
-    } else if (IS_IMMEDIATE(WORD_VALUE(word)) || !IS_WORD(WORD_VALUE(word))) {
-	WORD_VALUE(value) = UpconvertWord(WORD_VALUE(value));
-	WORD_VALUE(WORD_VALUE(value)) = value;
-	Col_DeclareChildWord(value, WORD_VALUE(value));
+    if (!WORD_SYNONYM(synonym)) {
+	WORD_SYNONYM(synonym) = synonym;
+    } else if (IS_IMMEDIATE(WORD_SYNONYM(synonym)) 
+	    || IS_ROPE(WORD_SYNONYM(synonym))) {
+	WORD_SYNONYM(synonym) = UpconvertWord(WORD_SYNONYM(synonym));
+	WORD_SYNONYM(WORD_SYNONYM(synonym)) = synonym;
     }
 
     /*
@@ -557,9 +565,9 @@ Col_AddWordValue(
      * pointers.
      */
 
-    SWAP_PTR(WORD_VALUE(word), WORD_VALUE(value));
-    Col_DeclareChildWord(word, value);
-    Col_DeclareChildWord(value, word);
+    SWAP_PTR(WORD_SYNONYM(word), WORD_SYNONYM(synonym));
+    Col_DeclareChild(word, WORD_SYNONYM(word));
+    Col_DeclareChild(synonym, WORD_SYNONYM(synonym));
 
     return word;
 }
@@ -589,7 +597,7 @@ UpconvertWord(
     Col_Word converted;
     
     converted = AllocCells(1);
-    WORD_VALUE(converted) = NULL;
+    WORD_SYNONYM(converted) = NULL;
     switch ((int) Col_GetWordInfo(word, &data)) {
 	case COL_INT:
 	    WORD_SET_TYPE_ID(converted, WORD_TYPE_INT);
@@ -624,10 +632,10 @@ UpconvertWord(
 /*
  *---------------------------------------------------------------------------
  *
- * Col_ClearWordValue --
+ * Col_ClearWordSynonym --
  *
- *	Clear a word's value. This removes the word from the value chain it 
- *	belongs to.
+ *	Clear a word's synonym. This removes the word from the synonym chain 
+ *	it belongs to.
  *
  * Results:
  *	None.
@@ -639,40 +647,41 @@ UpconvertWord(
  */
 
 void
-Col_ClearWordValue(
-    Col_Word word)		/* The word to clear value for. */
+Col_ClearWordSynonym(
+    Col_Word word)		/* The word to clear synonym for. */
 {
-    Col_Word value;
+    Col_Word synonym;
 
     RESOLVE_WORD(word);
 
-    if (!word || IS_IMMEDIATE(word) || !IS_WORD(word)) {
+    if (!word || IS_IMMEDIATE(word) || IS_ROPE(word)) {
 	/*
-	 * Ropes or immediate values have no underlying value.
+	 * Ropes or immediate values have no synonyms.
 	 */
 
 	return;
     }
 
-    value = WORD_VALUE(word);
-    if (!value || value == word || IS_IMMEDIATE(value) || !IS_WORD(value)) {
+    synonym = WORD_SYNONYM(word);
+    if (!synonym || synonym == word || IS_IMMEDIATE(synonym) 
+	    || IS_ROPE(synonym)) {
 	/*
-	 * No value chain. Simply clear word's value.
+	 * No synonym chain. Simply clear word's synonym.
 	 */
 
-	WORD_VALUE(word) = NULL;
+	WORD_SYNONYM(word) = NULL;
 	return;
     }
 
     /*
-     * Find the value pointing back to this word, and remove word from the 
+     * Find the synonym pointing back to this word, and remove word from the 
      * chain.
      */
 
-    while (WORD_VALUE(value) != word) {
-	value = WORD_VALUE(value);
+    while (WORD_SYNONYM(synonym) != word) {
+	synonym = WORD_SYNONYM(synonym);
     }
-    WORD_VALUE(value) = WORD_VALUE(word);
-    Col_DeclareChildWord(value, WORD_VALUE(word));
-    WORD_VALUE(word) = NULL;
+    WORD_SYNONYM(synonym) = WORD_SYNONYM(word);
+    Col_DeclareChild(synonym, WORD_SYNONYM(synonym));
+    WORD_SYNONYM(word) = NULL;
 }

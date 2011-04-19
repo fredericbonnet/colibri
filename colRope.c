@@ -7,15 +7,6 @@
 
 
 /* 
- * Max byte size of leaf ropes. A leaf rope can take no more than the available
- * size of a page. Larger ropes must be built by concatenation of smaller ones. 
- */
-
-#define UCS_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-ROPE_UCS_HEADER_SIZE)
-#define UTF8_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-ROPE_UTF8_HEADER_SIZE)
-#define CUSTOM_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-ROPE_CUSTOM_HEADER_SIZE)
-
-/* 
  * Max byte size of short leaves (inc. header) created with subrope or concat. 
  */
 
@@ -271,7 +262,7 @@ Col_RopeLength(
  *	short leaf rope.
  *
  * Side effects:
- *	Copy the string data int the associated MergeStringInfo fields.
+ *	Copy the string data into the associated MergeStringInfo fields.
  *
  *---------------------------------------------------------------------------
  */
@@ -745,7 +736,7 @@ GetArms(
  *	Col_ConcatRopes concatenates two ropes.
  *	Col_ConcatRopesA concatenates several ropes given in an array, by 
  *	recursive halvings until it contains one or two elements. 
- *	Col_ConcatRopesV is a variadic version of the Col_ConcatRopesA.
+ *	Col_ConcatRopesV is a variadic version of Col_ConcatRopesA.
  *
  *	Concatenation forms self-balanced binary trees. Each node has a depth 
  *	level. Concat nodes have a depth > 1. Subrope nodes have a depth equal
@@ -852,7 +843,7 @@ Col_ConcatRopes(
 	    return left;
 
 	case ROPE_TYPE_SUBROPE:
-	    rightDepth = ROPE_SUBROPE_DEPTH(left);
+	    rightDepth = ROPE_SUBROPE_DEPTH(right);
 	    break;
 
 	case ROPE_TYPE_CONCAT:
@@ -1080,7 +1071,7 @@ Col_ConcatRopesV(
 				 * concatenate in order. */
 {
     size_t i;
-    va_list list;
+    va_list args;
     Col_Rope *ropes;
     
     /* 
@@ -1089,9 +1080,9 @@ Col_ConcatRopesV(
      */
 
     ropes = alloca(number*sizeof(Col_Rope));
-    va_start(list, number);
+    va_start(args, number);
     for (i=0; i < number; i++) {
-	ropes[i] = va_arg(list, Col_Rope);
+	ropes[i] = va_arg(args, Col_Rope);
     }
     return Col_ConcatRopesA(number, ropes);
 }
@@ -1340,11 +1331,11 @@ Col_RopeReplace(
  * Results:
  *	The return value of the last called proc, or -1 if no traversal was
  *	performed.
- *	If non-null, the value pointed by lengthPtr is the total length of the 
+ *	If non-NULL, the value pointed by lengthPtr is the total length of the 
  *	traversed string.
  *
  * Side effects:
- *	If non-null, the value pointed to by lengthPtr is overwritten.
+ *	If non-NULL, the value pointed to by lengthPtr is overwritten.
  *
  *---------------------------------------------------------------------------
  */
@@ -1357,7 +1348,7 @@ Col_TraverseRopeChunks(
     Col_RopeChunkEnumProc *proc,	
 				/* Callback proc called at each leaf node. */
     Col_ClientData clientData,	/* Opaque data passed as is to above proc. */
-    size_t *lengthPtr)		/* If non-NULL, Will hold the total number of 
+    size_t *lengthPtr)		/* If non-NULL, will hold the total number of 
 				 * chars traversed upon completion. */
 {
     size_t ropeLength;
@@ -1372,7 +1363,7 @@ Col_TraverseRopeChunks(
      * Quick cases.
      */
 
-    ropeLength = Col_RopeLength(rope); /* Will update fields as well. */
+    ropeLength = Col_RopeLength(rope);
     if (start >= ropeLength) {
 	/* 
 	 * Start is past the end of the string.
@@ -1609,7 +1600,7 @@ Col_RopeIterBegin(
  *	Iterators point to the leaf containing the current char. To avoid 
  *	rescanning the whole tree when leaving this leaf, it also stores a
  *	higher level subrope containing this leaf, so that traversing all this
- *	subrope's siblings is fast. The subrope is the leaf's highest ancestor
+ *	subrope's children is fast. The subrope is the leaf's highest ancestor
  *	with a maximum depth of MAX_ITERATOR_SUBROPE_DEPTH. Some indices are
  *	stored along with this subrope in a way that traversal can be resumed
  *	quickly: If the current index is withing the subrope's range of 

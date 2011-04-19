@@ -42,6 +42,8 @@ typedef struct Col_WordType {
 #define COL_CHAR		((Col_WordType *) 2)	/* Unicode character. */
 #define COL_SMALL_STRING	((Col_WordType *) 3)	/* Small string. */
 #define COL_ROPE		((Col_WordType *) 4)	/* Rope (string). */
+#define COL_VECTOR		((Col_WordType *) 5)	/* Flat vector. */
+#define COL_LIST		((Col_WordType *) 6)	/* List. */
 
 typedef union {
     int i;			/* COL_INT. */
@@ -51,6 +53,11 @@ typedef union {
 	char data[sizeof(Col_Word)-1];
     } str;
     Col_Rope rope;		/* COL_ROPE. */
+    struct {
+	size_t length;
+	const Col_Word *elements;
+    } vector;			/* COL_VECTOR. */
+				/* COL_LIST use accessors and iterators. */
     void *data;			/* Other values = (Col_WordType *). */
 } Col_WordData;
 
@@ -71,9 +78,9 @@ EXTERN Col_Word		Col_NewWord(Col_WordType *type, size_t size,
 
 EXTERN Col_WordType *	Col_GetWordInfo(Col_Word word, Col_WordData *dataPtr);
 EXTERN Col_Word		Col_FindWordInfo(Col_Word word, Col_WordType * type, Col_WordData *dataPtr);
-EXTERN Col_Word		Col_GetWordValue(Col_Word word);
-EXTERN Col_Word		Col_AddWordValue(Col_Word word, Col_Word value);
-EXTERN void		Col_ClearWordValue(Col_Word word);
+EXTERN Col_Word		Col_GetWordSynonym(Col_Word word);
+EXTERN Col_Word		Col_AddWordSynonym(Col_Word word, Col_Word synonym);
+EXTERN void		Col_ClearWordSynonym(Col_Word word);
 
 
 /* 

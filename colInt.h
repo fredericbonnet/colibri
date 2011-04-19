@@ -24,6 +24,17 @@
 #    endif
 #endif
 
+#ifdef _DEBUG
+#define DO_TRACE
+#endif
+
+#ifdef DO_TRACE
+#   include <stdio.h>
+#   define TRACE(format, ...) (fprintf(stderr, format, __VA_ARGS__), fflush(stderr))
+#else
+#   define TRACE
+#endif
+
 /*
  * Swap two values using XOR. Don't use when both are the same lvalue.
  */
@@ -98,8 +109,6 @@ void			DeclareWord(Col_Word word);
 #define AVAILABLE_CELLS		(CELLS_PER_PAGE-RESERVED_CELLS)
 #define NB_CELLS(size)		(((size)+CELL_SIZE-1)/CELL_SIZE)
 
-#define IS_PAGE(page)		((((unsigned int)(page)) % PAGE_SIZE) == 0)
-
 #define PAGE_NEXT(page)		(*(void **)(page))
 #define PAGE_FLAGS(page)	(*((unsigned char *)(page)+4))
 #define PAGE_GENERATION(page)	(*((unsigned char *)(page)+5))
@@ -109,8 +118,6 @@ void			DeclareWord(Col_Word word);
 
 #define CELL_PAGE(cell)		((void *)((unsigned int)(cell) & ~(PAGE_SIZE-1)))
 #define CELL_INDEX(cell)	(((unsigned int)(cell) % PAGE_SIZE) / CELL_SIZE)
-
-#define PAGE_FLAG_EMPTY		1
 
 /*
  * Memory pools. Pools are a set of pages that store the ropes of a given 
@@ -122,9 +129,11 @@ typedef struct MemoryPool {
     void *lastFreePage[AVAILABLE_CELLS]; 
 				/* Last page where a cell sequence of a given 
 				 * size was found. */
+    size_t nbPages;		/* Number of pages in pool. */
+    size_t nbAlloc;		/* Number of pages alloc'd since last GC. */
+    size_t nbSetCells;		/* Number of set cells in pool. */
     size_t gc;			/* GC counter. Used for generational GC. */
-    int alloc;			/* Page alloc counter since last GC. */
-    int generation;		/* Generation level; 0 = younger. */
+    unsigned int generation;	/* Generation level; 0 = younger. */
 } MemoryPool;
 
 /* 
@@ -137,7 +146,7 @@ void			AllocInit(void);
  * Pool creation. Once created, pools cannot be freed.
  */
 
-MemoryPool *		PoolNew(int generation);
+MemoryPool *		PoolNew(unsigned int generation);
 
 /*
  * Allocation/deallocation of pool pages.
@@ -161,6 +170,7 @@ void			SetCells(void *page, size_t first, size_t number);
 void			ClearCells(void *page, size_t first, size_t number);
 void			ClearAllCells(void *page);
 int			TestCell(void *page, size_t index);
+size_t			NbSetCells(void *page);
 
 
 /*
@@ -180,23 +190,23 @@ int			TestCell(void *page, size_t index);
  * which is the string constant "\0", i.e. a byte array of two consecutive NUL
  * chars.
  *
- * The lead bit of the type field indicates the rope generation. A 1-bit 
- * generation counter means that ropes get promoted when they survive 2 GCs.
+ * The lead bit of the type field indicates parenthood. When set, this means 
+ * that the rope has children in youngest generations.
  *
- * ROPE_SET_TYPE also clears the generation counter.
+ * ROPE_SET_TYPE also clears the parent flag.
  */
 
 /* Careful: don't give arguments with side effects! */
 #define ROPE_TYPE(rope)	\
     ((rope)? \
-	 ((rope)[0]?		ROPE_TYPE_C	\
-	:((rope)[1]&0x7F))	/* Type ID */   \
-    :				ROPE_TYPE_NULL)
+	 ((rope)[0]?				ROPE_TYPE_C	\
+	:((unsigned char)(rope)[1]&0x7F))	/* Type ID */   \
+    :						ROPE_TYPE_NULL)
 #define ROPE_SET_TYPE(rope, type)	(((unsigned char *)(rope))[0] = 0, ((unsigned char *)(rope))[1] = (type))
 
-#define ROPE_GENERATION(rope)		(((unsigned char *)(rope))[1] & 0x80)
-#define ROPE_INCR_GENERATION(rope)	(((unsigned char *)(rope))[1] |= 0x80)
-#define ROPE_CLEAR_GENERATION(rope)	(((unsigned char *)(rope))[1] &= ~0x80)
+#define ROPE_PARENT(rope)		(((unsigned char *)(rope))[1] & 0x80)
+#define ROPE_SET_PARENT(rope)		(((unsigned char *)(rope))[1] |= 0x80)
+#define ROPE_CLEAR_PARENT(rope)		(((unsigned char *)(rope))[1] &= ~0x80)
 
 
 /* 
@@ -227,35 +237,44 @@ int			TestCell(void *page, size_t index);
  * levels, which is more than sufficient for balanced binary trees. 
  */
 
-#define ROPE_UCS_LENGTH(rope)		(*(unsigned short *)((rope)+2))
+#define ROPE_UCS_LENGTH(rope)		(((unsigned short *)(rope))[1])
 #define ROPE_UCS_HEADER_SIZE		4
 #define ROPE_UCS_DATA(rope)		((const unsigned char *)((rope)+4))
 #define ROPE_UCS1_DATA(rope)		((const unsigned char *)((rope)+4))
 #define ROPE_UCS2_DATA(rope)		((const unsigned short *)((rope)+4))
 #define ROPE_UCS4_DATA(rope)		((const unsigned int *)((rope)+4))
 
-#define ROPE_UTF8_LENGTH(rope)		(*(unsigned short *)((rope)+2))
-#define ROPE_UTF8_BYTELENGTH(rope)	(*(unsigned short *)((rope)+4))
+#define ROPE_UTF8_LENGTH(rope)		(((unsigned short *)(rope))[1])
+#define ROPE_UTF8_BYTELENGTH(rope)	(((unsigned short *)(rope))[2])
 #define ROPE_UTF8_HEADER_SIZE		6
 #define ROPE_UTF8_DATA(rope)		((const unsigned char *)((rope)+6))
 
-#define ROPE_SUBROPE_DEPTH(rope)	(*(unsigned char *)((rope)+2)) 
-#define ROPE_SUBROPE_SOURCE(rope)	(*(Col_Rope *)((rope)+4))
-#define ROPE_SUBROPE_FIRST(rope)	(*(size_t *)((rope)+8))
-#define ROPE_SUBROPE_LAST(rope)		(*(size_t *)((rope)+12))
+#define ROPE_SUBROPE_DEPTH(rope)	(((unsigned char *)(rope))[2]) 
+#define ROPE_SUBROPE_SOURCE(rope)	(((Col_Rope *)(rope))[1])
+#define ROPE_SUBROPE_FIRST(rope)	(((size_t *)(rope))[2])
+#define ROPE_SUBROPE_LAST(rope)		(((size_t *)(rope))[3])
 
-#define ROPE_CONCAT_DEPTH(rope)		(*(unsigned char *)((rope)+2))
-#define ROPE_CONCAT_LEFT_LENGTH(rope)	(*(unsigned char *)((rope)+3))
-#define ROPE_CONCAT_LENGTH(rope)	(*(size_t *)((rope)+4))
-#define ROPE_CONCAT_LEFT(rope)		(*(Col_Rope *)((rope)+8))
-#define ROPE_CONCAT_RIGHT(rope)		(*(Col_Rope *)((rope)+12))
+#define ROPE_CONCAT_DEPTH(rope)		(((unsigned char *)(rope))[2])
+#define ROPE_CONCAT_LEFT_LENGTH(rope)	(((unsigned char *)(rope))[3])
+#define ROPE_CONCAT_LENGTH(rope)	(((size_t *)(rope))[1])
+#define ROPE_CONCAT_LEFT(rope)		(((Col_Rope *)(rope))[2])
+#define ROPE_CONCAT_RIGHT(rope)		(((Col_Rope *)(rope))[3])
 
 #define ROPE_CUSTOM_HEADER_SIZE		8
-#define ROPE_CUSTOM_SIZE(rope)		(*(unsigned short *)((rope)+2))
-#define ROPE_CUSTOM_TYPE(rope)		(*(Col_RopeCustomType **)((rope)+4))
+#define ROPE_CUSTOM_SIZE(rope)		(((unsigned short *)(rope))[1])
+#define ROPE_CUSTOM_TYPE(rope)		(((Col_RopeCustomType **)(rope))[1])
 #define ROPE_CUSTOM_DATA(rope)		((void *)((rope)+8))
 #define ROPE_CUSTOM_TRAILER_SIZE	4
 #define ROPE_CUSTOM_NEXT(rope, size)	(*(Col_Rope *)((rope)+NB_CELLS(ROPE_CUSTOM_HEADER_SIZE+(size)+ROPE_CUSTOM_TRAILER_SIZE)*CELL_SIZE-ROPE_CUSTOM_TRAILER_SIZE))
+
+/* 
+ * Max byte size of leaf ropes. A leaf rope can take no more than the available
+ * size of a page. Larger ropes must be built by concatenation of smaller ones. 
+ */
+
+#define UCS_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-ROPE_UCS_HEADER_SIZE)
+#define UTF8_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-ROPE_UTF8_HEADER_SIZE)
+#define CUSTOM_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-ROPE_CUSTOM_HEADER_SIZE)
 
 
 /*
@@ -263,8 +282,6 @@ int			TestCell(void *page, size_t index);
  * Word structures.
  *----------------------------------------------------------------
  */
-
-#define WORD_TYPE_REGULAR		-1
 
 /*
  * Immediate value types.
@@ -281,7 +298,8 @@ int			TestCell(void *page, size_t index);
  *
  * The following tags are recognized:
  *
- *	P..			  ..P|0000	object pointer (aligned on 16 byte boundaries) including nil and ropes
+ *	P..			  ..P|0000	word pointer (aligned on 16 byte boundaries) including nil
+ *	P..			   .P|1000 	rope pointer (not including C strings)
  *	I..			     ..I|1 	small signed integer (31 bits on 32-bit systems)
  *	S..		     ..S|L....L|10	small string or char (general format)
  *	U..		     ..U|111111|10 	 - Unicode character (L=-1, 24 bits on 32-bit systems)
@@ -289,15 +307,22 @@ int			TestCell(void *page, size_t index);
  *	0..            0S    ..S|000001|10	 - 1-char 8-bit string (L=1)
  *	0..  ..0S..          ..S|000010|10	 - 2-char 8-bit string (L=2)
  *	S..		     ..S|000011|10	 - 3-char 8-bit string (L=3)
- *	?..			   .?|0100 	unused
- *	?..			  ..?|1000 	unused
+ *	?..			  ..?|0100 	unused
  *	?..			  ..?|1100 	unused
  */
 
-#define WORD_TYPE_NULL			-2
-#define WORD_TYPE_SMALL_INT		-3
-#define WORD_TYPE_CHAR			-4
-#define WORD_TYPE_SMALL_STRING		-5
+#define WORD_TYPE_REGULAR	0
+
+#define IS_ROPE(word)		((((unsigned int)(word))&0xF) == 8)
+#define WORD_TYPE_ROPE		-1
+
+#define IS_IMMEDIATE(word)	(((unsigned int)(word))&7)
+#define WORD_TYPE_NULL		-2
+#define WORD_TYPE_SMALL_INT	-3
+#define WORD_TYPE_CHAR		-4
+#define WORD_TYPE_SMALL_STRING	-5
+
+
 
 /* 
  * Type field. 
@@ -319,35 +344,33 @@ int			TestCell(void *page, size_t index);
  *
  * Predefined type IDs are chosen so that their bit 1 is zero to 
  * distinguish them with type pointers and avoid value clashes. The ID only
- * takes byte 0, the rest of the word being free to use. Ropes can be seen as
- * a special word type with a zero type ID.
+ * takes byte 0, the rest of the word being free to use.
  *
- * We use bit 0 of the type field as a generation indicator for both predefined
+ * We use bit 0 of the type field as a parenthood indicator for both predefined
  * type IDs and type pointers. Given the above, this bit is always on byte 0. 
- * A 1-bit generation counter means that words get promoted when they survive 
- * 2 GCs.
+ * When set, this means that the word has children in youngest generations.
  *
- * WORD_SET_TYPE_(ID|ADDR) also clears the generation counter.
+ * WORD_SET_TYPE_(ID|ADDR) also clears the parent flag.
  */
 
-#define IS_IMMEDIATE(word)	(((unsigned int)(word))&0xF)
-#define IS_WORD(ropeOrWord)	(((unsigned char *)(ropeOrWord))[0])
+#define CELL_TYPE(cell)		(((unsigned char *)(cell))[0])
 
 /* Careful: don't give arguments with side effects! */
 #define WORD_TYPE(word) \
-    ((word)?										\
-	IS_IMMEDIATE(word)?								\
-	    /* Immediate values */							\
-	     (((unsigned int)(word))&1)?		WORD_TYPE_SMALL_INT		\
-	    :(((unsigned int)(word))&2)?						\
-		 (((int)(word))&0x80)?			WORD_TYPE_CHAR			\
-		:					WORD_TYPE_SMALL_STRING		\
-	    /* Unknown format */							\
-	    :						WORD_TYPE_NULL			\
-	/* Pointer or predefined */							\
-	:(((unsigned char *)(word))[0]&2)?		WORD_TYPE_REGULAR		\
-	:(((unsigned char *)(word))[0]&~3)		/* Type ID (inc. rope) */	\
-    :							WORD_TYPE_NULL)
+    ((word)?								\
+	IS_IMMEDIATE(word)?						\
+	    /* Immediate values */					\
+	     (((unsigned int)(word))&1)?	WORD_TYPE_SMALL_INT	\
+	    :(((unsigned int)(word))&2)?				\
+		 (((int)(word))&0x80)?		WORD_TYPE_CHAR		\
+		:				WORD_TYPE_SMALL_STRING	\
+	    /* Unknown format */					\
+	    :					WORD_TYPE_NULL		\
+	:IS_ROPE(word)?				WORD_TYPE_ROPE		\
+	/* Pointer or predefined */					\
+	:(CELL_TYPE(word)&2)?			WORD_TYPE_REGULAR	\
+	:(CELL_TYPE(word)&~3)			/* Type ID */		\
+    :						WORD_TYPE_NULL)
 
 #ifdef WORDS_BIGENDIAN
 #   define WORD_GET_TYPE_ADDR(word) \
@@ -361,29 +384,33 @@ int			TestCell(void *page, size_t index);
 	(*(unsigned int *)(word) = ((unsigned int)(addr))|2)
 #endif
 #define WORD_SET_TYPE_ID(word, type)	(((unsigned char *)(word))[0] = (type))
-#define WORD_GENERATION(word)		(((unsigned char *)(word))[0] & 1)
-#define WORD_INCR_GENERATION(word)	(((unsigned char *)(word))[0] |= 1)
-#define WORD_CLEAR_GENERATION(word)	(((unsigned char *)(word))[0] &= ~1)
+
+#define WORD_PARENT(word)		(((unsigned char *)(word))[0] & 1)
+#define WORD_SET_PARENT(word)		(((unsigned char *)(word))[0] |= 1)
+#define WORD_CLEAR_PARENT(word)		(((unsigned char *)(word))[0] &= ~1)
 
 /*
  * Predefined word types.
  *
- * To respect the aforementioned constraints, values are chosen so that the MSB
- * and LSB are identical, and that their bit 0 and 1 are zero.
- *
- * As ropes have their byte 0 set to zero, a zero type ID indicates that the
- * word is a rope.
+ * To respect the aforementioned constraints, values are chosen so that their 
+ * 2 lsbs are zero.
  */
 
-#define WORD_TYPE_ROPE			0
 #define WORD_TYPE_INT			4
 #define WORD_TYPE_STRING		8
+#define WORD_TYPE_VECTOR		12
+#define WORD_TYPE_LIST			16
+#define WORD_TYPE_SUBLIST		20
+#define WORD_TYPE_CONCATLIST		24
 
 /*
- * Immediate value fields.
+ * Immediate & rope value fields.
  *
  * Values are for 32-bit systems.
  */
+
+#define WORD_ROPE_GET(word)		((Col_Rope)(((unsigned int)(word))&~0xF))
+#define WORD_ROPE_NEW(value)		((Col_Word)(((unsigned int)(value))|8))
 
 #define WORD_SMALL_INT_GET(word)	(((int)(word))>>1)
 #define WORD_SMALL_INT_NEW(value)	((Col_Word)(((value)<<1)|1))
@@ -407,18 +434,17 @@ int			TestCell(void *page, size_t index);
 /*
  * Word fields.
  *
- * Words have a value, stored in the 2nd machine word of the cell, that can 
- * take any accepted word value: immediate values (inc. NULL), ropes, or other 
- * words. Words can thus form chains of values having different types. All 
- * words in a value chain ultimately have the same value (e.g. a string 
- * representation or an interchange format). This implies that the order of 
- * words in a value chain has no importance.
+ * Words may have synonyms that that can take any accepted word value: immediate
+ * values (inc. NULL), ropes, or other words. Words can thus be part of chains
+ * of synonyms having different types, but with semantically identical values. 
+ * Such chains form a circular linked list using the 2nd machine word of the 
+ * cell. The order of words in a synonym chain has no importance.
  *
  * Values are for 32-bit systems.
  */
 
 #define WORD_HEADER_SIZE		8
-#define WORD_VALUE(word)		(((Col_Word *)(word))[1])
+#define WORD_SYNONYM(word)		(((Col_Word *)(word))[1])
 #define WORD_DATA(word)			((void *)((char *)(word)+8))
 #define WORD_TRAILER_SIZE		4
 #define WORD_NEXT(word, size)		(*(Col_Word *)((char *)(word)+NB_CELLS(WORD_HEADER_SIZE+(size)+WORD_TRAILER_SIZE)*CELL_SIZE-WORD_TRAILER_SIZE))
@@ -426,25 +452,39 @@ int			TestCell(void *page, size_t index);
 #define WORD_INT_DATA(word)		(*(int *) WORD_DATA(word))
 #define WORD_STRING_DATA(word)		(*(Col_Rope *) WORD_DATA(word))
 
+/* 
+ * Max byte size of word data. A word can take no more than the available size 
+ * of a page. Larger words must be built by concatenation of smaller ones. 
+ */
+
+#define WORD_MAX_SIZE		(AVAILABLE_CELLS*CELL_SIZE-WORD_HEADER_SIZE)
+
 /*
- * Roots, references and redirects.
- *
+ *----------------------------------------------------------------
+ * Roots and redirects.
+ *----------------------------------------------------------------
+ */
+
+/*
  * They use the same fields for both rope and word versions, only the header
  * field and type ID change.
  *
+ * Roots are explicitly preserved ropes or words, using a reference count.
+ *
+ * Parent roots are like automatic roots: they point to parents with children 
+ * in newer generations.
+ *
  * Redirects replace existing ropes during promotion.
  *
- * References are like automatic roots: they are followed from parents in
- * uncollected polls pointing to children in newer pools.
  */
 
 #define ROPE_TYPE_ROOT		0x7F
-#define ROPE_TYPE_REDIRECT	0x7E
-#define ROPE_TYPE_REF		0x7D
+#define ROPE_TYPE_PARENT	0x7E
+#define ROPE_TYPE_REDIRECT	0x7D
 
 #define WORD_TYPE_ROOT		0xFC
-#define WORD_TYPE_REDIRECT	0xF8
-#define WORD_TYPE_REF		0xF4
+#define WORD_TYPE_PARENT	0xF8
+#define WORD_TYPE_REDIRECT	0xF4
 
 /* Careful: don't give arguments with side effects!  */
 #define RESOLVE_ROPE(rope)	\
@@ -456,9 +496,52 @@ int			TestCell(void *page, size_t index);
 #define ROOT_SOURCE(ropeOrWord)		(((const void **)(ropeOrWord))[2])
 #define ROOT_NEXT(ropeOrWord)		(((const void **)(ropeOrWord))[3])
 
+#define PARENT_CELL(ropeOrWord)		(((const void **)(ropeOrWord))[1])
+#define PARENT_NEXT(ropeOrWord)		(((const void **)(ropeOrWord))[3])
+
 #define REDIRECT_SOURCE(rope)		ROOT_SOURCE(rope)
 
-#define REF_PARENT(ropeOrWord)		(((const void **)(ropeOrWord))[1])
-#define REF_CHILD(ropeOrWord)		(((const void **)(ropeOrWord))[2])
-#define REF_NEXT(ropeOrWord)		(((const void **)(ropeOrWord))[3])
 
+/*
+ *----------------------------------------------------------------
+ * Vectors and lists.
+ *----------------------------------------------------------------
+ */
+
+/* 
+ * Max length of vectors words. A vector word can take no more than the 
+ * available size of a page. Larger datasets must use tree-based lists.
+ */
+
+#define VECTOR_MAX_LENGTH		(WORD_MAX_SIZE/sizeof(Col_Word))
+
+/*
+ * Vector fields.
+ */
+
+#define WORD_VECTOR_FLAGS(word)		(((unsigned char *)(word))[1])
+#define WORD_VECTOR_LENGTH(word)	(((unsigned short *)(word))[1])
+#define WORD_VECTOR_ELEMENTS(word)	((Col_Word *) WORD_DATA(word))
+
+/*
+ * List fields.
+ *
+ * List nodes and sublists are not regular words in the sense that they have no 
+ * synonym field. Instead they store their size. They are similar to concat 
+ * resp. substring ropes and use the same format. They are never used 
+ * independently from list words.
+ */
+
+#define WORD_LIST_LENGTH(word)		(((size_t *)(word))[2])
+#define WORD_LIST_ROOT(word)		(((Col_Word *)(word))[3])
+
+#define WORD_SUBLIST_DEPTH(word)	(((unsigned char *)(word))[1]) 
+#define WORD_SUBLIST_SOURCE(word)	(((Col_Word *)(word))[1])
+#define WORD_SUBLIST_FIRST(word)	(((size_t *)(word))[2])
+#define WORD_SUBLIST_LAST(word)		(((size_t *)(word))[3])
+
+#define WORD_CONCATLIST_DEPTH(word)	(((unsigned char *)(word))[1])
+#define WORD_CONCATLIST_LEFT_LENGTH(word) (((unsigned short *)(word))[1])
+#define WORD_CONCATLIST_LENGTH(word)	(((size_t *)(word))[1])
+#define WORD_CONCATLIST_LEFT(word)	(((Col_Word *)(word))[2])
+#define WORD_CONCATLIST_RIGHT(word)	(((Col_Word *)(word))[3])

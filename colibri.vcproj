@@ -183,6 +183,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\colList.c"
+				>
+			</File>
+			<File
 				RelativePath=".\colRope.c"
 				>
 			</File>
@@ -202,6 +206,10 @@
 			</File>
 			<File
 				RelativePath=".\colInt.h"
+				>
+			</File>
+			<File
+				RelativePath=".\colList.h"
 				>
 			</File>
 			<File

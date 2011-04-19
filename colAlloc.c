@@ -5,7 +5,6 @@
 #   include <windows.h>
 #endif
 
-
 /*
  * System page size. Should be a multiple of PAGE_SIZE on every possible 
  * platform.
@@ -31,8 +30,9 @@ static size_t systemPageSize;
  * points to first). Indices must be consecutive. That way we can scan a range 
  * for holes from any of its page.
  *
- * Ranges are themselves tracked by a singly-linked list of structures that 
- * store a pointer to any committed page within the range.
+ * An alternative was to use VirtualQuery to get the committed and free pages 
+ * in a range, but this proved to be too CPU expensive, and VirtualQuery is
+ * known to be much slower on Win64.
  */
 
 static SYSTEM_INFO systemInfo;
@@ -46,18 +46,10 @@ static size_t pagesPerRange;
     ((unsigned short)(((unsigned int)(page) % systemInfo.dwAllocationGranularity) / systemInfo.dwPageSize))
 #define PHYS_PAGE_NEXT(page)	PAGE_RESERVED(page)
 
-#define PHYS_PAGE_FLAG_EMPTY		2
-
-typedef struct PageRange {
-    struct PageRange * next;	/* Next in list. */
-    void *page;			/* Address of any page in range reserved by 
-				 * VirtualAlloc. */
-} PageRange;
-
 typedef struct WinMemoryPool {
     MemoryPool pool;		/* Must be first for polymorphism. */
-    PageRange *ranges;		/* List of memory ranges. */
-    PageRange *firstFreeRange;	/* First free range in list. */
+    void *lastFreeRange;	/* Last page belonging to a range with free
+				 * pages. */
 } WinMemoryPool;
 
 #endif /* WIN32 */
@@ -211,14 +203,14 @@ static const char firstZeroBitSequence[7][256] = {
 };
 
 /* 
- * Longest leading zero bit sequence in byte
+ * Longest leading zero bit sequence in byte.
  */
 
 static const char longestLeadingZeroBitSequence[256] = {
     8, 7, 6, 6, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4, 
     3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 
-    2, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 
-    2, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
@@ -231,6 +223,29 @@ static const char longestLeadingZeroBitSequence[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+/*
+ *  Number of bits set in byte.
+ */
+
+static const char nbBitsSet[256] = {
+    0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 
+    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 
+    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 
+    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 
+    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 
+    4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8
 };
 
 /*
@@ -290,23 +305,22 @@ SysPageAlloc(
 {
 #ifdef WIN32
     WinMemoryPool * winPool = (WinMemoryPool *)pool;
+    void *base, *page;
 
     /* 
      * Look for an address range with a free page. 
      */
 
-    PageRange *range, *prevRange;
-    for (prevRange = NULL, range = winPool->firstFreeRange; range; 
-	    prevRange = range, range = range->next) {
-	void * first = PHYS_PAGE_RANGE(range->page);
+    for (page = winPool->lastFreeRange; page; page = LAST_PAGE_NEXT(page)) {
 	unsigned short index, prev, next;
 
 	/* 
 	 * Search hole in page index list. 
 	 */
 
-	index = PHYS_PAGE_INDEX(range->page);
-	next = PHYS_PAGE_NEXT(range->page);
+	base = PHYS_PAGE_RANGE(page);
+	index = PHYS_PAGE_INDEX(page);
+	next = PHYS_PAGE_NEXT(page);
 	prev = index;
 	if (next == index) {
 	    /* 
@@ -330,7 +344,7 @@ SysPageAlloc(
 		    break;
 		}
 		prev = next;
-		next = PHYS_PAGE_NEXT(PHYS_PAGE(first, prev));
+		next = PHYS_PAGE_NEXT(PHYS_PAGE(base, prev));
 	    } while (next != index);
 	}
 	if (next != index) {
@@ -338,7 +352,7 @@ SysPageAlloc(
 	     * Hole found, commit page.
 	     */
 
-	    void * page = PHYS_PAGE(first, next);
+	    page = PHYS_PAGE(base, next);
 	    VirtualAlloc(page, systemInfo.dwPageSize, MEM_COMMIT, 
 		    PAGE_READWRITE);
 
@@ -346,61 +360,27 @@ SysPageAlloc(
 	     * Insert into list after <index>.
 	     */
 
-	    PHYS_PAGE_NEXT(page) = PHYS_PAGE_NEXT(PHYS_PAGE(first, prev));
-	    PHYS_PAGE_NEXT(PHYS_PAGE(first, prev)) = next;
+	    PHYS_PAGE_NEXT(page) = PHYS_PAGE_NEXT(PHYS_PAGE(base, prev));
+	    PHYS_PAGE_NEXT(PHYS_PAGE(base, prev)) = next;
 
-	    /* 
-	     * Point to the new page & range so that subsequent searches are 
-	     * faster. 
-	     */
-
-	    range->page = page;
-	    winPool->firstFreeRange = range;
-
-	    return page;
+	    break;
 	}
     }
 
-    /* 
-     * No room in existing ranges, reserve new one and allocate first page. 
-     */
-
-    range = (PageRange *) malloc(sizeof(*range));
-    range->page = VirtualAlloc(NULL, systemInfo.dwAllocationGranularity, 
-	    MEM_RESERVE, PAGE_READWRITE);
-    VirtualAlloc(range->page, systemInfo.dwPageSize, MEM_COMMIT, 
-	    PAGE_READWRITE);
-    PHYS_PAGE_NEXT(range->page) = 0;
-
-    /* 
-     * Insert range in list. 
-     */
-
-    if (prevRange) {
+    if (!page) {
 	/* 
-	 * Middle of list, insert after previous. Don't insert at head in order
-	 * to avoid scanning all the previous ranges again next time.
+	 * No room in existing ranges, reserve new one and allocate first page. 
 	 */
 
-	range->next = prevRange->next;
-	prevRange->next = range;
-    } else {
-	/* 
-	 * Head of list. 
-	 */
-
-	/* ASSERT(winPool->ranges == NULL) */
-	range->next = NULL;
-	winPool->ranges = range;
+	base = VirtualAlloc(NULL, systemInfo.dwAllocationGranularity, 
+		MEM_RESERVE, PAGE_READWRITE);
+	page = VirtualAlloc(base, systemInfo.dwPageSize, MEM_COMMIT, 
+		PAGE_READWRITE);
+	PHYS_PAGE_NEXT(page) = 0;
     }
 
-    /* 
-     * Point to the new range so that subsequent searches are faster. 
-     */
-
-    winPool->firstFreeRange = range;
-
-    return range->page;
+    winPool->lastFreeRange = page;
+    return page;
 #endif /* WIN32 */
 }
 
@@ -426,12 +406,26 @@ SysPageFree(
     void * page)		/* The page to free. */
 {
 #ifdef WIN32
-    /*
-     * Actual cleanup is done in SysPageCleanup. Set first logical page's flag
-     * to PHYS_PAGE_FLAG_EMPTY to mark the system page as empty. This is a safe
-     * way to check for emptiness of the whole system page. */
+    unsigned short index = PHYS_PAGE_INDEX(page);
+    if (PHYS_PAGE_NEXT(page) == index) {
+	/* 
+	 * Last and only page in range, release whole range. 
+	 */
 
-    PAGE_FLAGS(page) |= PHYS_PAGE_FLAG_EMPTY;
+	VirtualFree(PHYS_PAGE_RANGE(page), 0, MEM_RELEASE);
+    } else {
+	/* 
+	 * Unlink and decommit first page. 
+	 */
+
+	void *base = PHYS_PAGE_RANGE(page);
+	unsigned short prev, next;
+	for (prev = index, next = PHYS_PAGE_NEXT(PHYS_PAGE(base, prev)); 
+		next != index; prev = next, 
+		next = PHYS_PAGE_NEXT(PHYS_PAGE(base, next)));
+	PHYS_PAGE_NEXT(PHYS_PAGE(base, prev)) = PHYS_PAGE_NEXT(page);
+	VirtualFree(page, systemInfo.dwPageSize, MEM_DECOMMIT);
+    }
 #endif
 }
 
@@ -455,83 +449,8 @@ static void
 SysPageCleanup(MemoryPool * pool) {
 #ifdef WIN32
     WinMemoryPool * winPool = (WinMemoryPool *)pool;
-    PageRange *range, *prevRange, *nextRange;
 
-    /* 
-     * Scan all ranges for empty system pages to free. Also free empty ranges. 
-     */
-
-    for (prevRange = NULL, range = winPool->ranges; range; range = nextRange) {
-	void * first = PHYS_PAGE_RANGE(range->page);
-	void *page, *prev;
-	unsigned short index, next;
-
-	nextRange = range->next;
-
-	index = PHYS_PAGE_INDEX(range->page);
-	next = PHYS_PAGE_NEXT(range->page);
-
-	/* 
-	 * Iterate over system pages, starting past the first one so that the 
-	 * circular list stays closed. Handle first page later on. 
-	 */
-
-	for (prev = range->page; next != index; /* within loop */) {
-	    page = PHYS_PAGE(first, next);
-	    next = PHYS_PAGE_NEXT(page);
-	    if (PAGE_FLAGS(page) & PHYS_PAGE_FLAG_EMPTY) {
-		/* 
-		 * Page is free, unlink and decommit. 
-		 */
-
-		PHYS_PAGE_NEXT(prev) = next;
-		VirtualFree(page, systemInfo.dwPageSize, MEM_DECOMMIT);
-	    } else {
-		prev = page;
-	    }
-	}
-
-	/* 
-	 * Now handle first page in range. 
-	 */
-
-	if (PAGE_FLAGS(range->page) & PHYS_PAGE_FLAG_EMPTY) {
-	    if (PHYS_PAGE_NEXT(range->page) == index) {
-		/* 
-		 * Last and only page in range, release whole range. 
-		 */
-
-		VirtualFree(PHYS_PAGE_RANGE(range->page), 
-			systemInfo.dwAllocationGranularity, MEM_RELEASE);
-		if (prevRange) {
-		    /*
-		     * Middle of list.
-		     */
-
-		    prevRange->next = nextRange;
-		} else {
-		    /* 
-		     * Head of list. 
-		     */
-
-		    winPool->ranges = nextRange;
-		}
-		free(range);
-	    } else {
-		/* 
-		 * Unlink and decommit first page. 
-		 */
-
-		PHYS_PAGE_NEXT(prev) = PHYS_PAGE_NEXT(range->page);
-		VirtualFree(range->page, systemInfo.dwPageSize, MEM_DECOMMIT);
-		range->page = prev;
-	    }
-	} else {
-	    prevRange = range;
-	}
-    }
-
-    winPool->firstFreeRange = winPool->ranges;
+    winPool->lastFreeRange = pool->pages;
 #endif /* WIN32 */
 }
 
@@ -553,26 +472,16 @@ SysPageCleanup(MemoryPool * pool) {
 
 MemoryPool * 
 PoolNew(
-    int generation)		/* Generation number; 0 = youngest. */
+    unsigned int generation)	/* Generation number; 0 = youngest. */
 {
-    size_t i;
 #ifdef WIN32
-    WinMemoryPool * winPool = (WinMemoryPool *)malloc(sizeof(*winPool));
+    WinMemoryPool * winPool = (WinMemoryPool *) malloc(sizeof(*winPool));
     MemoryPool * pool = (MemoryPool *) winPool;
 
     memset(winPool, 0, sizeof(*winPool));
 #endif
 
     pool->generation = generation;
-
-    /* 
-     * Alloc some pages. 
-     */
-
-    PoolAllocPages(pool, &pool->pages);
-    for (i = 0; i < AVAILABLE_CELLS; i++) {
-	pool->lastFreePage[i] = pool->pages;
-    }
 
     return pool;
 }
@@ -608,7 +517,9 @@ PoolAllocPages(
 
     base = SysPageAlloc(pool);
 
-    pool->alloc += systemPageSize/PAGE_SIZE;
+    pool->nbPages += systemPageSize/PAGE_SIZE;
+    pool->nbAlloc += systemPageSize/PAGE_SIZE;
+    pool->nbSetCells += RESERVED_CELLS*systemPageSize/PAGE_SIZE;
 
     /*
      * Insert in list.
@@ -645,7 +556,7 @@ PoolAllocPages(
  *
  * PoolFreePages --
  *
- *	Free system pages in pool.
+ *	Free system pages in pool. Refresh page count in the process.
  *
  * Results:
  *	None.
@@ -661,28 +572,35 @@ PoolFreePages(
     MemoryPool *pool)		/* The pool with pages to free. */
 {
     char *page, *base, *prev, *next;
-    size_t i;
+    size_t nbSetCells;
+
+    pool->nbPages = 0;
+    pool->nbSetCells = 0;
 
     /* 
      * Iterate over system pages... 
      */
 
     for (prev = NULL, base = pool->pages; base; base = next) {
-	int isEmpty = 1;
-
 	next = LAST_PAGE_NEXT(base);
 
 	/* 
 	 * ... then over logical pages within the system page. 
 	 */
 
+	nbSetCells = 0;
 	for (page = base; page < base + systemPageSize; page += PAGE_SIZE) {
-	    if (!(PAGE_FLAGS(page) & PAGE_FLAG_EMPTY)) {
-		isEmpty = 0;
-		break;
-	    }
+	    nbSetCells += NbSetCells(page);
 	}
-	if (isEmpty) {
+	if (nbSetCells > RESERVED_CELLS * (systemPageSize/PAGE_SIZE)) {
+	    /*
+	     * At least one page contains allocated cells.
+	     */
+
+	    prev = base;
+	    pool->nbPages += systemPageSize/PAGE_SIZE;
+	    pool->nbSetCells += nbSetCells;
+	} else {
 	    /* 
 	     * All logical pages in system page are empty. 
 	     */
@@ -698,14 +616,6 @@ PoolFreePages(
 		 * Head of list. 
 		 */
 
-		if (!next) {
-		    /*
-		     * Last and only system page in list, don't free. Pools
-		     * must have at least one page.
-		     */
-
-		    break;
-		}
 		pool->pages = next;
 	    }
 
@@ -714,17 +624,7 @@ PoolFreePages(
 	     */
 
 	    SysPageFree(pool, base);
-	} else {
-	    prev = base;
 	}
-    }
-
-    /*
-     * Reset shortcut pointers because pages may no longer be valid. 
-     */
-
-    for (i = 0; i < AVAILABLE_CELLS; i++) {
-	pool->lastFreePage[i] = pool->pages;
     }
 
     /* 
@@ -1003,4 +903,32 @@ TestCell(
 {
     unsigned char *mask = PAGE_BITMASK(page);
     return mask[index>>3] & (1<<(index&7));
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * NbSetCells --
+ *
+ *	Get the number of cells set in a page.
+ *
+ * Results:
+ *	Number of set cells.
+ *
+ * Side effects:
+ *	None.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+size_t
+NbSetCells(
+    void *page)			/* The page. */
+{
+    unsigned char *mask = PAGE_BITMASK(page);
+    size_t i, nb = 0;
+    for (i=0; i < (CELLS_PER_PAGE>>3); i++) {
+	nb += nbBitsSet[mask[i]];
+    }
+    return nb;
 }

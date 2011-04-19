@@ -151,6 +151,7 @@ typedef unsigned int Col_Char;
 #include "colRope.h"
 #include "colWord.h"
 
+#include "colList.h"
 
 /*
  *----------------------------------------------------------------
@@ -174,8 +175,7 @@ EXTERN void		Col_ResumeGC(void);
  * Child declaration needed by the generational GC.
  */
 
-EXTERN void		Col_DeclareChildRope(const void *parent, Col_Rope child);
-EXTERN void		Col_DeclareChildWord(const void *parent, Col_Word child);
+EXTERN void		Col_DeclareChild(const void *parent, const void *child);
 
 /*
  * end block for C++
