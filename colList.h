@@ -1,5 +1,5 @@
-#ifndef _COLIBRI_COLLECTION
-#define _COLIBRI_COLLECTION
+#ifndef _COLIBRI_LIST
+#define _COLIBRI_LIST
 
 #include <stddef.h> /* For size_t */
 #include <stdarg.h> /* For variadic procs */
@@ -26,7 +26,9 @@ EXTERN void		Col_BindReference(Col_Word reference, Col_Word source);
 EXTERN size_t		Col_GetMaxVectorLength(void);
 EXTERN Col_Word		Col_NewVector(size_t length, 
 			    const Col_Word * elements);
-EXTERN Col_Word		Col_NewVectorV(size_t length, ...);
+EXTERN Col_Word		Col_NewVectorNV(size_t length, ...);
+#define Col_NewVectorV(...) \
+    Col_NewVectorNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
 
 /*
  * Mutable vectors are flat arrays that can grow up to a maximum length, whose
@@ -40,7 +42,8 @@ EXTERN void		Col_MVectorSetLength(Col_Word mvector, size_t length);
 
 /*
  * Lists are immutable structures built by composition of other lists and 
- * vectors. Immutable vectors can be used in place of immutable lists. 
+ * vectors. Immutable vectors can be used in place of immutable lists. Mutable
+ * lists' content is frozen, and mutable vectors are copied.
  */
 
 EXTERN Col_Word		Col_NewList(size_t length, 
@@ -49,7 +52,9 @@ EXTERN size_t		Col_ListLength(Col_Word list);
 EXTERN Col_Word		Col_Sublist(Col_Word list, size_t first, size_t last);
 EXTERN Col_Word		Col_ConcatLists(Col_Word left, Col_Word right);
 EXTERN Col_Word		Col_ConcatListsA(size_t number, const Col_Word * words);
-EXTERN Col_Word		Col_ConcatListsV(size_t number, ...);
+EXTERN Col_Word		Col_ConcatListsNV(size_t number, ...);
+#define Col_ConcatListsV(...) \
+    Col_ConcatListsNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
 EXTERN Col_Word		Col_ConcatListsL(Col_Word list, size_t first, 
 			    size_t last);
 EXTERN Col_Word		Col_LoopList(Col_Word list);
@@ -65,32 +70,30 @@ EXTERN size_t		Col_ListLoopLength(Col_Word list);
 EXTERN Col_Word		Col_NewMList();
 EXTERN void		Col_FreezeMList(Col_Word mlist);
 EXTERN void		Col_MListSetLength(Col_Word mlist, size_t length);
-EXTERN void		Col_MListLoop(Col_Word mlist, size_t length);
+EXTERN void		Col_MListLoop(Col_Word mlist, size_t loopLength);
 EXTERN void		Col_MListSetAt(Col_Word mlist, size_t index, 
 			    Col_Word element);
 EXTERN void		Col_MListInsert(Col_Word into, size_t index, 
 			    Col_Word list);
 EXTERN void		Col_MListRemove(Col_Word mlist, size_t first, 
 			    size_t last);
-EXTERN void		Col_MListReplace(Col_Word mlist, size_t first, 
-			    size_t last, Col_Word with);
 
 
 /*
  *----------------------------------------------------------------
- * High level operations on immutable lists. These are done by composition of
- * basic operations.
+ * High level immutable operations. These are done by composition of basic 
+ * immutable operations.
  *----------------------------------------------------------------
  */
 
 /* 
- * Accessing. Works on mutable or immutable lists and vectors.
+ * Accessing.
  */
 
-EXTERN Col_Word		Col_ListGetAt(Col_Word list, size_t index);
+EXTERN Col_Word		Col_ListAt(Col_Word list, size_t index);
 
 /* 
- * Repetition/looping of an immutable list.
+ * Immutable repetition.
  */
 
 EXTERN Col_Word		Col_RepeatList(Col_Word list, size_t count);
@@ -106,6 +109,12 @@ EXTERN Col_Word		Col_ListRemove(Col_Word list, size_t first,
 EXTERN Col_Word		Col_ListReplace(Col_Word list, size_t first, 
 			    size_t last, Col_Word with);
 
+/* 
+ * Mutable insertion/removal. 
+ */
+
+EXTERN void		Col_MListReplace(Col_Word mlist, size_t first, 
+			    size_t last, Col_Word with);
 
 /* 
  *----------------------------------------------------------------
@@ -151,7 +160,7 @@ typedef struct Col_ListIterator {
 	
 EXTERN void		Col_ListIterBegin(Col_Word list, size_t index, 
 			    Col_ListIterator *it);
-EXTERN Col_Word		Col_ListIterElementAt(Col_ListIterator *it);
+EXTERN Col_Word		Col_ListIterAt(Col_ListIterator *it);
 EXTERN int		Col_ListIterCompare(Col_ListIterator *it1, 
 			    Col_ListIterator *it2);
 EXTERN void		Col_ListIterMoveTo(Col_ListIterator *it, size_t index);
@@ -161,4 +170,4 @@ EXTERN void		Col_ListIterBackward(Col_ListIterator *it, size_t nb);
 #define Col_ListIterNext(it)	Col_ListIterForward((it), 1)
 #define Col_ListIterPrevious(it) Col_ListIterBackward((it), 1)
 
-#endif /* _COLIBRI_COLLECTION */
+#endif /* _COLIBRI_LIST */
