@@ -32,12 +32,6 @@ extern size_t systemPageSize;
 #define LAST_PAGE_NEXT(page)	\
     PAGE_NEXT(((char *)(page) + systemPageSize - PAGE_SIZE))
 
-/* 
- * Initialization. 
- */
-
-void			PlatAllocInit(void);
-
 /*
  * Allocation/deallocation of system pages.
  */

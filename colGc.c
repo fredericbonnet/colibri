@@ -266,7 +266,7 @@ Col_DeclareChild(
 	     */
 
 	    return;
-	} else if (IS_IMMEDIATE(child)) {
+	} else if (!child || IS_IMMEDIATE(child)) {
 	    /*
 	     * Not cell-based.
 	     */
@@ -717,7 +717,7 @@ PoolAllocCells(
 	return NULL;
     }
     cells = PageAllocCells(number, PAGE_NEXT(tail), &tail);
-    /* ASSERT(cells) */
+    ASSERT(cells);
 
     /* 
      * Cell sequences equal to or larger than <number> cannot be found before 
@@ -1102,7 +1102,7 @@ MarkReachableCellsFromParents(
 	     * be set again during the mark phase. 
 	     */
 
-	    /* ASSERT(TestCell(CELL_PAGE(parent), CELL_INDEX(parent))) */
+	    ASSERT(TestCell(CELL_PAGE(parent), CELL_INDEX(parent)));
 	    ClearCells(CELL_PAGE(parent), CELL_INDEX(parent), 1);
 	    if (CELL_TYPE(root) /* word */) {
 		MarkWord(info, (Col_Word *) &parent, NULL);
@@ -1635,7 +1635,7 @@ start:
 	 * No tail recursion.
 	 */
 
-	/* ASSERT(type == WORD_TYPE_REGULAR */
+	ASSERT(type == WORD_TYPE_REGULAR);
 	MarkWord(info, &WORD_SYNONYM(*wordPtr), &childGen);
 	if (childGen >= PAGE_GENERATION(CELL_PAGE(*wordPtr))) {
 	    WORD_CLEAR_PARENT(*wordPtr);

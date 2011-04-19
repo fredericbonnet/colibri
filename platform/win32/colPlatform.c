@@ -13,144 +13,10 @@ typedef struct {
 
 
 /*
- *----------------------------------------------------------------
- * Process & thread.
- *----------------------------------------------------------------
+ * Prototypes for functions used only in this file.
  */
 
-/*
- *---------------------------------------------------------------------------
- *
- * DllMain --
- *
- *	Windows DLL entry point.
- *
- * Results:
- *	True.
- *
- * Side effects:
- *	Create thread-local storage token.
- *
- *---------------------------------------------------------------------------
- */
-
-BOOL APIENTRY 
-DllMain( 
-    HMODULE hModule,
-    DWORD dwReason,
-    LPVOID lpReserved)
-{
-    switch (dwReason) {
-	case DLL_PROCESS_ATTACH:
-	    if ((tlsToken = TlsAlloc()) == TLS_OUT_OF_INDEXES) {
-		return FALSE;
-	    }
-	    break;
-
-	case DLL_PROCESS_DETACH:
-	    TlsFree(tlsToken);
-	    break;
-    }
-    return TRUE;
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatEnter --
- *
- *	Enter the thread.
- *
- * Results:
- *	Non-zero if this is the first nested call, else 0.
- *
- * Side effects:
- *	Global data is initialized; decrement nesting count.
- *
- *---------------------------------------------------------------------------
- */
-
-int
-PlatEnter()
-{
-    ThreadData *info = (ThreadData *) TlsGetValue(tlsToken);
-    if (!info) {
-	/*
-	 * Not yet initialized.
-	*/
-
-	info = (ThreadData *) malloc(sizeof(ThreadData));
-	info->nestCount = 0;
-	TlsSetValue(tlsToken, info);
-    }
-
-    /* 
-     * Increment nest count. 
-     */
-
-    return ((++info->nestCount) == 1);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatLeave --
- *
- *	Leave the thread.
- *
- * Results:
- *	Non-zero if this is the last nested call, else 0.
- *
- * Side effects:
- *	Decrement nesting count.
- *
- *---------------------------------------------------------------------------
- */
-
-int
-PlatLeave()
-{
-    ThreadData *info = (ThreadData *) TlsGetValue(tlsToken);
-    if (!info) {
-	/* TODO: exception ? */
-	return 0;
-    }
-
-    /*
-     * Decrement nest count.
-     */
-
-    return ((--info->nestCount) == 0);
-}
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatCleanup --
- *
- *	Final cleanup.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Cleanup global structures.
- *
- *---------------------------------------------------------------------------
- */
-
-void
-PlatCleanup()
-{
-    ThreadData *info = (ThreadData *) TlsGetValue(tlsToken);
-    if (!info || info->nestCount != 0) {
-	/* TODO: exception ? */
-	return;
-    }
-
-    free(info);
-    TlsSetValue(tlsToken, 0);
-}
+static BOOL Init(void);
 
 
 /*
@@ -195,29 +61,6 @@ static size_t pagesPerRange;
  */
 
 #define lastFreeRange data
-
-/*
- *---------------------------------------------------------------------------
- *
- * PlatAllocInitAllocInit --
- *
- *	Initialize the platform-specific memory allocator stuff.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Global data is initialized.
- *
- *---------------------------------------------------------------------------
- */
-
-void
-PlatAllocInit() {
-    GetSystemInfo(&systemInfo);
-    systemPageSize = systemInfo.dwPageSize;
-    pagesPerRange = systemInfo.dwAllocationGranularity/systemInfo.dwPageSize;
-}
 
 /*
  *---------------------------------------------------------------------------
@@ -434,3 +277,171 @@ PlatGetErrorProcPtr() {
 }
 
 #endif /* COL_THREADS */
+
+
+/*
+ *----------------------------------------------------------------
+ * Process & threads.
+ *----------------------------------------------------------------
+ */
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * DllMain --
+ *
+ *	Windows DLL entry point.
+ *
+ * Results:
+ *	True.
+ *
+ * Side effects:
+ *	Create thread-local storage token.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+BOOL APIENTRY 
+DllMain( 
+    HMODULE hModule,
+    DWORD dwReason,
+    LPVOID lpReserved)
+{
+    switch (dwReason) {
+	case DLL_PROCESS_ATTACH:
+	    return Init();
+
+	case DLL_PROCESS_DETACH:
+	    TlsFree(tlsToken);
+	    break;
+    }
+    return TRUE;
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * Init --
+ *
+ *	Initialization routine. Called through DllMain.
+ *
+ * Results:
+ *	True.
+ *
+ * Side effects:
+ *	Create thread-local storage key. Note: key is never freed.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+static BOOL
+Init()
+{
+    if ((tlsToken = TlsAlloc()) == TLS_OUT_OF_INDEXES) {
+	return FALSE;
+    }
+
+    GetSystemInfo(&systemInfo);
+    systemPageSize = systemInfo.dwPageSize;
+    pagesPerRange = systemInfo.dwAllocationGranularity/systemInfo.dwPageSize;
+
+    return TRUE;
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * PlatEnter --
+ *
+ *	Enter the thread.
+ *
+ * Results:
+ *	Non-zero if this is the first nested call, else 0.
+ *
+ * Side effects:
+ *	Global data is initialized; decrement nesting count.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+int
+PlatEnter()
+{
+    ThreadData *info = (ThreadData *) TlsGetValue(tlsToken);
+    if (!info) {
+	/*
+	 * Not yet initialized.
+	*/
+
+	info = (ThreadData *) malloc(sizeof(ThreadData));
+	info->nestCount = 0;
+	TlsSetValue(tlsToken, info);
+    }
+
+    /* 
+     * Increment nest count. 
+     */
+
+    return ((++info->nestCount) == 1);
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * PlatLeave --
+ *
+ *	Leave the thread.
+ *
+ * Results:
+ *	Non-zero if this is the last nested call, else 0.
+ *
+ * Side effects:
+ *	Decrement nesting count.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+int
+PlatLeave()
+{
+    ThreadData *info = (ThreadData *) TlsGetValue(tlsToken);
+    if (!info) {
+	/* TODO: exception ? */
+	return 0;
+    }
+
+    /*
+     * Decrement nest count.
+     */
+
+    return ((--info->nestCount) == 0);
+}
+
+/*
+ *---------------------------------------------------------------------------
+ *
+ * PlatCleanup --
+ *
+ *	Final cleanup.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Cleanup global structures.
+ *
+ *---------------------------------------------------------------------------
+ */
+
+void
+PlatCleanup()
+{
+    ThreadData *info = (ThreadData *) TlsGetValue(tlsToken);
+    if (!info || info->nestCount != 0) {
+	/* TODO: exception ? */
+	return;
+    }
+
+    free(info);
+    TlsSetValue(tlsToken, 0);
+}

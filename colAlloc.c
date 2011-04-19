@@ -209,27 +209,6 @@ static size_t		FindFreeCells(void *page, size_t number);
 /*
  *---------------------------------------------------------------------------
  *
- * AllocInit --
- *
- *	Initialize the memory allocator.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Platform-specific -- see respective implementations of callees.
- *
- *---------------------------------------------------------------------------
- */
-
-void 
-AllocInit() {
-    PlatAllocInit();
-}
-
-/*
- *---------------------------------------------------------------------------
- *
  * PoolInit --
  * PoolCleanup --
  *

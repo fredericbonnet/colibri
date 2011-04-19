@@ -146,10 +146,13 @@ typedef void * Col_ClientData;
  * Include other files.
  */
 
+#include "colUtils.h"
+
 #include "colRope.h"
 #include "colWord.h"
 
-#include "colCollection.h"
+#include "colList.h"
+#include "colMap.h"
 
 /*
  *----------------------------------------------------------------

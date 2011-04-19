@@ -480,7 +480,8 @@ MergeStringsProc(
 		break;
 	}
 
-	/* ASSERT(info->format == format) */
+	ASSERT(info->format == format);
+
 	if (info->byteLength + byteLength 
 		> MAX_SHORT_LEAF_SIZE - ROPE_UCS_HEADER_SIZE) {
 	    /* 
@@ -683,11 +684,7 @@ Col_Subrope(
      */
 
     subrope = (Col_Rope) AllocCells(1);
-    ROPE_SET_TYPE(subrope, ROPE_TYPE_SUBROPE);
-    ROPE_SUBROPE_DEPTH(subrope) = depth;
-    ROPE_SUBROPE_SOURCE(subrope) = rope;
-    ROPE_SUBROPE_FIRST(subrope) = first;
-    ROPE_SUBROPE_LAST(subrope) = last;
+    ROPE_SUBROPE_INIT(subrope, depth, rope, first, last);
 
     return subrope;
 }
@@ -714,15 +711,16 @@ GetArms(
     Col_Rope * leftPtr,		/* Returned left arm. */
     Col_Rope * rightPtr)	/* Returned right arm. */
 {
-    if (ROPE_TYPE(rope) == ROPE_TYPE_CONCAT) {
-	*leftPtr  = ROPE_CONCAT_LEFT(rope);
-	*rightPtr = ROPE_CONCAT_RIGHT(rope);
-    } else {
-	/* ASSERT(ROPE_TYPE(rope) == ROPE_TYPE_SUBROPE) */
+    if (ROPE_TYPE(rope) == ROPE_TYPE_SUBROPE) {
 	/* Create one subrope for each concat arm. */
 	Col_Rope source = ROPE_SUBROPE_SOURCE(rope);
-	/* ASSERT(ROPE_TYPE(source) == ROPE_TYPE_CONCAT) */
-	size_t leftLength = ROPE_CONCAT_LEFT_LENGTH(source);
+	size_t leftLength;
+
+	ASSERT(ROPE_TYPE(source) == ROPE_TYPE_CONCAT);
+	ASSERT(ROPE_SUBROPE_DEPTH(rope) >= 1);
+	ASSERT(ROPE_CONCAT_DEPTH(source) == ROPE_SUBROPE_DEPTH(rope));
+
+	leftLength = ROPE_CONCAT_LEFT_LENGTH(source);
 	if (leftLength == 0) {
 	    leftLength = Col_RopeLength(ROPE_CONCAT_LEFT(source));
 	}
@@ -730,6 +728,12 @@ GetArms(
 		ROPE_SUBROPE_FIRST(rope), leftLength-1);
 	*rightPtr = Col_Subrope(ROPE_CONCAT_RIGHT(source), 0, 
 		ROPE_SUBROPE_LAST(rope)-leftLength);
+    } else {
+	ASSERT(ROPE_TYPE(rope) == ROPE_TYPE_CONCAT);
+	ASSERT(ROPE_CONCAT_DEPTH(rope) >= 1);
+
+	*leftPtr  = ROPE_CONCAT_LEFT(rope);
+	*rightPtr = ROPE_CONCAT_RIGHT(rope);
     }
 }
 
@@ -738,13 +742,13 @@ GetArms(
  *
  * Col_ConcatRopes --
  * Col_ConcatRopesA --
- * Col_ConcatRopesV --
+ * Col_ConcatRopesNV --
  *
  *	Concatenate ropes.
  *	Col_ConcatRopes concatenates two ropes.
  *	Col_ConcatRopesA concatenates several ropes given in an array, by 
  *	recursive halvings until it contains one or two elements. 
- *	Col_ConcatRopesV is a variadic version of Col_ConcatRopesA.
+ *	Col_ConcatRopesNV is a variadic version of Col_ConcatRopesA.
  *
  *	Concatenation forms self-balanced binary trees. Each node has a depth 
  *	level. Concat nodes have a depth > 1. Subrope nodes have a depth equal
@@ -894,6 +898,7 @@ Col_ConcatRopes(
 	     * Zero result means data fits into one short leaf. 
 	     */
 
+	    ASSERT(info.length == leftLength+rightLength);
 	    return Col_NewRope(info.format, info.data, info.byteLength);
 	}
     }
@@ -912,18 +917,21 @@ Col_ConcatRopes(
 	 * Left is deeper by more than 1 level, rebalance.
 	 */
 
-
-	unsigned char left1Depth=0;
+	unsigned char left1Depth=0, left2Depth=0;
 	Col_Rope left1, left2;
 
-	/* ASSERT(leftDepth >= 2) */
+	ASSERT(leftDepth >= 2);
 
 	GetArms(left, &left1, &left2);
 	switch (ROPE_TYPE(left1)) {
 	    case ROPE_TYPE_SUBROPE: left1Depth = ROPE_SUBROPE_DEPTH(left1); break;
 	    case ROPE_TYPE_CONCAT: left1Depth = ROPE_CONCAT_DEPTH(left1); break;
 	}
-	if (left1Depth < leftDepth-1) {
+	switch (ROPE_TYPE(left2)) {
+	    case ROPE_TYPE_SUBROPE: left2Depth = ROPE_SUBROPE_DEPTH(left2); break;
+	    case ROPE_TYPE_CONCAT: left2Depth = ROPE_CONCAT_DEPTH(left2); break;
+	}
+	if (left1Depth < left2Depth) {
 	    /* 
 	     * Left2 is deeper, split it between both arms. 
 	     *
@@ -976,17 +984,21 @@ Col_ConcatRopes(
 	 * Right is deeper by more than 1 level, rebalance. 
 	 */
 
-	unsigned char right2Depth=0;
+	unsigned char right1Depth=0, right2Depth=0;
 	Col_Rope right1, right2;
 
-	/* ASSERT(rightDepth >= 2) */
+	ASSERT(rightDepth >= 2);
 
 	GetArms(right, &right1, &right2);
+	switch (ROPE_TYPE(right1)) {
+	    case ROPE_TYPE_SUBROPE: right1Depth = ROPE_SUBROPE_DEPTH(right1); break;
+	    case ROPE_TYPE_CONCAT: right1Depth = ROPE_CONCAT_DEPTH(right1); break;
+	}
 	switch (ROPE_TYPE(right2)) {
 	    case ROPE_TYPE_SUBROPE: right2Depth = ROPE_SUBROPE_DEPTH(right2); break;
 	    case ROPE_TYPE_CONCAT: right2Depth = ROPE_CONCAT_DEPTH(right2); break;
 	}
-	if (right2Depth < rightDepth-1) {
+	if (right2Depth < right1Depth) {
 	    /* 
 	     * Right1 is deeper, split it between both arms. 
 	     *
@@ -1041,14 +1053,8 @@ Col_ConcatRopes(
      */
 
     concatRope = (Col_Rope) AllocCells(1);
-    ROPE_SET_TYPE(concatRope, ROPE_TYPE_CONCAT);
-    ROPE_CONCAT_DEPTH(concatRope) 
-	    = (leftDepth>rightDepth?leftDepth:rightDepth) + 1;
-    ROPE_CONCAT_LENGTH(concatRope) = leftLength + rightLength;
-    ROPE_CONCAT_LEFT_LENGTH(concatRope) 
-	    = (leftLength<=UCHAR_MAX)?(unsigned char) leftLength:0;
-    ROPE_CONCAT_LEFT(concatRope) = left;
-    ROPE_CONCAT_RIGHT(concatRope) = right;
+    ROPE_CONCAT_INIT(concatRope, (leftDepth>rightDepth?leftDepth:rightDepth)
+	    + 1, leftLength + rightLength, leftLength, left, right);
 
     return concatRope;
 }
@@ -1081,7 +1087,7 @@ Col_ConcatRopesA(
 
 /* - Variadic version. */
 Col_Rope 
-Col_ConcatRopesV(
+Col_ConcatRopesNV(
     size_t number,		/* Number of arguments. */
     ...)			/* Remaining arguments, i.e. ropes to 
 				 * concatenate in order. */
@@ -1106,7 +1112,7 @@ Col_ConcatRopesV(
 /*
  *---------------------------------------------------------------------------
  *
- * Col_RopeCharAt --
+ * Col_RopeAt --
  *
  *	Get the codepoint of the character at a given position. 
  *
@@ -1121,14 +1127,14 @@ Col_ConcatRopesV(
  */
 
 Col_Char 
-Col_RopeCharAt(
+Col_RopeAt(
     Col_Rope rope,		/* Rope to get char from. */
     size_t index)		/* Char index. */
 {
     Col_RopeIterator it;
     
     Col_RopeIterBegin(rope, index, &it);
-    return Col_RopeIterCharAt(&it);
+    return Col_RopeIterAt(&it);
 }
 
 /*
@@ -1675,6 +1681,8 @@ UpdateTraversalInfo(
 
     it->traversal.leaf = NULL;
     while (!it->traversal.leaf) {
+	size_t subFirst=first, subLast=last;
+
 	switch (ROPE_TYPE(rope)) {
 	    case ROPE_TYPE_NULL:
 	    case ROPE_TYPE_EMPTY:
@@ -1691,6 +1699,7 @@ UpdateTraversalInfo(
 
 		it->traversal.leaf = rope;
 		it->traversal.index.fixed = it->index - offset;
+		ASSERT(it->traversal.index.fixed < ROPE_UCS_LENGTH(rope));
 		break;
 
 	    case ROPE_TYPE_UTF8: {
@@ -1705,28 +1714,29 @@ UpdateTraversalInfo(
 		it->traversal.index.var.b = (unsigned short) (Utf8CharAddr(data, 
 			it->index - offset, ROPE_UTF8_LENGTH(rope), 
 			ROPE_UTF8_BYTELENGTH(rope)) - data);
+		ASSERT(it->traversal.index.var.c < ROPE_UTF8_LENGTH(rope));
 		break;
 	    }
 
 	    case ROPE_TYPE_SUBROPE: 
-		if (ROPE_SUBROPE_DEPTH(rope) == MAX_ITERATOR_SUBROPE_DEPTH 
-			|| !it->traversal.subrope) {
-		    /*
-		     * Remember as subrope.
-		     */
+		/*
+		 * Always remember as subrope.
+		 */
 
-		    it->traversal.subrope = rope;
-		    it->traversal.first = first;
-		    it->traversal.last = last;
-		    it->traversal.offset = offset;
-		}
+		it->traversal.subrope = rope;
+		it->traversal.first = first;
+		it->traversal.last = last;
+		it->traversal.offset = offset;
 
 		/*
 		 * Recurse into source.
-		 * Note: offset may become negative but it doesn't matter.
+		 * Note: offset may become negative (in 2's complement) but it 
+		 * doesn't matter.
 		 */
 
 		offset -= ROPE_SUBROPE_FIRST(rope);
+		subLast = first - ROPE_SUBROPE_FIRST(rope) 
+			+ ROPE_SUBROPE_LAST(rope);
 		rope = ROPE_SUBROPE_SOURCE(rope);
 		break;
 
@@ -1747,19 +1757,19 @@ UpdateTraversalInfo(
 		    it->traversal.offset = offset;
 		}
 
-		if (it->index < offset + leftLength) {
+		if (it->index - offset < leftLength) {
 		    /*
 		     * Recurse into left arm.
 		     */
 
-		    last = offset + leftLength-1;
+		    subLast = offset + leftLength-1;
 		    rope = ROPE_CONCAT_LEFT(rope);
 		} else {
 		    /*
 		     * Recurse into right arm.
 		     */
 
-		    first = offset + leftLength;
+		    subFirst = offset + leftLength;
 		    offset += leftLength;
 		    rope = ROPE_CONCAT_RIGHT(rope);
 		}
@@ -1776,8 +1786,8 @@ UpdateTraversalInfo(
 			 * Recurse into custom rope's subrope.
 			 */
 
-			first = offset + subOffset;
-			last = first + Col_RopeLength(subrope)-1;
+			subFirst = offset + subOffset;
+			subLast = first + Col_RopeLength(subrope)-1;
 			offset += subOffset;
 			rope = subrope;
 			break;
@@ -1790,10 +1800,23 @@ UpdateTraversalInfo(
 
 		it->traversal.leaf = rope;
 		it->traversal.index.fixed = it->index - offset;
+		ASSERT(it->traversal.index.fixed < ROPE_CUSTOM_TYPE(rope)->lengthProc(rope));
 		break;
 
 	    /* ROPE_TYPE_UNKNOWN */
+
+	    default:
+		/* CANTHAPPEN */
+		ASSERT(0);
+		return;
 	}
+
+	/*
+	 * Shorten validity range.
+	 */
+
+	if (subFirst > first) first = subFirst;
+	if (subLast < last) last = subLast;
     }
     if (!it->traversal.subrope) {
 	it->traversal.subrope = it->traversal.leaf;
@@ -1803,7 +1826,7 @@ UpdateTraversalInfo(
 /*
  *---------------------------------------------------------------------------
  *
- * Col_RopeIterCharAt --
+ * Col_RopeIterAt --
  *
  *	Get the codepoint of the character designated by the iterator.
  *
@@ -1818,10 +1841,15 @@ UpdateTraversalInfo(
  */
 
 Col_Char
-Col_RopeIterCharAt(
+Col_RopeIterAt(
     Col_RopeIterator *it)	/* Iterator that points to the character. */
 {
     if (Col_RopeIterEnd(it)) {
+	/*
+	 * No such element.
+	 */
+
+	Col_Error(COL_ERROR, "Invalid rope iterator");
 	return COL_CHAR_INVALID;
     }
 
@@ -1838,25 +1866,34 @@ Col_RopeIterCharAt(
 	    return (Col_Char) ((const Col_Char1 *)(it->traversal.leaf))[it->traversal.index.fixed];
 
 	case ROPE_TYPE_UCS1:
+	    ASSERT(it->traversal.index.fixed < ROPE_UCS_LENGTH(it->traversal.leaf));
 	    return (Col_Char) ROPE_UCS1_DATA(it->traversal.leaf)[it->traversal.index.fixed];
 
 	case ROPE_TYPE_UCS2:
+	    ASSERT(it->traversal.index.fixed < ROPE_UCS_LENGTH(it->traversal.leaf));
 	    return (Col_Char) ROPE_UCS2_DATA(it->traversal.leaf)[it->traversal.index.fixed];
 
 	case ROPE_TYPE_UCS4:
+	    ASSERT(it->traversal.index.fixed < ROPE_UCS_LENGTH(it->traversal.leaf));
 	    return (Col_Char) ROPE_UCS4_DATA(it->traversal.leaf)[it->traversal.index.fixed];
 
 	case ROPE_TYPE_UTF8:
+	    ASSERT(it->traversal.index.var.c < ROPE_UTF8_LENGTH(it->traversal.leaf));
 	    return Utf8CharValue(ROPE_UTF8_DATA(it->traversal.leaf) 
 		    + it->traversal.index.var.b);
 
 	case ROPE_TYPE_CUSTOM:
+	    ASSERT(it->traversal.index.fixed < ROPE_CUSTOM_TYPE(it->traversal.leaf)->lengthProc(it->traversal.leaf));
 	    return ROPE_CUSTOM_TYPE(it->traversal.leaf)->charAtProc(
 		    it->traversal.leaf, it->traversal.index.fixed);
 
 	/* ROPE_TYPE_UNKNOWN */
+
+	default: 
+	    /* CANTHAPPEN */
+	    ASSERT(0);
+	    return COL_CHAR_INVALID;
     }
-    return COL_CHAR_INVALID;
 }
 
 /*
@@ -1920,7 +1957,16 @@ Col_RopeIterForward(
     Col_RopeIterator *it,	/* The iterator to move. */
     size_t nb)			/* Offset. */
 {
-    if (Col_RopeIterEnd(it) || nb == 0) {
+    if (Col_RopeIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid rope iterator");
+	return;
+    }
+
+    if (nb == 0) {
+	/*
+	 * No-op.
+	 */
+
 	return;
     }
 
@@ -2068,7 +2114,16 @@ Col_RopeIterBackward(
     Col_RopeIterator *it,	/* The iterator to move. */
     size_t nb)			/* Offset. */
 {
-    if (Col_RopeIterEnd(it) || nb == 0) {
+    if (Col_RopeIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid rope iterator");
+	return;
+    }
+
+    if (nb == 0) {
+	/*
+	 * No-op.
+	 */
+
 	return;
     }
 
@@ -2151,7 +2206,7 @@ Col_RopeIterBackward(
 
 		it->traversal.leaf = NULL;
 	    } else {
-		it->traversal.index.fixed += nb;
+		it->traversal.index.fixed -= nb;
 	    }
 	    break;
 
@@ -2372,14 +2427,11 @@ Col_NewCustomRope(
     }
     
     rope = (Col_Rope) AllocCells(NB_CELLS(ROPE_CUSTOM_HEADER_SIZE+actualSize));
-
-    ROPE_SET_TYPE(rope, ROPE_TYPE_CUSTOM);
-    ROPE_CUSTOM_TYPE(rope) = type;
-    ROPE_CUSTOM_SIZE(rope) = (unsigned short) size;
-    if (dataPtr) *dataPtr = ROPE_CUSTOM_DATA(rope);
+    ROPE_CUSTOM_INIT(rope, type, size);
 
     DeclareCustomRope(rope);
 
+    if (dataPtr) *dataPtr = ROPE_CUSTOM_DATA(rope);
     return rope;
 }
 

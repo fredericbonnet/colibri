@@ -30,7 +30,10 @@
 #endif
 
 #ifdef _DEBUG
-#define DO_TRACE
+#   define DO_TRACE
+#   define ASSERT(x) {if (!(x)) Col_Error(COL_FATAL, "%s(%d) : assertion failed! (%s)", __FILE__, __LINE__, #x);}
+#else
+#   define ASSERT
 #endif
 
 #ifdef DO_TRACE
@@ -105,12 +108,6 @@ typedef struct MemoryPool {
 				 * unreachable after a GC. */
     Col_ClientData data;	/* Opaque token for system-specific data. */
 } MemoryPool;
-
-/* 
- * Initialization. 
- */
-
-void			AllocInit(void);
 
 /*
  * Pool initialization/cleanup.
@@ -398,6 +395,13 @@ void			DeclareWord(Col_Word word);
 #define ROPE_SUBROPE_FIRST(rope)	(((size_t *)(rope))[2])
 #define ROPE_SUBROPE_LAST(rope)		(((size_t *)(rope))[3])
 
+#define ROPE_SUBROPE_INIT(rope, depth, source, first, last) \
+    ROPE_SET_TYPE((rope), ROPE_TYPE_SUBROPE); \
+    ROPE_SUBROPE_DEPTH(rope) = (unsigned char) (depth); \
+    ROPE_SUBROPE_SOURCE(rope) = (source); \
+    ROPE_SUBROPE_FIRST(rope) = (first); \
+    ROPE_SUBROPE_LAST(rope) = (last);
+
 /*
  * Concat ropes.
  *
@@ -435,6 +439,14 @@ void			DeclareWord(Col_Word word);
 #define ROPE_CONCAT_LENGTH(rope)	(((size_t *)(rope))[1])
 #define ROPE_CONCAT_LEFT(rope)		(((Col_Rope *)(rope))[2])
 #define ROPE_CONCAT_RIGHT(rope)		(((Col_Rope *)(rope))[3])
+
+#define ROPE_CONCAT_INIT(rope, depth, length, leftLength, left, right) \
+    ROPE_SET_TYPE((rope), ROPE_TYPE_CONCAT); \
+    ROPE_CONCAT_DEPTH(rope) = (unsigned char) (depth); \
+    ROPE_CONCAT_LENGTH(rope) = (length); \
+    ROPE_CONCAT_LEFT_LENGTH(rope) = (unsigned char) ((leftLength)>UCHAR_MAX?0:(leftLength)); \
+    ROPE_CONCAT_LEFT(rope) = (left); \
+    ROPE_CONCAT_RIGHT(rope) = (right);
 
 /*
  * Custom ropes.
@@ -477,6 +489,11 @@ void			DeclareWord(Col_Word word);
 
 #define CUSTOM_MAX_SIZE			(AVAILABLE_CELLS*CELL_SIZE-ROPE_CUSTOM_HEADER_SIZE)
 
+#define ROPE_CUSTOM_INIT(rope, type, size) \
+    ROPE_SET_TYPE((rope), ROPE_TYPE_CUSTOM); \
+    ROPE_CUSTOM_TYPE(rope) = (type); \
+    ROPE_CUSTOM_SIZE(rope) = (unsigned short) (size);
+
 
 /*
  *----------------------------------------------------------------
@@ -513,6 +530,7 @@ void			DeclareWord(Col_Word word);
 
 #define WORD_TYPE_REGULAR	0
 
+/* Careful: IS_IMMEDIATE returns false on nil! Nil needs explicit handling. */
 #define IS_IMMEDIATE(word)	(((uintptr_t)(word))&7)
 #define WORD_TYPE_NIL		-1
 #define WORD_TYPE_SMALL_INT	-2
@@ -737,6 +755,11 @@ void			DeclareWord(Col_Word word);
 
 #define WORD_INT_DATA(word)	(*(int *) WORD_DATA(word))
 
+#define WORD_INT_INIT(word, data) \
+    WORD_SET_TYPE_ID((word), WORD_TYPE_INT); \
+    WORD_SYNONYM(word) = WORD_NIL; \
+    WORD_INT_DATA(word) = (data);
+
 /*
  * String words.
  *
@@ -766,6 +789,12 @@ void			DeclareWord(Col_Word word);
 
 #define WORD_STRING_DATA(word)	(((Col_Rope *) WORD_DATA(word))[0])
 #define WORD_STRING_ALT(word)	(((Col_Rope *) WORD_DATA(word))[1])
+
+#define WORD_STRING_INIT(word, data, alt) \
+    WORD_SET_TYPE_ID((word), WORD_TYPE_STRING); \
+    WORD_SYNONYM(word) = WORD_NIL; \
+    WORD_STRING_DATA(word) = (data); \
+    WORD_STRING_ALT(word) = (alt);
 
 
 /*
@@ -934,10 +963,15 @@ void			DeclareWord(Col_Word word);
 
 #define WORD_REFERENCE_SOURCE(word)	(((Col_Word *)(word))[2])
 
+#define WORD_REFERENCE_INIT(word, source) \
+    WORD_SET_TYPE_ID((word), WORD_TYPE_REFERENCE); \
+    WORD_SYNONYM(word) = WORD_NIL; \
+    WORD_REFERENCE_SOURCE(word) = (source);
+
 
 /*
  *----------------------------------------------------------------
- * Collections.
+ * Lists.
  *----------------------------------------------------------------
  */
 
@@ -1006,7 +1040,18 @@ void			DeclareWord(Col_Word word);
 #define WORD_VECTOR_LENGTH(word)	(((unsigned short *)(word))[1])
 #define WORD_VECTOR_ELEMENTS(word)	((Col_Word *) WORD_DATA(word))
 
+#define WORD_VECTOR_INIT(word, length) \
+    WORD_SET_TYPE_ID((word), WORD_TYPE_VECTOR); \
+    WORD_SYNONYM(word) = WORD_NIL; \
+    WORD_VECTOR_LENGTH(word) = (unsigned short) (length);
+
 #define WORD_MVECTOR_SIZE(word)		(((unsigned char *)(word))[1])
+
+#define WORD_MVECTOR_INIT(word, size, length) \
+    WORD_SET_TYPE_ID((word), WORD_TYPE_MVECTOR); \
+    WORD_SYNONYM(word) = WORD_NIL; \
+    WORD_MVECTOR_SIZE(word) = (unsigned char) (size); \
+    WORD_VECTOR_LENGTH(word) = (unsigned short) (length);
 
 /*
  * List words.
@@ -1055,7 +1100,7 @@ void			DeclareWord(Col_Word word);
  *    0                   1                   2                   3
  *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |   Type info   |     Unused    |     Depth     |    Unused     |
+ *   |   Type info   |     Depth     |            Unused             |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   |                            Source                             |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -1078,7 +1123,7 @@ void			DeclareWord(Col_Word word);
  *    0                   1                   2                   3
  *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *   |   Type info   |     Unused    |     Depth     |  Left length  |
+ *   |   Type info   |     Depth     |          Left length          |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *   |                            Length                             |
  *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -1091,9 +1136,9 @@ void			DeclareWord(Col_Word word);
  *	    8 bits will code up to 255 depth levels, which is more than 
  *	    sufficient for balanced binary trees. 
  *
- *	Left length : 8-bit unsigned
+ *	Left length : 16-bit unsigned
  *	    Used as shortcut to avoid dereferencing the left arm. Zero if actual 
- *	    length is larger than 255.
+ *	    length is larger than 65536.
  *
  *	Length : 32-bit unsigned
  *
@@ -1109,17 +1154,50 @@ void			DeclareWord(Col_Word word);
 #define WORD_LIST_ROOT(word)		(((Col_Word *)(word))[2])
 #define WORD_LIST_LOOP(word)		(((size_t *)(word))[3])
 
-#define WORD_LIST_VOID_LENGTH(word)	(((size_t *)(word))[2])
+#define WORD_LIST_INIT(word, root, loop) \
+    WORD_SET_TYPE_ID((word), WORD_TYPE_LIST); \
+    WORD_SYNONYM(word) = WORD_NIL; \
+    WORD_LIST_ROOT(word) = (root); \
+    WORD_LIST_LOOP(word) = (loop);
 
-#define WORD_LISTNODE_DEPTH(word)	(((unsigned char *)(word))[2]) 
+#define WORD_MLIST_INIT(word, root, loop) \
+    WORD_SET_TYPE_ID((word), WORD_TYPE_MLIST); \
+    WORD_SYNONYM(word) = WORD_NIL; \
+    WORD_LIST_ROOT(word) = (root); \
+    WORD_LIST_LOOP(word) = (loop);
+
+#define WORD_LISTNODE_DEPTH(word)	(((unsigned char *)(word))[1])
 
 #define WORD_SUBLIST_SOURCE(word)	(((Col_Word *)(word))[1])
 #define WORD_SUBLIST_FIRST(word)	(((size_t *)(word))[2])
 #define WORD_SUBLIST_LAST(word)		(((size_t *)(word))[3])
 
-#define WORD_CONCATLIST_LEFT_LENGTH(word) (((unsigned char *)(word))[3])
+#define WORD_SUBLIST_INIT(node, depth, source, first, last) \
+    WORD_SET_TYPE_ID((node), WORD_TYPE_SUBLIST); \
+    WORD_LISTNODE_DEPTH(node) = (unsigned char) (depth); \
+    WORD_SUBLIST_SOURCE(node) = (source); \
+    WORD_SUBLIST_FIRST(node) = (first); \
+    WORD_SUBLIST_LAST(node) = (last);
+
+#define WORD_CONCATLIST_LEFT_LENGTH(word) (((unsigned short *)(word))[1])
 #define WORD_CONCATLIST_LENGTH(word)	(((size_t *)(word))[1])
 #define WORD_CONCATLIST_LEFT(word)	(((Col_Word *)(word))[2])
 #define WORD_CONCATLIST_RIGHT(word)	(((Col_Word *)(word))[3])
+
+#define WORD_CONCATLIST_INIT(node, depth, length, leftLength, left, right) \
+    WORD_SET_TYPE_ID((node), WORD_TYPE_CONCATLIST); \
+    WORD_LISTNODE_DEPTH(node) = (unsigned char) (depth); \
+    WORD_CONCATLIST_LENGTH(node) = (length); \
+    WORD_CONCATLIST_LEFT_LENGTH(node) = (unsigned short) ((leftLength)>USHRT_MAX?0:(leftLength)); \
+    WORD_CONCATLIST_LEFT(node) = (left); \
+    WORD_CONCATLIST_RIGHT(node) = (right);
+
+#define WORD_MCONCATLIST_INIT(node, depth, length, leftLength, left, right) \
+    WORD_SET_TYPE_ID((node), WORD_TYPE_MCONCATLIST); \
+    WORD_LISTNODE_DEPTH(node) = (unsigned char) (depth); \
+    WORD_CONCATLIST_LENGTH(node) = (length); \
+    WORD_CONCATLIST_LEFT_LENGTH(node) = (unsigned short) ((leftLength)>USHRT_MAX?0:(leftLength)); \
+    WORD_CONCATLIST_LEFT(node) = (left); \
+    WORD_CONCATLIST_RIGHT(node) = (right);
 
 #endif /* _COLIBRI_INTERNAL */

@@ -38,7 +38,6 @@ void
 Col_Init() 
 {
     if (PlatEnter()) {
-	AllocInit();
 	GcInit();
 	Col_SetErrorProc(NULL);
     }

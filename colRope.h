@@ -73,8 +73,9 @@ EXTERN Col_Rope		Col_Subrope(Col_Rope rope, size_t first, size_t last);
 
 EXTERN Col_Rope		Col_ConcatRopes(Col_Rope left, Col_Rope right);
 EXTERN Col_Rope		Col_ConcatRopesA(size_t number, const Col_Rope * ropes);
-EXTERN Col_Rope		Col_ConcatRopesV(size_t number, ...);
-
+EXTERN Col_Rope		Col_ConcatRopesNV(size_t number, ...);
+#define Col_ConcatRopesV(...) \
+    Col_ConcatRopesNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
 
 /*
  *----------------------------------------------------------------
@@ -86,7 +87,7 @@ EXTERN Col_Rope		Col_ConcatRopesV(size_t number, ...);
  * Accessing. 
  */
 
-EXTERN Col_Char		Col_RopeCharAt(Col_Rope rope, size_t index);
+EXTERN Col_Char		Col_RopeAt(Col_Rope rope, size_t index);
 
 /* 
  * Repetition of a given rope. 
@@ -150,7 +151,7 @@ typedef struct Col_RopeIterator {
 	
 EXTERN void		Col_RopeIterBegin(Col_Rope rope, size_t index, 
 			    Col_RopeIterator *it);
-EXTERN Col_Char		Col_RopeIterCharAt(Col_RopeIterator *it);
+EXTERN Col_Char		Col_RopeIterAt(Col_RopeIterator *it);
 EXTERN int		Col_RopeIterCompare(Col_RopeIterator *it1, 
 			    Col_RopeIterator *it2);
 EXTERN void		Col_RopeIterMoveTo(Col_RopeIterator *it, size_t index);

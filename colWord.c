@@ -51,9 +51,7 @@ Col_NewIntWord(
      */
 
     word = (Col_Word) AllocCells(1);
-    WORD_SET_TYPE_ID(word, WORD_TYPE_INT);
-    WORD_SYNONYM(word) = WORD_NIL;
-    WORD_INT_DATA(word) = value;
+    WORD_INT_INIT(word, value);
 
     return word;
 }
@@ -220,10 +218,8 @@ Col_NewRopeWord(
 	     */
 
 	    word = (Col_Word) AllocCells(1);
-	    WORD_SET_TYPE_ID(word, WORD_TYPE_STRING);
-	    WORD_SYNONYM(word) = WORD_NIL;
-	    WORD_STRING_DATA(word) = rope;
-	    WORD_STRING_ALT(word) = NULL;
+	    WORD_STRING_INIT(word, rope, NULL);
+
 	    return word;
 
 	/* ROPE_TYPE_UNKNOWN */
@@ -270,6 +266,8 @@ Col_NewWord(
 	 * Not enough room.
 	 */
 
+	Col_Error(COL_ERROR, "Word size %u too large (max %u)", size, 
+		WORD_MAX_SIZE - (actualSize - size));
 	*dataPtr = NULL;
 	return WORD_NIL;
     }
@@ -475,7 +473,7 @@ Col_Word
 Col_GetWordSynonym(
     Col_Word word)		/* The word to get synonym for. */
 {
-    if (IS_IMMEDIATE(word) || IS_ROPE(word)) {
+    if (!word || IS_IMMEDIATE(word) || IS_ROPE(word)) {
 	/*
 	 * Ropes or immediate values have no synonyms.
 	 */
@@ -631,42 +629,35 @@ UpconvertWord(
     Col_Word converted;
     
     converted = (Col_Word) AllocCells(1);
-    WORD_SYNONYM(converted) = WORD_NIL;
     switch ((intptr_t) Col_GetWordInfo(word, &data)) {
 	case (intptr_t) COL_INT:
-	    WORD_SET_TYPE_ID(converted, WORD_TYPE_INT);
-	    WORD_INT_DATA(converted) = data.i;
+	    WORD_INT_INIT(converted, data.i);
 	    break;
 
 	case (intptr_t) COL_CHAR:
-	    WORD_SET_TYPE_ID(converted, WORD_TYPE_STRING);
 	    if (data.ch <= USHRT_MAX) {
 		unsigned short ch2 = (unsigned short) data.ch; 
-		WORD_STRING_DATA(converted) = Col_NewRope(COL_UCS2, &ch2, 2);
+		WORD_STRING_INIT(converted, Col_NewRope(COL_UCS2, &ch2, 2), 
+			NULL);
 	    } else {
-		WORD_STRING_DATA(converted) = Col_NewRope(COL_UCS4, &data.ch, 4);
+		WORD_STRING_INIT(converted, Col_NewRope(COL_UCS4, &data.ch, 4),
+			NULL);
 	    }
-	    WORD_STRING_ALT(converted) = NULL;
 	    break;
 
 	case (intptr_t) COL_SMALL_STRING:
-	    WORD_SET_TYPE_ID(converted, WORD_TYPE_STRING);
-	    WORD_STRING_DATA(converted) = Col_NewRope(COL_UCS1, data.str.data, 
-		    data.str.length);
-	    WORD_STRING_ALT(converted) = NULL;
+	    WORD_STRING_INIT(converted, Col_NewRope(COL_UCS1, data.str.data, 
+		    data.str.length), NULL);
 	    break;
 
 	case (intptr_t) COL_LIST:
-	    /* ASSERT(WORD_TYPE(word) == WORD_VOID_LIST) */
-	    WORD_SET_TYPE_ID(converted, WORD_TYPE_LIST);
-	    WORD_LIST_ROOT(converted) = WORD_VOID_LIST_NEW(data.vector.length);
-	    WORD_LIST_LOOP(converted) = 0;
+	    ASSERT(WORD_TYPE(word) == WORD_TYPE_VOID_LIST);
+
+	    WORD_LIST_INIT(converted, WORD_VOID_LIST_NEW(data.vector.length), 0);
 	    break;
 
 	case (intptr_t) COL_ROPE:
-	    WORD_SET_TYPE_ID(converted, WORD_TYPE_STRING);
-	    WORD_STRING_DATA(converted) = data.rope;
-	    WORD_STRING_ALT(converted) = NULL;
+	    WORD_STRING_INIT(converted, data.rope, NULL);
 	    break;
     }
 

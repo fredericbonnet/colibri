@@ -176,15 +176,15 @@
 				>
 			</File>
 			<File
-				RelativePath=".\colCollection.c"
-				>
-			</File>
-			<File
 				RelativePath=".\colGc.c"
 				>
 			</File>
 			<File
 				RelativePath=".\colibri.c"
+				>
+			</File>
+			<File
+				RelativePath=".\colList.c"
 				>
 			</File>
 			<File
@@ -206,10 +206,6 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath=".\colCollection.h"
-				>
-			</File>
-			<File
 				RelativePath=".\colConf.h"
 				>
 			</File>
@@ -222,11 +218,23 @@
 				>
 			</File>
 			<File
+				RelativePath=".\colList.h"
+				>
+			</File>
+			<File
+				RelativePath=".\colMap.h"
+				>
+			</File>
+			<File
 				RelativePath=".\colPlatform.h"
 				>
 			</File>
 			<File
 				RelativePath=".\colRope.h"
+				>
+			</File>
+			<File
+				RelativePath=".\colUtils.h"
 				>
 			</File>
 			<File
