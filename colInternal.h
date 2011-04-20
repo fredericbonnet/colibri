@@ -1890,7 +1890,7 @@ void			DeclareCustomWord(Col_Word word,
  *	accessible for both read/write operations).
  *
  * See also:
- *	<WORD_CONCATLIST_INIT>
+ *	<WORD_CONCATLIST_INIT>, <WORD_MCONCATLIST_INIT>
  *---------------------------------------------------------------------------*/
 
 #define WORD_CONCATLIST_DEPTH(word)	(((uint8_t *)(word))[1])
