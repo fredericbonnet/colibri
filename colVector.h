@@ -64,10 +64,10 @@ EXTERN Col_Word		Col_NewMVector(size_t maxLength, size_t length,
  * Group: Mutable Vector Operations
  *
  * Declarations:
- *	<Col_MVectorSetLength>, <Col_FreezeMVector>
+ *	<Col_MVectorSetLength>, <Col_MVectorFreeze>
  ****************************************************************************/
 
 EXTERN void		Col_MVectorSetLength(Col_Word mvector, size_t length);
-EXTERN void		Col_FreezeMVector(Col_Word mvector);
+EXTERN void		Col_MVectorFreeze(Col_Word mvector);
 
 #endif /* _COLIBRI_VECTOR */

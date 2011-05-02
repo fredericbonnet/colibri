@@ -344,7 +344,7 @@ Col_MVectorSetLength(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_FreezeMVector
+ * Function: Col_MVectorFreeze
  *
  *	Turn a mutable vector immutable. If an immutable vector is given,
  *	does nothing.
@@ -354,7 +354,7 @@ Col_MVectorSetLength(
  *---------------------------------------------------------------------------*/
 
 void
-Col_FreezeMVector(
+Col_MVectorFreeze(
     Col_Word mvector)
 {
     switch (WORD_TYPE(mvector)) {
