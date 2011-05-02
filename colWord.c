@@ -127,7 +127,7 @@ Col_GetWordInfo(
 {
     switch (WORD_TYPE(word)) {
 	/*
-	 * Immediate values.
+	 * Immediate words.
 	 */
 
 	case WORD_TYPE_NIL:
@@ -148,6 +148,13 @@ Col_GetWordInfo(
 		    = WORD_SMALLSTR_DATA(dataPtr->string._smallData);
 	    dataPtr->string.byteLength = WORD_SMALLSTR_LENGTH(word);
 	    return COL_STRING;
+
+	case WORD_TYPE_CIRCLIST:
+	    /*
+	     * Same as core list.
+	     */
+
+	    return Col_GetWordInfo(WORD_CIRCLIST_CORE(word), dataPtr);
 
 	case WORD_TYPE_VOIDLIST:
 	    return COL_LIST;
@@ -192,12 +199,12 @@ Col_GetWordInfo(
 	    dataPtr->mvector.elements = WORD_VECTOR_ELEMENTS(word);
 	    return COL_MVECTOR;
 
-	case WORD_TYPE_LIST:
 	case WORD_TYPE_SUBLIST:
 	case WORD_TYPE_CONCATLIST:
 	    return COL_LIST;
 
 	case WORD_TYPE_MLIST:
+	case WORD_TYPE_MCONCATLIST:
 	    return COL_MLIST;
 
 	case WORD_TYPE_STRHASHMAP:
@@ -298,7 +305,6 @@ HasSynonymField(
     switch (WORD_TYPE(word)) {
 	case WORD_TYPE_WRAP:
 	case WORD_TYPE_INT:
-	case WORD_TYPE_LIST:
 	case WORD_TYPE_MLIST:
 	case WORD_TYPE_STRHASHMAP:
 	case WORD_TYPE_INTHASHMAP:
@@ -348,10 +354,25 @@ AddSynonymField(
 	    WORD_INT_INIT(converted, WORD_SMALLINT_GET(*wordPtr));
 	    break;
 
-	case WORD_TYPE_VOIDLIST:
-	case WORD_TYPE_SUBLIST:
-	case WORD_TYPE_CONCATLIST:
-	    WORD_LIST_INIT(converted, *wordPtr, 0);
+	case WORD_TYPE_MCONCATLIST:
+	    WORD_MLIST_INIT(converted, *wordPtr);
+	    break;
+
+	case WORD_TYPE_CIRCLIST:
+	    if (WORD_TYPE(WORD_CIRCLIST_CORE(*wordPtr)) 
+		    == WORD_TYPE_MCONCATLIST) {
+		/*
+		 * Use mutable list.
+		 */
+
+		WORD_MLIST_INIT(converted, *wordPtr);
+	    } else {
+		/*
+		 * Use generic wrapper.
+		 */
+
+		WORD_WRAP_INIT(converted, *wordPtr);
+	    }
 	    break;
 
 	/* WORD_TYPE_UNKNOWN */

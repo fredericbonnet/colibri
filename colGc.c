@@ -318,6 +318,16 @@ Col_PreserveWord(
 	     */
 
 	    return;
+
+	case WORD_TYPE_CIRCLIST:
+	    /*
+	     * Preserve core list.
+	     */
+
+	    Col_PreserveWord(WORD_CIRCLIST_CORE(word));
+	    return;
+
+	/* WORD_TYPE_UNKNOWN */
     }
 
     /*
@@ -512,6 +522,16 @@ Col_ReleaseWord(
 	     */
 
 	    return;
+
+	case WORD_TYPE_CIRCLIST:
+	    /*
+	     * Release core list.
+	     */
+
+	    Col_ReleaseWord(WORD_CIRCLIST_CORE(word));
+	    return;
+
+	/* WORD_TYPE_UNKNOWN */
     }
 
     EnterProtectRoots(data->groupData);
@@ -1208,25 +1228,42 @@ MarkWord(
 
 start:
 
-    if (!*wordPtr || IS_IMMEDIATE(*wordPtr)) {
-	/* 
-	 * Immediate values. No cell to mark.
-	 */
-
-	return;
-    }
-
     type = WORD_TYPE(*wordPtr);
-#ifdef PROMOTE_COMPACT
-    if (type == WORD_TYPE_REDIRECT) {
-	/* 
-	 * Overwrite reference and tail recurse on source.
-	 */
+    switch (type) {
+	case WORD_TYPE_NIL:
+	case WORD_TYPE_SMALLINT:
+	case WORD_TYPE_CHAR:
+	case WORD_TYPE_SMALLSTR:
+	case WORD_TYPE_VOIDLIST:
+	    /* 
+	     * No cell to mark nor child to follow.
+	     */
 
-	*wordPtr = WORD_REDIRECT_SOURCE(*wordPtr);
-	TAIL_RECURSE(wordPtr, parentPage);
-    }
+	    return;
+
+	case WORD_TYPE_CIRCLIST: {
+	    /*
+	     * Recurse on core list and update immediate word.
+	     */
+
+	    Col_Word core = WORD_CIRCLIST_CORE(*wordPtr);
+	    MarkWord(data, &core, parentPage);
+	    *wordPtr = WORD_CIRCLIST_NEW(core);
+	    return;
+	}
+
+#ifdef PROMOTE_COMPACT
+	case WORD_TYPE_REDIRECT:
+	    /* 
+	     * Overwrite reference and tail recurse on source.
+	     */
+
+	    *wordPtr = WORD_REDIRECT_SOURCE(*wordPtr);
+	    TAIL_RECURSE(wordPtr, parentPage);
 #endif /* PROMOTE_COMPACT */
+
+	/* WORD_TYPE_UNKNOWN */
+    }
 
     page = CELL_PAGE(*wordPtr);
     if (PAGE_GENERATION(page) < PAGE_GENERATION(parentPage) 
@@ -1341,13 +1378,12 @@ start:
 	    return;
 	}
 
-	case WORD_TYPE_LIST:
 	case WORD_TYPE_MLIST:
 	    /* 
 	     * Follow list root and tail recurse on synonym.
 	     */
 
-	    MarkWord(data, &WORD_LIST_ROOT(*wordPtr), page);
+	    MarkWord(data, &WORD_MLIST_ROOT(*wordPtr), page);
 	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 
 	case WORD_TYPE_SUBLIST:

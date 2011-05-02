@@ -71,7 +71,6 @@ Group: Containers  {
       File: colVector.h  (colVector.h)
       File: colVector.c  (colVector.c)
       File: colList.h  (colList.h)
-      File: colList.c  (colList.c)
       }  # Group: Vectors and Lists
 
    Group: Maps  {
@@ -82,6 +81,7 @@ Group: Containers  {
       File: colHash.c  (colHash.c)
       File: colTrie.h  (colTrie.h)
       File: colTrie.c  (colTrie.c)
+      File: colList.c  (colList.c)
       }  # Group: Maps
 
    }  # Group: Containers

@@ -624,6 +624,7 @@ void			DeclareCustomWord(Col_Word word,
  *	WORD_TYPE_CHAR		- Character Words (<WORD_CHAR_NEW>)
  *	WORD_TYPE_SMALLSTR	- Small String Words (<WORD_SMALLSTR_DATA>, 
  *				  <WORD_SMALLSTR_SET_LENGTH>)
+ *	WORD_TYPE_CIRCLIST	- Circular Lists (<WORD_CIRCLIST_NEW>)
  *	WORD_TYPE_VOIDLIST	- Void Lists (<WORD_VOIDLIST_NEW>)
  *	WORD_TYPE_WRAP		- Wrap Words (<WORD_WRAP_INIT>)
  *	WORD_TYPE_UCSSTR	- Fixed-Width Ropes (<WORD_UCSSTR_INIT>)
@@ -634,7 +635,6 @@ void			DeclareCustomWord(Col_Word word,
  *	WORD_TYPE_INT		- Integers (<WORD_INT_INIT>)
  *	WORD_TYPE_VECTOR	- Vectors (<WORD_VECTOR_INIT>)
  *	WORD_TYPE_MVECTOR	- Mutable Vectors (<WORD_MVECTOR_INIT>)
- *	WORD_TYPE_LIST		- Lists (<WORD_LIST_INIT>)
  *	WORD_TYPE_MLIST		- Mutable Lists (<WORD_MLIST_INIT>)
  *	WORD_TYPE_SUBLIST	- Sublists (<WORD_SUBLIST_INIT>)
  *	WORD_TYPE_CONCATLIST	- Concat Lists (<WORD_CONCATLIST_INIT>)
@@ -669,7 +669,8 @@ void			DeclareCustomWord(Col_Word word,
 #define WORD_TYPE_SMALLINT	-2
 #define WORD_TYPE_CHAR		-3
 #define WORD_TYPE_SMALLSTR	-4
-#define WORD_TYPE_VOIDLIST	-5
+#define WORD_TYPE_CIRCLIST	-5
+#define WORD_TYPE_VOIDLIST	-6
 
 #define WORD_TYPE_WRAP		2
 
@@ -682,19 +683,18 @@ void			DeclareCustomWord(Col_Word word,
 
 #define WORD_TYPE_VECTOR	26
 #define WORD_TYPE_MVECTOR	30
-#define WORD_TYPE_LIST		34
-#define WORD_TYPE_MLIST		38
-#define WORD_TYPE_SUBLIST	42
-#define WORD_TYPE_CONCATLIST	46
-#define WORD_TYPE_MCONCATLIST	50
-#define WORD_TYPE_MAPENTRY	54
-#define WORD_TYPE_INTMAPENTRY	58
-#define WORD_TYPE_STRHASHMAP	62
-#define WORD_TYPE_INTHASHMAP	66
-#define WORD_TYPE_STRTRIEMAP	70
-#define WORD_TYPE_INTTRIEMAP	74
-#define WORD_TYPE_STRTRIENODE	78
-#define WORD_TYPE_INTTRIENODE	82
+#define WORD_TYPE_MLIST		34
+#define WORD_TYPE_SUBLIST	38
+#define WORD_TYPE_CONCATLIST	42
+#define WORD_TYPE_MCONCATLIST	46
+#define WORD_TYPE_MAPENTRY	50
+#define WORD_TYPE_INTMAPENTRY	54
+#define WORD_TYPE_STRHASHMAP	58
+#define WORD_TYPE_INTHASHMAP	62
+#define WORD_TYPE_STRTRIEMAP	66
+#define WORD_TYPE_INTTRIEMAP	70
+#define WORD_TYPE_STRTRIENODE	74
+#define WORD_TYPE_INTTRIENODE	78
 #ifdef PROMOTE_COMPACT
 #   define WORD_TYPE_REDIRECT	254
 #endif
@@ -724,7 +724,8 @@ void			DeclareCustomWord(Col_Word word,
 	    :(((uintptr_t)(word))&2)?					\
 		 (((uintptr_t)(word))&0x80)?	WORD_TYPE_CHAR		\
 		:				WORD_TYPE_SMALLSTR	\
-	    :(((uintptr_t)(word))&4)?		WORD_TYPE_VOIDLIST	\
+	    :(((uintptr_t)(word))&4)?		WORD_TYPE_CIRCLIST	\
+	    :(((uintptr_t)(word))&8)?		WORD_TYPE_VOIDLIST	\
 	    /* Unknown */						\
 	    :					WORD_TYPE_NIL		\
 	/* Pointer or predefined */					\
@@ -819,20 +820,35 @@ void			DeclareCustomWord(Col_Word word,
  *	WORD_SMALLSTR_DATA		- Small string data.
  *
  *
- * Void lists:
- *	<WORD_TYPE_VOIDLIST>
+ * Circular lists:
+ *	<WORD_TYPE_CIRCLIST>
  *
  * (start table)
  *      0 1 2 3                                                       n
  *     +-+-+-+---------------------------------------------------------+
- *   0 |0|0|1|                         Length                          |
- *     +-+-+-----------------------------------------------------------+
+ *   0 |0|0|1|                          Core                           |
+ *     +-+-+-+---------------------------------------------------------+
+ * (end)
+ *
+ *	Circular lists are lists made of a core list that repeats infinitely.
+ *	
+ *	WORD_CIRCLIST_CORE	- Get core list.
+ *
+ *
+ * Void lists:
+ *	<WORD_TYPE_VOIDLIST>
+ *
+ * (start table)
+ *      0 1 2 3 4                                                     n
+ *     +-+-+-+-+-------------------------------------------------------+
+ *   0 |0|0|0|1|                       Length                          |
+ *     +-+-+-+-+-------------------------------------------------------+
  * (end)
  *
  *	Void lists are lists whose elements are all nil. Length width is the
- *	machine word width minus 3 bits, so the maximum length is about a 
- *	quarter of the theoretical maximum. Larger void lists are built by
- *	concatenating several shorter immediate void lists.
+ *	machine word width minus 4 bits, so the maximum length is about 1/16th
+ *	of the theoretical maximum. Larger void lists are built by concatenating
+ *	several shorter immediate void lists.
  *	
  *	WORD_VOIDLIST_LENGTH	- Get void list length.
  *
@@ -840,6 +856,9 @@ void			DeclareCustomWord(Col_Word word,
  * Note:
  *	Macros are L-values and side effect-free unless specified (i.e. 
  *	accessible for both read/write operations).
+ *
+ *	Void list tag bit comes after the circular list tag so that void lists
+ *	can be made circular. Void circular lists thus combine both tag bits.
  *
  * See also:
  *	<WORD_TYPE>, <Word Type Identifiers>
@@ -854,28 +873,8 @@ void			DeclareCustomWord(Col_Word word,
 #else
 #   define WORD_SMALLSTR_DATA(word)	(((Col_Char1 *)&(word))+1)
 #endif
-#define WORD_VOIDLIST_LENGTH(word)	(((size_t)(intptr_t)(word))>>3)
-
-/*---------------------------------------------------------------------------
- * Internal Macro: IS_IMMEDIATE
- *
- *	Test whether word is immediate or not. 
- *
- * Argument:
- *	word	- Word to test.
- *
- * Result:
- *	Non-zero if word is immediate, zero if regular or nil.
- *
- * Note:
- *	Returns false on nil. Nil needs explicit handling.
- *
- * See also:
- *	<Immediate Word Fields>
- *---------------------------------------------------------------------------*/
-
-#define IS_IMMEDIATE(word) \
-    (((uintptr_t)(word))&0xF)
+#define WORD_CIRCLIST_CORE(word)	((Col_Word)(((uintptr_t)(word))&~0x7))
+#define WORD_VOIDLIST_LENGTH(word)	(((size_t)(intptr_t)(word))>>4)
 
 /*---------------------------------------------------------------------------
  * Internal Constants: Immediate Word Type Limits
@@ -889,7 +888,7 @@ void			DeclareCustomWord(Col_Word word,
 #define SMALLINT_MAX		(INTPTR_MAX>>1)
 #define SMALLINT_MIN		(INTPTR_MIN>>1)
 #define SMALLSTR_MAX_LENGTH	(sizeof(Col_Word)-1)
-#define VOIDLIST_MAX_LENGTH	(SIZE_MAX>>3)
+#define VOIDLIST_MAX_LENGTH	(SIZE_MAX>>4)
 
 /*---------------------------------------------------------------------------
  * Internal Constants: Word Singletons
@@ -933,6 +932,21 @@ void			DeclareCustomWord(Col_Word word,
     ((Col_Word)((((uintptr_t)(value))<<8)|0xFE))
 
 /*---------------------------------------------------------------------------
+ * Internal Macro: WORD_CIRCLIST_NEW
+ *
+ *	Circular list word creation.
+ *
+ * Argument:
+ *	core	- Core list. Must be acyclic.
+ *
+ * Result:
+ *	The new circular list word.
+ *---------------------------------------------------------------------------*/
+
+#define WORD_CIRCLIST_NEW(core) \
+    ((Col_Word)(((uintptr_t)(core))|4))
+
+/*---------------------------------------------------------------------------
  * Internal Macro: WORD_VOIDLIST_NEW
  *
  *	Void list word creation.
@@ -945,7 +959,7 @@ void			DeclareCustomWord(Col_Word word,
  *---------------------------------------------------------------------------*/
 
 #define WORD_VOIDLIST_NEW(length) \
-    ((Col_Word)(intptr_t)((((size_t)(length))<<3)|4))
+    ((Col_Word)(intptr_t)((((size_t)(length))<<4)|8))
 
 
 /****************************************************************************
@@ -1950,14 +1964,12 @@ void			DeclareCustomWord(Col_Word word,
     WORD_CONCATLIST_LEFT(word) = (left); \
     WORD_CONCATLIST_RIGHT(word) = (right);
 
+//FIXME: remove mutable lists and replace by generic mutable wrap.
+
 /*---------------------------------------------------------------------------
- * Internal Macros: List Word Fields
+ * Internal Macros: Mutable List Word Fields
  *
- *	Accessors for list word fields. Both immutable and mutable versions use
- *	these fields.
- *
- *	List words are used to wrap other nodes when the list is part of a 
- *	synonym chain or when it is cyclic.
+ *	Accessors for mutable list word fields.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -1971,45 +1983,22 @@ void			DeclareCustomWord(Col_Word word,
  *     +---------------------------------------------------------------+
  *   2 |                             Root                              |
  *     +---------------------------------------------------------------+
- *   3 |                             Loop                              |
+ *   3 |                            Unused                             |
  *     +---------------------------------------------------------------+
  * (end)
  *
- *	WORD_LIST_ROOT	- The root node, may be a vector, sublist or concat 
+ *	WORD_MLIST_ROOT	- The root node, may be a vector, sublist or concat 
  *			  list. The list length is given by its root node.
- *	WORD_LIST_LOOP	- Terminal loop length for cyclic lists, else zero.
  *
  * Note:
  *	Macros are L-values and side effect-free unless specified (i.e. 
  *	accessible for both read/write operations).
  *
  * See also:
- *	<WORD_LIST_INIT>, <WORD_MLIST_INIT>
+ *	<WORD_MLIST_INIT>
  *---------------------------------------------------------------------------*/
 
-#define WORD_LIST_ROOT(word)		(((Col_Word *)(word))[2])
-#define WORD_LIST_LOOP(word)		(((size_t *)(word))[3])
-
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_LIST_INIT
- *
- *	Initializer for immutable list words.
- *
- * Arguments:
- *	word	- Word to initialize. (Caution: evaluated several times during 
- *		  macro expansion)
- *	root	- <WORD_LIST_ROOT>
- *	loop	- <WORD_LIST_LOOP>
- *
- * See also:
- *	<NewListWord>
- *---------------------------------------------------------------------------*/
-
-#define WORD_LIST_INIT(word, root, loop) \
-    WORD_SET_TYPEID((word), WORD_TYPE_LIST); \
-    WORD_SYNONYM(word) = WORD_NIL; \
-    WORD_LIST_ROOT(word) = (root); \
-    WORD_LIST_LOOP(word) = (loop);
+#define WORD_MLIST_ROOT(word)		(((Col_Word *)(word))[2])
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_MLIST_INIT
@@ -2019,18 +2008,16 @@ void			DeclareCustomWord(Col_Word word,
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
  *		  macro expansion)
- *	root	- <WORD_LIST_ROOT>
- *	loop	- <WORD_LIST_LOOP>
+ *	root	- <WORD_MLIST_ROOT>
  *
  * See also:
  *	<Col_NewMList>
  *---------------------------------------------------------------------------*/
 
-#define WORD_MLIST_INIT(word, root, loop) \
+#define WORD_MLIST_INIT(word, root) \
     WORD_SET_TYPEID((word), WORD_TYPE_MLIST); \
     WORD_SYNONYM(word) = WORD_NIL; \
-    WORD_LIST_ROOT(word) = (root); \
-    WORD_LIST_LOOP(word) = (loop);
+    WORD_MLIST_ROOT(word) = (root); \
 
 
 /****************************************************************************

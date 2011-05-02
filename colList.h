@@ -55,7 +55,7 @@ EXTERN Col_Word		Col_ListAt(Col_Word list, size_t index);
  *
  * Declarations:
  *	<Col_Sublist>, <Col_ConcatLists>, <Col_ConcatListsA>,
- *	<Col_ConcatListsNV>, <Col_RepeatList>, <Col_LoopList>, 
+ *	<Col_ConcatListsNV>, <Col_RepeatList>, <Col_CircularList>, 
  *	<Col_ListInsert>, <Col_ListRemove>, <Col_ListReplace>
  *	
  ****************************************************************************/
@@ -65,7 +65,7 @@ EXTERN Col_Word		Col_ConcatLists(Col_Word left, Col_Word right);
 EXTERN Col_Word		Col_ConcatListsA(size_t number, const Col_Word * words);
 EXTERN Col_Word		Col_ConcatListsNV(size_t number, ...);
 EXTERN Col_Word		Col_RepeatList(Col_Word list, size_t count);
-EXTERN Col_Word		Col_LoopList(Col_Word list);
+EXTERN Col_Word		Col_CircularList(Col_Word core);
 EXTERN Col_Word		Col_ListInsert(Col_Word into, size_t index, 
 			    Col_Word list);
 EXTERN Col_Word		Col_ListRemove(Col_Word list, size_t first, 
@@ -101,15 +101,15 @@ EXTERN Col_Word		Col_NewMList();
  * Group: Mutable List Operations
  *
  * Declarations:
- *	<Col_FreezeMList>, <Col_MListSetLength>, <Col_MListSetLoop>,
+ *	<Col_FreezeMList>, <Col_MListSetLength>, <Col_MListLoop>,
  *	<Col_MListSetAt>, <Col_MListInsert>, <Col_MListRemove>,
  *	<Col_MListReplace>
  *	
  ****************************************************************************/
 
-EXTERN void		Col_FreezeMList(Col_Word mlist);
+EXTERN Col_Word		Col_FreezeMList(Col_Word mlist);
 EXTERN void		Col_MListSetLength(Col_Word mlist, size_t length);
-EXTERN void		Col_MListSetLoop(Col_Word mlist, size_t loopLength);
+EXTERN void		Col_MListLoop(Col_Word mlist);
 EXTERN void		Col_MListSetAt(Col_Word mlist, size_t index, 
 			    Col_Word element);
 EXTERN void		Col_MListInsert(Col_Word into, size_t index, 
