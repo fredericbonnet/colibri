@@ -1592,18 +1592,28 @@ Col_RopeInsert(
     size_t index,
     Col_Word rope)
 {
-    size_t ropeLength;
+    size_t length;
+ 
+    if (Col_RopeLength(rope) == 0) {
+	/*
+	 * No-op.
+	 */
+
+	return into;
+    }
+
     if (index == 0) {
 	/*
-	 * Insert at begin.
+	 * Insert at beginning.
 	 */
 
 	return Col_ConcatRopes(rope, into);
     }
-    ropeLength = Col_RopeLength(into);
-    if (index >= ropeLength) {
-	/* 
-	 * Insert at end; don't pad. 
+
+    length = Col_RopeLength(into);
+    if (index >= length) {
+	/*
+	 * Insertion past the end of rope is concatenation.
 	 */
 
 	return Col_ConcatRopes(into, rope);
@@ -1615,7 +1625,7 @@ Col_RopeInsert(
 
     return Col_ConcatRopes(Col_ConcatRopes(
 		    Col_Subrope(into, 0, index-1), rope), 
-	    Col_Subrope(into, index, ropeLength-1));
+	    Col_Subrope(into, index, length-1));
 }
 
 /*---------------------------------------------------------------------------
@@ -1642,9 +1652,11 @@ Col_RopeInsert(
 Col_Word 
 Col_RopeRemove(
     Col_Word rope,
-    size_t first, size_t last)
+    size_t first, 
+    size_t last)
 {
-    size_t ropeLength;
+    size_t length;
+
     if (first > last) {
 	/* 
 	 * No-op. 
@@ -1652,8 +1664,9 @@ Col_RopeRemove(
 
 	return rope;
     }
-    ropeLength = Col_RopeLength(rope);
-    if (ropeLength == 0 || first >= ropeLength) {
+
+    length = Col_RopeLength(rope);
+    if (length == 0 || first >= length) {
 	/*
 	 * No-op.
 	 */
@@ -1664,8 +1677,8 @@ Col_RopeRemove(
 	 * Trim begin.
 	 */
 
-	return Col_Subrope(rope, last+1, ropeLength-1);
-    } else if (last >= ropeLength-1) {
+	return Col_Subrope(rope, last+1, length-1);
+    } else if (last >= length-1) {
 	/* 
 	 * Trim end. 
 	 */
@@ -1678,7 +1691,7 @@ Col_RopeRemove(
      */
 
     return Col_ConcatRopes(Col_Subrope(rope, 0, first-1), 
-	    Col_Subrope(rope, last+1, ropeLength-1));
+	    Col_Subrope(rope, last+1, length-1));
 }
 
 /*---------------------------------------------------------------------------
@@ -1711,7 +1724,8 @@ Col_RopeRemove(
 Col_Word 
 Col_RopeReplace(
     Col_Word rope,
-    size_t first, size_t last,
+    size_t first, 
+    size_t last,
     Col_Word with)
 {
     if (first > last) {
@@ -1859,6 +1873,14 @@ Col_TraverseRopeChunks(
 
 		type = WORD_TYPE(info[i].rope);
 		switch (type) {
+		    case WORD_TYPE_WRAP:
+			/* 
+			 * Recurse on source.
+			 */
+
+			info[i].rope = WORD_WRAP_SOURCE(info[i].rope);
+			continue;
+
 		    case WORD_TYPE_SUBROPE:
 			/* 
 			 * Subrope: recurse on source rope.
@@ -1923,15 +1945,9 @@ Col_TraverseRopeChunks(
 			info[i].max = leftLength-info[i].start;
 			info[i].rope = WORD_CONCATROPE_LEFT(info[i].rope);
 			continue;
+
+		    /* WORD_TYPE_UNKNOWN */
 		    }
-
-		    case WORD_TYPE_WRAP:
-			/* 
-			 * Recurse on source.
-			 */
-
-			info[i].rope = WORD_WRAP_SOURCE(info[i].rope);
-			continue;
 		}
 		break;
 	    }
