@@ -290,166 +290,177 @@ Col_IntMapUnset(
 }
 
 /****************************************************************************
- * Group: Map Entries
+ * Group: Map Iterators
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Function: Col_MapEntryGet
+ * Function: Col_MapIterGet
  *
- *	Get key & value from map entry.
+ *	Get key & value from map iterator.
  *
- * Arguments:
- *	entry		- Map entry to get key & value from.
- *	keyPtr		- Returned entry key.
- *	valuePtr	- Returned entry value.
+ * Argument:
+ *	it		- Map iterator to get key & value from.
  *
  * Results:
- *	Entry key & value through keyPtr and valuePtr.
+ *	keyPtr		- Entry key.
+ *	valuePtr	- Entry value.
  *---------------------------------------------------------------------------*/
 
 void
-Col_MapEntryGet(
-    Col_Word entry,
+Col_MapIterGet(
+    Col_MapIterator *it,
     Col_Word *keyPtr,
     Col_Word *valuePtr)
 {
-    if (WORD_TYPE(entry) != WORD_TYPE_MAPENTRY) {
-	Col_Error(COL_ERROR, "%x is not a map entry", entry);
+    if (Col_MapIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid map iterator");
 	return;
     }
 
-    *keyPtr = WORD_MAPENTRY_KEY(entry);
-    *valuePtr = WORD_MAPENTRY_VALUE(entry);
+    if (WORD_TYPE(it->entry) != WORD_TYPE_MAPENTRY) {
+	Col_Error(COL_ERROR, "Not a generic or string map iterator");
+	return;
+    }
+
+    *keyPtr = WORD_MAPENTRY_KEY(it->entry);
+    *valuePtr = WORD_MAPENTRY_VALUE(it->entry);
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_MapEntryGetKey
+ * Function: Col_IntMapIterGet
  *
- *	Get key from map entry.
+ *	Get key & value from integer map iterator.
  *
  * Argument:
- *	entry	- Map entry to get key from.
+ *	it		- Integer map iterator to get key & value from.
+ *
+ * Results:
+ *	keyPtr		- Integer entry key.
+ *	valuePtr	- Entry value.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_IntMapIterGet(
+    Col_MapIterator *it,
+    intptr_t *keyPtr,
+    Col_Word *valuePtr)
+{
+    if (Col_MapIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid map iterator");
+	return;
+    }
+
+    if (WORD_TYPE(it->entry) != WORD_TYPE_INTMAPENTRY) {
+	Col_Error(COL_ERROR, "Not an integer map iterator");
+	return;
+    }
+
+    *keyPtr = WORD_INTMAPENTRY_KEY(it->entry);
+    *valuePtr = WORD_MAPENTRY_VALUE(it->entry);
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_MapIterKey
+ *
+ *	Get key from map iterator.
+ *
+ * Argument:
+ *	it	- Map iterator to get key & value from.
  *
  * Result:
  *	Key word.
  *---------------------------------------------------------------------------*/
 
 Col_Word
-Col_MapEntryGetKey(
-    Col_Word entry)
+Col_MapIterKey(
+    Col_MapIterator *it)
 {
-    if (WORD_TYPE(entry) != WORD_TYPE_MAPENTRY) {
-	Col_Error(COL_ERROR, "%x is not a map entry", entry);
+    if (Col_MapIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid map iterator");
 	return WORD_NIL;
     }
 
-    return WORD_MAPENTRY_KEY(entry);
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_MapEntryGetValue
- *
- *	Get value from map entry.
- *
- * Argument:
- *	entry	- Map entry to get value from.
- *
- * Result:
- *	Value word.
- *---------------------------------------------------------------------------*/
-
-Col_Word
-Col_MapEntryGetValue(
-    Col_Word entry)
-{
-    switch (WORD_TYPE(entry)) {
-	case WORD_TYPE_MAPENTRY:
-	case WORD_TYPE_INTMAPENTRY:
-	    return WORD_MAPENTRY_VALUE(entry);
-
-	default:
-	    Col_Error(COL_ERROR, "%x is not a map entry", entry);
-	    return WORD_NIL;
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_MapEntrySetValue
- *
- *	Set value of map entry.
- *
- * Argument:
- *	entry	- Map entry to set value for.
- *	value	- Value to set.
- *---------------------------------------------------------------------------*/
-
-void
-Col_MapEntrySetValue(
-    Col_Word entry,
-    Col_Word value)
-{
-    switch (WORD_TYPE(entry)) {
-	case WORD_TYPE_MAPENTRY:
-	case WORD_TYPE_INTMAPENTRY:
-	    WORD_MAPENTRY_VALUE(entry) = value;
-	    Col_WordSetModified(entry);
-	    return;
-
-	default:
-	    Col_Error(COL_ERROR, "%x is not a map entry", entry);
-	    return;
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_IntMapEntryGet
- *
- *	Get key & value from integer map entry.
- *
- * Arguments:
- *	entry		- Integer map entry to get key & value from.
- *	keyPtr		- Returned integer entry key.
- *	valuePtr	- Returned entry value.
- *
- * Results:
- *	Entry key & value through keyPtr and valuePtr.
- *---------------------------------------------------------------------------*/
-
-void
-Col_IntMapEntryGet(
-    Col_Word entry,
-    intptr_t *keyPtr,
-    Col_Word *valuePtr)
-{
-    if (WORD_TYPE(entry) != WORD_TYPE_INTMAPENTRY) {
-	Col_Error(COL_ERROR, "%x is not an integer map entry", entry);
-	return;
+    if (WORD_TYPE(it->entry) != WORD_TYPE_MAPENTRY) {
+	Col_Error(COL_ERROR, "Not a generic or string map iterator");
+	return WORD_NIL;
     }
 
-    *keyPtr = WORD_INTMAPENTRY_KEY(entry);
-    *valuePtr = WORD_MAPENTRY_VALUE(entry);
+    return WORD_MAPENTRY_KEY(it->entry);
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_IntMapEntryGetKey
+ * Function: Col_IntMapIterKey
  *
- *	Get integer key from integer map entry.
+ *	Get integer key from integer map iterator.
  *
  * Argument:
- *	entry	- Integer map entry to get integer key from.
+ *	it	- Integer map iterator to get integer key from.
  *
  * Result:
  *	Integer key.
  *---------------------------------------------------------------------------*/
 
 intptr_t
-Col_IntMapEntryGetKey(
-    Col_Word entry)
+Col_IntMapIterKey(
+    Col_MapIterator *it)
 {
-    if (WORD_TYPE(entry) != WORD_TYPE_INTMAPENTRY) {
-	Col_Error(COL_ERROR, "%x is not an integer map entry", entry);
+    if (Col_MapIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid map iterator");
+	return 0;
+    }
+
+    if (WORD_TYPE(it->entry) != WORD_TYPE_INTMAPENTRY) {
+	Col_Error(COL_ERROR, "Not an integer map iterator");
+	return 0;
+    }
+
+    return WORD_INTMAPENTRY_KEY(it->entry);
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_MapIterGetValue
+ *
+ *	Get value from map iterator.
+ *
+ * Argument:
+ *	it	- Map iterator to get value from.
+ *
+ * Result:
+ *	Value word.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_MapIterGetValue(
+    Col_MapIterator *it)
+{
+    if (Col_MapIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid map iterator");
 	return WORD_NIL;
     }
 
-    return WORD_INTMAPENTRY_KEY(entry);
+    return WORD_MAPENTRY_VALUE(it->entry);
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_MapIterSetValue
+ *
+ *	Set value of map iterator.
+ *
+ * Argument:
+ *	it	- Map iterator to set value for.
+ *	value	- Value to set.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_MapIterSetValue(
+    Col_MapIterator *it,
+    Col_Word value)
+{
+    if (Col_MapIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid map iterator");
+	return;
+    }
+
+    WORD_MAPENTRY_VALUE(it->entry) = value;
+    Col_WordSetModified(it->entry);
 }

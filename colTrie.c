@@ -20,6 +20,16 @@
 #include <string.h>
 
 
+/*
+ * Prototypes for functions used only in this file.
+ */
+
+static Col_Word		StringTrieMapFindEntry(Col_Word map, Col_Word key,
+			    int *createPtr);
+static Col_Word		IntTrieMapFindEntry(Col_Word map, intptr_t key,
+			    int *createPtr);
+
+
 /****************************************************************************
  * Group: Trie Map Creation
  ****************************************************************************/
@@ -72,6 +82,454 @@ Col_NewIntTrieMap()
 
 
 /****************************************************************************
+ * Group: Trie Map Entries
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: StringTrieMapFindEntry
+ *
+ *	Find or create in string trie map the entry mapped to the given key.
+ *
+ * Arguments:
+ *	map		- String trie map to find or create entry into.
+ *	key		- String entry key.
+ *	createPtr	- (in) If non-NULL, whether to create entry if absent.
+ *
+ * Results:
+ *	The entry if found or created, else nil. Additionally:
+ *
+ *	createPtr	- (out) If non-NULL, whether a new entry was created. 
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+StringTrieMapFindEntry(
+    Col_Word map,
+    Col_Word key,
+    int *createPtr)
+{
+    Col_Word node, entry, parent, *nodePtr, prev, next;
+    Col_RopeIterator itKey;
+    Col_Word entryKey = WORD_NIL;
+    size_t diff;
+    Col_Char cKey, cEntryKey, mask, newMask;
+    
+    /*
+     * Search for matching entry.
+     */
+
+    node = WORD_TRIEMAP_ROOT(map);
+    Col_RopeIterBegin(key, 0, &itKey);
+    while (node) {
+	if (WORD_TYPE(node) == WORD_TYPE_STRTRIENODE) {
+	    mask = WORD_STRTRIENODE_MASK(node);
+	    cKey = COL_CHAR_INVALID;
+	    if (!Col_RopeIterEnd(&itKey)) {
+		Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
+		if (!Col_RopeIterEnd(&itKey)) {
+		    cKey = Col_RopeIterAt(&itKey);
+		}
+	    }
+	    if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
+		/*
+		 * Recurse on right.
+		 */
+
+		node = WORD_TRIENODE_RIGHT(node);
+	    } else {
+		/*
+		 * Recurse on left.
+		 */
+
+		node = WORD_TRIENODE_LEFT(node);
+	    }
+	    continue;
+	}
+
+	/*
+	 * Entry node.
+	 */
+
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_MAPENTRY);
+	entryKey = WORD_MAPENTRY_KEY(node);
+	if (Col_CompareRopes(key, entryKey, 0, SIZE_MAX, &diff, &cKey, &cEntryKey) 
+		== 0) {
+	    /*
+	     * Found!
+	     */
+
+	    if (createPtr) *createPtr = 0;
+	    return node;
+	}
+	break;
+    }
+
+    /*
+     * Not found, create new if asked for.
+     */
+
+    if (!createPtr || !*createPtr) {
+	return WORD_NIL;
+    }
+    *createPtr = 1;
+
+    entry = (Col_Word) AllocCells(1);
+    WORD_MAPENTRY_INIT(entry, WORD_NIL, key, WORD_NIL, 0);
+
+    if (!WORD_TRIEMAP_ROOT(map)) {
+	/*
+	 * First entry.
+	 */
+
+	ASSERT(WORD_TRIEMAP_ROOT(map) == WORD_NIL);
+	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
+	WORD_TRIEMAP_ROOT(map) = entry;
+	Col_WordSetModified(map);
+
+	WORD_TRIEMAP_SIZE(map)++;
+
+	return entry;
+    }
+    ASSERT(node);
+
+    /*
+     * Get diff mask between inserted key and existing entry key, i.e. only keep 
+     * the highest bit set.
+     * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 
+     *
+     * Note: when either char is COL_CHAR_INVALID, they differ on the highest
+     * bit, so the penultimate step overflows and the mask is zero. This
+     * happens when one of the keys is shorter. We use this property when 
+     * choosing the right arm to follow.
+     */
+
+    newMask = cKey ^ cEntryKey;
+    newMask |= newMask >> 1;
+    newMask |= newMask >> 2;
+    newMask |= newMask >> 4;
+    newMask |= newMask >> 8;
+    newMask |= newMask >> 16;
+    newMask++;
+    newMask >>= 1;
+
+    /*
+     * Find insertion point.
+     */
+
+    nodePtr = &WORD_TRIEMAP_ROOT(map);
+    parent = map;
+    prev = WORD_NIL;
+    next = WORD_NIL;
+    Col_RopeIterBegin(key, 0, &itKey);
+    while (*nodePtr) {
+	node = *nodePtr;
+	if (WORD_TYPE(node) == WORD_TYPE_STRTRIENODE) {
+	    mask = WORD_STRTRIENODE_MASK(node);
+	    if (diff < WORD_STRTRIENODE_DIFF(node) 
+		    || (diff == WORD_STRTRIENODE_DIFF(node) 
+		    && (mask && newMask > mask))) {
+		break;
+	    }
+	    parent = node;
+	    cKey = COL_CHAR_INVALID;
+	    if (!Col_RopeIterEnd(&itKey)) {
+		Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
+		if (!Col_RopeIterEnd(&itKey)) {
+		    cKey = Col_RopeIterAt(&itKey);
+		}
+	    }
+	    if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
+		/*
+		 * Recurse on right, remember left for later insertion in chain.
+		 */
+
+		prev = WORD_TRIENODE_LEFT(node);
+		nodePtr = &WORD_TRIENODE_RIGHT(node);
+	    } else {
+		/*
+		 * Recurse on left.
+		 */
+
+		nodePtr = &WORD_TRIENODE_LEFT(node);
+	    }
+	    continue;
+	}
+
+	break;
+    }
+
+    /*
+     * Insert entry here.
+     */
+
+    node = (Col_Word) AllocCells(1);
+    cKey = COL_CHAR_INVALID;
+    if (!Col_RopeIterEnd(&itKey)) {
+	Col_RopeIterMoveTo(&itKey, diff);
+	if (!Col_RopeIterEnd(&itKey)) {
+	    cKey = Col_RopeIterAt(&itKey);
+	}
+    }
+    if (cKey != COL_CHAR_INVALID && (!newMask || (cKey & newMask))) {
+	/*
+	 * Entry is right.
+	 */
+
+	prev = *nodePtr;
+	WORD_STRTRIENODE_INIT(node, diff, newMask, *nodePtr, entry);
+    } else {
+	/*
+	 * Entry is left.
+	 */
+
+	next = *nodePtr;
+	WORD_STRTRIENODE_INIT(node, diff, newMask, entry, *nodePtr);
+    }
+    *nodePtr = node;
+    Col_WordSetModified(parent);
+
+    /*
+     * Insert in chain.
+     */
+
+    if (prev) {
+	/*
+	 * Insert after rightmost adjacent entry.
+	 */
+
+	while (WORD_TYPE(prev) == WORD_TYPE_STRTRIENODE) {
+	    prev = WORD_TRIENODE_RIGHT(prev);
+	}
+	ASSERT(WORD_TYPE(prev) == WORD_TYPE_MAPENTRY);
+	WORD_MAPENTRY_NEXT(entry) = WORD_MAPENTRY_NEXT(prev);
+	WORD_MAPENTRY_NEXT(prev) = entry;
+	Col_WordSetModified(prev);
+    } else {
+	/*
+	 * Entry is first, insert before leftmost adjacent entry.
+	 */
+
+	ASSERT(next);
+	while (WORD_TYPE(next) == WORD_TYPE_STRTRIENODE) {
+	    next = WORD_TRIENODE_LEFT(next);
+	}
+	ASSERT(WORD_TYPE(next) == WORD_TYPE_MAPENTRY);
+	WORD_MAPENTRY_NEXT(entry) = next;
+    }
+
+    WORD_TRIEMAP_SIZE(map)++;
+
+    return entry;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: IntTrieMapFindEntry
+ *
+ *	Find or create in integer trie map the entry mapped to the given key.
+ *
+ * Arguments:
+ *	map		- Integer trie map to find or create entry into.
+ *	key		- Integer entry key.
+ *	createPtr	- (in) If non-NULL, whether to create entry if absent.
+ *
+ * Results:
+ *	The entry if found or created, else nil. Additionally:
+ *
+ *	createPtr	- (out) If non-NULL, whether a new entry was created. 
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+IntTrieMapFindEntry(
+    Col_Word map,
+    intptr_t key,
+    int *createPtr)
+{
+    Col_Word node, entry, parent, *nodePtr, prev, next;
+    intptr_t entryKey = WORD_NIL, mask, newMask;
+    
+    /*
+     * Search for matching entry.
+     */
+
+    node = WORD_TRIEMAP_ROOT(map);
+    while (node) {
+	if (WORD_TYPE(node) == WORD_TYPE_INTTRIENODE) {
+	    mask = WORD_INTTRIENODE_MASK(node);
+	    if (mask ? (key & mask) : (key >= 0)) {
+		/*
+		 * Recurse on right.
+		 */
+
+		node = WORD_TRIENODE_RIGHT(node);
+	    } else {
+		/*
+		 * Recurse on left.
+		 */
+
+		node = WORD_TRIENODE_LEFT(node);
+	    }
+	    continue;
+	}
+
+	/*
+	 * Entry node.
+	 */
+
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_INTMAPENTRY);
+	entryKey = WORD_INTMAPENTRY_KEY(node);
+	if (key == entryKey) {
+	    /*
+	     * Found!
+	     */
+
+	    if (createPtr) *createPtr = 0;
+	    return node;
+	}
+	break;
+    }
+
+    /*
+     * Not found, create new if asked for.
+     */
+
+    if (!createPtr || !*createPtr) {
+	return WORD_NIL;
+    }
+    *createPtr = 1;
+
+    entry = (Col_Word) AllocCells(1);
+    WORD_INTMAPENTRY_INIT(entry, WORD_NIL, key, WORD_NIL);
+
+    if (!WORD_TRIEMAP_ROOT(map)) {
+	/*
+	 * First entry.
+	 */
+
+	ASSERT(WORD_TRIEMAP_ROOT(map) == WORD_NIL);
+	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
+	WORD_TRIEMAP_ROOT(map) = entry;
+	Col_WordSetModified(map);
+
+	WORD_TRIEMAP_SIZE(map)++;
+
+	return entry;
+    }
+    ASSERT(node);
+
+    /*
+     * Get diff mask between inserted key and existing entry key, i.e. only keep 
+     * the highest bit set.
+     * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 
+     *
+     * Note: when keys are of opposite signs, they differ on the highest bit,
+     * so the penultimate step overflows and the mask is zero. We use this
+     * property when choosing the right arm to follow.
+     */
+
+    newMask = key ^ entryKey;
+    ASSERT(newMask);
+    newMask |= newMask >> 1;
+    newMask |= newMask >> 2;
+    newMask |= newMask >> 4;
+    newMask |= newMask >> 8;
+    newMask |= newMask >> 16;
+    newMask++;
+    newMask >>= 1;
+
+    /*
+     * Find insertion point.
+     */
+
+    nodePtr = &WORD_TRIEMAP_ROOT(map);
+    parent = map;
+    prev = WORD_NIL;
+    next = WORD_NIL;
+    while (*nodePtr) {
+	node = *nodePtr;
+	if (WORD_TYPE(node) == WORD_TYPE_INTTRIENODE) {
+	    mask = WORD_INTTRIENODE_MASK(node);
+	    if (mask && newMask > mask) {
+		break;
+	    }
+	    parent = node;
+	    if (mask ? (key & mask) : (key >= 0)) {
+		/*
+		 * Recurse on right, remember left for later insertion in chain.
+		 */
+
+		prev = WORD_TRIENODE_LEFT(node);
+		nodePtr = &WORD_TRIENODE_RIGHT(node);
+	    } else {
+		/*
+		 * Recurse on left.
+		 */
+
+		nodePtr = &WORD_TRIENODE_LEFT(node);
+	    }
+	    continue;
+	}
+
+	break;
+    }
+
+    /*
+     * Insert entry here.
+     */
+
+    node = (Col_Word) AllocCells(1);
+    if (newMask ? (key & newMask) : (key >= 0)) {
+	/*
+	 * Entry is right.
+	 */
+
+	prev = *nodePtr;
+	WORD_INTTRIENODE_INIT(node, newMask, *nodePtr, entry);
+    } else {
+	/*
+	 * Entry is left.
+	 */
+
+	next = *nodePtr;
+	WORD_INTTRIENODE_INIT(node, newMask, entry, *nodePtr);
+    }
+    *nodePtr = node;
+    Col_WordSetModified(parent);
+
+    /*
+     * Insert in chain.
+     */
+
+    if (prev) {
+	/*
+	 * Insert after rightmost adjacent entry.
+	 */
+
+	while (WORD_TYPE(prev) == WORD_TYPE_INTTRIENODE) {
+	    prev = WORD_TRIENODE_RIGHT(prev);
+	}
+	ASSERT(WORD_TYPE(prev) == WORD_TYPE_INTMAPENTRY);
+	WORD_MAPENTRY_NEXT(entry) = WORD_MAPENTRY_NEXT(prev);
+	WORD_MAPENTRY_NEXT(prev) = entry;
+	Col_WordSetModified(prev);
+    } else {
+	/*
+	 * Entry is first, insert before leftmost adjacent entry.
+	 */
+
+	ASSERT(next);
+	while (WORD_TYPE(next) == WORD_TYPE_INTTRIENODE) {
+	    next = WORD_TRIENODE_LEFT(next);
+	}
+	ASSERT(WORD_TYPE(next) == WORD_TYPE_INTMAPENTRY);
+	WORD_MAPENTRY_NEXT(entry) = next;
+    }
+
+    WORD_TRIEMAP_SIZE(map)++;
+
+    return entry;
+}
+
+
+/****************************************************************************
  * Group: Trie Map Access
  ****************************************************************************/
 
@@ -96,7 +554,14 @@ Col_StringTrieMapGet(
     Col_Word key,
     Col_Word *valuePtr)
 {
-    Col_Word entry = Col_StringTrieMapFindEntry(map, key, NULL);
+    Col_Word entry;
+
+    if (WORD_TYPE(map) != WORD_TYPE_STRTRIEMAP) {
+	Col_Error(COL_ERROR, "%x is not a string trie map", map);
+	return WORD_NIL;
+    }
+
+    entry = StringTrieMapFindEntry(map, key, NULL);
     if (entry) {
 	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
@@ -127,7 +592,14 @@ Col_IntTrieMapGet(
     intptr_t key,
     Col_Word *valuePtr)
 {
-    Col_Word entry = Col_IntTrieMapFindEntry(map, key, NULL);
+    Col_Word entry;
+
+    if (WORD_TYPE(map) != WORD_TYPE_INTTRIEMAP) {
+	Col_Error(COL_ERROR, "%x is not an integer trie map", map);
+	return WORD_NIL;
+    }
+
+    entry = IntTrieMapFindEntry(map, key, NULL);
     if (entry) {
 	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
@@ -161,7 +633,14 @@ Col_StringTrieMapSet(
     Col_Word value)
 {
     int create = 1;
-    Col_Word entry = Col_StringTrieMapFindEntry(map, key, &create);
+    Col_Word entry;
+
+    if (WORD_TYPE(map) != WORD_TYPE_STRTRIEMAP) {
+	Col_Error(COL_ERROR, "%x is not a string trie map", map);
+	return WORD_NIL;
+    }
+
+    entry = StringTrieMapFindEntry(map, key, &create);
     ASSERT(entry);
     ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
     Col_WordSetModified(entry);
@@ -191,7 +670,14 @@ Col_IntTrieMapSet(
     Col_Word value)
 {
     int create = 1;
-    Col_Word entry = Col_IntTrieMapFindEntry(map, key, &create);
+    Col_Word entry;
+
+    if (WORD_TYPE(map) != WORD_TYPE_INTTRIEMAP) {
+	Col_Error(COL_ERROR, "%x is not an integer trie map", map);
+	return WORD_NIL;
+    }
+
+    entry = IntTrieMapFindEntry(map, key, &create);
     ASSERT(entry);
     ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
     Col_WordSetModified(entry);
@@ -444,462 +930,6 @@ Col_IntTrieMapUnset(
 
 
 /****************************************************************************
- * Group: Trie Map Entries
- ****************************************************************************/
-
-/*---------------------------------------------------------------------------
- * Function: Col_StringTrieMapFindEntry
- *
- *	Find or create in string trie map the entry mapped to the given key.
- *
- * Arguments:
- *	map		- String trie map to find or create entry into.
- *	key		- String entry key.
- *	createPtr	- In: if non-NULL, whether to create entry if absent.
- *			  Out: if non-NULL, whether a new entry was created. 
- *
- * Result:
- *	The entry if found or created, else nil.
- *---------------------------------------------------------------------------*/
-
-Col_Word
-Col_StringTrieMapFindEntry(
-    Col_Word map,
-    Col_Word key,
-    int *createPtr)
-{
-    Col_Word node, entry, parent, *nodePtr, prev, next;
-    Col_RopeIterator itKey;
-    Col_Word entryKey = WORD_NIL;
-    size_t diff;
-    Col_Char cKey, cEntryKey, mask, newMask;
-    
-    if (WORD_TYPE(map) != WORD_TYPE_STRTRIEMAP) {
-	Col_Error(COL_ERROR, "%x is not a string trie map", map);
-	return WORD_NIL;
-    }
-
-    /*
-     * Search for matching entry.
-     */
-
-    node = WORD_TRIEMAP_ROOT(map);
-    Col_RopeIterBegin(key, 0, &itKey);
-    while (node) {
-	if (WORD_TYPE(node) == WORD_TYPE_STRTRIENODE) {
-	    mask = WORD_STRTRIENODE_MASK(node);
-	    cKey = COL_CHAR_INVALID;
-	    if (!Col_RopeIterEnd(&itKey)) {
-		Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
-		if (!Col_RopeIterEnd(&itKey)) {
-		    cKey = Col_RopeIterAt(&itKey);
-		}
-	    }
-	    if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
-		/*
-		 * Recurse on right.
-		 */
-
-		node = WORD_TRIENODE_RIGHT(node);
-	    } else {
-		/*
-		 * Recurse on left.
-		 */
-
-		node = WORD_TRIENODE_LEFT(node);
-	    }
-	    continue;
-	}
-
-	/*
-	 * Entry node.
-	 */
-
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_MAPENTRY);
-	entryKey = WORD_MAPENTRY_KEY(node);
-	if (Col_CompareRopes(key, entryKey, 0, SIZE_MAX, &diff, &cKey, &cEntryKey) 
-		== 0) {
-	    /*
-	     * Found!
-	     */
-
-	    if (createPtr) *createPtr = 0;
-	    return node;
-	}
-	break;
-    }
-
-    /*
-     * Not found, create new if asked for.
-     */
-
-    if (!createPtr || !*createPtr) {
-	return WORD_NIL;
-    }
-    *createPtr = 1;
-
-    entry = (Col_Word) AllocCells(1);
-    WORD_MAPENTRY_INIT(entry, WORD_NIL, key, WORD_NIL, 0);
-
-    if (!WORD_TRIEMAP_ROOT(map)) {
-	/*
-	 * First entry.
-	 */
-
-	ASSERT(WORD_TRIEMAP_ROOT(map) == WORD_NIL);
-	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
-	WORD_TRIEMAP_ROOT(map) = entry;
-	Col_WordSetModified(map);
-
-	WORD_TRIEMAP_SIZE(map)++;
-
-	return entry;
-    }
-    ASSERT(node);
-
-    /*
-     * Get diff mask between inserted key and existing entry key, i.e. only keep 
-     * the highest bit set.
-     * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 
-     *
-     * Note: when either char is COL_CHAR_INVALID, they differ on the highest
-     * bit, so the penultimate step overflows and the mask is zero. This
-     * happens when one of the keys is shorter. We use this property when 
-     * choosing the right arm to follow.
-     */
-
-    newMask = cKey ^ cEntryKey;
-    newMask |= newMask >> 1;
-    newMask |= newMask >> 2;
-    newMask |= newMask >> 4;
-    newMask |= newMask >> 8;
-    newMask |= newMask >> 16;
-    newMask++;
-    newMask >>= 1;
-
-    /*
-     * Find insertion point.
-     */
-
-    nodePtr = &WORD_TRIEMAP_ROOT(map);
-    parent = map;
-    prev = WORD_NIL;
-    next = WORD_NIL;
-    Col_RopeIterBegin(key, 0, &itKey);
-    while (*nodePtr) {
-	node = *nodePtr;
-	if (WORD_TYPE(node) == WORD_TYPE_STRTRIENODE) {
-	    mask = WORD_STRTRIENODE_MASK(node);
-	    if (diff < WORD_STRTRIENODE_DIFF(node) 
-		    || (diff == WORD_STRTRIENODE_DIFF(node) 
-		    && (mask && newMask > mask))) {
-		break;
-	    }
-	    parent = node;
-	    cKey = COL_CHAR_INVALID;
-	    if (!Col_RopeIterEnd(&itKey)) {
-		Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
-		if (!Col_RopeIterEnd(&itKey)) {
-		    cKey = Col_RopeIterAt(&itKey);
-		}
-	    }
-	    if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
-		/*
-		 * Recurse on right, remember left for later insertion in chain.
-		 */
-
-		prev = WORD_TRIENODE_LEFT(node);
-		nodePtr = &WORD_TRIENODE_RIGHT(node);
-	    } else {
-		/*
-		 * Recurse on left.
-		 */
-
-		nodePtr = &WORD_TRIENODE_LEFT(node);
-	    }
-	    continue;
-	}
-
-	break;
-    }
-
-    /*
-     * Insert entry here.
-     */
-
-    node = (Col_Word) AllocCells(1);
-    cKey = COL_CHAR_INVALID;
-    if (!Col_RopeIterEnd(&itKey)) {
-	Col_RopeIterMoveTo(&itKey, diff);
-	if (!Col_RopeIterEnd(&itKey)) {
-	    cKey = Col_RopeIterAt(&itKey);
-	}
-    }
-    if (cKey != COL_CHAR_INVALID && (!newMask || (cKey & newMask))) {
-	/*
-	 * Entry is right.
-	 */
-
-	prev = *nodePtr;
-	WORD_STRTRIENODE_INIT(node, diff, newMask, *nodePtr, entry);
-    } else {
-	/*
-	 * Entry is left.
-	 */
-
-	next = *nodePtr;
-	WORD_STRTRIENODE_INIT(node, diff, newMask, entry, *nodePtr);
-    }
-    *nodePtr = node;
-    Col_WordSetModified(parent);
-
-    /*
-     * Insert in chain.
-     */
-
-    if (prev) {
-	/*
-	 * Insert after rightmost adjacent entry.
-	 */
-
-	while (WORD_TYPE(prev) == WORD_TYPE_STRTRIENODE) {
-	    prev = WORD_TRIENODE_RIGHT(prev);
-	}
-	ASSERT(WORD_TYPE(prev) == WORD_TYPE_MAPENTRY);
-	WORD_MAPENTRY_NEXT(entry) = WORD_MAPENTRY_NEXT(prev);
-	WORD_MAPENTRY_NEXT(prev) = entry;
-	Col_WordSetModified(prev);
-    } else {
-	/*
-	 * Entry is first, insert before leftmost adjacent entry.
-	 */
-
-	ASSERT(next);
-	while (WORD_TYPE(next) == WORD_TYPE_STRTRIENODE) {
-	    next = WORD_TRIENODE_LEFT(next);
-	}
-	ASSERT(WORD_TYPE(next) == WORD_TYPE_MAPENTRY);
-	WORD_MAPENTRY_NEXT(entry) = next;
-    }
-
-    WORD_TRIEMAP_SIZE(map)++;
-
-    return entry;
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_IntTrieMapFindEntry
- *
- *	Find or create in integer trie map the entry mapped to the given key.
- *
- * Arguments:
- *	map		- Integer trie map to find or create entry into.
- *	key		- Integer entry key.
- *	createPtr	- In: if non-NULL, whether to create entry if absent.
- *			  Out: if non-NULL, whether a new entry was created. 
- *
- * Result:
- *	The entry if found or created, else nil.
- *---------------------------------------------------------------------------*/
-
-Col_Word
-Col_IntTrieMapFindEntry(
-    Col_Word map,
-    intptr_t key,
-    int *createPtr)
-{
-    Col_Word node, entry, parent, *nodePtr, prev, next;
-    intptr_t entryKey = WORD_NIL, mask, newMask;
-    
-    if (WORD_TYPE(map) != WORD_TYPE_INTTRIEMAP) {
-	Col_Error(COL_ERROR, "%x is not an integer trie map", map);
-	return WORD_NIL;
-    }
-
-    /*
-     * Search for matching entry.
-     */
-
-    node = WORD_TRIEMAP_ROOT(map);
-    while (node) {
-	if (WORD_TYPE(node) == WORD_TYPE_INTTRIENODE) {
-	    mask = WORD_INTTRIENODE_MASK(node);
-	    if (mask ? (key & mask) : (key >= 0)) {
-		/*
-		 * Recurse on right.
-		 */
-
-		node = WORD_TRIENODE_RIGHT(node);
-	    } else {
-		/*
-		 * Recurse on left.
-		 */
-
-		node = WORD_TRIENODE_LEFT(node);
-	    }
-	    continue;
-	}
-
-	/*
-	 * Entry node.
-	 */
-
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_INTMAPENTRY);
-	entryKey = WORD_INTMAPENTRY_KEY(node);
-	if (key == entryKey) {
-	    /*
-	     * Found!
-	     */
-
-	    if (createPtr) *createPtr = 0;
-	    return node;
-	}
-	break;
-    }
-
-    /*
-     * Not found, create new if asked for.
-     */
-
-    if (!createPtr || !*createPtr) {
-	return WORD_NIL;
-    }
-    *createPtr = 1;
-
-    entry = (Col_Word) AllocCells(1);
-    WORD_INTMAPENTRY_INIT(entry, WORD_NIL, key, WORD_NIL);
-
-    if (!WORD_TRIEMAP_ROOT(map)) {
-	/*
-	 * First entry.
-	 */
-
-	ASSERT(WORD_TRIEMAP_ROOT(map) == WORD_NIL);
-	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
-	WORD_TRIEMAP_ROOT(map) = entry;
-	Col_WordSetModified(map);
-
-	WORD_TRIEMAP_SIZE(map)++;
-
-	return entry;
-    }
-    ASSERT(node);
-
-    /*
-     * Get diff mask between inserted key and existing entry key, i.e. only keep 
-     * the highest bit set.
-     * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 
-     *
-     * Note: when keys are of opposite signs, they differ on the highest bit,
-     * so the penultimate step overflows and the mask is zero. We use this
-     * property when choosing the right arm to follow.
-     */
-
-    newMask = key ^ entryKey;
-    ASSERT(newMask);
-    newMask |= newMask >> 1;
-    newMask |= newMask >> 2;
-    newMask |= newMask >> 4;
-    newMask |= newMask >> 8;
-    newMask |= newMask >> 16;
-    newMask++;
-    newMask >>= 1;
-
-    /*
-     * Find insertion point.
-     */
-
-    nodePtr = &WORD_TRIEMAP_ROOT(map);
-    parent = map;
-    prev = WORD_NIL;
-    next = WORD_NIL;
-    while (*nodePtr) {
-	node = *nodePtr;
-	if (WORD_TYPE(node) == WORD_TYPE_INTTRIENODE) {
-	    mask = WORD_INTTRIENODE_MASK(node);
-	    if (mask && newMask > mask) {
-		break;
-	    }
-	    parent = node;
-	    if (mask ? (key & mask) : (key >= 0)) {
-		/*
-		 * Recurse on right, remember left for later insertion in chain.
-		 */
-
-		prev = WORD_TRIENODE_LEFT(node);
-		nodePtr = &WORD_TRIENODE_RIGHT(node);
-	    } else {
-		/*
-		 * Recurse on left.
-		 */
-
-		nodePtr = &WORD_TRIENODE_LEFT(node);
-	    }
-	    continue;
-	}
-
-	break;
-    }
-
-    /*
-     * Insert entry here.
-     */
-
-    node = (Col_Word) AllocCells(1);
-    if (newMask ? (key & newMask) : (key >= 0)) {
-	/*
-	 * Entry is right.
-	 */
-
-	prev = *nodePtr;
-	WORD_INTTRIENODE_INIT(node, newMask, *nodePtr, entry);
-    } else {
-	/*
-	 * Entry is left.
-	 */
-
-	next = *nodePtr;
-	WORD_INTTRIENODE_INIT(node, newMask, entry, *nodePtr);
-    }
-    *nodePtr = node;
-    Col_WordSetModified(parent);
-
-    /*
-     * Insert in chain.
-     */
-
-    if (prev) {
-	/*
-	 * Insert after rightmost adjacent entry.
-	 */
-
-	while (WORD_TYPE(prev) == WORD_TYPE_INTTRIENODE) {
-	    prev = WORD_TRIENODE_RIGHT(prev);
-	}
-	ASSERT(WORD_TYPE(prev) == WORD_TYPE_INTMAPENTRY);
-	WORD_MAPENTRY_NEXT(entry) = WORD_MAPENTRY_NEXT(prev);
-	WORD_MAPENTRY_NEXT(prev) = entry;
-	Col_WordSetModified(prev);
-    } else {
-	/*
-	 * Entry is first, insert before leftmost adjacent entry.
-	 */
-
-	ASSERT(next);
-	while (WORD_TYPE(next) == WORD_TYPE_INTTRIENODE) {
-	    next = WORD_TRIENODE_LEFT(next);
-	}
-	ASSERT(WORD_TYPE(next) == WORD_TYPE_INTMAPENTRY);
-	WORD_MAPENTRY_NEXT(entry) = next;
-    }
-
-    WORD_TRIEMAP_SIZE(map)++;
-
-    return entry;
-}
-
-
-/****************************************************************************
  * Group: Trie Map Iterators
  ****************************************************************************/
 
@@ -990,6 +1020,84 @@ Col_TrieMapIterNext(
     if (!it->entry) {
 	/*
 	 * End of map.
+	 */
+
+	it->map = WORD_NIL;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_StringTrieMapIterFind
+ *
+ *	Initialize the trie map iterator so that it points to the entry with
+ *	the given string key within the map.
+ *
+ * Arguments:
+ *	map		- String trie map to find or create entry into.
+ *	key		- String entry key.
+ *	createPtr	- (in) If non-NULL, whether to create entry if absent.
+ *	it		- Iterator to initialize.
+ *
+ * Results:
+ *	createPtr	- (out) If non-NULL, whether a new entry was created. 
+ *---------------------------------------------------------------------------*/
+
+void
+Col_StringTrieMapIterFind(
+    Col_Word map, 
+    Col_Word key, 
+    int *createPtr, 
+    Col_MapIterator *it)
+{
+    if (WORD_TYPE(map) != WORD_TYPE_STRTRIEMAP) {
+	Col_Error(COL_ERROR, "%x is not a string trie map", map);
+	it->map = WORD_NIL;
+	return;
+    }
+
+    it->entry = StringTrieMapFindEntry(map, key, createPtr);
+    if (!it->entry) {
+	/*
+	 * Not found.
+	 */
+
+	it->map = WORD_NIL;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_IntTrieMapIterFind
+ *
+ *	Initialize the trie map iterator so that it points to the entry with
+ *	the given string key within the map.
+ *
+ * Arguments:
+ *	map		- Integer trie map to find or create entry into.
+ *	key		- Integer entry key.
+ *	createPtr	- (in) If non-NULL, whether to create entry if absent.
+ *	it		- Iterator to initialize.
+ *
+ * Results:
+ *	createPtr	- (out) If non-NULL, whether a new entry was created. 
+ *---------------------------------------------------------------------------*/
+
+void
+Col_IntTrieMapIterFind(
+    Col_Word map, 
+    intptr_t key, 
+    int *createPtr, 
+    Col_MapIterator *it)
+{
+    if (WORD_TYPE(map) != WORD_TYPE_INTTRIEMAP) {
+	Col_Error(COL_ERROR, "%x is not an integer trie map", map);
+	it->map = WORD_NIL;
+	return;
+    }
+
+    it->entry = IntTrieMapFindEntry(map, key, createPtr);
+    if (!it->entry) {
+	/*
+	 * Not found.
 	 */
 
 	it->map = WORD_NIL;

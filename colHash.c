@@ -25,9 +25,13 @@
 
 static Col_RopeChunksTraverseProc HashChunkProc;
 static Col_HashProc HashString;
-static void		AllocBuckets(Col_Word map, size_t capacity);
 static int		GrowHashMap(Col_Word map, Col_HashProc proc);
 static int		GrowIntHashMap(Col_Word map);
+static Col_Word		StringHashMapFindEntry(Col_Word map, Col_Word key,
+			    int *createPtr, size_t *bucketPtr);
+static Col_Word		IntHashMapFindEntry(Col_Word map, intptr_t key,
+			    int *createPtr, size_t *bucketPtr);
+static void		AllocBuckets(Col_Word map, size_t capacity);
 
 
 /****************************************************************************
@@ -70,16 +74,14 @@ static int		GrowIntHashMap(Col_Word map);
  *	Bucket access. Get bucket array regardless of whether it is stored in 
  *	static space or in a separate vector word.
  *
- * Arguments:
+ * Argument:
  *	map		- Map to get bucket array for.
+ *
+ * Results:
  *	nBuckets	- Size of bucket array.
  *	buckets		- Bucket array.
  *	bucketParent	- Parent word of bucket container. Used during 
  *			  modification (see <Col_WordSetModified>).
- *
- * Results:
- *	Bucket array info through nbBuckets, buckets and bucketParent argument 
- *	variables.
  *---------------------------------------------------------------------------*/
 
 #define GET_BUCKETS(map, nbBuckets, buckets, bucketParent) \
@@ -480,6 +482,187 @@ Col_NewIntHashMap(
     return map;
 }
 
+
+/****************************************************************************
+ * Internal Group: Hash Map Entries
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: StringHashMapFindEntry
+ *
+ *	Find or create in string hash map the entry mapped to the given key.
+ *
+ * Arguments:
+ *	map		- String hash map to find or create entry into.
+ *	key		- String entry key.
+ *	createPtr	- (in) If non-NULL, whether to create entry if absent.
+ *
+ * Results:
+ *	The entry if found or created, else nil. Additionally:
+ *
+ *	createPtr	- (out) If non-NULL, whether a new entry was created. 
+ *	bucketPtr	- If non-NULL, bucket containing the entry if found.
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+StringHashMapFindEntry(
+    Col_Word map,
+    Col_Word key,
+    int *createPtr,
+    size_t *bucketPtr)
+{
+    Col_Word *buckets, bucketParent, entry;
+    size_t nbBuckets;
+    uintptr_t hash, index;
+
+    /*
+     * Search for matching entry.
+     *
+     * Note: bucket size is always a power of 2.
+     */
+
+    GET_BUCKETS(map, nbBuckets, buckets, bucketParent);
+    ASSERT(!(nbBuckets & (nbBuckets-1)));
+    hash = HashString(key);
+    index = hash & (nbBuckets-1);
+    entry = buckets[index];
+    while (entry) {
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
+	if (WORD_MAPENTRY_HASH(entry) == (hash & MAPENTRY_HASH_MASK)
+		&& Col_CompareRopes(WORD_MAPENTRY_KEY(entry), key, 0, SIZE_MAX,
+		NULL, NULL, NULL) == 0) {
+	    /*
+	     * Found!
+	     */
+
+	    if (createPtr) *createPtr = 0;
+	    if (bucketPtr) *bucketPtr = index;
+	    return entry;
+	}
+
+	entry = WORD_MAPENTRY_NEXT(entry);
+    }
+
+    /*
+     * Not found, create new if asked for.
+     */
+
+    if (!createPtr || !*createPtr) {
+	return WORD_NIL;
+    }
+    *createPtr = 1;
+
+    if (WORD_HASHMAP_SIZE(map) >= nbBuckets * LOAD_FACTOR
+	    && GrowHashMap(map, HashString)) {
+	/*
+	 * Grow map and insert again.
+	 */
+
+	return StringHashMapFindEntry(map, key, createPtr, bucketPtr);
+    }
+
+    /*
+     * Insert a new entry at head so that subsequent lookups are faster.
+     */
+
+    entry = (Col_Word) AllocCells(1);
+    WORD_MAPENTRY_INIT(entry, buckets[index], key, WORD_NIL, hash);
+    buckets[index] = entry;
+    Col_WordSetModified(bucketParent);
+
+    WORD_HASHMAP_SIZE(map)++;
+
+    if (bucketPtr) *bucketPtr = index;
+    return entry;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: IntHashMapFindEntry
+ *
+ *	Find or create in integer hash map the entry mapped to the given key.
+ *
+ * Arguments:
+ *	map		- Integer hash map to find or create entry into.
+ *	key		- Integer entry key.
+ *	createPtr	- (in) If non-NULL, whether to create entry if absent.
+ *
+ * Results:
+ *	The entry if found or created, else nil. Additionally:
+ *
+ *	createPtr	- (out) If non-NULL, whether a new entry was created. 
+ *	bucketPtr	- If found, bucket containing the entry.
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+IntHashMapFindEntry(
+    Col_Word map,
+    intptr_t key,
+    int *createPtr,
+    size_t *bucketPtr)
+{
+    Col_Word *buckets, bucketParent, entry;
+    size_t nbBuckets;
+    uintptr_t index;
+
+    /*
+     * Search for matching entry.
+     *
+     * Note: bucket size is always a power of 2.
+     */
+
+    GET_BUCKETS(map, nbBuckets, buckets, bucketParent);
+    ASSERT(!(nbBuckets & (nbBuckets-1)));
+    index = RANDOMIZE_KEY(key) & (nbBuckets-1);
+    entry = buckets[index];
+    while (entry) {
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+	if (WORD_INTMAPENTRY_KEY(entry) == key) {
+	    /*
+	     * Found!
+	     */
+
+	    if (createPtr) *createPtr = 0;
+	    if (bucketPtr) *bucketPtr = index;
+	    return entry;
+	}
+
+	entry = WORD_MAPENTRY_NEXT(entry);
+    }
+
+    /*
+     * Not found, create new if asked for.
+     */
+
+    if (!createPtr || !*createPtr) {
+	return WORD_NIL;
+    }
+    *createPtr = 1;
+
+    if (WORD_HASHMAP_SIZE(map) >= nbBuckets * LOAD_FACTOR
+	    && GrowIntHashMap(map)) {
+	/*
+	 * Grow map and insert again.
+	 */
+
+	return IntHashMapFindEntry(map, key, createPtr, bucketPtr);
+    }
+
+    /*
+     * Insert a new entry at head so that subsequent lookups are faster.
+     */
+
+    entry = (Col_Word) AllocCells(1);
+    WORD_INTMAPENTRY_INIT(entry, buckets[index], key, WORD_NIL);
+    buckets[index] = entry;
+    Col_WordSetModified(bucketParent);
+
+    WORD_HASHMAP_SIZE(map)++;
+
+    if (bucketPtr) *bucketPtr = index;
+    return entry;
+}
+
+
 /****************************************************************************
  * Group: Hash Map Access
  ****************************************************************************/
@@ -505,7 +688,15 @@ Col_StringHashMapGet(
     Col_Word key,
     Col_Word *valuePtr)
 {
-    Col_Word entry = Col_StringHashMapFindEntry(map, key, NULL);
+    Col_Word entry;
+
+    if (WORD_TYPE(map) != WORD_TYPE_STRHASHMAP) {
+	Col_Error(COL_ERROR, "%x is not a string hash map", map);
+	return WORD_NIL;
+    }
+
+    entry = StringHashMapFindEntry(map, key, NULL, NULL);
+
     if (entry) {
 	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
@@ -536,7 +727,14 @@ Col_IntHashMapGet(
     intptr_t key,
     Col_Word *valuePtr)
 {
-    Col_Word entry = Col_IntHashMapFindEntry(map, key, NULL);
+    Col_Word entry;
+    
+    if (WORD_TYPE(map) != WORD_TYPE_INTHASHMAP) {
+	Col_Error(COL_ERROR, "%x is not an integer hash map", map);
+	return WORD_NIL;
+    }
+
+    entry = IntHashMapFindEntry(map, key, NULL, NULL);
     if (entry) {
 	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
@@ -570,7 +768,14 @@ Col_StringHashMapSet(
     Col_Word value)
 {
     int create = 1;
-    Col_Word entry = Col_StringHashMapFindEntry(map, key, &create);
+    Col_Word entry;
+    
+    if (WORD_TYPE(map) != WORD_TYPE_STRHASHMAP) {
+	Col_Error(COL_ERROR, "%x is not a string hash map", map);
+	return WORD_NIL;
+    }
+
+    entry = StringHashMapFindEntry(map, key, &create, NULL);
     ASSERT(entry);
     ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
     Col_WordSetModified(entry);
@@ -602,7 +807,14 @@ Col_IntHashMapSet(
     Col_Word value)
 {
     int create = 1;
-    Col_Word entry = Col_IntHashMapFindEntry(map, key, &create);
+    Col_Word entry;
+    
+    if (WORD_TYPE(map) != WORD_TYPE_INTHASHMAP) {
+	Col_Error(COL_ERROR, "%x is not an integer hash map", map);
+	return WORD_NIL;
+    }
+
+    entry = IntHashMapFindEntry(map, key, &create, NULL);
     ASSERT(entry);
     ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
     Col_WordSetModified(entry);
@@ -739,184 +951,6 @@ Col_IntHashMapUnset(
     return 0;
 }
 
-/****************************************************************************
- * Group: Hash Map Entries
- ****************************************************************************/
-
-/*---------------------------------------------------------------------------
- * Function: Col_StringHashMapFindEntry
- *
- *	Find or create in string hash map the entry mapped to the given key.
- *
- * Arguments:
- *	map		- String hash map to find or create entry into.
- *	key		- String entry key.
- *	createPtr	- In: if non-NULL, whether to create entry if absent.
- *			  Out: if non-NULL, whether a new entry was created. 
- *
- * Result:
- *	The entry if found or created, else nil.
- *---------------------------------------------------------------------------*/
-
-Col_Word
-Col_StringHashMapFindEntry(
-    Col_Word map,
-    Col_Word key,
-    int *createPtr)
-{
-    Col_Word *buckets, bucketParent, entry;
-    size_t nbBuckets;
-    uintptr_t hash, index;
-
-    if (WORD_TYPE(map) != WORD_TYPE_STRHASHMAP) {
-	Col_Error(COL_ERROR, "%x is not a string hash map", map);
-	return WORD_NIL;
-    }
-
-    /*
-     * Search for matching entry.
-     *
-     * Note: bucket size is always a power of 2.
-     */
-
-    GET_BUCKETS(map, nbBuckets, buckets, bucketParent);
-    ASSERT(!(nbBuckets & (nbBuckets-1)));
-    hash = HashString(key);
-    index = hash & (nbBuckets-1);
-    entry = buckets[index];
-    while (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
-	if (WORD_MAPENTRY_HASH(entry) == (hash & MAPENTRY_HASH_MASK)
-		&& Col_CompareRopes(WORD_MAPENTRY_KEY(entry), key, 0, SIZE_MAX,
-		NULL, NULL, NULL) == 0) {
-	    /*
-	     * Found!
-	     */
-
-	    if (createPtr) *createPtr = 0;
-	    return entry;
-	}
-
-	entry = WORD_MAPENTRY_NEXT(entry);
-    }
-
-    /*
-     * Not found, create new if asked for.
-     */
-
-    if (!createPtr || !*createPtr) {
-	return WORD_NIL;
-    }
-    *createPtr = 1;
-
-    if (WORD_HASHMAP_SIZE(map) >= nbBuckets * LOAD_FACTOR
-	    && GrowHashMap(map, HashString)) {
-	/*
-	 * Grow map and insert again.
-	 */
-
-	return Col_StringHashMapFindEntry(map, key, createPtr);
-    }
-
-    /*
-     * Insert a new entry at head so that subsequent lookups are faster.
-     */
-
-    entry = (Col_Word) AllocCells(1);
-    WORD_MAPENTRY_INIT(entry, buckets[index], key, WORD_NIL, hash);
-    buckets[index] = entry;
-    Col_WordSetModified(bucketParent);
-
-    WORD_HASHMAP_SIZE(map)++;
-
-    return entry;
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_IntHashMapFindEntry
- *
- *	Find or create in integer hash map the entry mapped to the given key.
- *
- * Arguments:
- *	map		- Integer hash map to find or create entry into.
- *	key		- Integer entry key.
- *	createPtr	- In: if non-NULL, whether to create entry if absent.
- *			  Out: if non-NULL, whether a new entry was created. 
- *
- * Result:
- *	The entry if found or created, else nil.
- *---------------------------------------------------------------------------*/
-
-Col_Word
-Col_IntHashMapFindEntry(
-    Col_Word map,
-    intptr_t key,
-    int *createPtr)
-{
-    Col_Word *buckets, bucketParent, entry;
-    size_t nbBuckets;
-    uintptr_t index;
-
-    if (WORD_TYPE(map) != WORD_TYPE_INTHASHMAP) {
-	Col_Error(COL_ERROR, "%x is not an integer hash map", map);
-	return WORD_NIL;
-    }
-
-    /*
-     * Search for matching entry.
-     *
-     * Note: bucket size is always a power of 2.
-     */
-
-    GET_BUCKETS(map, nbBuckets, buckets, bucketParent);
-    ASSERT(!(nbBuckets & (nbBuckets-1)));
-    index = RANDOMIZE_KEY(key) & (nbBuckets-1);
-    entry = buckets[index];
-    while (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
-	if (WORD_INTMAPENTRY_KEY(entry) == key) {
-	    /*
-	     * Found!
-	     */
-
-	    if (createPtr) *createPtr = 0;
-	    return entry;
-	}
-
-	entry = WORD_MAPENTRY_NEXT(entry);
-    }
-
-    /*
-     * Not found, create new if asked for.
-     */
-
-    if (!createPtr || !*createPtr) {
-	return WORD_NIL;
-    }
-    *createPtr = 1;
-
-    if (WORD_HASHMAP_SIZE(map) >= nbBuckets * LOAD_FACTOR
-	    && GrowIntHashMap(map)) {
-	/*
-	 * Grow map and insert again.
-	 */
-
-	return Col_IntHashMapFindEntry(map, key, createPtr);
-    }
-
-    /*
-     * Insert a new entry at head so that subsequent lookups are faster.
-     */
-
-    entry = (Col_Word) AllocCells(1);
-    WORD_INTMAPENTRY_INIT(entry, buckets[index], key, WORD_NIL);
-    buckets[index] = entry;
-    Col_WordSetModified(bucketParent);
-
-    WORD_HASHMAP_SIZE(map)++;
-
-    return entry;
-}
 
 /****************************************************************************
  * Group: Hash Map Iterators
@@ -1031,4 +1065,82 @@ Col_HashMapIterNext(
      */
 
     it->map = WORD_NIL;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_StringHashMapIterFind
+ *
+ *	Initialize the hash map iterator so that it points to the entry with
+ *	the given string key within the map.
+ *
+ * Arguments:
+ *	map		- String hash map to find or create entry into.
+ *	key		- String entry key.
+ *	createPtr	- (in) If non-NULL, whether to create entry if absent.
+ *	it		- Iterator to initialize.
+ *
+ * Results:
+ *	createPtr	- (out) If non-NULL, whether a new entry was created. 
+ *---------------------------------------------------------------------------*/
+
+void
+Col_StringHashMapIterFind(
+    Col_Word map, 
+    Col_Word key, 
+    int *createPtr, 
+    Col_MapIterator *it)
+{
+    if (WORD_TYPE(map) != WORD_TYPE_STRHASHMAP) {
+	Col_Error(COL_ERROR, "%x is not a string hash map", map);
+	it->map = WORD_NIL;
+	return;
+    }
+
+    it->entry = StringHashMapFindEntry(map, key, createPtr, &it->bucket);
+    if (!it->entry) {
+	/*
+	 * Not found.
+	 */
+
+	it->map = WORD_NIL;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_IntHashMapIterFind
+ *
+ *	Initialize the hash map iterator so that it points to the entry with
+ *	the given string key within the map.
+ *
+ * Arguments:
+ *	map		- Integer hash map to find or create entry into.
+ *	key		- Integer entry key.
+ *	createPtr	- (in) If non-NULL, whether to create entry if absent.
+ *	it		- Iterator to initialize.
+ *
+ * Results:
+ *	createPtr	- (out) If non-NULL, whether a new entry was created. 
+ *---------------------------------------------------------------------------*/
+
+void
+Col_IntHashMapIterFind(
+    Col_Word map, 
+    intptr_t key, 
+    int *createPtr, 
+    Col_MapIterator *it)
+{
+    if (WORD_TYPE(map) != WORD_TYPE_INTHASHMAP) {
+	Col_Error(COL_ERROR, "%x is not an integer hash map", map);
+	it->map = WORD_NIL;
+	return;
+    }
+
+    it->entry = IntHashMapFindEntry(map, key, createPtr, &it->bucket);
+    if (!it->entry) {
+	/*
+	 * Not found.
+	 */
+
+	it->map = WORD_NIL;
+    }
 }

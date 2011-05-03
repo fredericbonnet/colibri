@@ -48,28 +48,20 @@ EXTERN int		Col_IntHashMapUnset(Col_Word map, intptr_t key);
 
 
 /****************************************************************************
- * Group: Hash Map Entries
- *
- * Declarations:
- *	<Col_StringHashMapFindEntry>, <Col_IntHashMapFindEntry>
- ****************************************************************************/
-
-EXTERN Col_Word		Col_StringHashMapFindEntry(Col_Word map, Col_Word key, 
-			    int *createPtr);
-EXTERN Col_Word		Col_IntHashMapFindEntry(Col_Word map, intptr_t key, 
-			    int *createPtr);
-
-
-/****************************************************************************
  * Group: Hash Map Iterators
  *
  * Declarations:
- *	<Col_HashMapIterBegin>, <Col_HashMapIterNext>
+ *	<Col_HashMapIterBegin>, <Col_HashMapIterNext>,
+ *	<Col_StringHashMapIterFind>, <Col_IntHashMapIterFind>
  ****************************************************************************/
 
 EXTERN void		Col_HashMapIterBegin(Col_Word map, 
 			    Col_MapIterator *it);
 EXTERN void		Col_HashMapIterNext(Col_MapIterator *it);
+EXTERN void		Col_StringHashMapIterFind(Col_Word map, Col_Word key, 
+			    int *createPtr, Col_MapIterator *it);
+EXTERN void		Col_IntHashMapIterFind(Col_Word map, intptr_t key, 
+			    int *createPtr, Col_MapIterator *it);
 
 
 /****************************************************************************

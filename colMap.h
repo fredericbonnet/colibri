@@ -35,25 +35,11 @@ EXTERN int		Col_IntMapUnset(Col_Word map, intptr_t key);
 
 
 /****************************************************************************
- * Group: Map Entries
+ * Group: Map Iterators
  *
  * Declarations:
- *	<Col_MapEntryGet>, <Col_IntMapEntryGet>, <Col_MapEntryGetKey>,
- *	<Col_IntMapEntryGetKey>, <Col_MapEntryGetValue>, <Col_MapEntrySetValue>
- ****************************************************************************/
-
-EXTERN void		Col_MapEntryGet(Col_Word entry, Col_Word *keyPtr,
-			    Col_Word *valuePtr);
-EXTERN void		Col_IntMapEntryGet(Col_Word entry, intptr_t *keyPtr,
-			    Col_Word *valuePtr);
-EXTERN Col_Word		Col_MapEntryGetKey(Col_Word entry);
-EXTERN intptr_t		Col_IntMapEntryGetKey(Col_Word entry);
-EXTERN Col_Word		Col_MapEntryGetValue(Col_Word entry);
-EXTERN void		Col_MapEntrySetValue(Col_Word entry, Col_Word value);
-
-
-/****************************************************************************
- * Group: Map Iterators
+ *	<Col_MapIterGet>, <Col_IntMapIterGet>, <Col_MapIterKey>,
+ *	<Col_IntMapIterKey>, <Col_MapIterGetValue>, <Col_MapIterSetValue>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -126,22 +112,14 @@ typedef ColMapIterator Col_MapIterator;
 #define Col_MapIterMap(it) \
     ((it)->map)
 
-/*---------------------------------------------------------------------------
- * Macro: Col_MapIterEntry
- *
- *	Get current entry within map for iterator.
- *
- * Arguments:
- *	it	- The iterator to get entry for.
- *
- * Result:
- *	Current entry. Undefined if at end.
- *
- * See also: 
- *	<Col_MapIterator>
- *---------------------------------------------------------------------------*/
-
-#define Col_MapIterEntry(it) \
-    ((it)->entry)
+EXTERN void		Col_MapIterGet(Col_MapIterator *it, Col_Word *keyPtr,
+			    Col_Word *valuePtr);
+EXTERN void		Col_IntMapIterGet(Col_MapIterator *it, intptr_t *keyPtr,
+			    Col_Word *valuePtr);
+EXTERN Col_Word		Col_MapIterKey(Col_MapIterator *it);
+EXTERN intptr_t		Col_IntMapIterKey(Col_MapIterator *it);
+EXTERN Col_Word		Col_MapIterGetValue(Col_MapIterator *it);
+EXTERN void		Col_MapIterSetValue(Col_MapIterator *it, 
+			    Col_Word value);
 
 #endif /* _COLIBRI_MAP */
