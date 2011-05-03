@@ -52,7 +52,7 @@ Col_NewStringTrieMap()
  *
  *	Create a new integer trie map word.
  *
- * Results:
+ * Result:
  *	The new word.
  *
  * Side effects:

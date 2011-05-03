@@ -33,7 +33,7 @@
  *	length		- Char length of sequence.
  *	bytelength	- Byte length of sequence.
  *
- * Results:
+ * Result:
  *	Pointer to the character.
  *---------------------------------------------------------------------------*/
 
@@ -81,7 +81,7 @@ Col_Utf8CharAddr(
  * Argument:
  *	data		- UTF-8 byte sequence.
  *
- * Results:
+ * Result:
  *	32-bit Unicode codepoint of the char.
  *---------------------------------------------------------------------------*/
 

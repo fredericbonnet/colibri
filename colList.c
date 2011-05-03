@@ -492,14 +492,13 @@ GetRoot(
  *	Get the left and right arms of a list node (a concat or one of its 
  *	sublists).
  *
- * Arguments:
+ * Argument:
  *	node		- List node to extract arms from. Either a sublist or
  *			  concat node.
- *	leftPtr		- Returned left arm.
- *	rightPtr	- Returned right arm.
  *
  * Results:
- *	leftPtr and rightPtr will hold the left and right arms.
+ *	leftPtr		- Left arm.
+ *	rightPtr	- Right arm.
  *
  * Side effects:
  *	May create new words.
@@ -1593,7 +1592,7 @@ Col_ListReplace(
  *
  *	Create a new mutable list word.
  *
- * Results:
+ * Result:
  *	The new word.
  *
  * Side effects:
@@ -3511,13 +3510,13 @@ Col_MListReplace(
  *	max		- Max number of elements.
  *	proc		- Callback proc called on each chunk.
  *	clientData	- Opaque data passed as is to above proc.
- *	lengthPtr	- If non-NULL, incremented by the total number of 
- *			  elements traversed upon completion.
  *
  * Results:
  *	The return value of the last called proc, or -1 if no traversal was
- *	performed. If non-NULL, the value pointed by lengthPtr is incremented by
- *	the total length of the traversed lists, i.e. the number of elements.
+ *	performed. Additionally:
+ *
+ *	lengthPtr	- If non-NULL, incremented by the total number of 
+ *			  elements traversed upon completion.
  *---------------------------------------------------------------------------*/
 
 int 

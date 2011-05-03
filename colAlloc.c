@@ -707,7 +707,7 @@ PageAllocCells(
  *	number	- Number of cells to look for.
  *	index	- First cell to consider.
  *
- * Results:
+ * Result:
  *	Index of first cell of sequence, or -1 if none found.
  *---------------------------------------------------------------------------*/
 

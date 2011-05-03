@@ -485,7 +485,7 @@ PlatSyncPauseGC(
  * Argument:
  *	data	- Group-specific data.
  *
- * Results:
+ * Result:
  *	Non-zero if successful.
  * 
  * See also:

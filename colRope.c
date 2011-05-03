@@ -555,10 +555,6 @@ CompareChunksProc(
  *	rope1, rope2	- Ropes to compare.
  *	start		- Starting index.
  *	max		- Maximum number of characters to compare.
- *	posPtr		- If non-NULL, position of the first differing character
- *			  upon return.
- *	c1Ptr, c2Ptr	- If non-NULL, respective codepoints of differing 
- *			  characters upon return.
  *
  * Results:
  *	Returns an integral value indicating the relationship between the 
@@ -568,11 +564,13 @@ CompareChunksProc(
  *	      does not match has a greater value in rope1 than in rope2, or that
  *	      rope1 is longer than rope2; 
  *	    - A value less than zero indicates the opposite.
- *	Moreover, if non-NULL and if ropes differ:
- *	    - The value pointed to by posPtr is given the position of the first 
- *	      differing character;
- *	    - The value pointed to by c1Ptr (resp. c2Ptr) is given the codepoint
- *	      of the differing character in rope1 (resp. rope2).
+ *
+ *	Additionally, if ropes differ:
+
+ *	posPtr		- If non-NULL, position of the first differing character
+ *			  upon return.
+ *	c1Ptr, c2Ptr	- If non-NULL, respective codepoints of differing 
+ *			  characters upon return.
  *---------------------------------------------------------------------------*/
 
 int
@@ -903,14 +901,13 @@ MergeChunksProc(
  *	Get the left and right arms of a rope, i.e. a concat or one of its 
  *	subropes.
  *
- * Arguments:
+ * Argument:
  *	rope		- Rope to extract arms from. Either a subrope or
  *			  concat rope.
- *	leftPtr		- Returned left arm.
- *	rightPtr	- Returned right arm.
  *
  * Results:
- *	leftPtr and rightPtr will hold the left and right arms.
+ *	leftPtr		- Left arm.
+ *	rightPtr	- Right arm.
  *
  * Side effects:
  *	May create new words.
@@ -1768,13 +1765,13 @@ Col_RopeReplace(
  *	max		- Max number of characters.
  *	proc		- Callback proc called on each chunk.
  *	clientData	- Opaque data passed as is to above proc.
- *	lengthPtr	- If non-NULL, incremented by the total number of 
- *			  characters traversed upon completion.
  *
  * Results:
  *	The return value of the last called proc, or -1 if no traversal was
- *	performed. If non-NULL, the value pointed by lengthPtr is incremented by
- *	the total length of the traversed ropes, i.e. the number of characters.
+ *	performed. Additionally:
+ *
+ *	lengthPtr	- If non-NULL, incremented by the total number of 
+ *			  characters traversed upon completion.
  *---------------------------------------------------------------------------*/
 
 int 

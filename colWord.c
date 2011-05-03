@@ -114,10 +114,11 @@ Col_NewCustomWord(
  *
  * Arguments:
  *	word	- The word to get info for.
- *	dataPtr	- Returned data.
  *
  * Results:
- *	A type ID or pointer, and additional type-specific info in dataPtr.
+ *	A type ID or pointer. Additionally:
+ *
+ *	dataPtr	- Type-specific info.
  *---------------------------------------------------------------------------*/
 
 Col_WordType
@@ -241,11 +242,11 @@ Col_GetWordInfo(
  * Arguments:
  *	word	- The word to get data from.
  *	type	- The required type.
- *	dataPtr	- Returned data.
  *
  * Results:
- *	The word or nil if not found, and additional info type-specific in 
- *	dataPtr.
+ *	The word or nil if not found. Additionally:
+ *
+ *	dataPtr	- Type-specific info.
  *---------------------------------------------------------------------------*/
 
 Col_Word
