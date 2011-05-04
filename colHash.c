@@ -265,7 +265,7 @@ GrowHashMap(
     for (index=0; index < nbBuckets; index++) {
 	entry = buckets[index];
 	while (entry) {
-	    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
+	    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
 
 	    /*
 	     * Get new index from string key and move at head of new bucket.
@@ -346,7 +346,7 @@ GrowIntHashMap(
     for (index=0; index < nbBuckets; index++) {
 	entry = buckets[index];
 	while (entry) {
-	    ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+	    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
 
 	    /*
 	     * Get new index from integer key and move at head of new bucket.
@@ -527,7 +527,7 @@ StringHashMapFindEntry(
     index = hash & (nbBuckets-1);
     entry = buckets[index];
     while (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
 	if (WORD_MAPENTRY_HASH(entry) == (hash & MAPENTRY_HASH_MASK)
 		&& Col_CompareRopes(WORD_MAPENTRY_KEY(entry), key, 0, SIZE_MAX,
 		NULL, NULL, NULL) == 0) {
@@ -566,7 +566,7 @@ StringHashMapFindEntry(
      */
 
     entry = (Col_Word) AllocCells(1);
-    WORD_MAPENTRY_INIT(entry, buckets[index], key, WORD_NIL, hash);
+    WORD_MMAPENTRY_INIT(entry, buckets[index], key, WORD_NIL, hash);
     buckets[index] = entry;
     Col_WordSetModified(bucketParent);
 
@@ -615,7 +615,7 @@ IntHashMapFindEntry(
     index = RANDOMIZE_KEY(key) & (nbBuckets-1);
     entry = buckets[index];
     while (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
 	if (WORD_INTMAPENTRY_KEY(entry) == key) {
 	    /*
 	     * Found!
@@ -652,7 +652,7 @@ IntHashMapFindEntry(
      */
 
     entry = (Col_Word) AllocCells(1);
-    WORD_INTMAPENTRY_INIT(entry, buckets[index], key, WORD_NIL);
+    WORD_MINTMAPENTRY_INIT(entry, buckets[index], key, WORD_NIL);
     buckets[index] = entry;
     Col_WordSetModified(bucketParent);
 
@@ -698,7 +698,7 @@ Col_StringHashMapGet(
     entry = StringHashMapFindEntry(map, key, NULL, NULL);
 
     if (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
 	return 1;
     } else {
@@ -736,7 +736,7 @@ Col_IntHashMapGet(
 
     entry = IntHashMapFindEntry(map, key, NULL, NULL);
     if (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
 	return 1;
     } else {
@@ -777,7 +777,7 @@ Col_StringHashMapSet(
 
     entry = StringHashMapFindEntry(map, key, &create, NULL);
     ASSERT(entry);
-    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
     Col_WordSetModified(entry);
     WORD_MAPENTRY_VALUE(entry) = value;
     return create;
@@ -816,7 +816,7 @@ Col_IntHashMapSet(
 
     entry = IntHashMapFindEntry(map, key, &create, NULL);
     ASSERT(entry);
-    ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
     Col_WordSetModified(entry);
     WORD_MAPENTRY_VALUE(entry) = value;
     return create;
@@ -862,7 +862,7 @@ Col_StringHashMapUnset(
     prevPtr = &buckets[index];
     while (*prevPtr) {
 	entry = *prevPtr;
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
 
 	if (WORD_MAPENTRY_HASH(entry) == (hash & MAPENTRY_HASH_MASK)
 		&& Col_CompareRopes(WORD_MAPENTRY_KEY(entry), key, 0, SIZE_MAX,
@@ -927,7 +927,7 @@ Col_IntHashMapUnset(
     prevPtr = &buckets[index];
     while (*prevPtr) {
 	entry = *prevPtr;
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
 
 	if (WORD_INTMAPENTRY_KEY(entry) == key) {
 	    /*
@@ -1015,59 +1015,6 @@ Col_HashMapIterBegin(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_HashMapIterNext
- *
- *	Move the iterator to the next element.
- *
- * Argument:
- *	it	- The iterator to move.
- *---------------------------------------------------------------------------*/
-
-void
-Col_HashMapIterNext(
-    Col_MapIterator *it)
-{
-    Col_Word *buckets, dummy;
-    size_t nbBuckets, i;
-
-    if (Col_MapIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid map iterator");
-	return;
-    }
-
-    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MAPENTRY 
-	    || WORD_TYPE(it->entry) == WORD_TYPE_INTMAPENTRY);
-
-    /*
-     * Get next entry in bucket.
-     */
-
-    it->entry = WORD_MAPENTRY_NEXT(it->entry);
-    if (it->entry) {
-	return;
-    }
-
-    /*
-     * End of bucket, get first entry in next nonempty bucket.
-     */
-
-    GET_BUCKETS(it->map, nbBuckets, buckets, dummy);
-    for (i=it->bucket+1; i < nbBuckets; i++) {
-	if (buckets[i]) {
-	    it->entry = buckets[i];
-	    it->bucket = i;
-	    return;
-	}
-    }
-
-    /*
-     * End of map.
-     */
-
-    it->map = WORD_NIL;
-}
-
-/*---------------------------------------------------------------------------
  * Function: Col_StringHashMapIterFind
  *
  *	Initialize the hash map iterator so that it points to the entry with
@@ -1110,7 +1057,7 @@ Col_StringHashMapIterFind(
  * Function: Col_IntHashMapIterFind
  *
  *	Initialize the hash map iterator so that it points to the entry with
- *	the given string key within the map.
+ *	the given integer key within the map.
  *
  * Arguments:
  *	map		- Integer hash map to find or create entry into.
@@ -1143,4 +1090,113 @@ Col_IntHashMapIterFind(
 
 	it->map = WORD_NIL;
     }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_HashMapIterSetValue
+ *
+ *	Set value of hash map iterator.
+ *
+ * Argument:
+ *	it	- Map iterator to set value for.
+ *	value	- Value to set.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_HashMapIterSetValue(
+    Col_MapIterator *it,
+    Col_Word value)
+{
+    if (Col_MapIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid map iterator");
+	return;
+    }
+
+    switch (WORD_TYPE(it->map)) {
+	case WORD_TYPE_STRHASHMAP:
+	    if (WORD_TYPE(it->entry) == WORD_TYPE_MMAPENTRY) {
+		/*
+		 * Set value directly.
+		 */
+
+		WORD_MAPENTRY_VALUE(it->entry) = value;
+		Col_WordSetModified(it->entry);
+		return;
+	    }
+	    //TODO handle immutable entries
+	    ASSERT(0);
+	    break;
+
+	case WORD_TYPE_INTHASHMAP:
+	    if (WORD_TYPE(it->entry) == WORD_TYPE_MINTMAPENTRY) {
+		/*
+		 * Set value directly.
+		 */
+
+		WORD_MAPENTRY_VALUE(it->entry) = value;
+		Col_WordSetModified(it->entry);
+		return;
+	    }
+	    //TODO handle immutable entries
+	    ASSERT(0);
+	    break;
+
+	/* WORD_TYPE_UNKNOWN */
+
+	default:
+	    Col_Error(COL_ERROR, "%x is not a hash map", it->map);
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_HashMapIterNext
+ *
+ *	Move the iterator to the next element.
+ *
+ * Argument:
+ *	it	- The iterator to move.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_HashMapIterNext(
+    Col_MapIterator *it)
+{
+    Col_Word *buckets, dummy;
+    size_t nbBuckets, i;
+
+    if (Col_MapIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid map iterator");
+	return;
+    }
+
+    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MMAPENTRY 
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MINTMAPENTRY);
+
+    /*
+     * Get next entry in bucket.
+     */
+
+    it->entry = WORD_MAPENTRY_NEXT(it->entry);
+    if (it->entry) {
+	return;
+    }
+
+    /*
+     * End of bucket, get first entry in next nonempty bucket.
+     */
+
+    GET_BUCKETS(it->map, nbBuckets, buckets, dummy);
+    for (i=it->bucket+1; i < nbBuckets; i++) {
+	if (buckets[i]) {
+	    it->entry = buckets[i];
+	    it->bucket = i;
+	    return;
+	}
+    }
+
+    /*
+     * End of map.
+     */
+
+    it->map = WORD_NIL;
 }

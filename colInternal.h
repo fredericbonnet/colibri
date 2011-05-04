@@ -633,14 +633,19 @@ void			DeclareCustomWord(Col_Word word,
  *	WORD_TYPE_SUBROPE	- Subropes (<WORD_SUBROPE_INIT>)
  *	WORD_TYPE_CONCATROPE	- Concat Ropes (<WORD_CONCATROPE_INIT>)
  *	WORD_TYPE_INT		- Integers (<WORD_INT_INIT>)
- *	WORD_TYPE_VECTOR	- Vectors (<WORD_VECTOR_INIT>)
+ *	WORD_TYPE_VECTOR	- Immutable Vectors (<WORD_VECTOR_INIT>)
  *	WORD_TYPE_MVECTOR	- Mutable Vectors (<WORD_MVECTOR_INIT>)
- *	WORD_TYPE_MLIST		- Mutable Lists (<WORD_MLIST_INIT>)
  *	WORD_TYPE_SUBLIST	- Sublists (<WORD_SUBLIST_INIT>)
- *	WORD_TYPE_CONCATLIST	- Concat Lists (<WORD_CONCATLIST_INIT>)
+ *	WORD_TYPE_CONCATLIST	- Immutable Concat Lists 
+ *				  (<WORD_CONCATLIST_INIT>)
  *	WORD_TYPE_MCONCATLIST	- Mutable Concat Lists (<WORD_MCONCATLIST_INIT>)
- *	WORD_TYPE_MAPENTRY	- Maps Entries (<WORD_MAPENTRY_INIT>)
- *	WORD_TYPE_INTMAPENTRY	- Integer Map Entries (<WORD_INTMAPENTRY_INIT>)
+ *	WORD_TYPE_MLIST		- Mutable Lists (<WORD_MLIST_INIT>)
+ *	WORD_TYPE_MAPENTRY	- Immutable Maps Entries (<WORD_MAPENTRY_INIT>)
+ *	WORD_TYPE_MMAPENTRY	- Mutable Maps Entries (<WORD_MMAPENTRY_INIT>)
+ *	WORD_TYPE_INTMAPENTRY	- Immutable Integer Map Entries 
+ *				  (<WORD_INTMAPENTRY_INIT>)
+ *	WORD_TYPE_MINTMAPENTRY	- Mutable Integer Map Entries 
+ *				  (<WORD_MINTMAPENTRY_INIT>)
  *	WORD_TYPE_STRHASHMAP	- String Hash Maps (<WORD_STRHASHMAP_INIT>)
  *	WORD_TYPE_INTHASHMAP	- Integer Hash Maps (<WORD_INTHASHMAP_INIT>)
  *	WORD_TYPE_STRTRIEMAP	- String Trie Maps (<WORD_STRTRIEMAP_INIT>)
@@ -683,18 +688,20 @@ void			DeclareCustomWord(Col_Word word,
 
 #define WORD_TYPE_VECTOR	26
 #define WORD_TYPE_MVECTOR	30
-#define WORD_TYPE_MLIST		34
-#define WORD_TYPE_SUBLIST	38
-#define WORD_TYPE_CONCATLIST	42
-#define WORD_TYPE_MCONCATLIST	46
+#define WORD_TYPE_SUBLIST	34
+#define WORD_TYPE_CONCATLIST	38
+#define WORD_TYPE_MCONCATLIST	42
+#define WORD_TYPE_MLIST		46
 #define WORD_TYPE_MAPENTRY	50
-#define WORD_TYPE_INTMAPENTRY	54
-#define WORD_TYPE_STRHASHMAP	58
-#define WORD_TYPE_INTHASHMAP	62
-#define WORD_TYPE_STRTRIEMAP	66
-#define WORD_TYPE_INTTRIEMAP	70
-#define WORD_TYPE_STRTRIENODE	74
-#define WORD_TYPE_INTTRIENODE	78
+#define WORD_TYPE_MMAPENTRY	54
+#define WORD_TYPE_INTMAPENTRY	58
+#define WORD_TYPE_MINTMAPENTRY	62
+#define WORD_TYPE_STRHASHMAP	66
+#define WORD_TYPE_INTHASHMAP	70
+#define WORD_TYPE_STRTRIEMAP	74
+#define WORD_TYPE_INTTRIEMAP	78
+#define WORD_TYPE_STRTRIENODE	82
+#define WORD_TYPE_INTTRIENODE	86
 #ifdef PROMOTE_COMPACT
 #   define WORD_TYPE_REDIRECT	254
 #endif
@@ -2030,7 +2037,8 @@ void			DeclareCustomWord(Col_Word word,
 /*---------------------------------------------------------------------------
  * Internal Macros: Map Entry Fields
  *
- *	Accessors for map entry fields.
+ *	Accessors for map entry fields. Both immutable and mutable versions use 
+ *	these fields.
  *
  *	Maps associate a key to a word value. The key is usually a word 
  *	(including ropes) but specialized subtypes use integer values.
@@ -2071,7 +2079,7 @@ void			DeclareCustomWord(Col_Word word,
  *	accessible for both read/write operations).
  *
  * See also:
- *	<WORD_MAPENTRY_INIT>
+ *	<WORD_MMAPENTRY_INIT>
  *---------------------------------------------------------------------------*/
 
 #define WORD_MAPENTRY_NEXT(word)	(((Col_Word *)(word))[1])
@@ -2089,7 +2097,32 @@ void			DeclareCustomWord(Col_Word word,
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_MAPENTRY_INIT
  *
- *	Initializer for map entry words.
+ *	Initializer for immutable map entry words.
+ *
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	next	- <WORD_MAPENTRY_NEXT>
+ *	key	- <WORD_MAPENTRY_KEY>
+ *	value	- <WORD_MAPENTRY_VALUE>
+ *	hash	- <WORD_MAPENTRY_SET_HASH>
+ *
+ * Note:
+ *	Macros are L-values and side effect-free unless specified (i.e. 
+ *	accessible for both read/write operations).
+ *---------------------------------------------------------------------------*/
+
+#define WORD_MAPENTRY_INIT(word, next, key, value, hash) \
+    WORD_SET_TYPEID((word), WORD_TYPE_MAPENTRY); \
+    WORD_MAPENTRY_NEXT(word) = (next); \
+    WORD_MAPENTRY_KEY(word) = (key); \
+    WORD_MAPENTRY_VALUE(word) = (value); \
+    WORD_MAPENTRY_SET_HASH(word, hash);
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_MMAPENTRY_INIT
+ *
+ *	Initializer for mutable map entry words.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2107,8 +2140,8 @@ void			DeclareCustomWord(Col_Word word,
  *	<Col_StringHashMapFindEntry>, <Col_StringTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
-#define WORD_MAPENTRY_INIT(word, next, key, value, hash) \
-    WORD_SET_TYPEID((word), WORD_TYPE_MAPENTRY); \
+#define WORD_MMAPENTRY_INIT(word, next, key, value, hash) \
+    WORD_SET_TYPEID((word), WORD_TYPE_MMAPENTRY); \
     WORD_MAPENTRY_NEXT(word) = (next); \
     WORD_MAPENTRY_KEY(word) = (key); \
     WORD_MAPENTRY_VALUE(word) = (value); \
@@ -2117,7 +2150,8 @@ void			DeclareCustomWord(Col_Word word,
 /*---------------------------------------------------------------------------
  * Internal Macros: Integer Map Entry Fields
  *
- *	Accessors for integer map entry fields.
+ *	Accessors for integer map entry fields.  Both immutable and mutable 
+ *	versions use these fields.
  *
  *	Integer map entries are exactly like generic ones except that their key
  *	is a machine integer instead of a word. The hash field is unused.
@@ -2145,7 +2179,7 @@ void			DeclareCustomWord(Col_Word word,
  *	accessible for both read/write operations).
  *
  * See also:
- *	<Map Entry Fields>, <WORD_INTMAPENTRY_INIT>
+ *	<Map Entry Fields>, <WORD_MINTMAPENTRY_INIT>
  *---------------------------------------------------------------------------*/
 
 #define WORD_INTMAPENTRY_KEY(word)	(((intptr_t *)(word))[2])
@@ -2153,7 +2187,26 @@ void			DeclareCustomWord(Col_Word word,
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_INTMAPENTRY_INIT
  *
- *	Initializer for integer map entry words.
+ *	Initializer for immutable integer map entry words.
+ *
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	next	- <WORD_MAPENTRY_NEXT>
+ *	key	- <WORD_INTMAPENTRY_KEY>
+ *	value	- <WORD_MAPENTRY_VALUE>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_INTMAPENTRY_INIT(word, next, key, value) \
+    WORD_SET_TYPEID((word), WORD_TYPE_INTMAPENTRY); \
+    WORD_MAPENTRY_NEXT(word) = (next); \
+    WORD_INTMAPENTRY_KEY(word) = (key); \
+    WORD_MAPENTRY_VALUE(word) = (value);
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_MINTMAPENTRY_INIT
+ *
+ *	Initializer for mutable integer map entry words.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2166,8 +2219,8 @@ void			DeclareCustomWord(Col_Word word,
  *	<Col_IntHashMapFindEntry>, <Col_IntTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
-#define WORD_INTMAPENTRY_INIT(word, next, key, value) \
-    WORD_SET_TYPEID((word), WORD_TYPE_INTMAPENTRY); \
+#define WORD_MINTMAPENTRY_INIT(word, next, key, value) \
+    WORD_SET_TYPEID((word), WORD_TYPE_MINTMAPENTRY); \
     WORD_MAPENTRY_NEXT(word) = (next); \
     WORD_INTMAPENTRY_KEY(word) = (key); \
     WORD_MAPENTRY_VALUE(word) = (value);

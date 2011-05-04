@@ -1429,6 +1429,7 @@ start:
 	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 
 	case WORD_TYPE_MAPENTRY:
+	case WORD_TYPE_MMAPENTRY:
 	    /*
 	     * Follow key & value and tail recurse on next.
 	     */
@@ -1438,6 +1439,7 @@ start:
 	    TAIL_RECURSE(&WORD_MAPENTRY_NEXT(*wordPtr), page);
 
 	case WORD_TYPE_INTMAPENTRY:
+	case WORD_TYPE_MINTMAPENTRY:
 	    /*
 	     * Follow value and tail recurse on next.
 	     */

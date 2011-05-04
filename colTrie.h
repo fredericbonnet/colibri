@@ -55,16 +55,19 @@ EXTERN int		Col_IntTrieMapUnset(Col_Word map, intptr_t key);
  * Group: Trie Map Iterators
  *
  * Declarations:
- *	<Col_TrieMapIterBegin>, <Col_TrieMapIterNext>,
- *	<Col_StringTrieMapIterFind>, <Col_IntTrieMapIterFind>
+ *	<Col_TrieMapIterBegin>, <Col_StringTrieMapIterFind>, 
+ *	<Col_IntTrieMapIterFind>, <Col_TrieMapIterSetValue>,
+ *	<Col_TrieMapIterNext>
  ****************************************************************************/
 
 EXTERN void		Col_TrieMapIterBegin(Col_Word map, 
 			    Col_MapIterator *it);
-EXTERN void		Col_TrieMapIterNext(Col_MapIterator *it);
 EXTERN void		Col_StringTrieMapIterFind(Col_Word map, Col_Word key, 
 			    int *createPtr, Col_MapIterator *it);
 EXTERN void		Col_IntTrieMapIterFind(Col_Word map, intptr_t key, 
 			    int *createPtr, Col_MapIterator *it);
+EXTERN void		Col_TrieMapIterSetValue(Col_MapIterator *it, 
+			    Col_Word value);
+EXTERN void		Col_TrieMapIterNext(Col_MapIterator *it);
 
 #endif /* _COLIBRI_TRIE */

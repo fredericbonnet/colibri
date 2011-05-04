@@ -149,7 +149,7 @@ StringTrieMapFindEntry(
 	 * Entry node.
 	 */
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_MAPENTRY);
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_MMAPENTRY);
 	entryKey = WORD_MAPENTRY_KEY(node);
 	if (Col_CompareRopes(key, entryKey, 0, SIZE_MAX, &diff, &cKey, &cEntryKey) 
 		== 0) {
@@ -173,7 +173,7 @@ StringTrieMapFindEntry(
     *createPtr = 1;
 
     entry = (Col_Word) AllocCells(1);
-    WORD_MAPENTRY_INIT(entry, WORD_NIL, key, WORD_NIL, 0);
+    WORD_MMAPENTRY_INIT(entry, WORD_NIL, key, WORD_NIL, 0);
 
     if (!WORD_TRIEMAP_ROOT(map)) {
 	/*
@@ -299,7 +299,7 @@ StringTrieMapFindEntry(
 	while (WORD_TYPE(prev) == WORD_TYPE_STRTRIENODE) {
 	    prev = WORD_TRIENODE_RIGHT(prev);
 	}
-	ASSERT(WORD_TYPE(prev) == WORD_TYPE_MAPENTRY);
+	ASSERT(WORD_TYPE(prev) == WORD_TYPE_MMAPENTRY);
 	WORD_MAPENTRY_NEXT(entry) = WORD_MAPENTRY_NEXT(prev);
 	WORD_MAPENTRY_NEXT(prev) = entry;
 	Col_WordSetModified(prev);
@@ -312,7 +312,7 @@ StringTrieMapFindEntry(
 	while (WORD_TYPE(next) == WORD_TYPE_STRTRIENODE) {
 	    next = WORD_TRIENODE_LEFT(next);
 	}
-	ASSERT(WORD_TYPE(next) == WORD_TYPE_MAPENTRY);
+	ASSERT(WORD_TYPE(next) == WORD_TYPE_MMAPENTRY);
 	WORD_MAPENTRY_NEXT(entry) = next;
     }
 
@@ -374,7 +374,7 @@ IntTrieMapFindEntry(
 	 * Entry node.
 	 */
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_INTMAPENTRY);
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTMAPENTRY);
 	entryKey = WORD_INTMAPENTRY_KEY(node);
 	if (key == entryKey) {
 	    /*
@@ -397,7 +397,7 @@ IntTrieMapFindEntry(
     *createPtr = 1;
 
     entry = (Col_Word) AllocCells(1);
-    WORD_INTMAPENTRY_INIT(entry, WORD_NIL, key, WORD_NIL);
+    WORD_MINTMAPENTRY_INIT(entry, WORD_NIL, key, WORD_NIL);
 
     if (!WORD_TRIEMAP_ROOT(map)) {
 	/*
@@ -506,7 +506,7 @@ IntTrieMapFindEntry(
 	while (WORD_TYPE(prev) == WORD_TYPE_INTTRIENODE) {
 	    prev = WORD_TRIENODE_RIGHT(prev);
 	}
-	ASSERT(WORD_TYPE(prev) == WORD_TYPE_INTMAPENTRY);
+	ASSERT(WORD_TYPE(prev) == WORD_TYPE_MINTMAPENTRY);
 	WORD_MAPENTRY_NEXT(entry) = WORD_MAPENTRY_NEXT(prev);
 	WORD_MAPENTRY_NEXT(prev) = entry;
 	Col_WordSetModified(prev);
@@ -519,7 +519,7 @@ IntTrieMapFindEntry(
 	while (WORD_TYPE(next) == WORD_TYPE_INTTRIENODE) {
 	    next = WORD_TRIENODE_LEFT(next);
 	}
-	ASSERT(WORD_TYPE(next) == WORD_TYPE_INTMAPENTRY);
+	ASSERT(WORD_TYPE(next) == WORD_TYPE_MINTMAPENTRY);
 	WORD_MAPENTRY_NEXT(entry) = next;
     }
 
@@ -563,7 +563,7 @@ Col_StringTrieMapGet(
 
     entry = StringTrieMapFindEntry(map, key, NULL);
     if (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
 	return 1;
     } else {
@@ -601,7 +601,7 @@ Col_IntTrieMapGet(
 
     entry = IntTrieMapFindEntry(map, key, NULL);
     if (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
 	return 1;
     } else {
@@ -642,7 +642,7 @@ Col_StringTrieMapSet(
 
     entry = StringTrieMapFindEntry(map, key, &create);
     ASSERT(entry);
-    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
     Col_WordSetModified(entry);
     WORD_MAPENTRY_VALUE(entry) = value;
     return create;
@@ -679,7 +679,7 @@ Col_IntTrieMapSet(
 
     entry = IntTrieMapFindEntry(map, key, &create);
     ASSERT(entry);
-    ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
     Col_WordSetModified(entry);
     WORD_MAPENTRY_VALUE(entry) = value;
     return create;
@@ -760,7 +760,7 @@ Col_StringTrieMapUnset(
 	    continue;
 	}
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_MAPENTRY);
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_MMAPENTRY);
 	if (Col_CompareRopes(key, WORD_MAPENTRY_KEY(node), 0, SIZE_MAX, NULL,
 		NULL, NULL) == 0) {
 	    /*
@@ -795,7 +795,7 @@ Col_StringTrieMapUnset(
 		while (WORD_TYPE(prev) == WORD_TYPE_STRTRIENODE) {
 		    prev = WORD_TRIENODE_RIGHT(prev);
 		}
-		ASSERT(WORD_TYPE(prev) == WORD_TYPE_MAPENTRY);
+		ASSERT(WORD_TYPE(prev) == WORD_TYPE_MMAPENTRY);
 		WORD_MAPENTRY_NEXT(prev) = WORD_MAPENTRY_NEXT(node);
 		Col_WordSetModified(prev);
 	    }
@@ -876,7 +876,7 @@ Col_IntTrieMapUnset(
 	    continue;
 	}
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_INTMAPENTRY);
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTMAPENTRY);
 	if (key == WORD_INTMAPENTRY_KEY(node)) {
 	    /*
 	     * Found!
@@ -910,7 +910,7 @@ Col_IntTrieMapUnset(
 		while (WORD_TYPE(prev) == WORD_TYPE_INTTRIENODE) {
 		    prev = WORD_TRIENODE_RIGHT(prev);
 		}
-		ASSERT(WORD_TYPE(prev) == WORD_TYPE_INTMAPENTRY);
+		ASSERT(WORD_TYPE(prev) == WORD_TYPE_MINTMAPENTRY);
 		WORD_MAPENTRY_NEXT(prev) = WORD_MAPENTRY_NEXT(node);
 		Col_WordSetModified(prev);
 	    }
@@ -993,40 +993,6 @@ Col_TrieMapIterBegin(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_TrieMapIterNext
- *
- *	Move the iterator to the next element.
- *
- * Argument:
- *	it	- The iterator to move.
- *---------------------------------------------------------------------------*/
-
-void
-Col_TrieMapIterNext(
-    Col_MapIterator *it)
-{
-    if (Col_MapIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid map iterator");
-	return;
-    }
-
-    /*
-     * Get next entry in chain.
-     */
-
-    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MAPENTRY 
-	    || WORD_TYPE(it->entry) == WORD_TYPE_INTMAPENTRY);
-    it->entry = WORD_MAPENTRY_NEXT(it->entry);
-    if (!it->entry) {
-	/*
-	 * End of map.
-	 */
-
-	it->map = WORD_NIL;
-    }
-}
-
-/*---------------------------------------------------------------------------
  * Function: Col_StringTrieMapIterFind
  *
  *	Initialize the trie map iterator so that it points to the entry with
@@ -1069,7 +1035,7 @@ Col_StringTrieMapIterFind(
  * Function: Col_IntTrieMapIterFind
  *
  *	Initialize the trie map iterator so that it points to the entry with
- *	the given string key within the map.
+ *	the given integer key within the map.
  *
  * Arguments:
  *	map		- Integer trie map to find or create entry into.
@@ -1098,6 +1064,96 @@ Col_IntTrieMapIterFind(
     if (!it->entry) {
 	/*
 	 * Not found.
+	 */
+
+	it->map = WORD_NIL;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_TrieMapIterSetValue
+ *
+ *	Set value of trie map iterator.
+ *
+ * Argument:
+ *	it	- Map iterator to set value for.
+ *	value	- Value to set.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_TrieMapIterSetValue(
+    Col_MapIterator *it,
+    Col_Word value)
+{
+    if (Col_MapIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid map iterator");
+	return;
+    }
+
+    switch (WORD_TYPE(it->map)) {
+	case WORD_TYPE_STRTRIEMAP:
+	    if (WORD_TYPE(it->entry) == WORD_TYPE_MMAPENTRY) {
+		/*
+		 * Set value directly.
+		 */
+
+		WORD_MAPENTRY_VALUE(it->entry) = value;
+		Col_WordSetModified(it->entry);
+		return;
+	    }
+	    //TODO handle immutable entries
+	    ASSERT(0);
+	    break;
+
+	case WORD_TYPE_INTTRIEMAP:
+	    if (WORD_TYPE(it->entry) == WORD_TYPE_MINTMAPENTRY) {
+		/*
+		 * Set value directly.
+		 */
+
+		WORD_MAPENTRY_VALUE(it->entry) = value;
+		Col_WordSetModified(it->entry);
+		return;
+	    }
+	    //TODO handle immutable entries
+	    ASSERT(0);
+	    break;
+
+	/* WORD_TYPE_UNKNOWN */
+
+	default:
+	    Col_Error(COL_ERROR, "%x is not a trie map", it->map);
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_TrieMapIterNext
+ *
+ *	Move the iterator to the next element.
+ *
+ * Argument:
+ *	it	- The iterator to move.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_TrieMapIterNext(
+    Col_MapIterator *it)
+{
+    if (Col_MapIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid map iterator");
+	return;
+    }
+
+    /*
+     * Get next entry in chain.
+     */
+
+    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MMAPENTRY 
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MINTMAPENTRY);
+    it->entry = WORD_MAPENTRY_NEXT(it->entry);
+    if (!it->entry) {
+	/*
+	 * End of map.
 	 */
 
 	it->map = WORD_NIL;

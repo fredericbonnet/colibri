@@ -38,8 +38,10 @@ EXTERN int		Col_IntMapUnset(Col_Word map, intptr_t key);
  * Group: Map Iterators
  *
  * Declarations:
- *	<Col_MapIterGet>, <Col_IntMapIterGet>, <Col_MapIterKey>,
- *	<Col_IntMapIterKey>, <Col_MapIterGetValue>, <Col_MapIterSetValue>
+ *	<Col_MapIterBegin>, <Col_MapIterFind>, <Col_IntMapIterFind>, 
+ *	<Col_MapIterGet>, <Col_IntMapIterGet>, <Col_MapIterGetKey>, 
+ *	<Col_IntMapIterGetKey>, <Col_MapIterGetValue>, <Col_MapIterSetValue>, 
+ *	<Col_MapIterNext>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -112,14 +114,20 @@ typedef ColMapIterator Col_MapIterator;
 #define Col_MapIterMap(it) \
     ((it)->map)
 
+EXTERN void		Col_MapIterBegin(Col_Word map, Col_MapIterator *it);
+EXTERN void		Col_MapIterFind(Col_Word map, Col_Word key, 
+			    int *createPtr, Col_MapIterator *it);
+EXTERN void		Col_IntMapIterFind(Col_Word map, intptr_t key, 
+			    int *createPtr, Col_MapIterator *it);
 EXTERN void		Col_MapIterGet(Col_MapIterator *it, Col_Word *keyPtr,
 			    Col_Word *valuePtr);
 EXTERN void		Col_IntMapIterGet(Col_MapIterator *it, intptr_t *keyPtr,
 			    Col_Word *valuePtr);
-EXTERN Col_Word		Col_MapIterKey(Col_MapIterator *it);
-EXTERN intptr_t		Col_IntMapIterKey(Col_MapIterator *it);
+EXTERN Col_Word		Col_MapIterGetKey(Col_MapIterator *it);
+EXTERN intptr_t		Col_IntMapIterGetKey(Col_MapIterator *it);
 EXTERN Col_Word		Col_MapIterGetValue(Col_MapIterator *it);
 EXTERN void		Col_MapIterSetValue(Col_MapIterator *it, 
 			    Col_Word value);
+EXTERN void		Col_MapIterNext(Col_MapIterator *it);
 
 #endif /* _COLIBRI_MAP */
