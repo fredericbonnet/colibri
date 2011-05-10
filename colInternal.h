@@ -2130,7 +2130,8 @@ void			DeclareCustomWord(Col_Word word,
  *	next	- <WORD_MAPENTRY_NEXT>
  *	key	- <WORD_MAPENTRY_KEY>
  *	value	- <WORD_MAPENTRY_VALUE>
- *	hash	- <WORD_MAPENTRY_SET_HASH>
+ *	hash	- <WORD_MAPENTRY_SET_HASH> (Caution: evaluated several times
+ *		  during macro expansion)
  *
  * Note:
  *	Macros are L-values and side effect-free unless specified (i.e. 
