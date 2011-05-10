@@ -1234,7 +1234,7 @@ void			DeclareCustomWord(Col_Word word,
  *	source	- <WORD_WRAP_SOURCE>
  *
  * See also:
- *	<AddSynonymField>
+ *	<WORD_TYPE_WRAP>, <AddSynonymField>
  *---------------------------------------------------------------------------*/
 
 #define WORD_WRAP_INIT(word, source) \
@@ -1281,7 +1281,7 @@ void			DeclareCustomWord(Col_Word word,
  *	value	- <WORD_INT_VALUE>
  *
  * See also:
- *	<Col_NewIntWord>
+ *	<WORD_TYPE_INT>, <Col_NewIntWord>
  *---------------------------------------------------------------------------*/
 
 #define WORD_INT_INIT(word, value) \
@@ -1396,7 +1396,7 @@ void			DeclareCustomWord(Col_Word word,
  *	length	- <WORD_UCSSTR_LENGTH>
  *
  * See also:
- *	<Col_NewRope>
+ *	<WORD_TYPE_UCSSTR>, <Col_NewRope>
  *---------------------------------------------------------------------------*/
 
 #define WORD_UCSSTR_INIT(word, format, length) \
@@ -1468,7 +1468,7 @@ void			DeclareCustomWord(Col_Word word,
  *	byteLength	- <WORD_UTF8STR_BYTELENGTH>
  *
  * See also:
- *	<Col_NewRope>
+ *	<WORD_TYPE_UTF8STR>, <Col_NewRope>
  *---------------------------------------------------------------------------*/
 
 #define WORD_UTF8STR_INIT(word, length, byteLength) \
@@ -1548,7 +1548,7 @@ void			DeclareCustomWord(Col_Word word,
  *	last		- <WORD_SUBROPE_LAST>
  *
  * See also:
- *	<Col_Subrope>
+ *	<WORD_TYPE_SUBROPE>, <Col_Subrope>
  *---------------------------------------------------------------------------*/
 
 #define WORD_SUBROPE_INIT(word, depth, source, first, last) \
@@ -1620,7 +1620,7 @@ void			DeclareCustomWord(Col_Word word,
  *	right		- <WORD_CONCATROPE_RIGHT>
  *
  * See also:
- *	<Col_ConcatRopes>
+ *	<WORD_TYPE_CONCATROPE>, <Col_ConcatRopes>
  *---------------------------------------------------------------------------*/
 
 #define WORD_CONCATROPE_INIT(word, depth, length, leftLength, left, right) \
@@ -1773,7 +1773,7 @@ void			DeclareCustomWord(Col_Word word,
  *	length	- <WORD_VECTOR_LENGTH>
  *
  * See also:
- *	<Col_NewVector>, <Col_NewVectorNV>
+ *	<WORD_TYPE_VECTOR>, <Col_NewVector>, <Col_NewVectorNV>
  *---------------------------------------------------------------------------*/
 
 #define WORD_VECTOR_INIT(word, length) \
@@ -1792,7 +1792,7 @@ void			DeclareCustomWord(Col_Word word,
  *	length	- <WORD_VECTOR_LENGTH>
  *
  * See also:
- *	<Col_NewVector>, <Col_NewVectorNV>
+ *	<WORD_TYPE_MVECTOR>, <Col_NewVector>, <Col_NewVectorNV>
  *---------------------------------------------------------------------------*/
 
 #define WORD_MVECTOR_INIT(word, size, length) \
@@ -1863,7 +1863,7 @@ void			DeclareCustomWord(Col_Word word,
  *	last		- <WORD_SUBLIST_LAST>
  *
  * See also:
- *	<Col_Sublist>
+ *	<WORD_TYPE_SUBLIST>, <Col_Sublist>
  *---------------------------------------------------------------------------*/
 
 #define WORD_SUBLIST_INIT(word, depth, source, first, last) \
@@ -1936,7 +1936,7 @@ void			DeclareCustomWord(Col_Word word,
  *	right		- <WORD_CONCATLIST_RIGHT>
  *
  * See also:
- *	<Col_ConcatLists>
+ *	<WORD_TYPE_CONCATLIST>, <Col_ConcatLists>
  *---------------------------------------------------------------------------*/
 
 #define WORD_CONCATLIST_INIT(word, depth, length, leftLength, left, right) \
@@ -1961,6 +1961,9 @@ void			DeclareCustomWord(Col_Word word,
  *			  several times during macro expansion)
  *	left		- <WORD_CONCATLIST_LEFT>
  *	right		- <WORD_CONCATLIST_RIGHT>
+ *
+ * See also:
+ *	<WORD_TYPE_MCONCATLIST>, <NewMConcatList>, <UpdateMConcatNode>
  *---------------------------------------------------------------------------*/
 
 #define WORD_MCONCATLIST_INIT(word, depth, length, leftLength, left, right) \
@@ -2018,7 +2021,7 @@ void			DeclareCustomWord(Col_Word word,
  *	root	- <WORD_MLIST_ROOT>
  *
  * See also:
- *	<Col_NewMList>
+ *	<WORD_TYPE_MLIST>, <Col_NewMList>
  *---------------------------------------------------------------------------*/
 
 #define WORD_MLIST_INIT(word, root) \
@@ -2068,9 +2071,7 @@ void			DeclareCustomWord(Col_Word word,
  *	WORD_MAPENTRY_SET_HASH	- Set hash value. Only retain the high order 
  *				  bits.
  *	WORD_MAPENTRY_NEXT	- Pointer to next entry in chain. The exact 
- *				  nature of this chain depends on the container 
- *				  (for example, on hash maps this is the chain 
- *				  of all entries in a bucket).
+ *				  nature of this chain depends on the map type.
  *	WORD_MAPENTRY_KEY	- Entry key word.
  *	WORD_MAPENTRY_VALUE	- Entry value word.
  *
@@ -2110,6 +2111,9 @@ void			DeclareCustomWord(Col_Word word,
  * Note:
  *	Macros are L-values and side effect-free unless specified (i.e. 
  *	accessible for both read/write operations).
+ *
+ * See also:
+ *	<WORD_TYPE_MAPENTRY>
  *---------------------------------------------------------------------------*/
 
 #define WORD_MAPENTRY_INIT(word, next, key, value, hash) \
@@ -2138,7 +2142,8 @@ void			DeclareCustomWord(Col_Word word,
  *	accessible for both read/write operations).
  *
  * See also:
- *	<Col_StringHashMapFindEntry>, <Col_StringTrieMapFindEntry>
+ *	<WORD_TYPE_MMAPENTRY>, <Col_StringHashMapFindEntry>, 
+ *	<Col_StringTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 #define WORD_MMAPENTRY_INIT(word, next, key, value, hash) \
@@ -2196,6 +2201,9 @@ void			DeclareCustomWord(Col_Word word,
  *	next	- <WORD_MAPENTRY_NEXT>
  *	key	- <WORD_INTMAPENTRY_KEY>
  *	value	- <WORD_MAPENTRY_VALUE>
+ *
+ * See also:
+ *	<WORD_TYPE_INTMAPENTRY>
  *---------------------------------------------------------------------------*/
 
 #define WORD_INTMAPENTRY_INIT(word, next, key, value) \
@@ -2217,7 +2225,7 @@ void			DeclareCustomWord(Col_Word word,
  *	value	- <WORD_MAPENTRY_VALUE>
  *
  * See also:
- *	<Col_IntHashMapFindEntry>, <Col_IntTrieMapFindEntry>
+ *	<WORD_TYPE_MINTMAPENTRY>, <Col_IntHashMapFindEntry>, <Col_IntTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 #define WORD_MINTMAPENTRY_INIT(word, next, key, value) \
@@ -2256,6 +2264,11 @@ void			DeclareCustomWord(Col_Word word,
  *
  *	Integer hash maps are specialized hash maps where the hash value is the 
  *	randomized integer key.
+ *
+ * Entries:
+ *	Hash maps use standard map entries. The <WORD_MAPENTRY_NEXT> field is
+ *	used to chain bucket entries together. It is also used during iteration:
+ *	entries in buckets are iterated in order.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -2338,7 +2351,7 @@ void			DeclareCustomWord(Col_Word word,
  *		  macro expansion)
  *
  * See also:
- *	<Col_NewStringHashMap>
+ *	<WORD_TYPE_STRHASHMAP>, <Col_NewStringHashMap>
  *---------------------------------------------------------------------------*/
 
 #define WORD_STRHASHMAP_INIT(word) \
@@ -2357,7 +2370,7 @@ void			DeclareCustomWord(Col_Word word,
  *		  macro expansion)
  *
  * See also:
- *	<Col_NewIntHashMap>
+ *	<WORD_TYPE_INTHASHMAP>n <Col_NewIntHashMap>
  *---------------------------------------------------------------------------*/
 
 #define WORD_INTHASHMAP_INIT(word) \
@@ -2386,6 +2399,11 @@ void			DeclareCustomWord(Col_Word word,
  *	Entries where this bit is cleared are stored in the left subtree, and 
  *	those with this bit set are stored in the right subtree, all in a 
  *	recursive manner.
+ *
+ * Entries:
+ *	Trie maps use standard map entries. The <WORD_MAPENTRY_NEXT> field is
+ *	used for iteration: each entry points to the next entry in iteration 
+ *	order.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -2427,7 +2445,7 @@ void			DeclareCustomWord(Col_Word word,
  *		  macro expansion)
  *
  * See also:
- *	<Col_NewStringTrieMap>
+ *	<WORD_TYPE_STRTRIEMAP>, <Col_NewStringTrieMap>
  *---------------------------------------------------------------------------*/
 
 #define WORD_STRTRIEMAP_INIT(word) \
@@ -2446,7 +2464,7 @@ void			DeclareCustomWord(Col_Word word,
  *		  macro expansion)
  *
  * See also:
- *	<Col_NewIntTrieMap>
+ *	<WORD_TYPE_INTTRIEMAP>, <Col_NewIntTrieMap>
  *---------------------------------------------------------------------------*/
 
 #define WORD_INTTRIEMAP_INIT(word) \
@@ -2554,7 +2572,7 @@ void			DeclareCustomWord(Col_Word word,
  *	right	- <WORD_TRIENODE_RIGHT>
  *
  * See also:
- *	<Col_StringTrieMapFindEntry>
+ *	<WORD_TYPE_STRTRIENODE>, <StringTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 #define WORD_STRTRIENODE_INIT(word, diff, mask, left, right) \
@@ -2612,7 +2630,7 @@ void			DeclareCustomWord(Col_Word word,
  *	right	- <WORD_TRIENODE_RIGHT>
  *
  * See also:
- *	<Col_IntTrieMapFindEntry>
+ *	<WORD_TYPE_INTTRIENODE>, <IntTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 #define WORD_INTTRIENODE_INIT(word, mask, left, right) \
