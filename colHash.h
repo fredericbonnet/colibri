@@ -20,11 +20,12 @@
  * Group: Hash Map Creation
  *
  * Declarations:
- *	<Col_NewStringHashMap>, <Col_NewIntHashMap>
+ *	<Col_NewStringHashMap>, <Col_NewIntHashMap>, <Col_CopyHashMap>
  ****************************************************************************/
 
 EXTERN Col_Word		Col_NewStringHashMap(size_t capacity);
 EXTERN Col_Word		Col_NewIntHashMap(size_t capacity);
+EXTERN Col_Word		Col_CopyHashMap(Col_Word map);
 
 
 /****************************************************************************

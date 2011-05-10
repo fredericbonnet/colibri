@@ -25,13 +25,17 @@
 
 static Col_RopeChunksTraverseProc HashChunkProc;
 static Col_HashProc HashString;
+static void		AllocBuckets(Col_Word map, size_t capacity);
 static int		GrowHashMap(Col_Word map, Col_HashProc proc);
 static int		GrowIntHashMap(Col_Word map);
+static Col_Word		ConvertEntryToMutable(Col_Word entry, 
+			    Col_Word *prevPtr);
+static Col_Word		ConvertIntEntryToMutable(Col_Word entry, 
+			    Col_Word *prevPtr);
 static Col_Word		StringHashMapFindEntry(Col_Word map, Col_Word key,
-			    int *createPtr, size_t *bucketPtr);
+			    int mutable, int *createPtr, size_t *bucketPtr);
 static Col_Word		IntHashMapFindEntry(Col_Word map, intptr_t key,
-			    int *createPtr, size_t *bucketPtr);
-static void		AllocBuckets(Col_Word map, size_t capacity);
+			    int mutable, int *createPtr, size_t *bucketPtr);
 
 
 /****************************************************************************
@@ -67,34 +71,6 @@ static void		AllocBuckets(Col_Word map, size_t capacity);
     1
 #define GROW_FACTOR \
     4
-
-/*---------------------------------------------------------------------------
- * Internal Macro: GET_BUCKETS
- *
- *	Bucket access. Get bucket array regardless of whether it is stored in 
- *	static space or in a separate vector word.
- *
- * Argument:
- *	map		- Map to get bucket array for.
- *
- * Results:
- *	nBuckets	- Size of bucket array.
- *	buckets		- Bucket array.
- *	bucketParent	- Parent word of bucket container. Used during 
- *			  modification (see <Col_WordSetModified>).
- *---------------------------------------------------------------------------*/
-
-#define GET_BUCKETS(map, nbBuckets, buckets, bucketParent) \
-    if (WORD_HASHMAP_BUCKETS(map)) { \
-	ASSERT(WORD_TYPE(WORD_HASHMAP_BUCKETS(map)) == WORD_TYPE_MVECTOR); \
-	(nbBuckets) = WORD_VECTOR_LENGTH(WORD_HASHMAP_BUCKETS(map)); \
-	(buckets) = WORD_VECTOR_ELEMENTS(WORD_HASHMAP_BUCKETS(map)); \
-	(bucketParent) = WORD_HASHMAP_BUCKETS(map); \
-    } else { \
-	(nbBuckets) = HASHMAP_STATICBUCKETS_SIZE; \
-	(buckets) = WORD_HASHMAP_STATICBUCKETS(map); \
-	(bucketParent) = map; \
-    }
 
 /*---------------------------------------------------------------------------
  * Internal Macro: STRING_HASH
@@ -208,172 +184,49 @@ HashString(
     return hash;
 }
 
-/*---------------------------------------------------------------------------
- * Internal Function: GrowHashMap
- *
- *	Resize a hash map bucket container. Size won't grow past a given limit.
- *	As the bucket container is a mutable vector, this limit matches the 
- *	maximum mutable vector length.
- *
- * Arguments:
- *	map	- Hash map to grow.
- *	proc	- Hash proc to apply on keys.
- *
- * Result:
- *	Whether the bucket container was resized or not. 
- *
- * Side effects:
- *	Bucket container may be resized.
- *---------------------------------------------------------------------------*/
-
-static int
-GrowHashMap(
-    Col_Word map,
-    Col_HashProc proc)
-{
-    Col_Word *buckets, *newBuckets, newBucketContainer, entry, dummy;
-    size_t nbBuckets, newNbBuckets;
-    uintptr_t hash, index, newIndex;
-    Col_Word key;
-
-    /*
-     * Create a new bucket container.
-     */
-
-    GET_BUCKETS(map, nbBuckets, buckets, dummy);
-    ASSERT(!(nbBuckets & (nbBuckets-1)));
-    newNbBuckets = nbBuckets * GROW_FACTOR;
-    if (newNbBuckets > VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE)) {
-	/*
-	 * Already too large.
-	 */
-
-	return 0;
-    }
-
-    /*
-     * Rehash all entries from old to new bucket array.
-     *
-     * Note: bucket size is always a power of 2.
-     */
-
-    ASSERT(!(newNbBuckets & (newNbBuckets-1)));
-    newBucketContainer = Col_NewMVector(newNbBuckets, newNbBuckets, NULL);
-    ASSERT(WORD_TYPE(newBucketContainer) == WORD_TYPE_MVECTOR);
-    newBuckets = WORD_VECTOR_ELEMENTS(newBucketContainer);
-
-    for (index=0; index < nbBuckets; index++) {
-	entry = buckets[index];
-	while (entry) {
-	    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
-
-	    /*
-	     * Get new index from string key and move at head of new bucket.
-	     */
-
-	    buckets[index] = WORD_MAPENTRY_NEXT(entry);
-
-	    key = WORD_MAPENTRY_KEY(entry);
-	    //TODO: optimize hash computation when possible by combining masked & modulo values?
-	    hash = proc(key);
-	    newIndex = hash & (newNbBuckets-1);
-	    WORD_MAPENTRY_NEXT(entry) = newBuckets[newIndex];
-	    newBuckets[newIndex] = entry;
-	    Col_WordSetModified(entry);
-
-	    entry = buckets[index];
-	}
-    }
-
-    WORD_HASHMAP_BUCKETS(map) = newBucketContainer;
-    Col_WordSetModified(map);
-
-    return 1;
-}
-
-/*---------------------------------------------------------------------------
- * Internal Function: GrowIntHashMap
- *
- *	Resize an integer hash map bucket container. Size won't grow past a 
- *	given limit. As the bucket container is a mutable vector, this limit 
- *	matches the maximum mutable vector length.
- *
- * Arguments:
- *	map	- Integer hash map to grow.
- *
- * Result:
- *	Whether the bucket container was resized or not. 
- *
- * Side effects:
- *	Bucket container may be resized.
- *---------------------------------------------------------------------------*/
-
-static int
-GrowIntHashMap(
-    Col_Word map)
-{
-    Col_Word *buckets, *newBuckets, newBucketContainer, entry, dummy;
-    size_t nbBuckets, newNbBuckets;
-    uintptr_t index, newIndex;
-    intptr_t key;
-
-    /*
-     * Create a new bucket container.
-     */
-
-    GET_BUCKETS(map, nbBuckets, buckets, dummy);
-    ASSERT(!(nbBuckets & (nbBuckets-1)));
-    newNbBuckets = nbBuckets * GROW_FACTOR;
-    if (newNbBuckets > VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE)) {
-	/*
-	 * Already too large.
-	 */
-
-	return 0;
-    }
-
-    /*
-     * Rehash all entries from old to new bucket array.
-     *
-     * Note: bucket size is always a power of 2.
-     */
-
-    ASSERT(!(newNbBuckets & (newNbBuckets-1)));
-    newBucketContainer = Col_NewMVector(newNbBuckets, newNbBuckets, NULL);
-    ASSERT(WORD_TYPE(newBucketContainer) == WORD_TYPE_MVECTOR);
-    newBuckets = WORD_VECTOR_ELEMENTS(newBucketContainer);
-
-    for (index=0; index < nbBuckets; index++) {
-	entry = buckets[index];
-	while (entry) {
-	    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
-
-	    /*
-	     * Get new index from integer key and move at head of new bucket.
-	     */
-
-	    buckets[index] = WORD_MAPENTRY_NEXT(entry);
-
-	    key = WORD_INTMAPENTRY_KEY(entry);
-	    newIndex = RANDOMIZE_KEY(key) & (newNbBuckets-1);
-	    WORD_MAPENTRY_NEXT(entry) = newBuckets[newIndex];
-	    newBuckets[newIndex] = entry;
-	    Col_WordSetModified(entry);
-
-	    entry = buckets[index];
-	}
-    }
-
-    WORD_HASHMAP_BUCKETS(map) = newBucketContainer;
-    Col_WordSetModified(map);
-
-    return 1;
-}
-
-
 /****************************************************************************
  * Group: Hash Map Creation
  ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: GET_BUCKETS
+ *
+ *	Bucket access. Get bucket array regardless of whether it is stored in 
+ *	static space or in a separate vector word.
+ *
+ * Arguments:
+ *	map		- Map to get bucket array for.
+ *	mutable		- If true, ensure that entry is mutable.
+ *
+ * Results:
+ *	nBuckets	- Size of bucket array.
+ *	buckets		- Bucket array.
+ *	bucketParent	- Parent word of bucket container. Used during 
+ *			  modification (see <Col_WordSetModified>).
+ *---------------------------------------------------------------------------*/
+
+#define GET_BUCKETS(map, mutable, nbBuckets, buckets, bucketParent) \
+    switch (WORD_TYPE(WORD_HASHMAP_BUCKETS(map))) { \
+    case WORD_TYPE_VECTOR: \
+	if (mutable) { \
+	    WORD_HASHMAP_BUCKETS(map) = Col_NewMVector(0, \
+		WORD_VECTOR_LENGTH(WORD_HASHMAP_BUCKETS(map)), \
+		WORD_VECTOR_ELEMENTS(WORD_HASHMAP_BUCKETS(map))); \
+	    Col_WordSetModified(map); \
+	}; \
+	/* continued. */ \
+    case WORD_TYPE_MVECTOR: \
+	(nbBuckets) = WORD_VECTOR_LENGTH(WORD_HASHMAP_BUCKETS(map)); \
+	(buckets) = WORD_VECTOR_ELEMENTS(WORD_HASHMAP_BUCKETS(map)); \
+	(bucketParent) = WORD_HASHMAP_BUCKETS(map); \
+	break; \
+    \
+    default: \
+	ASSERT(!WORD_HASHMAP_BUCKETS(map)); \
+	(nbBuckets) = HASHMAP_STATICBUCKETS_SIZE; \
+	(buckets) = WORD_HASHMAP_STATICBUCKETS(map); \
+	(bucketParent) = map; \
+    }
 
 /*---------------------------------------------------------------------------
  * Internal Function: AllocBuckets
@@ -423,6 +276,232 @@ AllocBuckets(
 	ASSERT(WORD_TYPE(WORD_HASHMAP_BUCKETS(map)) == WORD_TYPE_MVECTOR);
     }
 }
+
+/*---------------------------------------------------------------------------
+ * Internal Function: GrowHashMap
+ *
+ *	Resize a hash map bucket container. Size won't grow past a given limit.
+ *	As the bucket container is a mutable vector, this limit matches the 
+ *	maximum mutable vector length.
+ *
+ * Arguments:
+ *	map	- Hash map to grow.
+ *	proc	- Hash proc to apply on keys.
+ *
+ * Result:
+ *	Whether the bucket container was resized or not. 
+ *
+ * Side effects:
+ *	Bucket container may be resized.
+ *---------------------------------------------------------------------------*/
+
+static int
+GrowHashMap(
+    Col_Word map,
+    Col_HashProc proc)
+{
+    Col_Word *buckets, *newBuckets, newBucketContainer, entry, next, dummy;
+    size_t nbBuckets, newNbBuckets;
+    uintptr_t hash, index, newIndex;
+    Col_Word key;
+
+    GET_BUCKETS(map, 0, nbBuckets, buckets, dummy);
+    ASSERT(!(nbBuckets & (nbBuckets-1)));
+    newNbBuckets = nbBuckets * GROW_FACTOR;
+    if (newNbBuckets > VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE)) {
+	/*
+	 * Bucket container already too large.
+	 */
+
+	return 0;
+    }
+
+    /*
+     * Create a new bucket container.
+     *
+     * Note: size is always a power of 2.
+     */
+
+    ASSERT(!(newNbBuckets & (newNbBuckets-1)));
+    newBucketContainer = Col_NewMVector(newNbBuckets, newNbBuckets, NULL);
+    ASSERT(WORD_TYPE(newBucketContainer) == WORD_TYPE_MVECTOR);
+    newBuckets = WORD_VECTOR_ELEMENTS(newBucketContainer);
+
+    /*
+     * Rehash all entries from old to new bucket array.
+     */
+
+    for (index=0; index < nbBuckets; index++) {
+	entry = buckets[index];
+	while (entry) {
+	    /*
+	     * Get new index from string key.
+	     */
+
+	    key = WORD_MAPENTRY_KEY(entry);
+	    if (nbBuckets & ~MAPENTRY_HASH_MASK) {
+		/*
+		 * Recompute full hash.
+		 */
+
+		hash = proc(key);
+	    } else {
+		/*
+		 * Get actual hash by combining entry hash and index.
+		 */
+
+		hash = WORD_MAPENTRY_HASH(entry) | index;
+		ASSERT(hash == proc(key));
+	    }
+	    newIndex = hash & (newNbBuckets-1);
+
+	    switch (WORD_TYPE(entry)) {
+		case WORD_TYPE_MAPENTRY:
+		    if (!WORD_MAPENTRY_NEXT(entry) && !newBuckets[newIndex]) {
+			/*
+			 * Share immutable entry in new bucket.
+			 */
+
+			newBuckets[newIndex] = entry;
+			next = WORD_NIL;
+			break;
+		    }
+
+		    /*
+		     * Convert to mutable first.
+		     */
+
+		    entry = ConvertEntryToMutable(entry, &entry);
+		    /* continued. */
+
+		case WORD_TYPE_MMAPENTRY:
+		    /*
+		     * Move entry at head of new bucket.
+		     */
+
+		    next = WORD_MAPENTRY_NEXT(entry);
+		    WORD_MAPENTRY_NEXT(entry) = newBuckets[newIndex];
+		    newBuckets[newIndex] = entry;
+		    Col_WordSetModified(entry);
+	    }
+
+	    entry = next;
+	}
+    }
+
+    WORD_HASHMAP_BUCKETS(map) = newBucketContainer;
+    Col_WordSetModified(map);
+
+    return 1;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: GrowIntHashMap
+ *
+ *	Resize an integer hash map bucket container. Size won't grow past a 
+ *	given limit. As the bucket container is a mutable vector, this limit 
+ *	matches the maximum mutable vector length.
+ *
+ * Arguments:
+ *	map	- Integer hash map to grow.
+ *
+ * Result:
+ *	Whether the bucket container was resized or not. 
+ *
+ * Side effects:
+ *	Bucket container may be resized.
+ *---------------------------------------------------------------------------*/
+
+static int
+GrowIntHashMap(
+    Col_Word map)
+{
+    Col_Word *buckets, *newBuckets, newBucketContainer, entry, dummy, next;
+    size_t nbBuckets, newNbBuckets;
+    uintptr_t index, newIndex;
+    intptr_t key;
+
+    GET_BUCKETS(map, 0, nbBuckets, buckets, dummy);
+    ASSERT(!(nbBuckets & (nbBuckets-1)));
+    newNbBuckets = nbBuckets * GROW_FACTOR;
+    if (newNbBuckets > VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE)) {
+	/*
+	 * Bucket container already too large.
+	 */
+
+	return 0;
+    }
+
+    ASSERT(!(newNbBuckets & (newNbBuckets-1)));
+    newBucketContainer = Col_NewMVector(newNbBuckets, newNbBuckets, NULL);
+    ASSERT(WORD_TYPE(newBucketContainer) == WORD_TYPE_MVECTOR);
+    newBuckets = WORD_VECTOR_ELEMENTS(newBucketContainer);
+
+    /*
+     * Create a new bucket container.
+     *
+     * Note: size is always a power of 2.
+     */
+
+    ASSERT(!(newNbBuckets & (newNbBuckets-1)));
+    newBucketContainer = Col_NewMVector(newNbBuckets, newNbBuckets, NULL);
+    ASSERT(WORD_TYPE(newBucketContainer) == WORD_TYPE_MVECTOR);
+    newBuckets = WORD_VECTOR_ELEMENTS(newBucketContainer);
+
+    /*
+     * Rehash all entries from old to new bucket array.
+     */
+
+    for (index=0; index < nbBuckets; index++) {
+	entry = buckets[index];
+	while (entry) {
+	    /*
+	     * Get new index from integer key.
+	     */
+
+	    key = WORD_INTMAPENTRY_KEY(entry);
+	    newIndex = RANDOMIZE_KEY(key) & (newNbBuckets-1);
+
+	    switch (WORD_TYPE(entry)) {
+		case WORD_TYPE_INTMAPENTRY:
+		    if (!WORD_MAPENTRY_NEXT(entry) && !newBuckets[newIndex]) {
+			/*
+			 * Share immutable entry in new bucket.
+			 */
+
+			newBuckets[newIndex] = entry;
+			next = WORD_NIL;
+			break;
+		    }
+
+		    /*
+		     * Convert to mutable first.
+		     */
+
+		    entry = ConvertIntEntryToMutable(entry, &entry);
+		    /* continued. */
+
+		case WORD_TYPE_MINTMAPENTRY:
+		    /*
+		     * Move entry at head of new bucket.
+		     */
+
+		    next = WORD_MAPENTRY_NEXT(entry);
+		    WORD_MAPENTRY_NEXT(entry) = newBuckets[newIndex];
+		    newBuckets[newIndex] = entry;
+		    Col_WordSetModified(entry);
+	    }
+
+	    entry = next;
+	}
+    }
+
+    WORD_HASHMAP_BUCKETS(map) = newBucketContainer;
+    Col_WordSetModified(map);
+
+    return 1;
+}
+
 
 /*---------------------------------------------------------------------------
  * Function: Col_NewStringHashMap
@@ -482,10 +561,185 @@ Col_NewIntHashMap(
     return map;
 }
 
+/*---------------------------------------------------------------------------
+ * Function: Col_CopyHashMap
+ *
+ *	Create a new hash map word from an existing one.
+ *
+ * Argument:
+ *	map	- Hash map to copy.
+ *
+ * Result:
+ *	The new word.
+ *
+ * Side effects:
+ *	Source map content is frozen.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_CopyHashMap(
+    Col_Word map)
+{
+    Col_Word newMap;
+    Col_Word entry, *buckets, dummy;
+    size_t nbBuckets, i;
+
+    switch (WORD_TYPE(map)) {
+	case WORD_TYPE_STRHASHMAP:
+	case WORD_TYPE_INTHASHMAP:
+	    /*
+	     * Copy word first.
+	     */
+
+	    newMap = (Col_Word) AllocCells(HASHMAP_NBCELLS);
+	    memcpy((void *) newMap, (void *) map, sizeof(Cell) 
+		    * HASHMAP_NBCELLS);
+	    WORD_CLEAR_PINNED(newMap);
+
+	    if (WORD_HASHMAP_BUCKETS(map)) {
+		if (WORD_TYPE(WORD_HASHMAP_BUCKETS(map)) == WORD_TYPE_VECTOR) {
+		    /*
+		     * Already frozen.
+		     */
+
+		    return newMap;
+		}
+
+		/*
+		 * Freeze bucket container.
+		 */
+
+		Col_MVectorFreeze(WORD_HASHMAP_BUCKETS(map));
+	    }
+
+	    /*
+	     * Freeze entries: simply change their type ID.
+	     */
+
+	    GET_BUCKETS(map, 0, nbBuckets, buckets, dummy);
+	    for (i=0; i < nbBuckets; i++) {
+		entry = buckets[i];
+		while (entry) {
+		    ASSERT(!WORD_PINNED(entry));
+		    switch (WORD_TYPE(entry)) {
+			case WORD_TYPE_MMAPENTRY:
+			    WORD_SET_TYPEID(entry, WORD_TYPE_MAPENTRY);
+			    entry = WORD_MAPENTRY_NEXT(entry);
+			    break;
+
+			case WORD_TYPE_MINTMAPENTRY:
+			    WORD_SET_TYPEID(entry, WORD_TYPE_INTMAPENTRY);
+			    entry = WORD_MAPENTRY_NEXT(entry);
+			    break;
+
+			default:
+			    /*
+			     * Already frozen, skip remaining entries.
+			     */
+
+			    entry = WORD_NIL;
+		    }
+		}
+	    }
+
+	    /*
+	     * Both maps now share the same immutable structure.
+	     */
+
+	    return newMap;
+
+	default:
+	    Col_Error(COL_ERROR, "%x is not a hash map", map);
+	    return WORD_NIL;
+    }
+}
+
 
 /****************************************************************************
  * Internal Group: Hash Map Entries
  ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: ConvertEntryToMutable
+ *
+ *	Convert immutable entry and all all its predecessors to mutable.
+ *
+ * Arguments:
+ *	entry	- Entry to convert (inclusive).
+ *	prevPtr	- Points to first entry in chain containing entry.
+ *
+ * Result:
+ *	The converted mutable entry.
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+ConvertEntryToMutable(
+    Col_Word entry,
+    Col_Word *prevPtr)
+{
+    Col_Word converted;
+
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY);
+    for (;;) {
+	int last = (*prevPtr == entry);
+
+	ASSERT(WORD_TYPE(*prevPtr) == WORD_TYPE_MAPENTRY);
+
+	/*
+	 * Convert entry: copy then change type ID.
+	 */
+
+	converted = (Col_Word) AllocCells(1);
+	memcpy((void *) converted, (void *) *prevPtr, sizeof(Cell));
+	WORD_SET_TYPEID(converted, WORD_TYPE_MMAPENTRY);
+	*prevPtr = converted;
+
+	if (last) return converted;
+
+	prevPtr = &WORD_MAPENTRY_NEXT(*prevPtr);
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: ConvertIntEntryToMutable
+ *
+ *	Convert immutable integer entry and all all its predecessors to mutable.
+ *
+ * Arguments:
+ *	entry	- Entry to convert (inclusive).
+ *	prevPtr	- Points to first entry in chain containing entry.
+ *
+ * Result:
+ *	The converted mutable entry.
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+ConvertIntEntryToMutable(
+    Col_Word entry,
+    Col_Word *prevPtr)
+{
+    Col_Word converted;
+
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY);
+    for (;;) {
+	int last = (*prevPtr == entry);
+
+	ASSERT(WORD_TYPE(*prevPtr) == WORD_TYPE_INTMAPENTRY);
+
+	/*
+	 * Convert entry: copy then change type ID.
+	 */
+
+	converted = (Col_Word) AllocCells(1);
+	memcpy((void *) converted, (void *) *prevPtr, sizeof(Cell));
+	WORD_SET_TYPEID(converted, WORD_TYPE_MINTMAPENTRY);
+	*prevPtr = converted;
+
+	if (last) return converted;
+
+	prevPtr = &WORD_MAPENTRY_NEXT(*prevPtr);
+    }
+}
 
 /*---------------------------------------------------------------------------
  * Internal Function: StringHashMapFindEntry
@@ -495,6 +749,7 @@ Col_NewIntHashMap(
  * Arguments:
  *	map		- String hash map to find or create entry into.
  *	key		- String entry key.
+ *	mutable		- If true, ensure that entry is mutable.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
  *
  * Results:
@@ -508,6 +763,7 @@ static Col_Word
 StringHashMapFindEntry(
     Col_Word map,
     Col_Word key,
+    int mutable,
     int *createPtr,
     size_t *bucketPtr)
 {
@@ -521,13 +777,13 @@ StringHashMapFindEntry(
      * Note: bucket size is always a power of 2.
      */
 
-    GET_BUCKETS(map, nbBuckets, buckets, bucketParent);
+    GET_BUCKETS(map, 0, nbBuckets, buckets, bucketParent);
     ASSERT(!(nbBuckets & (nbBuckets-1)));
     hash = HashString(key);
     index = hash & (nbBuckets-1);
     entry = buckets[index];
     while (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MAPENTRY || WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
 	if (WORD_MAPENTRY_HASH(entry) == (hash & MAPENTRY_HASH_MASK)
 		&& Col_CompareRopes(WORD_MAPENTRY_KEY(entry), key, 0, SIZE_MAX,
 		NULL, NULL, NULL) == 0) {
@@ -537,6 +793,16 @@ StringHashMapFindEntry(
 
 	    if (createPtr) *createPtr = 0;
 	    if (bucketPtr) *bucketPtr = index;
+
+	    if (mutable && WORD_TYPE(entry) != WORD_TYPE_MMAPENTRY) {
+		/*
+		 * Entry is immutable, convert.
+		 */
+
+		GET_BUCKETS(map, 1, nbBuckets, buckets, bucketParent);
+		entry = ConvertEntryToMutable(entry, &buckets[index]);
+		ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
+	    }
 	    return entry;
 	}
 
@@ -550,6 +816,7 @@ StringHashMapFindEntry(
     if (!createPtr || !*createPtr) {
 	return WORD_NIL;
     }
+    ASSERT(mutable);
     *createPtr = 1;
 
     if (WORD_HASHMAP_SIZE(map) >= nbBuckets * LOAD_FACTOR
@@ -558,13 +825,15 @@ StringHashMapFindEntry(
 	 * Grow map and insert again.
 	 */
 
-	return StringHashMapFindEntry(map, key, createPtr, bucketPtr);
+	return StringHashMapFindEntry(map, key, mutable, createPtr, bucketPtr);
     }
 
     /*
-     * Insert a new entry at head so that subsequent lookups are faster.
+     * Insert a new entry at head so that subsequent lookups are faster. 
+     * Moreover this leaves potentially immutable existing entries untouched.
      */
 
+    GET_BUCKETS(map, 1, nbBuckets, buckets, bucketParent);
     entry = (Col_Word) AllocCells(1);
     WORD_MMAPENTRY_INIT(entry, buckets[index], key, WORD_NIL, hash);
     buckets[index] = entry;
@@ -584,6 +853,7 @@ StringHashMapFindEntry(
  * Arguments:
  *	map		- Integer hash map to find or create entry into.
  *	key		- Integer entry key.
+ *	mutable		- If true, ensure that entry is mutable.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
  *
  * Results:
@@ -597,6 +867,7 @@ static Col_Word
 IntHashMapFindEntry(
     Col_Word map,
     intptr_t key,
+    int mutable,
     int *createPtr,
     size_t *bucketPtr)
 {
@@ -610,12 +881,12 @@ IntHashMapFindEntry(
      * Note: bucket size is always a power of 2.
      */
 
-    GET_BUCKETS(map, nbBuckets, buckets, bucketParent);
+    GET_BUCKETS(map, 0, nbBuckets, buckets, bucketParent);
     ASSERT(!(nbBuckets & (nbBuckets-1)));
     index = RANDOMIZE_KEY(key) & (nbBuckets-1);
     entry = buckets[index];
     while (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTMAPENTRY || WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
 	if (WORD_INTMAPENTRY_KEY(entry) == key) {
 	    /*
 	     * Found!
@@ -623,6 +894,16 @@ IntHashMapFindEntry(
 
 	    if (createPtr) *createPtr = 0;
 	    if (bucketPtr) *bucketPtr = index;
+
+	    if (mutable && WORD_TYPE(entry) != WORD_TYPE_MINTMAPENTRY) {
+		/*
+		 * Entry is immutable, convert.
+		 */
+
+		GET_BUCKETS(map, 1, nbBuckets, buckets, bucketParent);
+		entry = ConvertIntEntryToMutable(entry, &buckets[index]);
+		ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
+	    }
 	    return entry;
 	}
 
@@ -636,6 +917,7 @@ IntHashMapFindEntry(
     if (!createPtr || !*createPtr) {
 	return WORD_NIL;
     }
+    ASSERT(mutable);
     *createPtr = 1;
 
     if (WORD_HASHMAP_SIZE(map) >= nbBuckets * LOAD_FACTOR
@@ -644,13 +926,15 @@ IntHashMapFindEntry(
 	 * Grow map and insert again.
 	 */
 
-	return IntHashMapFindEntry(map, key, createPtr, bucketPtr);
+	return IntHashMapFindEntry(map, key, mutable, createPtr, bucketPtr);
     }
 
     /*
-     * Insert a new entry at head so that subsequent lookups are faster.
+     * Insert a new entry at head so that subsequent lookups are faster. 
+     * Moreover this leaves potentially immutable existing entries untouched.
      */
 
+    GET_BUCKETS(map, 1, nbBuckets, buckets, bucketParent);
     entry = (Col_Word) AllocCells(1);
     WORD_MINTMAPENTRY_INIT(entry, buckets[index], key, WORD_NIL);
     buckets[index] = entry;
@@ -695,7 +979,7 @@ Col_StringHashMapGet(
 	return WORD_NIL;
     }
 
-    entry = StringHashMapFindEntry(map, key, NULL, NULL);
+    entry = StringHashMapFindEntry(map, key, 0, NULL, NULL);
 
     if (entry) {
 	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
@@ -734,7 +1018,7 @@ Col_IntHashMapGet(
 	return WORD_NIL;
     }
 
-    entry = IntHashMapFindEntry(map, key, NULL, NULL);
+    entry = IntHashMapFindEntry(map, key, 0, NULL, NULL);
     if (entry) {
 	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
@@ -775,7 +1059,7 @@ Col_StringHashMapSet(
 	return WORD_NIL;
     }
 
-    entry = StringHashMapFindEntry(map, key, &create, NULL);
+    entry = StringHashMapFindEntry(map, key, 1, &create, NULL);
     ASSERT(entry);
     ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
     Col_WordSetModified(entry);
@@ -814,7 +1098,7 @@ Col_IntHashMapSet(
 	return WORD_NIL;
     }
 
-    entry = IntHashMapFindEntry(map, key, &create, NULL);
+    entry = IntHashMapFindEntry(map, key, 1, &create, NULL);
     ASSERT(entry);
     ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
     Col_WordSetModified(entry);
@@ -840,7 +1124,7 @@ Col_StringHashMapUnset(
     Col_Word map,
     Col_Word key)
 {
-    Col_Word *buckets, parent, *prevPtr, entry;
+    Col_Word *buckets, parent, prev, entry;
     size_t nbBuckets;
     uintptr_t hash, index;
 
@@ -855,15 +1139,13 @@ Col_StringHashMapUnset(
      * Note: bucket size is always a power of 2.
      */
 
-    GET_BUCKETS(map, nbBuckets, buckets, parent);
+    GET_BUCKETS(map, 0, nbBuckets, buckets, parent);
     ASSERT(!(nbBuckets & (nbBuckets-1)));
     hash = HashString(key);
     index = hash & (nbBuckets-1);
-    prevPtr = &buckets[index];
-    while (*prevPtr) {
-	entry = *prevPtr;
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
-
+    prev = WORD_NIL;
+    entry = buckets[index];
+    while (entry) {
 	if (WORD_MAPENTRY_HASH(entry) == (hash & MAPENTRY_HASH_MASK)
 		&& Col_CompareRopes(WORD_MAPENTRY_KEY(entry), key, 0, SIZE_MAX,
 		NULL, NULL, NULL) == 0) {
@@ -871,14 +1153,42 @@ Col_StringHashMapUnset(
 	     * Found! Unlink & remove entry.
 	     */
 
-	    *prevPtr = WORD_MAPENTRY_NEXT(entry);
-	    Col_WordSetModified(parent);
+	    switch (WORD_TYPE(prev)) {
+		case WORD_TYPE_NIL:
+		    /*
+		     * Removed entry is first in bucket, ensure it is mutable 
+		     * before pointing to next entry.
+		     */
+
+		    GET_BUCKETS(map, 1, nbBuckets, buckets, parent);
+		    buckets[index] = WORD_MAPENTRY_NEXT(entry);
+		    Col_WordSetModified(parent);
+		    break;
+
+		case WORD_TYPE_MAPENTRY:
+		    /*
+		     * Previous entry is immutable, convert first.
+		     */
+
+		    GET_BUCKETS(map, 1, nbBuckets, buckets, parent);
+		    prev = ConvertEntryToMutable(prev, &buckets[index]);
+		    ASSERT(WORD_TYPE(prev) == WORD_TYPE_MMAPENTRY);
+		    /* continued. */
+
+		case WORD_TYPE_MMAPENTRY:
+		    /*
+		     * Skip removed entry.
+		     */
+
+		    WORD_MAPENTRY_NEXT(prev) = WORD_MAPENTRY_NEXT(entry);
+		    Col_WordSetModified(prev);
+	    }
 	    WORD_HASHMAP_SIZE(map)--;
 	    return 1;
 	}
 
-	parent = entry;
-	prevPtr = &WORD_MAPENTRY_NEXT(entry);
+	prev = entry;
+	entry = WORD_MAPENTRY_NEXT(entry);
     }
 
     /*
@@ -906,7 +1216,7 @@ Col_IntHashMapUnset(
     Col_Word map,
     intptr_t key)
 {
-    Col_Word *buckets, parent, *prevPtr, entry;
+    Col_Word *buckets, parent, prev, entry;
     size_t nbBuckets;
     uintptr_t index;
 
@@ -921,27 +1231,53 @@ Col_IntHashMapUnset(
      * Note: bucket size is always a power of 2.
      */
 
-    GET_BUCKETS(map, nbBuckets, buckets, parent);
+    GET_BUCKETS(map, 1, nbBuckets, buckets, parent);
     ASSERT(!(nbBuckets & (nbBuckets-1)));
     index = RANDOMIZE_KEY(key) & (nbBuckets-1);
-    prevPtr = &buckets[index];
-    while (*prevPtr) {
-	entry = *prevPtr;
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
-
+    prev = WORD_NIL;
+    entry = buckets[index];
+    while (entry) {
 	if (WORD_INTMAPENTRY_KEY(entry) == key) {
 	    /*
 	     * Found! Unlink & remove entry.
 	     */
 
-	    *prevPtr = WORD_MAPENTRY_NEXT(entry);
-	    Col_WordSetModified(parent);
+	    switch (WORD_TYPE(prev)) {
+		case WORD_TYPE_NIL:
+		    /*
+		     * Removed entry is first in bucket, ensure it is mutable 
+		     * before pointing to next entry.
+		     */
+
+		    GET_BUCKETS(map, 1, nbBuckets, buckets, parent);
+		    buckets[index] = WORD_MAPENTRY_NEXT(entry);
+		    Col_WordSetModified(parent);
+		    break;
+
+		case WORD_TYPE_INTMAPENTRY:
+		    /*
+		     * Previous entry is immutable, convert first.
+		     */
+
+		    GET_BUCKETS(map, 1, nbBuckets, buckets, parent);
+		    prev = ConvertIntEntryToMutable(prev, &buckets[index]);
+		    ASSERT(WORD_TYPE(prev) == WORD_TYPE_MMAPENTRY);
+		    /* continued. */
+
+		case WORD_TYPE_MINTMAPENTRY:
+		    /*
+		     * Skip removed entry.
+		     */
+
+		    WORD_MAPENTRY_NEXT(prev) = WORD_MAPENTRY_NEXT(entry);
+		    Col_WordSetModified(prev);
+	    }
 	    WORD_HASHMAP_SIZE(map)--;
 	    return 1;
 	}
 
-	parent = entry;
-	prevPtr = &WORD_MAPENTRY_NEXT(entry);
+	prev = entry;
+	entry = WORD_MAPENTRY_NEXT(entry);
     }
 
     /*
@@ -1000,7 +1336,7 @@ Col_HashMapIterBegin(
      */
 
     it->map = map;
-    GET_BUCKETS(map, nbBuckets, buckets, dummy);
+    GET_BUCKETS(map, 0, nbBuckets, buckets, dummy);
     for (i=0; i < nbBuckets; i++) {
 	if (buckets[i]) {
 	    it->entry = buckets[i];
@@ -1043,7 +1379,7 @@ Col_StringHashMapIterFind(
 	return;
     }
 
-    it->entry = StringHashMapFindEntry(map, key, createPtr, &it->bucket);
+    it->entry = StringHashMapFindEntry(map, key, 0, createPtr, &it->bucket);
     if (!it->entry) {
 	/*
 	 * Not found.
@@ -1082,7 +1418,7 @@ Col_IntHashMapIterFind(
 	return;
     }
 
-    it->entry = IntHashMapFindEntry(map, key, createPtr, &it->bucket);
+    it->entry = IntHashMapFindEntry(map, key, 0, createPtr, &it->bucket);
     if (!it->entry) {
 	/*
 	 * Not found.
@@ -1107,6 +1443,9 @@ Col_HashMapIterSetValue(
     Col_MapIterator *it,
     Col_Word value)
 {
+    Col_Word *buckets, dummy;
+    size_t nbBuckets;
+
     if (Col_MapIterEnd(it)) {
 	Col_Error(COL_ERROR, "Invalid map iterator");
 	return;
@@ -1114,31 +1453,45 @@ Col_HashMapIterSetValue(
 
     switch (WORD_TYPE(it->map)) {
 	case WORD_TYPE_STRHASHMAP:
-	    if (WORD_TYPE(it->entry) == WORD_TYPE_MMAPENTRY) {
+	    if (WORD_TYPE(it->entry) != WORD_TYPE_MMAPENTRY) {
 		/*
-		 * Set value directly.
+		 * Entry is immutable, convert to mutable.
 		 */
 
-		WORD_MAPENTRY_VALUE(it->entry) = value;
-		Col_WordSetModified(it->entry);
-		return;
+		ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MAPENTRY);
+		GET_BUCKETS(it->map, 1, nbBuckets, buckets, dummy);
+		it->entry = ConvertEntryToMutable(it->entry, 
+			&buckets[it->bucket]);
 	    }
-	    //TODO handle immutable entries
-	    ASSERT(0);
+
+	    /*
+	     * Set entry value.
+	     */
+
+	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MMAPENTRY);
+	    WORD_MAPENTRY_VALUE(it->entry) = value;
+	    Col_WordSetModified(it->entry);
 	    break;
 
 	case WORD_TYPE_INTHASHMAP:
-	    if (WORD_TYPE(it->entry) == WORD_TYPE_MINTMAPENTRY) {
+	    if (WORD_TYPE(it->entry) != WORD_TYPE_MINTMAPENTRY) {
 		/*
-		 * Set value directly.
+		 * Entry is immutable, convert to mutable.
 		 */
 
-		WORD_MAPENTRY_VALUE(it->entry) = value;
-		Col_WordSetModified(it->entry);
-		return;
+		ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTMAPENTRY);
+		GET_BUCKETS(it->map, 1, nbBuckets, buckets, dummy);
+		it->entry = ConvertIntEntryToMutable(it->entry, 
+			&buckets[it->bucket]);
 	    }
-	    //TODO handle immutable entries
-	    ASSERT(0);
+
+	    /*
+	     * Set entry value.
+	     */
+
+	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MINTMAPENTRY);
+	    WORD_MAPENTRY_VALUE(it->entry) = value;
+	    Col_WordSetModified(it->entry);
 	    break;
 
 	/* WORD_TYPE_UNKNOWN */
@@ -1169,7 +1522,9 @@ Col_HashMapIterNext(
 	return;
     }
 
-    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MMAPENTRY 
+    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MAPENTRY 
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MMAPENTRY
+	    || WORD_TYPE(it->entry) == WORD_TYPE_INTMAPENTRY
 	    || WORD_TYPE(it->entry) == WORD_TYPE_MINTMAPENTRY);
 
     /*
@@ -1185,7 +1540,7 @@ Col_HashMapIterNext(
      * End of bucket, get first entry in next nonempty bucket.
      */
 
-    GET_BUCKETS(it->map, nbBuckets, buckets, dummy);
+    GET_BUCKETS(it->map, 0, nbBuckets, buckets, dummy);
     for (i=it->bucket+1; i < nbBuckets; i++) {
 	if (buckets[i]) {
 	    it->entry = buckets[i];
