@@ -25,9 +25,9 @@
  */
 
 static Col_Word		StringTrieMapFindEntry(Col_Word map, Col_Word key,
-			    int *createPtr);
+			    int mutable, int *createPtr);
 static Col_Word		IntTrieMapFindEntry(Col_Word map, intptr_t key,
-			    int *createPtr);
+			    int mutable, int *createPtr);
 
 
 /****************************************************************************
@@ -93,6 +93,7 @@ Col_NewIntTrieMap()
  * Arguments:
  *	map		- String trie map to find or create entry into.
  *	key		- String entry key.
+ *	mutable		- If true, ensure that entry is mutable.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
  *
  * Results:
@@ -105,6 +106,7 @@ static Col_Word
 StringTrieMapFindEntry(
     Col_Word map,
     Col_Word key,
+    int mutable,
     int *createPtr)
 {
     Col_Word node, entry, parent, *nodePtr, prev, next;
@@ -329,6 +331,7 @@ StringTrieMapFindEntry(
  * Arguments:
  *	map		- Integer trie map to find or create entry into.
  *	key		- Integer entry key.
+ *	mutable		- If true, ensure that entry is mutable.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
  *
  * Results:
@@ -341,6 +344,7 @@ static Col_Word
 IntTrieMapFindEntry(
     Col_Word map,
     intptr_t key,
+    int mutable,
     int *createPtr)
 {
     Col_Word node, entry, parent, *nodePtr, prev, next;
@@ -561,7 +565,7 @@ Col_StringTrieMapGet(
 	return WORD_NIL;
     }
 
-    entry = StringTrieMapFindEntry(map, key, NULL);
+    entry = StringTrieMapFindEntry(map, key, 0, NULL);
     if (entry) {
 	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
@@ -599,7 +603,7 @@ Col_IntTrieMapGet(
 	return WORD_NIL;
     }
 
-    entry = IntTrieMapFindEntry(map, key, NULL);
+    entry = IntTrieMapFindEntry(map, key, 0, NULL);
     if (entry) {
 	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
@@ -640,7 +644,7 @@ Col_StringTrieMapSet(
 	return WORD_NIL;
     }
 
-    entry = StringTrieMapFindEntry(map, key, &create);
+    entry = StringTrieMapFindEntry(map, key, 1, &create);
     ASSERT(entry);
     ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
     Col_WordSetModified(entry);
@@ -677,7 +681,7 @@ Col_IntTrieMapSet(
 	return WORD_NIL;
     }
 
-    entry = IntTrieMapFindEntry(map, key, &create);
+    entry = IntTrieMapFindEntry(map, key, 1, &create);
     ASSERT(entry);
     ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
     Col_WordSetModified(entry);
@@ -1021,7 +1025,7 @@ Col_StringTrieMapIterFind(
 	return;
     }
 
-    it->entry = StringTrieMapFindEntry(map, key, createPtr);
+    it->entry = StringTrieMapFindEntry(map, key, 0, createPtr);
     if (!it->entry) {
 	/*
 	 * Not found.
@@ -1060,7 +1064,7 @@ Col_IntTrieMapIterFind(
 	return;
     }
 
-    it->entry = IntTrieMapFindEntry(map, key, createPtr);
+    it->entry = IntTrieMapFindEntry(map, key, 0, createPtr);
     if (!it->entry) {
 	/*
 	 * Not found.
@@ -1092,31 +1096,43 @@ Col_TrieMapIterSetValue(
 
     switch (WORD_TYPE(it->map)) {
 	case WORD_TYPE_STRTRIEMAP:
-	    if (WORD_TYPE(it->entry) == WORD_TYPE_MMAPENTRY) {
+	    if (WORD_TYPE(it->entry) != WORD_TYPE_MMAPENTRY) {
 		/*
-		 * Set value directly.
+		 * Entry is immutable, convert to mutable.
 		 */
 
-		WORD_MAPENTRY_VALUE(it->entry) = value;
-		Col_WordSetModified(it->entry);
-		return;
+		ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MAPENTRY);
+		it->entry = StringTrieMapFindEntry(it->map, 
+			WORD_MAPENTRY_KEY(it->entry), 1, NULL);
 	    }
-	    //TODO handle immutable entries
-	    ASSERT(0);
+
+	    /*
+	     * Set entry value.
+	     */
+
+	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MMAPENTRY);
+	    WORD_MAPENTRY_VALUE(it->entry) = value;
+	    Col_WordSetModified(it->entry);
 	    break;
 
 	case WORD_TYPE_INTTRIEMAP:
-	    if (WORD_TYPE(it->entry) == WORD_TYPE_MINTMAPENTRY) {
+	    if (WORD_TYPE(it->entry) != WORD_TYPE_MINTMAPENTRY) {
 		/*
-		 * Set value directly.
+		 * Entry is immutable, convert to mutable.
 		 */
 
-		WORD_MAPENTRY_VALUE(it->entry) = value;
-		Col_WordSetModified(it->entry);
-		return;
+		ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTMAPENTRY);
+		it->entry = IntTrieMapFindEntry(it->map, 
+			WORD_INTMAPENTRY_KEY(it->entry), 1, NULL);
 	    }
-	    //TODO handle immutable entries
-	    ASSERT(0);
+
+	    /*
+	     * Set entry value.
+	     */
+
+	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MINTMAPENTRY);
+	    WORD_MAPENTRY_VALUE(it->entry) = value;
+	    Col_WordSetModified(it->entry);
 	    break;
 
 	/* WORD_TYPE_UNKNOWN */
