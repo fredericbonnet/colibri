@@ -90,7 +90,7 @@ Col_NewIntTrieMap()
 /*---------------------------------------------------------------------------
  * Internal Function: LeftmostLeaf
  *
- *	Get leftmost entry in subtrie.
+ *	Get leftmost leaf in subtrie.
  *
  * Argument:
  *	node	- Root node of subtrie.
@@ -119,7 +119,7 @@ LeftmostLeaf(
 /*---------------------------------------------------------------------------
  * Internal Function: RightmostLeaf
  *
- *	Get rightmost entry in subtrie.
+ *	Get rightmost leaf in subtrie.
  *
  * Argument:
  *	node	- Root node of subtrie.
@@ -208,10 +208,10 @@ StringTrieMapFindEntry(
 	}
 
 	/*
-	 * Entry node.
+	 * Leaf node.
 	 */
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_MMAPENTRY);
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_TRIELEAF);
 	entryKey = WORD_MAPENTRY_KEY(node);
 	if (Col_CompareRopes(key, entryKey, 0, SIZE_MAX, &diff, &cKey, &cEntryKey) 
 		== 0) {
@@ -237,7 +237,7 @@ StringTrieMapFindEntry(
     WORD_TRIEMAP_SIZE(map)++;
 
     entry = (Col_Word) AllocCells(1);
-    WORD_MMAPENTRY_INIT(entry, WORD_NIL, key, WORD_NIL, 0);
+    WORD_TRIELEAF_INIT(entry, key, WORD_NIL, WORD_NIL);
 
     if (!WORD_TRIEMAP_ROOT(map)) {
 	/*
@@ -341,9 +341,9 @@ StringTrieMapFindEntry(
 	 */
 
 	rightmost = RightmostLeaf(*nodePtr);
-	ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_MMAPENTRY);
-	WORD_MAPENTRY_NEXT(entry) = WORD_MAPENTRY_NEXT(rightmost);
-	WORD_MAPENTRY_NEXT(rightmost) = node;
+	ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_TRIELEAF);
+	WORD_TRIELEAF_UP(entry) = WORD_TRIELEAF_UP(rightmost);
+	WORD_TRIELEAF_UP(rightmost) = node;
     } else {
 	/*
 	 * Entry is left.
@@ -355,7 +355,7 @@ StringTrieMapFindEntry(
 	 * Entry ancestor is new node.
 	 */
 
-	WORD_MAPENTRY_NEXT(entry) = node;
+	WORD_TRIELEAF_UP(entry) = node;
     }
     *nodePtr = node;
     Col_WordSetModified(parent);
@@ -415,10 +415,10 @@ IntTrieMapFindEntry(
 	}
 
 	/*
-	 * Entry node.
+	 * Leaf node.
 	 */
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTMAPENTRY);
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_INTTRIELEAF);
 	entryKey = WORD_INTMAPENTRY_KEY(node);
 	if (key == entryKey) {
 	    /*
@@ -443,7 +443,7 @@ IntTrieMapFindEntry(
     WORD_TRIEMAP_SIZE(map)++;
 
     entry = (Col_Word) AllocCells(1);
-    WORD_MINTMAPENTRY_INIT(entry, WORD_NIL, key, WORD_NIL);
+    WORD_INTTRIELEAF_INIT(entry, key, WORD_NIL, WORD_NIL);
 
     if (!WORD_TRIEMAP_ROOT(map)) {
 	/*
@@ -530,9 +530,9 @@ IntTrieMapFindEntry(
 	 */
 
 	rightmost = RightmostLeaf(*nodePtr);
-	ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_MINTMAPENTRY);
-	WORD_MAPENTRY_NEXT(entry) = WORD_MAPENTRY_NEXT(rightmost);
-	WORD_MAPENTRY_NEXT(rightmost) = node;
+	ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_INTTRIELEAF);
+	WORD_TRIELEAF_UP(entry) = WORD_TRIELEAF_UP(rightmost);
+	WORD_TRIELEAF_UP(rightmost) = node;
     } else {
 	/*
 	 * Entry is left.
@@ -544,7 +544,7 @@ IntTrieMapFindEntry(
 	 * Entry ancestor is new node.
 	 */
 
-	WORD_MAPENTRY_NEXT(entry) = node;
+	WORD_TRIELEAF_UP(entry) = node;
     }
     *nodePtr = node;
     Col_WordSetModified(parent);
@@ -587,7 +587,7 @@ Col_StringTrieMapGet(
 
     entry = StringTrieMapFindEntry(map, key, 0, NULL);
     if (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_TRIELEAF);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
 	return 1;
     } else {
@@ -625,7 +625,7 @@ Col_IntTrieMapGet(
 
     entry = IntTrieMapFindEntry(map, key, 0, NULL);
     if (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTTRIELEAF);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
 	return 1;
     } else {
@@ -666,7 +666,7 @@ Col_StringTrieMapSet(
 
     entry = StringTrieMapFindEntry(map, key, 1, &create);
     ASSERT(entry);
-    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MMAPENTRY);
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_TRIELEAF);
     Col_WordSetModified(entry);
     WORD_MAPENTRY_VALUE(entry) = value;
     return create;
@@ -703,7 +703,7 @@ Col_IntTrieMapSet(
 
     entry = IntTrieMapFindEntry(map, key, 1, &create);
     ASSERT(entry);
-    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTMAPENTRY);
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTTRIELEAF);
     Col_WordSetModified(entry);
     WORD_MAPENTRY_VALUE(entry) = value;
     return create;
@@ -777,7 +777,11 @@ Col_StringTrieMapUnset(
 	    continue;
 	}
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_MMAPENTRY);
+	/*
+	 * Leaf node.
+	 */
+
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_TRIELEAF);
 	if (Col_CompareRopes(key, WORD_MAPENTRY_KEY(node), 0, SIZE_MAX, NULL,
 		NULL, NULL) == 0) {
 	    /*
@@ -810,8 +814,8 @@ Col_StringTrieMapUnset(
 		     */
 
 		    rightmost = RightmostLeaf(sibling);
-		    ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_MMAPENTRY);
-		    WORD_MAPENTRY_NEXT(rightmost) = WORD_MAPENTRY_NEXT(node);
+		    ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_TRIELEAF);
+		    WORD_TRIELEAF_UP(rightmost) = WORD_TRIELEAF_UP(node);
 		} else {
 		    /*
 		     * Entry was left.
@@ -905,7 +909,11 @@ Col_IntTrieMapUnset(
 	    continue;
 	}
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTMAPENTRY);
+	/*
+	 * Leaf node.
+	 */
+
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_INTTRIELEAF);
 	if (key == WORD_INTMAPENTRY_KEY(node)) {
 	    /*
 	     * Found!
@@ -937,8 +945,8 @@ Col_IntTrieMapUnset(
 		     */
 
 		    rightmost = RightmostLeaf(sibling);
-		    ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_MINTMAPENTRY);
-		    WORD_MAPENTRY_NEXT(rightmost) = WORD_MAPENTRY_NEXT(node);
+		    ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_INTTRIELEAF);
+		    WORD_TRIELEAF_UP(rightmost) = WORD_TRIELEAF_UP(node);
 		} else {
 		    /*
 		     * Entry was left.
@@ -1123,41 +1131,25 @@ Col_TrieMapIterSetValue(
 
     switch (WORD_TYPE(it->map)) {
 	case WORD_TYPE_STRTRIEMAP:
-	    if (WORD_TYPE(it->entry) != WORD_TYPE_MMAPENTRY) {
-		/*
-		 * Entry is immutable, convert to mutable.
-		 */
-
-		ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MAPENTRY);
-		it->entry = StringTrieMapFindEntry(it->map, 
-			WORD_MAPENTRY_KEY(it->entry), 1, NULL);
-	    }
+	    //TODO handle immutable subtries.
 
 	    /*
 	     * Set entry value.
 	     */
 
-	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MMAPENTRY);
+	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_TRIELEAF);
 	    WORD_MAPENTRY_VALUE(it->entry) = value;
 	    Col_WordSetModified(it->entry);
 	    break;
 
 	case WORD_TYPE_INTTRIEMAP:
-	    if (WORD_TYPE(it->entry) != WORD_TYPE_MINTMAPENTRY) {
-		/*
-		 * Entry is immutable, convert to mutable.
-		 */
-
-		ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTMAPENTRY);
-		it->entry = IntTrieMapFindEntry(it->map, 
-			WORD_INTMAPENTRY_KEY(it->entry), 1, NULL);
-	    }
+	    //TODO handle immutable subtries.
 
 	    /*
 	     * Set entry value.
 	     */
 
-	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MINTMAPENTRY);
+	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTTRIELEAF);
 	    WORD_MAPENTRY_VALUE(it->entry) = value;
 	    Col_WordSetModified(it->entry);
 	    break;
@@ -1187,7 +1179,7 @@ Col_TrieMapIterNext(
 	return;
     }
 
-    if (!WORD_MAPENTRY_NEXT(it->entry)) {
+    if (!WORD_TRIELEAF_UP(it->entry)) {
 	/*
 	 * End of map.
 	 */
@@ -1200,9 +1192,9 @@ Col_TrieMapIterNext(
      * Next entry is leftmost leaf of ancestor's right subtrie.
      */
 
-    ASSERT(WORD_TYPE(WORD_MAPENTRY_NEXT(it->entry)) == WORD_TYPE_STRTRIENODE
-	    || WORD_TYPE(WORD_MAPENTRY_NEXT(it->entry)) == WORD_TYPE_INTTRIENODE)
+    ASSERT(WORD_TYPE(WORD_TRIELEAF_UP(it->entry)) == WORD_TYPE_STRTRIENODE
+	    || WORD_TYPE(WORD_TRIELEAF_UP(it->entry)) == WORD_TYPE_INTTRIENODE)
     it->entry = LeftmostLeaf(WORD_TRIENODE_RIGHT(
-	    WORD_MAPENTRY_NEXT(it->entry)));
+	    WORD_TRIELEAF_UP(it->entry)));
     ASSERT(it->entry);
 }

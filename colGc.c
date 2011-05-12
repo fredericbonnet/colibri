@@ -1378,14 +1378,6 @@ start:
 	    return;
 	}
 
-	case WORD_TYPE_MLIST:
-	    /* 
-	     * Follow list root and tail recurse on synonym.
-	     */
-
-	    MarkWord(data, &WORD_MLIST_ROOT(*wordPtr), page);
-	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
-
 	case WORD_TYPE_SUBLIST:
 	    /* 
 	     * Tail recurse on source.
@@ -1401,6 +1393,14 @@ start:
 
 	    MarkWord(data, &WORD_CONCATLIST_LEFT(*wordPtr), page);
 	    TAIL_RECURSE(&WORD_CONCATLIST_RIGHT(*wordPtr), page);
+
+	case WORD_TYPE_MLIST:
+	    /* 
+	     * Follow list root and tail recurse on synonym.
+	     */
+
+	    MarkWord(data, &WORD_MLIST_ROOT(*wordPtr), page);
+	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 
 	case WORD_TYPE_STRHASHMAP:
 	case WORD_TYPE_INTHASHMAP:
@@ -1428,24 +1428,22 @@ start:
 
 	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 
-	case WORD_TYPE_MAPENTRY:
-	case WORD_TYPE_MMAPENTRY:
+	case WORD_TYPE_HASHENTRY:
+	case WORD_TYPE_MHASHENTRY:
 	    /*
-	     * Follow key & value and tail recurse on next.
+	     * Follow key.
 	     */
 
 	    MarkWord(data, &WORD_MAPENTRY_KEY(*wordPtr), page);
-	    MarkWord(data, &WORD_MAPENTRY_VALUE(*wordPtr), page);
-	    TAIL_RECURSE(&WORD_MAPENTRY_NEXT(*wordPtr), page);
-
-	case WORD_TYPE_INTMAPENTRY:
-	case WORD_TYPE_MINTMAPENTRY:
+	    /* continued. */
+	case WORD_TYPE_INTHASHENTRY:
+	case WORD_TYPE_MINTHASHENTRY:
 	    /*
 	     * Follow value and tail recurse on next.
 	     */
 
 	    MarkWord(data, &WORD_MAPENTRY_VALUE(*wordPtr), page);
-	    TAIL_RECURSE(&WORD_MAPENTRY_NEXT(*wordPtr), page);
+	    TAIL_RECURSE(&WORD_HASHENTRY_NEXT(*wordPtr), page);
 
 	case WORD_TYPE_STRTRIEMAP:
 	case WORD_TYPE_INTTRIEMAP:
@@ -1465,14 +1463,28 @@ start:
 	    MarkWord(data, &WORD_TRIENODE_LEFT(*wordPtr), page);
 	    TAIL_RECURSE(&WORD_TRIENODE_RIGHT(*wordPtr), page);
 
-	case WORD_TYPE_SUBTRIE:
+	case WORD_TYPE_TRIELEAF:
 	    /*
-	     * Follow root and tail recurse on next. Parent is reachable anyway
-	     * through subtrie (the rightmost leaf points to it).
+	     * Follow key.
 	     */
 
-	    MarkWord(data, &WORD_SUBTRIE_ROOT(*wordPtr), page);
-	    TAIL_RECURSE(&WORD_SUBTRIE_NEXT(*wordPtr), page);
+	    MarkWord(data, &WORD_MAPENTRY_KEY(*wordPtr), page);
+	    /* continued. */
+	case WORD_TYPE_INTTRIELEAF:
+	    /*
+	     * Tail recurse on value. Don't follow up as it is reachable anyway
+	     * by construction.
+	     */
+
+	    TAIL_RECURSE(&WORD_MAPENTRY_VALUE(*wordPtr), page);
+
+	case WORD_TYPE_SUBTRIE:
+	    /*
+	     * Tail recurse on root. Don't follow parent and up as they are 
+	     * reachable anyway by construction.
+	     */
+
+	    TAIL_RECURSE(&WORD_SUBTRIE_ROOT(*wordPtr), page);
 
 	case WORD_TYPE_CUSTOM: {
 	    Col_CustomWordType *typeInfo = WORD_TYPEINFO(*wordPtr);

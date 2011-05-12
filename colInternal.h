@@ -640,18 +640,20 @@ void			DeclareCustomWord(Col_Word word,
  *				  (<WORD_CONCATLIST_INIT>)
  *	WORD_TYPE_MCONCATLIST	- Mutable Concat Lists (<WORD_MCONCATLIST_INIT>)
  *	WORD_TYPE_MLIST		- Mutable Lists (<WORD_MLIST_INIT>)
- *	WORD_TYPE_MAPENTRY	- Immutable Maps Entries (<WORD_MAPENTRY_INIT>)
- *	WORD_TYPE_MMAPENTRY	- Mutable Maps Entries (<WORD_MMAPENTRY_INIT>)
- *	WORD_TYPE_INTMAPENTRY	- Immutable Integer Map Entries 
- *				  (<WORD_INTMAPENTRY_INIT>)
- *	WORD_TYPE_MINTMAPENTRY	- Mutable Integer Map Entries 
- *				  (<WORD_MINTMAPENTRY_INIT>)
  *	WORD_TYPE_STRHASHMAP	- String Hash Maps (<WORD_STRHASHMAP_INIT>)
  *	WORD_TYPE_INTHASHMAP	- Integer Hash Maps (<WORD_INTHASHMAP_INIT>)
+ *	WORD_TYPE_HASHENTRY	- Immutable Hash Entries (<WORD_MAPENTRY_INIT>)
+ *	WORD_TYPE_MHASHENTRY	- Mutable Hash Entries (<WORD_MMAPENTRY_INIT>)
+ *	WORD_TYPE_INTHASHENTRY	- Immutable Integer Hash Entries 
+ *				  (<WORD_INTMAPENTRY_INIT>)
+ *	WORD_TYPE_MINTHASHENTRY	- Mutable Integer Hash Entries 
+ *				  (<WORD_MINTMAPENTRY_INIT>)
  *	WORD_TYPE_STRTRIEMAP	- String Trie Maps (<WORD_STRTRIEMAP_INIT>)
  *	WORD_TYPE_INTTRIEMAP	- Integer Trie Maps (<WORD_INTTRIEMAP_INIT>)
  *	WORD_TYPE_STRTRIENODE	- String Trie Nodes (<WORD_STRTRIENODE_INIT>)
  *	WORD_TYPE_INTTRIENODE	- Integer Trie Nodes (<WORD_INTTRIENODE_INIT>)
+ *	WORD_TYPE_TRIELEAF	- Trie Leaves (<WORD_TRIELEAF_INIT>)
+ *	WORD_TYPE_INTTRIELEAF	- Integer Trie Leaves (<WORD_INTTRIELEAF_INIT>)
  *	WORD_TYPE_SUBTRIE	- Subtries (<WORD_SUBTRIE_INIT>)
  *	WORD_TYPE_REDIRECT	- Redirects
  *	WORD_TYPE_UNKNOWN	- Used as a tag in the source code to mark 
@@ -693,17 +695,19 @@ void			DeclareCustomWord(Col_Word word,
 #define WORD_TYPE_CONCATLIST	38
 #define WORD_TYPE_MCONCATLIST	42
 #define WORD_TYPE_MLIST		46
-#define WORD_TYPE_MAPENTRY	50
-#define WORD_TYPE_MMAPENTRY	54
-#define WORD_TYPE_INTMAPENTRY	58
-#define WORD_TYPE_MINTMAPENTRY	62
-#define WORD_TYPE_STRHASHMAP	66
-#define WORD_TYPE_INTHASHMAP	70
+#define WORD_TYPE_STRHASHMAP	50
+#define WORD_TYPE_INTHASHMAP	54
+#define WORD_TYPE_HASHENTRY	58
+#define WORD_TYPE_MHASHENTRY	62
+#define WORD_TYPE_INTHASHENTRY	66
+#define WORD_TYPE_MINTHASHENTRY	70
 #define WORD_TYPE_STRTRIEMAP	74
 #define WORD_TYPE_INTTRIEMAP	78
 #define WORD_TYPE_STRTRIENODE	82
 #define WORD_TYPE_INTTRIENODE	86
-#define WORD_TYPE_SUBTRIE	90
+#define WORD_TYPE_TRIELEAF	90
+#define WORD_TYPE_INTTRIELEAF	94
+#define WORD_TYPE_SUBTRIE	98
 #ifdef PROMOTE_COMPACT
 #   define WORD_TYPE_REDIRECT	254
 #endif
@@ -2042,25 +2046,20 @@ void			DeclareCustomWord(Col_Word word,
 /*---------------------------------------------------------------------------
  * Internal Macros: Map Entry Fields
  *
- *	Accessors for map entry fields. Both immutable and mutable versions use 
- *	these fields.
+ *	Accessors for generic map entry fields.
  *
  *	Maps associate a key to a word value. The key is usually a word 
  *	(including ropes) but specialized subtypes use integer values.
- *
- *	All map types use the same entry word structure. Some fields have 
- *	different usage depending on their container (for example, the hash 
- *	field is only used by hash maps and ignored by tries).
  * 
  * Layout:
  *	On all architectures the cell layout is as follows:
  *
  * (start table)
- *      0     7                                                       n
+ *      0     7 8                                                     n
  *     +-------+-------------------------------------------------------+
- *   0 | Type  |                         Hash                          |
- *     +-------+-------------------------------------------------------+
- *   1 |                             Next                              |
+ *   0 | Type  |                                                       |
+ *     +-------+                   Type-specific data                  +
+ *   1 |                                                               |
  *     +---------------------------------------------------------------+
  *   2 |                              Key                              |
  *     +---------------------------------------------------------------+
@@ -2068,13 +2067,8 @@ void			DeclareCustomWord(Col_Word word,
  *     +---------------------------------------------------------------+
  * (end)
  *
- *	WORD_MAPENTRY_HASH	- Higher order bits of the hash value for fast 
- *				  negative test. Only used by hash maps.
- *	WORD_MAPENTRY_SET_HASH	- Set hash value. Only retain the high order 
- *				  bits.
- *	WORD_MAPENTRY_NEXT	- Pointer to next entry in chain. The exact 
- *				  nature of this chain depends on the map type.
  *	WORD_MAPENTRY_KEY	- Entry key word.
+ *	WORD_INTMAPENTRY_KEY	- Integer entry key.
  *	WORD_MAPENTRY_VALUE	- Entry value word.
  *
  * Note:
@@ -2082,159 +2076,13 @@ void			DeclareCustomWord(Col_Word word,
  *	accessible for both read/write operations).
  *
  * See also:
- *	<WORD_MMAPENTRY_INIT>
+ *	<WORD_HASHENTRY_INIT>, <WORD_MHASHENTRY_INIT>, <WORD_INTHASHENTRY_INIT>,
+ *	<WORD_MINTHASHENTRY_INIT>, <WORD_TRIELEAF_INIT>, <WORD_INTTRIELEAF_INIT>
  *---------------------------------------------------------------------------*/
 
-#define WORD_MAPENTRY_NEXT(word)	(((Col_Word *)(word))[1])
 #define WORD_MAPENTRY_KEY(word)		(((Col_Word *)(word))[2])
-#define WORD_MAPENTRY_VALUE(word)	(((Col_Word *)(word))[3])
-#define MAPENTRY_HASH_MASK		(UINTPTR_MAX^UCHAR_MAX)
-#ifdef COL_BIGENDIAN
-#   define WORD_MAPENTRY_HASH(word)	((((uintptr_t *)(word))[0]<<CHAR_BIT)&MAPENTRY_HASH_MASK)
-#   define WORD_MAPENTRY_SET_HASH(word, hash) ((((uintptr_t *)(word))[0])&=~(MAPENTRY_HASH_MASK>>CHAR_BIT),(((uintptr_t *)(word))[0])|=(((hash)&MAPENTRY_HASH_MASK)>>CHAR_BIT))
-#else
-#   define WORD_MAPENTRY_HASH(word)	((((uintptr_t *)(word))[0])&MAPENTRY_HASH_MASK)
-#   define WORD_MAPENTRY_SET_HASH(word, hash) ((((uintptr_t *)(word))[0])&=~MAPENTRY_HASH_MASK,(((uintptr_t *)(word))[0])|=((hash)&MAPENTRY_HASH_MASK))
-#endif
-
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_MAPENTRY_INIT
- *
- *	Initializer for immutable map entry words.
- *
- * Arguments:
- *	word	- Word to initialize. (Caution: evaluated several times during 
- *		  macro expansion)
- *	next	- <WORD_MAPENTRY_NEXT>
- *	key	- <WORD_MAPENTRY_KEY>
- *	value	- <WORD_MAPENTRY_VALUE>
- *	hash	- <WORD_MAPENTRY_SET_HASH>
- *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
- *
- * See also:
- *	<WORD_TYPE_MAPENTRY>
- *---------------------------------------------------------------------------*/
-
-#define WORD_MAPENTRY_INIT(word, next, key, value, hash) \
-    WORD_SET_TYPEID((word), WORD_TYPE_MAPENTRY); \
-    WORD_MAPENTRY_NEXT(word) = (next); \
-    WORD_MAPENTRY_KEY(word) = (key); \
-    WORD_MAPENTRY_VALUE(word) = (value); \
-    WORD_MAPENTRY_SET_HASH(word, hash);
-
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_MMAPENTRY_INIT
- *
- *	Initializer for mutable map entry words.
- *
- * Arguments:
- *	word	- Word to initialize. (Caution: evaluated several times during 
- *		  macro expansion)
- *	next	- <WORD_MAPENTRY_NEXT>
- *	key	- <WORD_MAPENTRY_KEY>
- *	value	- <WORD_MAPENTRY_VALUE>
- *	hash	- <WORD_MAPENTRY_SET_HASH> (Caution: evaluated several times
- *		  during macro expansion)
- *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
- *
- * See also:
- *	<WORD_TYPE_MMAPENTRY>, <StringHashMapFindEntry>, 
- *	<StringTrieMapFindEntry>
- *---------------------------------------------------------------------------*/
-
-#define WORD_MMAPENTRY_INIT(word, next, key, value, hash) \
-    WORD_SET_TYPEID((word), WORD_TYPE_MMAPENTRY); \
-    WORD_MAPENTRY_NEXT(word) = (next); \
-    WORD_MAPENTRY_KEY(word) = (key); \
-    WORD_MAPENTRY_VALUE(word) = (value); \
-    WORD_MAPENTRY_SET_HASH(word, hash);
-
-/*---------------------------------------------------------------------------
- * Internal Macros: Integer Map Entry Fields
- *
- *	Accessors for integer map entry fields.  Both immutable and mutable 
- *	versions use these fields.
- *
- *	Integer map entries are exactly like generic ones except that their key
- *	is a machine integer instead of a word. The hash field is unused.
- * 
- * Layout:
- *	On all architectures the cell layout is as follows:
- *
- * (start table)
- *      0     7                                                       n
- *     +-------+-------------------------------------------------------+
- *   0 | Type  |                        Unused                         |
- *     +-------+-------------------------------------------------------+
- *   1 |                        Next (Generic)                         |
- *     +---------------------------------------------------------------+
- *   2 |                              Key                              |
- *     +---------------------------------------------------------------+
- *   3 |                        Value (Generic)                        |
- *     +---------------------------------------------------------------+
- * (end)
- *
- *	WORD_INTMAPENTRY_KEY	- Integer entry key.
- *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
- *
- * See also:
- *	<Map Entry Fields>, <WORD_MINTMAPENTRY_INIT>
- *---------------------------------------------------------------------------*/
-
 #define WORD_INTMAPENTRY_KEY(word)	(((intptr_t *)(word))[2])
-
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_INTMAPENTRY_INIT
- *
- *	Initializer for immutable integer map entry words.
- *
- * Arguments:
- *	word	- Word to initialize. (Caution: evaluated several times during 
- *		  macro expansion)
- *	next	- <WORD_MAPENTRY_NEXT>
- *	key	- <WORD_INTMAPENTRY_KEY>
- *	value	- <WORD_MAPENTRY_VALUE>
- *
- * See also:
- *	<WORD_TYPE_INTMAPENTRY>
- *---------------------------------------------------------------------------*/
-
-#define WORD_INTMAPENTRY_INIT(word, next, key, value) \
-    WORD_SET_TYPEID((word), WORD_TYPE_INTMAPENTRY); \
-    WORD_MAPENTRY_NEXT(word) = (next); \
-    WORD_INTMAPENTRY_KEY(word) = (key); \
-    WORD_MAPENTRY_VALUE(word) = (value);
-
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_MINTMAPENTRY_INIT
- *
- *	Initializer for mutable integer map entry words.
- *
- * Arguments:
- *	word	- Word to initialize. (Caution: evaluated several times during 
- *		  macro expansion)
- *	next	- <WORD_MAPENTRY_NEXT>
- *	key	- <WORD_INTMAPENTRY_KEY>
- *	value	- <WORD_MAPENTRY_VALUE>
- *
- * See also:
- *	<WORD_TYPE_MINTMAPENTRY>, <IntHashMapFindEntry>, <IntTrieMapFindEntry>
- *---------------------------------------------------------------------------*/
-
-#define WORD_MINTMAPENTRY_INIT(word, next, key, value) \
-    WORD_SET_TYPEID((word), WORD_TYPE_MINTMAPENTRY); \
-    WORD_MAPENTRY_NEXT(word) = (next); \
-    WORD_INTMAPENTRY_KEY(word) = (key); \
-    WORD_MAPENTRY_VALUE(word) = (value);
+#define WORD_MAPENTRY_VALUE(word)	(((Col_Word *)(word))[3])
 
 
 /****************************************************************************
@@ -2266,11 +2114,6 @@ void			DeclareCustomWord(Col_Word word,
  *
  *	Integer hash maps are specialized hash maps where the hash value is the 
  *	randomized integer key.
- *
- * Entries:
- *	Hash maps use standard map entries. The <WORD_MAPENTRY_NEXT> field is
- *	used to chain bucket entries together. It is also used during iteration:
- *	entries in buckets are iterated in order.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -2381,6 +2224,161 @@ void			DeclareCustomWord(Col_Word word,
     WORD_HASHMAP_SIZE(word) = 0; \
     WORD_HASHMAP_BUCKETS(word) = WORD_NIL;
 
+/*---------------------------------------------------------------------------
+ * Internal Macros: Hash Entry Fields
+ *
+ *	Accessors for hash entry fields. Both immutable and mutable versions
+ *	use these fields.
+ *
+ *	Uses generic map entry fields.
+ * 
+ * Layout:
+ *	On all architectures the cell layout is as follows:
+ *
+ * (start table)
+ *      0     7 8                                                     n
+ *     +-------+-------------------------------------------------------+
+ *   0 | Type  |                         Hash                          |
+ *     +-------+-------------------------------------------------------+
+ *   1 |                             Next                              |
+ *     +---------------------------------------------------------------+
+ *   2 |                          Key (Generic)                        |
+ *     +---------------------------------------------------------------+
+ *   3 |                         Value (Generic)                       |
+ *     +---------------------------------------------------------------+
+ * (end)
+ *
+ *	WORD_HASHENTRY_HASH	- Higher order bits of the hash value for fast 
+ *				  negative test and rehashing. The full value is
+ *				  computed by combining these high order bits 
+ *				  and the bucket index whenever possible, else 
+ *				  the value is recomputed from the key.
+ *	WORD_HASHENTRY_SET_HASH	- Set hash value. Only retain the high order 
+ *				  bits.
+ *	WORD_HASHENTRY_NEXT	- Pointer to next entry in bucket. Also used 
+ *				  during iteration.
+ *
+ * Note:
+ *	Macros are L-values and side effect-free unless specified (i.e. 
+ *	accessible for both read/write operations).
+ *
+ * See also:
+ *	<Map Entry Fields>, <WORD_HASHENTRY_INIT>, <WORD_MHASHENTRY_INIT>, 
+ *	<WORD_INTHASHENTRY_INIT>, <WORD_MINTHASHENTRY_INIT>
+ *---------------------------------------------------------------------------*/
+
+#define HASHENTRY_HASH_MASK		(UINTPTR_MAX^UCHAR_MAX)
+#ifdef COL_BIGENDIAN
+#   define WORD_HASHENTRY_HASH(word)	((((uintptr_t *)(word))[0]<<CHAR_BIT)&HASHENTRY_HASH_MASK)
+#   define WORD_HASHENTRY_SET_HASH(word, hash) ((((uintptr_t *)(word))[0])&=~(HASHENTRY_HASH_MASK>>CHAR_BIT),(((uintptr_t *)(word))[0])|=(((hash)&HASHENTRY_HASH_MASK)>>CHAR_BIT))
+#else
+#   define WORD_HASHENTRY_HASH(word)	((((uintptr_t *)(word))[0])&HASHENTRY_HASH_MASK)
+#   define WORD_HASHENTRY_SET_HASH(word, hash) ((((uintptr_t *)(word))[0])&=~HASHENTRY_HASH_MASK,(((uintptr_t *)(word))[0])|=((hash)&HASHENTRY_HASH_MASK))
+#endif
+#define WORD_HASHENTRY_NEXT(word)	(((Col_Word *)(word))[1])
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_HASHENTRY_INIT
+ *
+ *	Initializer for immutable hash entry words.
+ *
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	key	- <WORD_MAPENTRY_KEY>
+ *	value	- <WORD_MAPENTRY_VALUE>
+ *	next	- <WORD_HASHENTRY_NEXT>
+ *	hash	- <WORD_HASHENTRY_SET_HASH> (Caution: evaluated several times
+ *		  during macro expansion)
+ *
+ * Note:
+ *	Macros are L-values and side effect-free unless specified (i.e. 
+ *	accessible for both read/write operations).
+ *
+ * See also:
+ *	<WORD_TYPE_HASHENTRY>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_HASHENTRY_INIT(word, key, value, next, hash) \
+    WORD_SET_TYPEID((word), WORD_TYPE_HASHENTRY); \
+    WORD_MAPENTRY_KEY(word) = (key); \
+    WORD_MAPENTRY_VALUE(word) = (value); \
+    WORD_HASHENTRY_NEXT(word) = (next); \
+    WORD_HASHENTRY_SET_HASH(word, hash);
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_MHASHENTRY_INIT
+ *
+ *	Initializer for mutable hash entry words.
+ *
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	key	- <WORD_MAPENTRY_KEY>
+ *	value	- <WORD_MAPENTRY_VALUE>
+ *	next	- <WORD_HASHENTRY_NEXT>
+ *	hash	- <WORD_HASHENTRY_SET_HASH> (Caution: evaluated several times
+ *		  during macro expansion)
+ *
+ * Note:
+ *	Macros are L-values and side effect-free unless specified (i.e. 
+ *	accessible for both read/write operations).
+ *
+ * See also:
+ *	<WORD_TYPE_MHASHENTRY>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_MHASHENTRY_INIT(word, key, value, next, hash) \
+    WORD_SET_TYPEID((word), WORD_TYPE_MHASHENTRY); \
+    WORD_MAPENTRY_KEY(word) = (key); \
+    WORD_MAPENTRY_VALUE(word) = (value); \
+    WORD_HASHENTRY_NEXT(word) = (next); \
+    WORD_HASHENTRY_SET_HASH(word, hash);
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_INTHASHENTRY_INIT
+ *
+ *	Initializer for immutable integer hash entry words.
+ *
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	key	- <WORD_INTMAPENTRY_KEY>
+ *	value	- <WORD_MAPENTRY_VALUE>
+ *	next	- <WORD_HASHENTRY_NEXT>
+ *
+ * See also:
+ *	<WORD_TYPE_INTHASHENTRY>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_INTHASHENTRY_INIT(word, key, value, next) \
+    WORD_SET_TYPEID((word), WORD_TYPE_INTHASHENTRY); \
+    WORD_INTMAPENTRY_KEY(word) = (key); \
+    WORD_MAPENTRY_VALUE(word) = (value); \
+    WORD_HASHENTRY_NEXT(word) = (next);
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_MINTHASHENTRY_INIT
+ *
+ *	Initializer for mutable integer hash entry words.
+ *
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	key	- <WORD_INTMAPENTRY_KEY>
+ *	value	- <WORD_MAPENTRY_VALUE>
+ *	next	- <WORD_HASHENTRY_NEXT>
+ *
+ * See also:
+ *	<WORD_TYPE_MINTHASHENTRY>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_MINTHASHENTRY_INIT(word, key, value, next) \
+    WORD_SET_TYPEID((word), WORD_TYPE_MINTHASHENTRY); \
+    WORD_INTMAPENTRY_KEY(word) = (key); \
+    WORD_MAPENTRY_VALUE(word) = (value); \
+    WORD_HASHENTRY_NEXT(word) = (next);
+
 
 /****************************************************************************
  * Internal Group: Trie Maps
@@ -2401,13 +2399,6 @@ void			DeclareCustomWord(Col_Word word,
  *	Entries where this bit is cleared are stored in the left subtree, and 
  *	those with this bit set are stored in the right subtree, all in a 
  *	recursive manner.
- *
- * Entries:
- *	Trie maps use standard map entries. The <WORD_MAPENTRY_NEXT> field is
- *	used for iteration: each entry points to its deepest common ancestor
- *	with the next entry in iteration order. The next entry will be the
- *	leftmost leaf of the ancestor's right subtrie (current entry being the
- *	rightmost leaf of the ancestor's left subtrie).
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -2498,9 +2489,9 @@ void			DeclareCustomWord(Col_Word word,
  *     +---------------------------------------------------------------+
  * (end)
  *
- *	WORD_TRIENODE_LEFT	- Left subtrie. Entries have their critical bit
+ *	WORD_TRIENODE_LEFT	- Left subtrie. Keys have their critical bit
  *				  cleared.
- *	WORD_TRIENODE_RIGHT	- Left subtrie. Entries have their critical bit
+ *	WORD_TRIENODE_RIGHT	- Left subtrie. Keys have their critical bit
  *				  set.
  *
  * Note:
@@ -2644,6 +2635,98 @@ void			DeclareCustomWord(Col_Word word,
     WORD_TRIENODE_RIGHT(word) = (right);
 
 /*---------------------------------------------------------------------------
+ * Internal Macros: Trie Leaf Fields
+ *
+ *	Accessors for trie leaf fields.
+ *
+ *	Uses generic map entry fields.
+ * 
+ * Layout:
+ *	On all architectures the cell layout is as follows:
+ *
+ * (start table)
+ *      0     7                                                       n
+ *     +-------+-------------------------------------------------------+
+ *   0 | Type  |                        Unused                         |
+ *     +-------+-------------------------------------------------------+
+ *   1 |                              Up                               |
+ *     +---------------------------------------------------------------+
+ *   2 |                          Key (Generic)                        |
+ *     +---------------------------------------------------------------+
+ *   3 |                         Value (Generic)                       |
+ *     +---------------------------------------------------------------+
+ * (end)
+ *
+ *	WORD_TRIELEAF_UP	- Pointer to deepest common ancestor with the 
+ *				  next leaf in iteration order. The next leaf
+ *				  will be the leftmost leaf of the ancestor's 
+ *				  right subtrie (current leaf being the 
+ *				  rightmost leaf of the ancestor's left 
+ *				  subtrie).
+ *
+ * Note:
+ *	Macros are L-values and side effect-free unless specified (i.e. 
+ *	accessible for both read/write operations).
+ *
+ * See also:
+ *	<Map Entry Fields>, <WORD_TRIELEAF_INIT>, <WORD_INTTRIELEAF_INIT>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_TRIELEAF_UP(word)	(((Col_Word *)(word))[1])
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_TRIELEAF_INIT
+ *
+ *	Initializer for trie leaf words.
+ *
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	key	- <WORD_MAPENTRY_KEY>
+ *	value	- <WORD_MAPENTRY_VALUE>
+ *	up	- <WORD_TRIELEAF_UP>
+ *
+ * Note:
+ *	Macros are L-values and side effect-free unless specified (i.e. 
+ *	accessible for both read/write operations).
+ *
+ * See also:
+ *	<WORD_TYPE_TRIELEAF>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_TRIELEAF_INIT(word, key, value, up) \
+    WORD_SET_TYPEID((word), WORD_TYPE_TRIELEAF); \
+    WORD_MAPENTRY_KEY(word) = (key); \
+    WORD_MAPENTRY_VALUE(word) = (value); \
+    WORD_TRIELEAF_UP(word) = (up);
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_INTTRIELEAF_INIT
+ *
+ *	Initializer for integer trie leaf words.
+ *
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	key	- <WORD_INTMAPENTRY_KEY>
+ *	value	- <WORD_MAPENTRY_VALUE>
+ *	up	- <WORD_TRIELEAF_UP>
+ *
+ * Note:
+ *	Macros are L-values and side effect-free unless specified (i.e. 
+ *	accessible for both read/write operations).
+ *
+ * See also:
+ *	<WORD_TYPE_INTTRIELEAF>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_INTTRIELEAF_INIT(word, key, value, up) \
+    WORD_SET_TYPEID((word), WORD_TYPE_INTTRIELEAF); \
+    WORD_INTMAPENTRY_KEY(word) = (key); \
+    WORD_MAPENTRY_VALUE(word) = (value); \
+    WORD_TRIELEAF_UP(word) = (up);
+
+/*---------------------------------------------------------------------------
  * Internal Macros: Subtrie Fields
  *
  *	Accessors for subtrie fields.
@@ -2660,22 +2743,22 @@ void			DeclareCustomWord(Col_Word word,
  *     +-------+-------------------------------------------------------+
  *   0 | Type  |                        Unused                         |
  *     +-------+-------------------------------------------------------+
- *   1 |                             Root                              |
+ *   1 |                              Up                               |
  *     +---------------------------------------------------------------+
- *   2 |                            Parent                             |
+ *   2 |                             Root                              |
  *     +---------------------------------------------------------------+
- *   3 |                             Next                              |
+ *   3 |                            Parent                             |
  *     +---------------------------------------------------------------+
  * (end)
  *
+ *	WORD_SUBTRIE_UP		- Up link. When the end of a subtrie is reached,
+ *				  this field is used in place of the terminal
+ *				  leaf's <WORD_TRIELEAF_UP> field.
  *	WORD_SUBTRIE_ROOT	- Root node of the subtrie.
  *	WORD_SUBTRIE_PARENT	- Parent node of the root. This is used during
- *				  iteration: if the current entry's next field
+ *				  iteration: if the current leaf's up field
  *				  points to this parent, stop iterating the
  *				  subtrie and resume the current one.
- *	WORD_SUBTRIE_NEXT	- Next in iteration. When the end of a subtrie 
- *				  is reached, this field is used in place of
- *				  the entry's <WORD_MAPENTRY_NEXT> field.
  *
  * Note:
  *	Macros are L-values and side effect-free unless specified (i.e. 
@@ -2685,9 +2768,9 @@ void			DeclareCustomWord(Col_Word word,
  *	<WORD_SUBTRIE_INIT>
  *---------------------------------------------------------------------------*/
 
-#define WORD_SUBTRIE_ROOT(word)		(((Col_Word *)(word))[1])
-#define WORD_SUBTRIE_PARENT(word)	(((Col_Word *)(word))[2])
-#define WORD_SUBTRIE_NEXT(word)		(((Col_Word *)(word))[3])
+#define WORD_SUBTRIE_UP(word)		(((Col_Word *)(word))[1])
+#define WORD_SUBTRIE_ROOT(word)		(((Col_Word *)(word))[2])
+#define WORD_SUBTRIE_PARENT(word)	(((Col_Word *)(word))[3])
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_SUBTRIE_INIT
@@ -2697,18 +2780,18 @@ void			DeclareCustomWord(Col_Word word,
  * Argument:
  *	word	- Word to initialize. (Caution: evaluated several times during 
  *		  macro expansion)
+ *	up	- <WORD_SUBTRIE_UP>
  *	root	- <WORD_SUBTRIE_ROOT>
  *	parent	- <WORD_SUBTRIE_PARENT>
- *	next	- <WORD_SUBTRIE_NEXT>
  *
  * See also:
  *	<WORD_TYPE_SUBTRIE>
  *---------------------------------------------------------------------------*/
 
-#define WORD_SUBTRIE_INIT(word, root, parent, next) \
+#define WORD_SUBTRIE_INIT(word, up, root, parent) \
     WORD_SET_TYPEID((word), WORD_TYPE_SUBTRIE); \
+    WORD_SUBTRIE_UP(word) = up; \
     WORD_SUBTRIE_ROOT(word) = root; \
-    WORD_SUBTRIE_PARENT(word) = parent; \
-    WORD_SUBTRIE_NEXT(word) = next;
+    WORD_SUBTRIE_PARENT(word) = parent;
 
 #endif /* _COLIBRI_INTERNAL */

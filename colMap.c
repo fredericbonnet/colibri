@@ -444,8 +444,9 @@ Col_MapIterGet(
     }
 
     switch (WORD_TYPE(it->entry)) {
-	case WORD_TYPE_MAPENTRY:
-	case WORD_TYPE_MMAPENTRY:
+	case WORD_TYPE_HASHENTRY:
+	case WORD_TYPE_MHASHENTRY:
+	case WORD_TYPE_TRIELEAF:
 	    *keyPtr = WORD_MAPENTRY_KEY(it->entry);
 	    *valuePtr = WORD_MAPENTRY_VALUE(it->entry);
 	    break;
@@ -480,8 +481,9 @@ Col_IntMapIterGet(
     }
 
     switch (WORD_TYPE(it->entry)) {
-	case WORD_TYPE_INTMAPENTRY:
-	case WORD_TYPE_MINTMAPENTRY:
+	case WORD_TYPE_INTHASHENTRY:
+	case WORD_TYPE_MINTHASHENTRY:
+	case WORD_TYPE_INTTRIELEAF:
 	    *keyPtr = WORD_INTMAPENTRY_KEY(it->entry);
 	    *valuePtr = WORD_MAPENTRY_VALUE(it->entry);
 	    break;
@@ -513,8 +515,9 @@ Col_MapIterGetKey(
     }
 
     switch (WORD_TYPE(it->entry)) {
-	case WORD_TYPE_MAPENTRY:
-	case WORD_TYPE_MMAPENTRY:
+	case WORD_TYPE_HASHENTRY:
+	case WORD_TYPE_MHASHENTRY:
+	case WORD_TYPE_TRIELEAF:
 	    return WORD_MAPENTRY_KEY(it->entry);
 
 	default:
@@ -545,8 +548,9 @@ Col_IntMapIterGetKey(
     }
 
     switch (WORD_TYPE(it->entry)) {
-	case WORD_TYPE_INTMAPENTRY:
-	case WORD_TYPE_MINTMAPENTRY:
+	case WORD_TYPE_INTHASHENTRY:
+	case WORD_TYPE_MINTHASHENTRY:
+	case WORD_TYPE_INTTRIELEAF:
 	    return WORD_INTMAPENTRY_KEY(it->entry);
 
 	default:
