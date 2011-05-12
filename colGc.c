@@ -1465,6 +1465,15 @@ start:
 	    MarkWord(data, &WORD_TRIENODE_LEFT(*wordPtr), page);
 	    TAIL_RECURSE(&WORD_TRIENODE_RIGHT(*wordPtr), page);
 
+	case WORD_TYPE_SUBTRIE:
+	    /*
+	     * Follow root and tail recurse on next. Parent is reachable anyway
+	     * through subtrie (the rightmost leaf points to it).
+	     */
+
+	    MarkWord(data, &WORD_SUBTRIE_ROOT(*wordPtr), page);
+	    TAIL_RECURSE(&WORD_SUBTRIE_NEXT(*wordPtr), page);
+
 	case WORD_TYPE_CUSTOM: {
 	    Col_CustomWordType *typeInfo = WORD_TYPEINFO(*wordPtr);
 	    if (typeInfo->childrenProc) {

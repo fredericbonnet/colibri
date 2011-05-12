@@ -24,6 +24,8 @@
  * Prototypes for functions used only in this file.
  */
 
+static Col_Word		LeftmostLeaf(Col_Word node);
+static Col_Word		RightmostLeaf(Col_Word node);
 static Col_Word		StringTrieMapFindEntry(Col_Word map, Col_Word key,
 			    int mutable, int *createPtr);
 static Col_Word		IntTrieMapFindEntry(Col_Word map, intptr_t key,
@@ -86,6 +88,64 @@ Col_NewIntTrieMap()
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
+ * Internal Function: LeftmostLeaf
+ *
+ *	Get leftmost entry in subtrie.
+ *
+ * Argument:
+ *	node	- Root node of subtrie.
+ *
+ * Result:
+ *	The leftmost leaf of subtrie.
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+LeftmostLeaf(
+     Col_Word node) 
+{
+    for (;;) {
+	switch (WORD_TYPE(node)) {
+	    case WORD_TYPE_STRTRIENODE:
+	    case WORD_TYPE_INTTRIENODE:
+		node = WORD_TRIENODE_LEFT(node);
+		break;
+
+	    default:
+		return node;
+	}
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: RightmostLeaf
+ *
+ *	Get rightmost entry in subtrie.
+ *
+ * Argument:
+ *	node	- Root node of subtrie.
+ *
+ * Result:
+ *	The rightmost leaf of subtrie.
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+RightmostLeaf(
+     Col_Word node) 
+{
+    for (;;) {
+	switch (WORD_TYPE(node)) {
+	    case WORD_TYPE_STRTRIENODE:
+	    case WORD_TYPE_INTTRIENODE:
+		node = WORD_TRIENODE_RIGHT(node);
+		break;
+
+	    default:
+		return node;
+	}
+    }
+}
+
+/*---------------------------------------------------------------------------
  * Internal Function: StringTrieMapFindEntry
  *
  *	Find or create in string trie map the entry mapped to the given key.
@@ -109,7 +169,7 @@ StringTrieMapFindEntry(
     int mutable,
     int *createPtr)
 {
-    Col_Word node, entry, parent, *nodePtr, prev, next;
+    Col_Word node, entry, parent, *nodePtr, rightmost;
     Col_RopeIterator itKey;
     Col_Word entryKey = WORD_NIL;
     size_t diff;
@@ -174,6 +234,8 @@ StringTrieMapFindEntry(
     }
     *createPtr = 1;
 
+    WORD_TRIEMAP_SIZE(map)++;
+
     entry = (Col_Word) AllocCells(1);
     WORD_MMAPENTRY_INIT(entry, WORD_NIL, key, WORD_NIL, 0);
 
@@ -183,11 +245,9 @@ StringTrieMapFindEntry(
 	 */
 
 	ASSERT(WORD_TRIEMAP_ROOT(map) == WORD_NIL);
-	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
+	ASSERT(WORD_TRIEMAP_SIZE(map) == 1);
 	WORD_TRIEMAP_ROOT(map) = entry;
 	Col_WordSetModified(map);
-
-	WORD_TRIEMAP_SIZE(map)++;
 
 	return entry;
     }
@@ -219,8 +279,6 @@ StringTrieMapFindEntry(
 
     nodePtr = &WORD_TRIEMAP_ROOT(map);
     parent = map;
-    prev = WORD_NIL;
-    next = WORD_NIL;
     Col_RopeIterBegin(key, 0, &itKey);
     while (*nodePtr) {
 	node = *nodePtr;
@@ -241,10 +299,9 @@ StringTrieMapFindEntry(
 	    }
 	    if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
 		/*
-		 * Recurse on right, remember left for later insertion in chain.
+		 * Recurse on right.
 		 */
 
-		prev = WORD_TRIENODE_LEFT(node);
 		nodePtr = &WORD_TRIENODE_RIGHT(node);
 	    } else {
 		/*
@@ -260,7 +317,7 @@ StringTrieMapFindEntry(
     }
 
     /*
-     * Insert entry here.
+     * Insert node here.
      */
 
     node = (Col_Word) AllocCells(1);
@@ -276,49 +333,32 @@ StringTrieMapFindEntry(
 	 * Entry is right.
 	 */
 
-	prev = *nodePtr;
 	WORD_STRTRIENODE_INIT(node, diff, newMask, *nodePtr, entry);
+
+	/*
+	 * Get rightmost leaf of left subtrie. Entry's ancestor is the current
+	 * rightmost's ancestor. New rightmost ancestor's is new node.
+	 */
+
+	rightmost = RightmostLeaf(*nodePtr);
+	ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_MMAPENTRY);
+	WORD_MAPENTRY_NEXT(entry) = WORD_MAPENTRY_NEXT(rightmost);
+	WORD_MAPENTRY_NEXT(rightmost) = node;
     } else {
 	/*
 	 * Entry is left.
 	 */
 
-	next = *nodePtr;
 	WORD_STRTRIENODE_INIT(node, diff, newMask, entry, *nodePtr);
+
+	/*
+	 * Entry ancestor is new node.
+	 */
+
+	WORD_MAPENTRY_NEXT(entry) = node;
     }
     *nodePtr = node;
     Col_WordSetModified(parent);
-
-    /*
-     * Insert in chain.
-     */
-
-    if (prev) {
-	/*
-	 * Insert after rightmost adjacent entry.
-	 */
-
-	while (WORD_TYPE(prev) == WORD_TYPE_STRTRIENODE) {
-	    prev = WORD_TRIENODE_RIGHT(prev);
-	}
-	ASSERT(WORD_TYPE(prev) == WORD_TYPE_MMAPENTRY);
-	WORD_MAPENTRY_NEXT(entry) = WORD_MAPENTRY_NEXT(prev);
-	WORD_MAPENTRY_NEXT(prev) = entry;
-	Col_WordSetModified(prev);
-    } else {
-	/*
-	 * Entry is first, insert before leftmost adjacent entry.
-	 */
-
-	ASSERT(next);
-	while (WORD_TYPE(next) == WORD_TYPE_STRTRIENODE) {
-	    next = WORD_TRIENODE_LEFT(next);
-	}
-	ASSERT(WORD_TYPE(next) == WORD_TYPE_MMAPENTRY);
-	WORD_MAPENTRY_NEXT(entry) = next;
-    }
-
-    WORD_TRIEMAP_SIZE(map)++;
 
     return entry;
 }
@@ -347,7 +387,7 @@ IntTrieMapFindEntry(
     int mutable,
     int *createPtr)
 {
-    Col_Word node, entry, parent, *nodePtr, prev, next;
+    Col_Word node, entry, parent, *nodePtr, rightmost;
     intptr_t entryKey = WORD_NIL, mask, newMask;
     
     /*
@@ -400,6 +440,8 @@ IntTrieMapFindEntry(
     }
     *createPtr = 1;
 
+    WORD_TRIEMAP_SIZE(map)++;
+
     entry = (Col_Word) AllocCells(1);
     WORD_MINTMAPENTRY_INIT(entry, WORD_NIL, key, WORD_NIL);
 
@@ -409,11 +451,9 @@ IntTrieMapFindEntry(
 	 */
 
 	ASSERT(WORD_TRIEMAP_ROOT(map) == WORD_NIL);
-	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
+	ASSERT(WORD_TRIEMAP_SIZE(map) == 1);
 	WORD_TRIEMAP_ROOT(map) = entry;
 	Col_WordSetModified(map);
-
-	WORD_TRIEMAP_SIZE(map)++;
 
 	return entry;
     }
@@ -445,8 +485,6 @@ IntTrieMapFindEntry(
 
     nodePtr = &WORD_TRIEMAP_ROOT(map);
     parent = map;
-    prev = WORD_NIL;
-    next = WORD_NIL;
     while (*nodePtr) {
 	node = *nodePtr;
 	if (WORD_TYPE(node) == WORD_TYPE_INTTRIENODE) {
@@ -457,10 +495,9 @@ IntTrieMapFindEntry(
 	    parent = node;
 	    if (mask ? (key & mask) : (key >= 0)) {
 		/*
-		 * Recurse on right, remember left for later insertion in chain.
+		 * Recurse on right.
 		 */
 
-		prev = WORD_TRIENODE_LEFT(node);
 		nodePtr = &WORD_TRIENODE_RIGHT(node);
 	    } else {
 		/*
@@ -476,7 +513,7 @@ IntTrieMapFindEntry(
     }
 
     /*
-     * Insert entry here.
+     * Insert node here.
      */
 
     node = (Col_Word) AllocCells(1);
@@ -485,49 +522,32 @@ IntTrieMapFindEntry(
 	 * Entry is right.
 	 */
 
-	prev = *nodePtr;
 	WORD_INTTRIENODE_INIT(node, newMask, *nodePtr, entry);
+
+	/*
+	 * Get rightmost leaf of left subtrie. Entry's ancestor is the current
+	 * rightmost's ancestor. New rightmost's ancestor is new node.
+	 */
+
+	rightmost = RightmostLeaf(*nodePtr);
+	ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_MINTMAPENTRY);
+	WORD_MAPENTRY_NEXT(entry) = WORD_MAPENTRY_NEXT(rightmost);
+	WORD_MAPENTRY_NEXT(rightmost) = node;
     } else {
 	/*
 	 * Entry is left.
 	 */
 
-	next = *nodePtr;
 	WORD_INTTRIENODE_INIT(node, newMask, entry, *nodePtr);
+
+	/*
+	 * Entry ancestor is new node.
+	 */
+
+	WORD_MAPENTRY_NEXT(entry) = node;
     }
     *nodePtr = node;
     Col_WordSetModified(parent);
-
-    /*
-     * Insert in chain.
-     */
-
-    if (prev) {
-	/*
-	 * Insert after rightmost adjacent entry.
-	 */
-
-	while (WORD_TYPE(prev) == WORD_TYPE_INTTRIENODE) {
-	    prev = WORD_TRIENODE_RIGHT(prev);
-	}
-	ASSERT(WORD_TYPE(prev) == WORD_TYPE_MINTMAPENTRY);
-	WORD_MAPENTRY_NEXT(entry) = WORD_MAPENTRY_NEXT(prev);
-	WORD_MAPENTRY_NEXT(prev) = entry;
-	Col_WordSetModified(prev);
-    } else {
-	/*
-	 * Entry is first, insert before leftmost adjacent entry.
-	 */
-
-	ASSERT(next);
-	while (WORD_TYPE(next) == WORD_TYPE_INTTRIENODE) {
-	    next = WORD_TRIENODE_LEFT(next);
-	}
-	ASSERT(WORD_TYPE(next) == WORD_TYPE_MINTMAPENTRY);
-	WORD_MAPENTRY_NEXT(entry) = next;
-    }
-
-    WORD_TRIEMAP_SIZE(map)++;
 
     return entry;
 }
@@ -707,7 +727,7 @@ Col_StringTrieMapUnset(
     Col_Word map,
     Col_Word key)
 {
-    Col_Word node, *nodePtr, sibling, grandParent, *parentPtr, prev;
+    Col_Word node, grandParent, parent, sibling, rightmost;
     Col_Char mask;
     Col_RopeIterator itKey;
 
@@ -720,46 +740,39 @@ Col_StringTrieMapUnset(
      * Search for matching entry.
      */
 
-    parentPtr = NULL;
-    nodePtr = &WORD_TRIEMAP_ROOT(map);
-    prev = WORD_NIL;
+    grandParent = WORD_NIL;
+    parent = map;
+    node = WORD_TRIEMAP_ROOT(map);
     Col_RopeIterBegin(key, 0, &itKey);
-    while (*nodePtr) {
-	node = *nodePtr;
+    while (node) {
 	if (WORD_TYPE(node) == WORD_TYPE_STRTRIENODE) {
 	    Col_Char c = COL_CHAR_INVALID;
+
+	    grandParent = parent;
+	    parent = node;
+
 	    if (!Col_RopeIterEnd(&itKey)) {
 		Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
 		if (!Col_RopeIterEnd(&itKey)) {
 		    c = Col_RopeIterAt(&itKey);
 		}
 	    }
-	    if (parentPtr) {
-		grandParent = *parentPtr;
-	    } else {
-		grandParent = map;
-	    }
-	    parentPtr = nodePtr;
 	    if (!Col_RopeIterEnd(&itKey)) {
 		Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
 	    }
 	    mask = WORD_STRTRIENODE_MASK(node);
 	    if (c != COL_CHAR_INVALID && (!mask || (c & mask))) {
 		/*
-		 * Recurse on right, remember left for later deletion from 
-		 * chain.
+		 * Recurse on right.
 		 */
 
-		prev = WORD_TRIENODE_LEFT(node);
-		nodePtr = &WORD_TRIENODE_RIGHT(node);
-		sibling = WORD_TRIENODE_LEFT(node);
+		node = WORD_TRIENODE_RIGHT(node);
 	    } else {
 		/*
 		 * Recurse on left.
 		 */
 
-		nodePtr = &WORD_TRIENODE_LEFT(node);
-		sibling = WORD_TRIENODE_RIGHT(node);
+		node = WORD_TRIENODE_LEFT(node);
 	    }
 	    continue;
 	}
@@ -771,40 +784,60 @@ Col_StringTrieMapUnset(
 	     * Found!
 	     */
 
-	    if (parentPtr) {
-		/*
-		 * Replace parent by sibling.
-		 */
+	    WORD_TRIEMAP_SIZE(map)--;
 
-		ASSERT(grandParent);
-		*parentPtr = sibling;
-		Col_WordSetModified(grandParent);
-	    } else {
+	    if (!grandParent) {
 		/*
 		 * Entry was root.
 		 */
 
+		ASSERT(parent == map);
+		ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
 		WORD_TRIEMAP_ROOT(map) = WORD_NIL;
-	    }
+		Col_WordSetModified(map);
+	    } else {
+		ASSERT(WORD_TYPE(parent) == WORD_TYPE_STRTRIENODE);
+		if (node == WORD_TRIENODE_RIGHT(parent)) {
+		    /*
+		     * Entry was right.
+		     */
 
-	    /*
-	     * Remove from chain.
-	     */
+		    sibling = WORD_TRIENODE_LEFT(parent);
 
-	    if (prev) {
+		    /*
+		     * Get rightmost leaf of sibling. Its new ancestor is the
+		     * entry's ancestor.
+		     */
+
+		    rightmost = RightmostLeaf(sibling);
+		    ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_MMAPENTRY);
+		    WORD_MAPENTRY_NEXT(rightmost) = WORD_MAPENTRY_NEXT(node);
+		} else {
+		    /*
+		     * Entry was left.
+		     */
+
+		    sibling = WORD_TRIENODE_RIGHT(parent);
+		}
+
 		/*
-		 * Remove after rightmost adjacent entry.
+		 * Replace parent by sibling.
 		 */
 
-		while (WORD_TYPE(prev) == WORD_TYPE_STRTRIENODE) {
-		    prev = WORD_TRIENODE_RIGHT(prev);
-		}
-		ASSERT(WORD_TYPE(prev) == WORD_TYPE_MMAPENTRY);
-		WORD_MAPENTRY_NEXT(prev) = WORD_MAPENTRY_NEXT(node);
-		Col_WordSetModified(prev);
-	    }
+		if (grandParent == map) {
+		    /*
+		     * Parent was root.
+		     */
 
-	    WORD_TRIEMAP_SIZE(map)--;
+		    ASSERT(WORD_TRIEMAP_ROOT(map) == parent);
+		    WORD_TRIEMAP_ROOT(map) = sibling;
+		} else if (WORD_TRIENODE_LEFT(grandParent) == parent) {
+		    WORD_TRIENODE_LEFT(grandParent) = sibling;
+		} else {
+		    WORD_TRIENODE_RIGHT(grandParent) = sibling;
+		}
+		Col_WordSetModified(grandParent);
+	    }
 	    return 1;
 	}
 	break;
@@ -835,7 +868,7 @@ Col_IntTrieMapUnset(
     Col_Word map,
     intptr_t key)
 {
-    Col_Word node, *nodePtr, sibling, grandParent, *parentPtr, prev;
+    Col_Word node, grandParent, parent, sibling, rightmost;
     intptr_t mask;
 
     if (WORD_TYPE(map) != WORD_TYPE_INTTRIEMAP) {
@@ -847,35 +880,27 @@ Col_IntTrieMapUnset(
      * Search for matching entry.
      */
 
-    parentPtr = NULL;
-    nodePtr = &WORD_TRIEMAP_ROOT(map);
-    prev = WORD_NIL;
-    while (*nodePtr) {
-	node = *nodePtr;
+    grandParent = WORD_NIL;
+    parent = map;
+    node = WORD_TRIEMAP_ROOT(map);
+    while (node) {
 	if (WORD_TYPE(node) == WORD_TYPE_INTTRIENODE) {
-	    if (parentPtr) {
-		grandParent = *parentPtr;
-	    } else {
-		grandParent = map;
-	    }
-	    parentPtr = nodePtr;
+	    grandParent = parent;
+	    parent = node;
+
 	    mask = WORD_INTTRIENODE_MASK(node);
 	    if (mask ? (key & mask) : (key >= 0)) {
 		/*
-		 * Recurse on right, remember left for later deletion from 
-		 * chain.
+		 * Recurse on right.
 		 */
 
-		prev = WORD_TRIENODE_LEFT(node);
-		nodePtr = &WORD_TRIENODE_RIGHT(node);
-		sibling = WORD_TRIENODE_LEFT(node);
+		node = WORD_TRIENODE_RIGHT(node);
 	    } else {
 		/*
 		 * Recurse on left.
 		 */
 
-		nodePtr = &WORD_TRIENODE_LEFT(node);
-		sibling = WORD_TRIENODE_RIGHT(node);
+		node = WORD_TRIENODE_LEFT(node);
 	    }
 	    continue;
 	}
@@ -886,40 +911,60 @@ Col_IntTrieMapUnset(
 	     * Found!
 	     */
 
-	    if (parentPtr) {
-		/*
-		 * Replace parent by sibling.
-		 */
+	    WORD_TRIEMAP_SIZE(map)--;
 
-		ASSERT(grandParent);
-		*parentPtr = sibling;
-		Col_WordSetModified(grandParent);
-	    } else {
+	    if (!grandParent) {
 		/*
 		 * Entry was root.
 		 */
 
+		ASSERT(parent == map);
+		ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
 		WORD_TRIEMAP_ROOT(map) = WORD_NIL;
-	    }
+		Col_WordSetModified(map);
+	    } else {
+		ASSERT(WORD_TYPE(parent) == WORD_TYPE_INTTRIENODE);
+		if (node == WORD_TRIENODE_RIGHT(parent)) {
+		    /*
+		     * Entry was right.
+		     */
 
-	    /*
-	     * Remove from chain.
-	     */
+		    sibling = WORD_TRIENODE_LEFT(parent);
 
-	    if (prev) {
+		    /*
+		     * Get rightmost leaf of sibling. Its new ancestor is the
+		     * entry's ancestor.
+		     */
+
+		    rightmost = RightmostLeaf(sibling);
+		    ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_MINTMAPENTRY);
+		    WORD_MAPENTRY_NEXT(rightmost) = WORD_MAPENTRY_NEXT(node);
+		} else {
+		    /*
+		     * Entry was left.
+		     */
+
+		    sibling = WORD_TRIENODE_RIGHT(parent);
+		}
+
 		/*
-		 * Remove after rightmost adjacent entry.
+		 * Replace parent by sibling.
 		 */
 
-		while (WORD_TYPE(prev) == WORD_TYPE_INTTRIENODE) {
-		    prev = WORD_TRIENODE_RIGHT(prev);
-		}
-		ASSERT(WORD_TYPE(prev) == WORD_TYPE_MINTMAPENTRY);
-		WORD_MAPENTRY_NEXT(prev) = WORD_MAPENTRY_NEXT(node);
-		Col_WordSetModified(prev);
-	    }
+		if (grandParent == map) {
+		    /*
+		     * Parent was root.
+		     */
 
-	    WORD_TRIEMAP_SIZE(map)--;
+		    ASSERT(WORD_TRIEMAP_ROOT(map) == parent);
+		    WORD_TRIEMAP_ROOT(map) = sibling;
+		} else if (WORD_TRIENODE_LEFT(grandParent) == parent) {
+		    WORD_TRIENODE_LEFT(grandParent) = sibling;
+		} else {
+		    WORD_TRIENODE_RIGHT(grandParent) = sibling;
+		}
+		Col_WordSetModified(grandParent);
+	    }
 	    return 1;
 	}
 	break;
@@ -953,8 +998,6 @@ Col_TrieMapIterBegin(
     Col_Word map,
     Col_MapIterator *it)
 {
-    Col_Word node;
-
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_STRTRIEMAP:
 	case WORD_TYPE_INTTRIEMAP:
@@ -975,25 +1018,9 @@ Col_TrieMapIterBegin(
 	return;
     }
 
-    /*
-     * Get leftmost entry.
-     */
-
-    it->map = map;
-    node = WORD_TRIEMAP_ROOT(map);
-    ASSERT(node);
-    for (;;) {
-	switch (WORD_TYPE(node)) {
-	    case WORD_TYPE_STRTRIENODE:
-	    case WORD_TYPE_INTTRIENODE:
-		node = WORD_TRIENODE_LEFT(node);
-		break;
-
-	    default:
-		it->entry = node;
-		return;
-	}
-    }
+    ASSERT(WORD_TRIEMAP_ROOT(map));
+    it->entry = LeftmostLeaf(WORD_TRIEMAP_ROOT(map));
+    ASSERT(it->entry);
 }
 
 /*---------------------------------------------------------------------------
@@ -1160,18 +1187,22 @@ Col_TrieMapIterNext(
 	return;
     }
 
-    /*
-     * Get next entry in chain.
-     */
-
-    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MMAPENTRY 
-	    || WORD_TYPE(it->entry) == WORD_TYPE_MINTMAPENTRY);
-    it->entry = WORD_MAPENTRY_NEXT(it->entry);
-    if (!it->entry) {
+    if (!WORD_MAPENTRY_NEXT(it->entry)) {
 	/*
 	 * End of map.
 	 */
 
 	it->map = WORD_NIL;
+	return;
     }
+
+    /*
+     * Next entry is leftmost leaf of ancestor's right subtrie.
+     */
+
+    ASSERT(WORD_TYPE(WORD_MAPENTRY_NEXT(it->entry)) == WORD_TYPE_STRTRIENODE
+	    || WORD_TYPE(WORD_MAPENTRY_NEXT(it->entry)) == WORD_TYPE_INTTRIENODE)
+    it->entry = LeftmostLeaf(WORD_TRIENODE_RIGHT(
+	    WORD_MAPENTRY_NEXT(it->entry)));
+    ASSERT(it->entry);
 }

@@ -652,6 +652,7 @@ void			DeclareCustomWord(Col_Word word,
  *	WORD_TYPE_INTTRIEMAP	- Integer Trie Maps (<WORD_INTTRIEMAP_INIT>)
  *	WORD_TYPE_STRTRIENODE	- String Trie Nodes (<WORD_STRTRIENODE_INIT>)
  *	WORD_TYPE_INTTRIENODE	- Integer Trie Nodes (<WORD_INTTRIENODE_INIT>)
+ *	WORD_TYPE_SUBTRIE	- Subtries (<WORD_SUBTRIE_INIT>)
  *	WORD_TYPE_REDIRECT	- Redirects
  *	WORD_TYPE_UNKNOWN	- Used as a tag in the source code to mark 
  *				  places where predefined type specific code is
@@ -702,6 +703,7 @@ void			DeclareCustomWord(Col_Word word,
 #define WORD_TYPE_INTTRIEMAP	78
 #define WORD_TYPE_STRTRIENODE	82
 #define WORD_TYPE_INTTRIENODE	86
+#define WORD_TYPE_SUBTRIE	90
 #ifdef PROMOTE_COMPACT
 #   define WORD_TYPE_REDIRECT	254
 #endif
@@ -2142,8 +2144,8 @@ void			DeclareCustomWord(Col_Word word,
  *	accessible for both read/write operations).
  *
  * See also:
- *	<WORD_TYPE_MMAPENTRY>, <Col_StringHashMapFindEntry>, 
- *	<Col_StringTrieMapFindEntry>
+ *	<WORD_TYPE_MMAPENTRY>, <StringHashMapFindEntry>, 
+ *	<StringTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 #define WORD_MMAPENTRY_INIT(word, next, key, value, hash) \
@@ -2225,7 +2227,7 @@ void			DeclareCustomWord(Col_Word word,
  *	value	- <WORD_MAPENTRY_VALUE>
  *
  * See also:
- *	<WORD_TYPE_MINTMAPENTRY>, <Col_IntHashMapFindEntry>, <Col_IntTrieMapFindEntry>
+ *	<WORD_TYPE_MINTMAPENTRY>, <IntHashMapFindEntry>, <IntTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 #define WORD_MINTMAPENTRY_INIT(word, next, key, value) \
@@ -2370,7 +2372,7 @@ void			DeclareCustomWord(Col_Word word,
  *		  macro expansion)
  *
  * See also:
- *	<WORD_TYPE_INTHASHMAP>n <Col_NewIntHashMap>
+ *	<WORD_TYPE_INTHASHMAP>, <Col_NewIntHashMap>
  *---------------------------------------------------------------------------*/
 
 #define WORD_INTHASHMAP_INIT(word) \
@@ -2402,8 +2404,10 @@ void			DeclareCustomWord(Col_Word word,
  *
  * Entries:
  *	Trie maps use standard map entries. The <WORD_MAPENTRY_NEXT> field is
- *	used for iteration: each entry points to the next entry in iteration 
- *	order.
+ *	used for iteration: each entry points to its deepest common ancestor
+ *	with the next entry in iteration order. The next entry will be the
+ *	leftmost leaf of the ancestor's right subtrie (current entry being the
+ *	rightmost leaf of the ancestor's left subtrie).
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -2638,5 +2642,73 @@ void			DeclareCustomWord(Col_Word word,
     WORD_INTTRIENODE_MASK(word) = (mask); \
     WORD_TRIENODE_LEFT(word) = (left); \
     WORD_TRIENODE_RIGHT(word) = (right);
+
+/*---------------------------------------------------------------------------
+ * Internal Macros: Subtrie Fields
+ *
+ *	Accessors for subtrie fields.
+ *
+ *	Subtries are used when sharing common entries between several tries.
+ *	Such subtries are by nature immutable.
+ *	
+ *
+ * Layout:
+ *	On all architectures the cell layout is as follows:
+ *
+ * (start table)
+ *      0     7                                                       n
+ *     +-------+-------------------------------------------------------+
+ *   0 | Type  |                        Unused                         |
+ *     +-------+-------------------------------------------------------+
+ *   1 |                             Root                              |
+ *     +---------------------------------------------------------------+
+ *   2 |                            Parent                             |
+ *     +---------------------------------------------------------------+
+ *   3 |                             Next                              |
+ *     +---------------------------------------------------------------+
+ * (end)
+ *
+ *	WORD_SUBTRIE_ROOT	- Root node of the subtrie.
+ *	WORD_SUBTRIE_PARENT	- Parent node of the root. This is used during
+ *				  iteration: if the current entry's next field
+ *				  points to this parent, stop iterating the
+ *				  subtrie and resume the current one.
+ *	WORD_SUBTRIE_NEXT	- Next in iteration. When the end of a subtrie 
+ *				  is reached, this field is used in place of
+ *				  the entry's <WORD_MAPENTRY_NEXT> field.
+ *
+ * Note:
+ *	Macros are L-values and side effect-free unless specified (i.e. 
+ *	accessible for both read/write operations).
+ *
+ * See also:
+ *	<WORD_SUBTRIE_INIT>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_SUBTRIE_ROOT(word)		(((Col_Word *)(word))[1])
+#define WORD_SUBTRIE_PARENT(word)	(((Col_Word *)(word))[2])
+#define WORD_SUBTRIE_NEXT(word)		(((Col_Word *)(word))[3])
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_SUBTRIE_INIT
+ *
+ *	Initializer for subtrie words.
+ *
+ * Argument:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	root	- <WORD_SUBTRIE_ROOT>
+ *	parent	- <WORD_SUBTRIE_PARENT>
+ *	next	- <WORD_SUBTRIE_NEXT>
+ *
+ * See also:
+ *	<WORD_TYPE_SUBTRIE>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_SUBTRIE_INIT(word, root, parent, next) \
+    WORD_SET_TYPEID((word), WORD_TYPE_SUBTRIE); \
+    WORD_SUBTRIE_ROOT(word) = root; \
+    WORD_SUBTRIE_PARENT(word) = parent; \
+    WORD_SUBTRIE_NEXT(word) = next;
 
 #endif /* _COLIBRI_INTERNAL */
