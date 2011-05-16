@@ -583,75 +583,74 @@ Col_CopyHashMap(
     Col_Word newMap;
     Col_Word entry, *buckets, dummy;
     size_t nbBuckets, i;
+    int entryType;
 
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_STRHASHMAP:
+	    entryType = WORD_TYPE_HASHENTRY;
+	    break;
+
 	case WORD_TYPE_INTHASHMAP:
-	    /*
-	     * Copy word first.
-	     */
-
-	    newMap = (Col_Word) AllocCells(HASHMAP_NBCELLS);
-	    memcpy((void *) newMap, (void *) map, sizeof(Cell) 
-		    * HASHMAP_NBCELLS);
-	    WORD_CLEAR_PINNED(newMap);
-
-	    if (WORD_HASHMAP_BUCKETS(map)) {
-		if (WORD_TYPE(WORD_HASHMAP_BUCKETS(map)) == WORD_TYPE_VECTOR) {
-		    /*
-		     * Already frozen.
-		     */
-
-		    return newMap;
-		}
-
-		/*
-		 * Freeze bucket container.
-		 */
-
-		Col_MVectorFreeze(WORD_HASHMAP_BUCKETS(map));
-	    }
-
-	    /*
-	     * Freeze entries: simply change their type ID.
-	     */
-
-	    GET_BUCKETS(map, 0, nbBuckets, buckets, dummy);
-	    for (i=0; i < nbBuckets; i++) {
-		entry = buckets[i];
-		while (entry) {
-		    ASSERT(!WORD_PINNED(entry));
-		    switch (WORD_TYPE(entry)) {
-			case WORD_TYPE_MHASHENTRY:
-			    WORD_SET_TYPEID(entry, WORD_TYPE_HASHENTRY);
-			    entry = WORD_HASHENTRY_NEXT(entry);
-			    break;
-
-			case WORD_TYPE_MINTHASHENTRY:
-			    WORD_SET_TYPEID(entry, WORD_TYPE_INTHASHENTRY);
-			    entry = WORD_HASHENTRY_NEXT(entry);
-			    break;
-
-			default:
-			    /*
-			     * Already frozen, skip remaining entries.
-			     */
-
-			    entry = WORD_NIL;
-		    }
-		}
-	    }
-
-	    /*
-	     * Both maps now share the same immutable structure.
-	     */
-
-	    return newMap;
+	    entryType = WORD_TYPE_INTHASHENTRY;
+	    break;
 
 	default:
 	    Col_Error(COL_ERROR, "%x is not a hash map", map);
 	    return WORD_NIL;
     }
+
+    /*
+     * Copy word first.
+     */
+
+    newMap = (Col_Word) AllocCells(HASHMAP_NBCELLS);
+    memcpy((void *) newMap, (void *) map, sizeof(Cell) * HASHMAP_NBCELLS);
+    WORD_SYNONYM(newMap) = WORD_NIL;
+    WORD_CLEAR_PINNED(newMap);
+
+    if (WORD_HASHMAP_BUCKETS(map)) {
+	if (WORD_TYPE(WORD_HASHMAP_BUCKETS(map)) == WORD_TYPE_VECTOR) {
+	    /*
+	     * Already frozen.
+	     */
+
+	    return newMap;
+	}
+
+	/*
+	 * Freeze bucket container.
+	 */
+
+	Col_MVectorFreeze(WORD_HASHMAP_BUCKETS(map));
+    }
+
+    /*
+     * Freeze entries: simply change their type ID.
+     */
+
+    GET_BUCKETS(map, 0, nbBuckets, buckets, dummy);
+    for (i=0; i < nbBuckets; i++) {
+	entry = buckets[i];
+	while (entry) {
+	    if (WORD_TYPE(entry) == entryType) {
+		/*
+		 * Already frozen, skip remaining entries.
+		 */
+
+		break;
+	    }
+
+	    ASSERT(!WORD_PINNED(entry));
+	    WORD_SET_TYPEID(entry, entryType);
+	    entry = WORD_HASHENTRY_NEXT(entry);
+	}
+    }
+
+    /*
+     * Both maps now share the same immutable structure.
+     */
+
+    return newMap;
 }
 
 
