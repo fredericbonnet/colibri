@@ -50,9 +50,18 @@ EXTERN int		Col_IntMapUnset(Col_Word map, intptr_t key);
  *	Internal implementation of map iterators.
  *
  * Fields:
- *	map	- Map being iterated.
- *	index	- Current entry.
- *	bucket	- Current bucket (for hash maps).
+ *	map		- Map being iterated.
+ *	entry		- Current entry.
+ *
+ * Hash-specific fields:
+ *	hash.bucket	- Current bucket index.
+ *
+ * Trie-specific fields:
+ *	trie.up		- Uplink to deepest common ancestor with next entry. The
+ *			  next entry will be the leftmost leaf of the ancestor's 
+ *			  right subtrie (current entry being the rightmost leaf 
+ *			  of the ancestor's left subtrie). If nil, will be
+ *			  recomputed by in-depth traversal.
  *
  * See also:
  *	<Col_MapIterator>
@@ -61,7 +70,14 @@ EXTERN int		Col_IntMapUnset(Col_Word map, intptr_t key);
 typedef struct ColMapIterator {
     Col_Word map;
     Col_Word entry;
-    size_t bucket;
+    union {
+	struct {
+	    size_t bucket;
+	} hash;
+	struct {
+	    Col_Word up;
+	} trie;
+    };
 } ColMapIterator;
 
 /*---------------------------------------------------------------------------

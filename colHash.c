@@ -1339,7 +1339,7 @@ Col_HashMapIterBegin(
     for (i=0; i < nbBuckets; i++) {
 	if (buckets[i]) {
 	    it->entry = buckets[i];
-	    it->bucket = i;
+	    it->hash.bucket = i;
 	    return;
 	}
     }
@@ -1378,7 +1378,8 @@ Col_StringHashMapIterFind(
 	return;
     }
 
-    it->entry = StringHashMapFindEntry(map, key, 0, createPtr, &it->bucket);
+    it->entry = StringHashMapFindEntry(map, key, 0, createPtr, 
+	    &it->hash.bucket);
     if (!it->entry) {
 	/*
 	 * Not found.
@@ -1417,7 +1418,7 @@ Col_IntHashMapIterFind(
 	return;
     }
 
-    it->entry = IntHashMapFindEntry(map, key, 0, createPtr, &it->bucket);
+    it->entry = IntHashMapFindEntry(map, key, 0, createPtr, &it->hash.bucket);
     if (!it->entry) {
 	/*
 	 * Not found.
@@ -1450,6 +1451,8 @@ Col_HashMapIterSetValue(
 	return;
     }
 
+    ASSERT(it->entry);
+
     switch (WORD_TYPE(it->map)) {
 	case WORD_TYPE_STRHASHMAP:
 	    if (WORD_TYPE(it->entry) != WORD_TYPE_MHASHENTRY) {
@@ -1460,7 +1463,7 @@ Col_HashMapIterSetValue(
 		ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_HASHENTRY);
 		GET_BUCKETS(it->map, 1, nbBuckets, buckets, dummy);
 		it->entry = ConvertEntryToMutable(it->entry, 
-			&buckets[it->bucket]);
+			&buckets[it->hash.bucket]);
 	    }
 
 	    /*
@@ -1481,7 +1484,7 @@ Col_HashMapIterSetValue(
 		ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTHASHENTRY);
 		GET_BUCKETS(it->map, 1, nbBuckets, buckets, dummy);
 		it->entry = ConvertIntEntryToMutable(it->entry, 
-			&buckets[it->bucket]);
+			&buckets[it->hash.bucket]);
 	    }
 
 	    /*
@@ -1521,6 +1524,8 @@ Col_HashMapIterNext(
 	return;
     }
 
+    ASSERT(it->entry);
+
     ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_HASHENTRY 
 	    || WORD_TYPE(it->entry) == WORD_TYPE_MHASHENTRY
 	    || WORD_TYPE(it->entry) == WORD_TYPE_INTHASHENTRY
@@ -1540,10 +1545,10 @@ Col_HashMapIterNext(
      */
 
     GET_BUCKETS(it->map, 0, nbBuckets, buckets, dummy);
-    for (i=it->bucket+1; i < nbBuckets; i++) {
+    for (i=it->hash.bucket+1; i < nbBuckets; i++) {
 	if (buckets[i]) {
 	    it->entry = buckets[i];
-	    it->bucket = i;
+	    it->hash.bucket = i;
 	    return;
 	}
     }
