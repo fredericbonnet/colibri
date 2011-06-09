@@ -1455,7 +1455,9 @@ start:
 	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 
 	case WORD_TYPE_STRTRIENODE:
+	case WORD_TYPE_MSTRTRIENODE:
 	case WORD_TYPE_INTTRIENODE:
+	case WORD_TYPE_MINTTRIENODE:
 	    /* 
 	     * Follow left arm and tail recurse on right. 
 	     */
@@ -1464,6 +1466,7 @@ start:
 	    TAIL_RECURSE(&WORD_TRIENODE_RIGHT(*wordPtr), page);
 
 	case WORD_TYPE_TRIELEAF:
+	case WORD_TYPE_MTRIELEAF:
 	    /*
 	     * Follow key.
 	     */
@@ -1471,20 +1474,12 @@ start:
 	    MarkWord(data, &WORD_MAPENTRY_KEY(*wordPtr), page);
 	    /* continued. */
 	case WORD_TYPE_INTTRIELEAF:
+	case WORD_TYPE_MINTTRIELEAF:
 	    /*
-	     * Tail recurse on value. Don't follow up as it is reachable anyway
-	     * by construction.
+	     * Tail recurse on value.
 	     */
 
 	    TAIL_RECURSE(&WORD_MAPENTRY_VALUE(*wordPtr), page);
-
-	case WORD_TYPE_SUBTRIE:
-	    /*
-	     * Tail recurse on root. Don't follow parent and up as they are 
-	     * reachable anyway by construction.
-	     */
-
-	    TAIL_RECURSE(&WORD_SUBTRIE_ROOT(*wordPtr), page);
 
 	case WORD_TYPE_CUSTOM: {
 	    Col_CustomWordType *typeInfo = WORD_TYPEINFO(*wordPtr);

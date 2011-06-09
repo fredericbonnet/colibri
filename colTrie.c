@@ -26,6 +26,14 @@
 
 static Col_Word		LeftmostLeaf(Col_Word node);
 static Col_Word		RightmostLeaf(Col_Word node);
+static Col_Word		StringTrieMapFindNode(Col_Word map, Col_Word key,
+			    int closest, int *comparePtr, Col_Word *parentPtr,
+			    Col_Word *leftPtr, Col_Word *rightPtr, 
+			    size_t *diffPtr, Col_Char *maskPtr);
+static Col_Word		IntTrieMapFindNode(Col_Word map, intptr_t key,
+			    int closest, int *comparePtr, Col_Word *parentPtr,
+			    Col_Word *leftPtr, Col_Word *rightPtr, 
+			    intptr_t *maskPtr);
 static Col_Word		StringTrieMapFindEntry(Col_Word map, Col_Word key,
 			    int mutable, int *createPtr);
 static Col_Word		IntTrieMapFindEntry(Col_Word map, intptr_t key,
@@ -106,7 +114,9 @@ LeftmostLeaf(
     for (;;) {
 	switch (WORD_TYPE(node)) {
 	    case WORD_TYPE_STRTRIENODE:
+	    case WORD_TYPE_MSTRTRIENODE:
 	    case WORD_TYPE_INTTRIENODE:
+	    case WORD_TYPE_MINTTRIENODE:
 		node = WORD_TRIENODE_LEFT(node);
 		break;
 
@@ -135,7 +145,9 @@ RightmostLeaf(
     for (;;) {
 	switch (WORD_TYPE(node)) {
 	    case WORD_TYPE_STRTRIENODE:
+	    case WORD_TYPE_MSTRTRIENODE:
 	    case WORD_TYPE_INTTRIENODE:
+	    case WORD_TYPE_MINTTRIENODE:
 		node = WORD_TRIENODE_RIGHT(node);
 		break;
 
@@ -143,6 +155,342 @@ RightmostLeaf(
 		return node;
 	}
     }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: StringTrieMapFindNode
+ *
+ *	Find node equal or closest to the given key.
+ *
+ * Arguments:
+ *	map	- Integer trie map to find or create entry into.
+ *	key	- String entry key.
+ *	closest	- If true, find closest if key doesn't match.
+ *
+ * Results:
+ *	If map is empty, nil.
+ *
+ *	If key is present, the matching entry (i.e. leaf). Else, if closest is
+ *	true, the node with the longest common prefix. Else nil. Additionally 
+ *	(if non-NULL):
+ *
+ *	comparePtr	- (out) Key comparison result: 0 if node matches key, 1
+ *			  if key is after node key, -1 if before.
+ *	parentPtr	- (out) The node's parent word. May be the map or 
+ *			  another node.
+ *	leftPtr		- (out) Topmost left branch.
+ *	rightPtr	- (out) Topmost right branch.
+ *
+ *	Moreover (if non-NULL), if key doesn't match and closest is true:
+ *
+ *	diffPtr		- (out) Index of first differing character.
+ *	maskPtr		- (out) Crit-bit mask.
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+StringTrieMapFindNode(
+    Col_Word map,
+    Col_Word key,
+    int closest,
+    int *comparePtr,
+    Col_Word *parentPtr,
+    Col_Word *leftPtr,
+    Col_Word *rightPtr,
+    size_t *diffPtr,
+    Col_Char *maskPtr)
+{
+    int compare;
+    Col_Word node, parent, left, right;
+    Col_Word entryKey;
+    Col_RopeIterator itKey;
+    size_t diff;
+    Col_Char mask, newMask;
+    Col_Char cKey, cEntryKey;
+    
+    if (!WORD_TRIEMAP_ROOT(map)) {
+	/*
+	 * Map is empty.
+	 */
+
+	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
+	return WORD_NIL;
+    }
+
+    /*
+     * Search for matching entry.
+     */
+
+    node = WORD_TRIEMAP_ROOT(map);
+    parent = map;
+    left = WORD_NIL;
+    right = WORD_NIL;
+    Col_RopeIterBegin(key, 0, &itKey);
+    while (node) {
+	if (WORD_TYPE(node) == WORD_TYPE_MTRIELEAF) break;
+
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_MSTRTRIENODE);
+	mask = WORD_STRTRIENODE_MASK(node);
+	cKey = COL_CHAR_INVALID;
+	if (!Col_RopeIterEnd(&itKey)) {
+	    Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
+	    if (!Col_RopeIterEnd(&itKey)) {
+		cKey = Col_RopeIterAt(&itKey);
+	    }
+	}
+	parent = node;
+	if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
+	    left = WORD_TRIENODE_LEFT(node);
+	    node = WORD_TRIENODE_RIGHT(node);
+	} else {
+	    right = WORD_TRIENODE_RIGHT(node);
+	    node = WORD_TRIENODE_LEFT(node);
+	}
+    }
+
+    ASSERT(WORD_TYPE(node) == WORD_TYPE_MTRIELEAF);
+    entryKey = WORD_MAPENTRY_KEY(node);
+    compare = Col_CompareRopes(key, entryKey, 0, SIZE_MAX, &diff, &cKey, 
+	    &cEntryKey);
+    if (compare == 0 || !closest) {
+	/*
+	 * Exact match found or required.
+	 */
+
+	if (comparePtr) *comparePtr = compare;
+	if (parentPtr) *parentPtr = parent;
+	if (leftPtr) *leftPtr = left;
+	if (rightPtr) *rightPtr = right;
+	return (compare == 0 ? node : WORD_NIL);
+    }
+
+    /*
+     * Get diff mask between inserted key and existing entry key, i.e. only keep 
+     * the highest bit set.
+     * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 
+     *
+     * Note: when either char is COL_CHAR_INVALID, they differ on the highest
+     * bit, so the penultimate step overflows and the mask is zero. This
+     * happens when one of the keys is shorter. We use this property when 
+     * choosing the right arm to follow.
+     */
+
+    newMask = cKey ^ cEntryKey;
+    newMask |= newMask >> 1;
+    newMask |= newMask >> 2;
+    newMask |= newMask >> 4;
+    newMask |= newMask >> 8;
+    newMask |= newMask >> 16;
+    newMask++;
+    newMask >>= 1;
+
+    /*
+     * Find longest common prefix.
+     */
+
+    node = WORD_TRIEMAP_ROOT(map);
+    parent = map;
+    left = WORD_NIL;
+    right = WORD_NIL;
+    Col_RopeIterBegin(key, 0, &itKey);
+    while (node) {
+	if (WORD_TYPE(node) == WORD_TYPE_MTRIELEAF) break;
+
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_MSTRTRIENODE);
+	mask = WORD_STRTRIENODE_MASK(node);
+	if (diff < WORD_STRTRIENODE_DIFF(node) 
+		|| (diff == WORD_STRTRIENODE_DIFF(node) 
+		&& (mask && newMask > mask))) {
+	    /*
+	     * Prefixes diverge.
+	     */
+
+	    break;
+	}
+	cKey = COL_CHAR_INVALID;
+	if (!Col_RopeIterEnd(&itKey)) {
+	    Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
+	    if (!Col_RopeIterEnd(&itKey)) {
+		cKey = Col_RopeIterAt(&itKey);
+	    }
+	}
+
+	parent = node;
+	if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
+	    left = WORD_TRIENODE_LEFT(node);
+	    node = WORD_TRIENODE_RIGHT(node);
+	} else {
+	    right = WORD_TRIENODE_RIGHT(node);
+	    node = WORD_TRIENODE_LEFT(node);
+	}
+    }
+    if (comparePtr) {
+	cKey = COL_CHAR_INVALID;
+	if (!Col_RopeIterEnd(&itKey)) {
+	    Col_RopeIterMoveTo(&itKey, diff);
+	    if (!Col_RopeIterEnd(&itKey)) {
+		cKey = Col_RopeIterAt(&itKey);
+	    }
+	}
+	*comparePtr = ((cKey != COL_CHAR_INVALID && (!newMask 
+		|| (cKey & newMask))) ? 1 : -1);
+    }
+    if (parentPtr) *parentPtr = parent;
+    if (leftPtr) *leftPtr = left;
+    if (rightPtr) *rightPtr = right;
+    if (diffPtr) *diffPtr = diff;
+    if (maskPtr) *maskPtr = newMask;
+    return node;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: IntTrieMapFindNode
+ *
+ *	Find node closest to the given key.
+ *
+ * Arguments:
+ *	map	- Integer trie map to find or create entry into.
+ *	key	- Integer entry key.
+ *	closest	- If true, find closest if key doesn't match.
+ *
+ * Results:
+ *	If map is empty, nil.
+ *
+ *	If key is present, the matching entry (i.e. leaf). Else, if closest is
+ *	true, the node with the longest common prefix. Else nil. Additionally 
+ *	(if non-NULL):
+ *
+ *	comparePtr	- (out) Key comparison result: 0 if node matches key, 1
+ *			  if key is after node key, -1 if before.
+ *	parentPtr	- (out) The node's parent word. May be the map or 
+ *			  another node.
+ *	leftPtr		- (out) Topmost left branch.
+ *	rightPtr	- (out) Topmost right branch.
+ *
+ *	Moreover (if non-NULL), if key doesn't match and closest is true:
+ *
+ *	maskPtr		- (out) Crit-bit mask.
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+IntTrieMapFindNode(
+    Col_Word map,
+    intptr_t key,
+    int closest,
+    int *comparePtr,
+    Col_Word *parentPtr,
+    Col_Word *leftPtr,
+    Col_Word *rightPtr,
+    intptr_t *maskPtr)
+{
+    int compare;
+    Col_Word node, parent, left, right;
+    intptr_t entryKey;
+    intptr_t mask, newMask;
+    
+    if (!WORD_TRIEMAP_ROOT(map)) {
+	/*
+	 * Map is empty.
+	 */
+
+	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
+	return WORD_NIL;
+    }
+
+    /*
+     * Search for matching entry.
+     */
+
+    node = WORD_TRIEMAP_ROOT(map);
+    parent = map;
+    left = WORD_NIL;
+    right = WORD_NIL;
+    while (node) {
+	if (WORD_TYPE(node) == WORD_TYPE_MINTTRIELEAF) break;
+
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTTRIENODE);
+	mask = WORD_INTTRIENODE_MASK(node);
+	parent = node;
+	if (mask ? (key & mask) : (key >= 0)) {
+	    left = WORD_TRIENODE_LEFT(node);
+	    node = WORD_TRIENODE_RIGHT(node);
+	} else {
+	    right = WORD_TRIENODE_RIGHT(node);
+	    node = WORD_TRIENODE_LEFT(node);
+	}
+    }
+
+    ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTTRIELEAF);
+    entryKey = WORD_INTMAPENTRY_KEY(node);
+    compare = (key == entryKey ? 0 : key > entryKey ? 1 : -1);
+    if (compare == 0 || !closest) {
+	/*
+	 * Exact match found or required.
+	 */
+
+	if (comparePtr) *comparePtr = compare;
+	if (parentPtr) *parentPtr = parent;
+	if (leftPtr) *leftPtr = left;
+	if (rightPtr) *rightPtr = right;
+	return (compare == 0 ? node : WORD_NIL);
+    }
+
+    /*
+     * Get diff mask between inserted key and existing entry key, i.e. only keep 
+     * the highest bit set.
+     * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 
+     *
+     * Note: when keys are of opposite signs, they differ on the highest bit,
+     * so the penultimate step overflows and the mask is zero. We use this
+     * property when choosing the right arm to follow.
+     */
+
+    newMask = key ^ entryKey;
+    ASSERT(newMask);
+    newMask |= newMask >> 1;
+    newMask |= newMask >> 2;
+    newMask |= newMask >> 4;
+    newMask |= newMask >> 8;
+    newMask |= newMask >> 16;
+    newMask++;
+    newMask >>= 1;
+
+    /*
+     * Find longest common prefix.
+     */
+
+    node = WORD_TRIEMAP_ROOT(map);
+    parent = map;
+    left = WORD_NIL;
+    right = WORD_NIL;
+    while (node) {
+	if (WORD_TYPE(node) == WORD_TYPE_MINTTRIELEAF) break;
+
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTTRIENODE);
+	mask = WORD_INTTRIENODE_MASK(node);
+	if (mask && newMask > mask) {
+	    /*
+	     * Prefixes diverge.
+	     */
+
+	    break;
+	}
+
+	parent = node;
+	if (mask ? (key & mask) : (key >= 0)) {
+	    left = WORD_TRIENODE_LEFT(node);
+	    node = WORD_TRIENODE_RIGHT(node);
+	} else {
+	    right = WORD_TRIENODE_RIGHT(node);
+	    node = WORD_TRIENODE_LEFT(node);
+	}
+    }
+    if (comparePtr) *comparePtr = ((newMask ? (key & newMask) : (key >= 0)) ? 1
+	    : -1);
+    if (parentPtr) *parentPtr = parent;
+    if (leftPtr) *leftPtr = left;
+    if (rightPtr) *rightPtr = right;
+    if (maskPtr) *maskPtr = newMask;
+    return node;
 }
 
 /*---------------------------------------------------------------------------
@@ -169,60 +517,20 @@ StringTrieMapFindEntry(
     int mutable,
     int *createPtr)
 {
-    Col_Word node, entry, parent, *nodePtr, rightmost;
-    Col_RopeIterator itKey;
-    Col_Word entryKey = WORD_NIL;
+    Col_Word node, entry, parent, *nodePtr;
+    int compare;
     size_t diff;
-    Col_Char cKey, cEntryKey, mask, newMask;
+    Col_Char mask;
     
-    /*
-     * Search for matching entry.
-     */
-
-    node = WORD_TRIEMAP_ROOT(map);
-    Col_RopeIterBegin(key, 0, &itKey);
-    while (node) {
-	if (WORD_TYPE(node) == WORD_TYPE_STRTRIENODE) {
-	    mask = WORD_STRTRIENODE_MASK(node);
-	    cKey = COL_CHAR_INVALID;
-	    if (!Col_RopeIterEnd(&itKey)) {
-		Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
-		if (!Col_RopeIterEnd(&itKey)) {
-		    cKey = Col_RopeIterAt(&itKey);
-		}
-	    }
-	    if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
-		/*
-		 * Recurse on right.
-		 */
-
-		node = WORD_TRIENODE_RIGHT(node);
-	    } else {
-		/*
-		 * Recurse on left.
-		 */
-
-		node = WORD_TRIENODE_LEFT(node);
-	    }
-	    continue;
-	}
-
+    node = StringTrieMapFindNode(map, key, (createPtr && *createPtr), &compare, 
+	    &parent, NULL, NULL, &diff, &mask);
+    if (node && compare == 0) {
 	/*
-	 * Leaf node.
+	 * Found!
 	 */
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_TRIELEAF);
-	entryKey = WORD_MAPENTRY_KEY(node);
-	if (Col_CompareRopes(key, entryKey, 0, SIZE_MAX, &diff, &cKey, &cEntryKey) 
-		== 0) {
-	    /*
-	     * Found!
-	     */
-
-	    if (createPtr) *createPtr = 0;
-	    return node;
-	}
-	break;
+	if (createPtr) *createPtr = 0;
+	return node;
     }
 
     /*
@@ -230,6 +538,7 @@ StringTrieMapFindEntry(
      */
 
     if (!createPtr || !*createPtr) {
+	ASSERT(!node);
 	return WORD_NIL;
     }
     *createPtr = 1;
@@ -237,14 +546,14 @@ StringTrieMapFindEntry(
     WORD_TRIEMAP_SIZE(map)++;
 
     entry = (Col_Word) AllocCells(1);
-    WORD_TRIELEAF_INIT(entry, key, WORD_NIL, WORD_NIL);
+    WORD_MTRIELEAF_INIT(entry, key, WORD_NIL);
 
-    if (!WORD_TRIEMAP_ROOT(map)) {
+    if (!node) {
 	/*
 	 * First entry.
 	 */
 
-	ASSERT(WORD_TRIEMAP_ROOT(map) == WORD_NIL);
+	ASSERT(!WORD_TRIEMAP_ROOT(map));
 	ASSERT(WORD_TRIEMAP_SIZE(map) == 1);
 	WORD_TRIEMAP_ROOT(map) = entry;
 	Col_WordSetModified(map);
@@ -254,108 +563,31 @@ StringTrieMapFindEntry(
     ASSERT(node);
 
     /*
-     * Get diff mask between inserted key and existing entry key, i.e. only keep 
-     * the highest bit set.
-     * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 
-     *
-     * Note: when either char is COL_CHAR_INVALID, they differ on the highest
-     * bit, so the penultimate step overflows and the mask is zero. This
-     * happens when one of the keys is shorter. We use this property when 
-     * choosing the right arm to follow.
-     */
-
-    newMask = cKey ^ cEntryKey;
-    newMask |= newMask >> 1;
-    newMask |= newMask >> 2;
-    newMask |= newMask >> 4;
-    newMask |= newMask >> 8;
-    newMask |= newMask >> 16;
-    newMask++;
-    newMask >>= 1;
-
-    /*
-     * Find insertion point.
-     */
-
-    nodePtr = &WORD_TRIEMAP_ROOT(map);
-    parent = map;
-    Col_RopeIterBegin(key, 0, &itKey);
-    while (*nodePtr) {
-	node = *nodePtr;
-	if (WORD_TYPE(node) == WORD_TYPE_STRTRIENODE) {
-	    mask = WORD_STRTRIENODE_MASK(node);
-	    if (diff < WORD_STRTRIENODE_DIFF(node) 
-		    || (diff == WORD_STRTRIENODE_DIFF(node) 
-		    && (mask && newMask > mask))) {
-		break;
-	    }
-	    parent = node;
-	    cKey = COL_CHAR_INVALID;
-	    if (!Col_RopeIterEnd(&itKey)) {
-		Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
-		if (!Col_RopeIterEnd(&itKey)) {
-		    cKey = Col_RopeIterAt(&itKey);
-		}
-	    }
-	    if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
-		/*
-		 * Recurse on right.
-		 */
-
-		nodePtr = &WORD_TRIENODE_RIGHT(node);
-	    } else {
-		/*
-		 * Recurse on left.
-		 */
-
-		nodePtr = &WORD_TRIENODE_LEFT(node);
-	    }
-	    continue;
-	}
-
-	break;
-    }
-
-    /*
      * Insert node here.
      */
 
-    node = (Col_Word) AllocCells(1);
-    cKey = COL_CHAR_INVALID;
-    if (!Col_RopeIterEnd(&itKey)) {
-	Col_RopeIterMoveTo(&itKey, diff);
-	if (!Col_RopeIterEnd(&itKey)) {
-	    cKey = Col_RopeIterAt(&itKey);
-	}
+    if (parent == map) {
+	ASSERT(node == WORD_TRIEMAP_ROOT(map));
+	nodePtr = &WORD_TRIEMAP_ROOT(map);
+    } else {
+	ASSERT(WORD_TYPE(parent) == WORD_TYPE_MSTRTRIENODE);
+	nodePtr = (node == WORD_TRIENODE_LEFT(parent) ? 
+		&WORD_TRIENODE_LEFT(parent) : &WORD_TRIENODE_RIGHT(parent));
     }
-    if (cKey != COL_CHAR_INVALID && (!newMask || (cKey & newMask))) {
+
+    node = (Col_Word) AllocCells(1);
+    if (compare > 0) {
 	/*
 	 * Entry is right.
 	 */
 
-	WORD_STRTRIENODE_INIT(node, diff, newMask, *nodePtr, entry);
-
-	/*
-	 * Get rightmost leaf of left subtrie. Entry's ancestor is the current
-	 * rightmost's ancestor. New rightmost ancestor's is new node.
-	 */
-
-	rightmost = RightmostLeaf(*nodePtr);
-	ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_TRIELEAF);
-	WORD_TRIELEAF_UP(entry) = WORD_TRIELEAF_UP(rightmost);
-	WORD_TRIELEAF_UP(rightmost) = node;
+	WORD_MSTRTRIENODE_INIT(node, diff, mask, *nodePtr, entry);
     } else {
 	/*
 	 * Entry is left.
 	 */
 
-	WORD_STRTRIENODE_INIT(node, diff, newMask, entry, *nodePtr);
-
-	/*
-	 * Entry ancestor is new node.
-	 */
-
-	WORD_TRIELEAF_UP(entry) = node;
+	WORD_MSTRTRIENODE_INIT(node, diff, mask, entry, *nodePtr);
     }
     *nodePtr = node;
     Col_WordSetModified(parent);
@@ -387,48 +619,19 @@ IntTrieMapFindEntry(
     int mutable,
     int *createPtr)
 {
-    Col_Word node, entry, parent, *nodePtr, rightmost;
-    intptr_t entryKey = WORD_NIL, mask, newMask;
+    Col_Word node, entry, parent, *nodePtr;
+    int compare;
+    intptr_t mask;
     
-    /*
-     * Search for matching entry.
-     */
-
-    node = WORD_TRIEMAP_ROOT(map);
-    while (node) {
-	if (WORD_TYPE(node) == WORD_TYPE_INTTRIENODE) {
-	    mask = WORD_INTTRIENODE_MASK(node);
-	    if (mask ? (key & mask) : (key >= 0)) {
-		/*
-		 * Recurse on right.
-		 */
-
-		node = WORD_TRIENODE_RIGHT(node);
-	    } else {
-		/*
-		 * Recurse on left.
-		 */
-
-		node = WORD_TRIENODE_LEFT(node);
-	    }
-	    continue;
-	}
-
+    node = IntTrieMapFindNode(map, key, (createPtr && *createPtr), &compare, 
+	    &parent, NULL, NULL, &mask);
+    if (node && compare == 0) {
 	/*
-	 * Leaf node.
+	 * Found!
 	 */
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_INTTRIELEAF);
-	entryKey = WORD_INTMAPENTRY_KEY(node);
-	if (key == entryKey) {
-	    /*
-	     * Found!
-	     */
-
-	    if (createPtr) *createPtr = 0;
-	    return node;
-	}
-	break;
+	if (createPtr) *createPtr = 0;
+	return node;
     }
 
     /*
@@ -436,6 +639,7 @@ IntTrieMapFindEntry(
      */
 
     if (!createPtr || !*createPtr) {
+	ASSERT(!node);
 	return WORD_NIL;
     }
     *createPtr = 1;
@@ -443,108 +647,47 @@ IntTrieMapFindEntry(
     WORD_TRIEMAP_SIZE(map)++;
 
     entry = (Col_Word) AllocCells(1);
-    WORD_INTTRIELEAF_INIT(entry, key, WORD_NIL, WORD_NIL);
+    WORD_MINTTRIELEAF_INIT(entry, key, WORD_NIL);
 
-    if (!WORD_TRIEMAP_ROOT(map)) {
+    if (!node) {
 	/*
 	 * First entry.
 	 */
 
-	ASSERT(WORD_TRIEMAP_ROOT(map) == WORD_NIL);
+	ASSERT(!WORD_TRIEMAP_ROOT(map));
 	ASSERT(WORD_TRIEMAP_SIZE(map) == 1);
 	WORD_TRIEMAP_ROOT(map) = entry;
 	Col_WordSetModified(map);
 
 	return entry;
     }
-    ASSERT(node);
-
-    /*
-     * Get diff mask between inserted key and existing entry key, i.e. only keep 
-     * the highest bit set.
-     * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 
-     *
-     * Note: when keys are of opposite signs, they differ on the highest bit,
-     * so the penultimate step overflows and the mask is zero. We use this
-     * property when choosing the right arm to follow.
-     */
-
-    newMask = key ^ entryKey;
-    ASSERT(newMask);
-    newMask |= newMask >> 1;
-    newMask |= newMask >> 2;
-    newMask |= newMask >> 4;
-    newMask |= newMask >> 8;
-    newMask |= newMask >> 16;
-    newMask++;
-    newMask >>= 1;
-
-    /*
-     * Find insertion point.
-     */
-
-    nodePtr = &WORD_TRIEMAP_ROOT(map);
-    parent = map;
-    while (*nodePtr) {
-	node = *nodePtr;
-	if (WORD_TYPE(node) == WORD_TYPE_INTTRIENODE) {
-	    mask = WORD_INTTRIENODE_MASK(node);
-	    if (mask && newMask > mask) {
-		break;
-	    }
-	    parent = node;
-	    if (mask ? (key & mask) : (key >= 0)) {
-		/*
-		 * Recurse on right.
-		 */
-
-		nodePtr = &WORD_TRIENODE_RIGHT(node);
-	    } else {
-		/*
-		 * Recurse on left.
-		 */
-
-		nodePtr = &WORD_TRIENODE_LEFT(node);
-	    }
-	    continue;
-	}
-
-	break;
-    }
 
     /*
      * Insert node here.
      */
 
+    if (parent == map) {
+	ASSERT(node == WORD_TRIEMAP_ROOT(map));
+	nodePtr = &WORD_TRIEMAP_ROOT(map);
+    } else {
+	ASSERT(WORD_TYPE(parent) == WORD_TYPE_MINTTRIENODE);
+	nodePtr = (node == WORD_TRIENODE_LEFT(parent) ? 
+		&WORD_TRIENODE_LEFT(parent) : &WORD_TRIENODE_RIGHT(parent));
+    }
+
     node = (Col_Word) AllocCells(1);
-    if (newMask ? (key & newMask) : (key >= 0)) {
+    if (compare > 0) {
 	/*
 	 * Entry is right.
 	 */
 
-	WORD_INTTRIENODE_INIT(node, newMask, *nodePtr, entry);
-
-	/*
-	 * Get rightmost leaf of left subtrie. Entry's ancestor is the current
-	 * rightmost's ancestor. New rightmost's ancestor is new node.
-	 */
-
-	rightmost = RightmostLeaf(*nodePtr);
-	ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_INTTRIELEAF);
-	WORD_TRIELEAF_UP(entry) = WORD_TRIELEAF_UP(rightmost);
-	WORD_TRIELEAF_UP(rightmost) = node;
+	WORD_MINTTRIENODE_INIT(node, mask, *nodePtr, entry);
     } else {
 	/*
 	 * Entry is left.
 	 */
 
-	WORD_INTTRIENODE_INIT(node, newMask, entry, *nodePtr);
-
-	/*
-	 * Entry ancestor is new node.
-	 */
-
-	WORD_TRIELEAF_UP(entry) = node;
+	WORD_MINTTRIENODE_INIT(node, mask, entry, *nodePtr);
     }
     *nodePtr = node;
     Col_WordSetModified(parent);
@@ -587,7 +730,7 @@ Col_StringTrieMapGet(
 
     entry = StringTrieMapFindEntry(map, key, 0, NULL);
     if (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_TRIELEAF);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MTRIELEAF);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
 	return 1;
     } else {
@@ -625,7 +768,7 @@ Col_IntTrieMapGet(
 
     entry = IntTrieMapFindEntry(map, key, 0, NULL);
     if (entry) {
-	ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTTRIELEAF);
+	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTTRIELEAF);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
 	return 1;
     } else {
@@ -666,7 +809,7 @@ Col_StringTrieMapSet(
 
     entry = StringTrieMapFindEntry(map, key, 1, &create);
     ASSERT(entry);
-    ASSERT(WORD_TYPE(entry) == WORD_TYPE_TRIELEAF);
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MTRIELEAF);
     Col_WordSetModified(entry);
     WORD_MAPENTRY_VALUE(entry) = value;
     return create;
@@ -703,7 +846,7 @@ Col_IntTrieMapSet(
 
     entry = IntTrieMapFindEntry(map, key, 1, &create);
     ASSERT(entry);
-    ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTTRIELEAF);
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTTRIELEAF);
     Col_WordSetModified(entry);
     WORD_MAPENTRY_VALUE(entry) = value;
     return create;
@@ -727,7 +870,7 @@ Col_StringTrieMapUnset(
     Col_Word map,
     Col_Word key)
 {
-    Col_Word node, grandParent, parent, sibling, rightmost;
+    Col_Word node, grandParent, parent, sibling;
     Col_Char mask;
     Col_RopeIterator itKey;
 
@@ -745,7 +888,7 @@ Col_StringTrieMapUnset(
     node = WORD_TRIEMAP_ROOT(map);
     Col_RopeIterBegin(key, 0, &itKey);
     while (node) {
-	if (WORD_TYPE(node) == WORD_TYPE_STRTRIENODE) {
+	if (WORD_TYPE(node) == WORD_TYPE_MSTRTRIENODE) {
 	    Col_Char c = COL_CHAR_INVALID;
 
 	    grandParent = parent;
@@ -781,7 +924,7 @@ Col_StringTrieMapUnset(
 	 * Leaf node.
 	 */
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_TRIELEAF);
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_MTRIELEAF);
 	if (Col_CompareRopes(key, WORD_MAPENTRY_KEY(node), 0, SIZE_MAX, NULL,
 		NULL, NULL) == 0) {
 	    /*
@@ -800,22 +943,13 @@ Col_StringTrieMapUnset(
 		WORD_TRIEMAP_ROOT(map) = WORD_NIL;
 		Col_WordSetModified(map);
 	    } else {
-		ASSERT(WORD_TYPE(parent) == WORD_TYPE_STRTRIENODE);
+		ASSERT(WORD_TYPE(parent) == WORD_TYPE_MSTRTRIENODE);
 		if (node == WORD_TRIENODE_RIGHT(parent)) {
 		    /*
 		     * Entry was right.
 		     */
 
 		    sibling = WORD_TRIENODE_LEFT(parent);
-
-		    /*
-		     * Get rightmost leaf of sibling. Its new ancestor is the
-		     * entry's ancestor.
-		     */
-
-		    rightmost = RightmostLeaf(sibling);
-		    ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_TRIELEAF);
-		    WORD_TRIELEAF_UP(rightmost) = WORD_TRIELEAF_UP(node);
 		} else {
 		    /*
 		     * Entry was left.
@@ -872,7 +1006,7 @@ Col_IntTrieMapUnset(
     Col_Word map,
     intptr_t key)
 {
-    Col_Word node, grandParent, parent, sibling, rightmost;
+    Col_Word node, grandParent, parent, sibling;
     intptr_t mask;
 
     if (WORD_TYPE(map) != WORD_TYPE_INTTRIEMAP) {
@@ -888,7 +1022,7 @@ Col_IntTrieMapUnset(
     parent = map;
     node = WORD_TRIEMAP_ROOT(map);
     while (node) {
-	if (WORD_TYPE(node) == WORD_TYPE_INTTRIENODE) {
+	if (WORD_TYPE(node) == WORD_TYPE_MINTTRIENODE) {
 	    grandParent = parent;
 	    parent = node;
 
@@ -913,7 +1047,7 @@ Col_IntTrieMapUnset(
 	 * Leaf node.
 	 */
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_INTTRIELEAF);
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTTRIELEAF);
 	if (key == WORD_INTMAPENTRY_KEY(node)) {
 	    /*
 	     * Found!
@@ -931,22 +1065,13 @@ Col_IntTrieMapUnset(
 		WORD_TRIEMAP_ROOT(map) = WORD_NIL;
 		Col_WordSetModified(map);
 	    } else {
-		ASSERT(WORD_TYPE(parent) == WORD_TYPE_INTTRIENODE);
+		ASSERT(WORD_TYPE(parent) == WORD_TYPE_MINTTRIENODE);
 		if (node == WORD_TRIENODE_RIGHT(parent)) {
 		    /*
 		     * Entry was right.
 		     */
 
 		    sibling = WORD_TRIENODE_LEFT(parent);
-
-		    /*
-		     * Get rightmost leaf of sibling. Its new ancestor is the
-		     * entry's ancestor.
-		     */
-
-		    rightmost = RightmostLeaf(sibling);
-		    ASSERT(WORD_TYPE(rightmost) == WORD_TYPE_INTTRIELEAF);
-		    WORD_TRIELEAF_UP(rightmost) = WORD_TRIELEAF_UP(node);
 		} else {
 		    /*
 		     * Entry was left.
@@ -1027,6 +1152,7 @@ Col_TrieMapIterBegin(
     }
 
     ASSERT(WORD_TRIEMAP_ROOT(map));
+    it->map = map;
     it->entry = LeftmostLeaf(WORD_TRIEMAP_ROOT(map));
     ASSERT(it->entry);
 }
@@ -1060,6 +1186,7 @@ Col_StringTrieMapIterFind(
 	return;
     }
 
+    //TODO: up
     it->entry = StringTrieMapFindEntry(map, key, 0, createPtr);
     if (!it->entry) {
 	/*
@@ -1099,6 +1226,7 @@ Col_IntTrieMapIterFind(
 	return;
     }
 
+    //TODO: up
     it->entry = IntTrieMapFindEntry(map, key, 0, createPtr);
     if (!it->entry) {
 	/*
@@ -1129,27 +1257,25 @@ Col_TrieMapIterSetValue(
 	return;
     }
 
+    ASSERT(it->entry);
+
     switch (WORD_TYPE(it->map)) {
 	case WORD_TYPE_STRTRIEMAP:
-	    //TODO handle immutable subtries.
-
 	    /*
 	     * Set entry value.
 	     */
 
-	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_TRIELEAF);
+	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MTRIELEAF);
 	    WORD_MAPENTRY_VALUE(it->entry) = value;
 	    Col_WordSetModified(it->entry);
 	    break;
 
 	case WORD_TYPE_INTTRIEMAP:
-	    //TODO handle immutable subtries.
-
 	    /*
 	     * Set entry value.
 	     */
 
-	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTTRIELEAF);
+	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MINTTRIELEAF);
 	    WORD_MAPENTRY_VALUE(it->entry) = value;
 	    Col_WordSetModified(it->entry);
 	    break;
@@ -1174,27 +1300,38 @@ void
 Col_TrieMapIterNext(
     Col_MapIterator *it)
 {
+    Col_Word right;
+
     if (Col_MapIterEnd(it)) {
 	Col_Error(COL_ERROR, "Invalid map iterator");
 	return;
     }
 
-    if (!WORD_TRIELEAF_UP(it->entry)) {
+    //TODO: optimize.
+
+    /*
+     * Get leftmost leaf of topmost right branch.
+     */
+
+    ASSERT(it->entry);
+    switch (WORD_TYPE(it->map)) {
+	case WORD_TYPE_STRTRIEMAP:
+	    StringTrieMapFindNode(it->map, WORD_MAPENTRY_KEY(it->entry), 0,
+		    NULL, NULL, NULL, &right, NULL,NULL);
+	    break;
+
+	case WORD_TYPE_INTTRIEMAP:
+	    IntTrieMapFindNode(it->map, WORD_INTMAPENTRY_KEY(it->entry), 0,
+		    NULL, NULL, NULL, &right, NULL);
+	    break;
+    }
+    if (right) {
+	it->entry = LeftmostLeaf(right);
+    } else {
 	/*
 	 * End of map.
 	 */
 
 	it->map = WORD_NIL;
-	return;
     }
-
-    /*
-     * Next entry is leftmost leaf of ancestor's right subtrie.
-     */
-
-    ASSERT(WORD_TYPE(WORD_TRIELEAF_UP(it->entry)) == WORD_TYPE_STRTRIENODE
-	    || WORD_TYPE(WORD_TRIELEAF_UP(it->entry)) == WORD_TYPE_INTTRIENODE)
-    it->entry = LeftmostLeaf(WORD_TRIENODE_RIGHT(
-	    WORD_TRIELEAF_UP(it->entry)));
-    ASSERT(it->entry);
 }

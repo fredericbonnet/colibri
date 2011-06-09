@@ -447,6 +447,7 @@ Col_MapIterGet(
 	case WORD_TYPE_HASHENTRY:
 	case WORD_TYPE_MHASHENTRY:
 	case WORD_TYPE_TRIELEAF:
+	case WORD_TYPE_MTRIELEAF:
 	    *keyPtr = WORD_MAPENTRY_KEY(it->entry);
 	    *valuePtr = WORD_MAPENTRY_VALUE(it->entry);
 	    break;
@@ -484,6 +485,7 @@ Col_IntMapIterGet(
 	case WORD_TYPE_INTHASHENTRY:
 	case WORD_TYPE_MINTHASHENTRY:
 	case WORD_TYPE_INTTRIELEAF:
+	case WORD_TYPE_MINTTRIELEAF:
 	    *keyPtr = WORD_INTMAPENTRY_KEY(it->entry);
 	    *valuePtr = WORD_MAPENTRY_VALUE(it->entry);
 	    break;
@@ -518,6 +520,7 @@ Col_MapIterGetKey(
 	case WORD_TYPE_HASHENTRY:
 	case WORD_TYPE_MHASHENTRY:
 	case WORD_TYPE_TRIELEAF:
+	case WORD_TYPE_MTRIELEAF:
 	    return WORD_MAPENTRY_KEY(it->entry);
 
 	default:
@@ -551,6 +554,7 @@ Col_IntMapIterGetKey(
 	case WORD_TYPE_INTHASHENTRY:
 	case WORD_TYPE_MINTHASHENTRY:
 	case WORD_TYPE_INTTRIELEAF:
+	case WORD_TYPE_MINTTRIELEAF:
 	    return WORD_INTMAPENTRY_KEY(it->entry);
 
 	default:

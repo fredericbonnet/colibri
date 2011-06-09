@@ -642,19 +642,28 @@ void			DeclareCustomWord(Col_Word word,
  *	WORD_TYPE_MLIST		- Mutable Lists (<WORD_MLIST_INIT>)
  *	WORD_TYPE_STRHASHMAP	- String Hash Maps (<WORD_STRHASHMAP_INIT>)
  *	WORD_TYPE_INTHASHMAP	- Integer Hash Maps (<WORD_INTHASHMAP_INIT>)
- *	WORD_TYPE_HASHENTRY	- Immutable Hash Entries (<WORD_MAPENTRY_INIT>)
- *	WORD_TYPE_MHASHENTRY	- Mutable Hash Entries (<WORD_MMAPENTRY_INIT>)
+ *	WORD_TYPE_HASHENTRY	- Immutable Hash Entries (<WORD_HASHENTRY_INIT>)
+ *	WORD_TYPE_MHASHENTRY	- Mutable Hash Entries (<WORD_MHASHENTRY_INIT>)
  *	WORD_TYPE_INTHASHENTRY	- Immutable Integer Hash Entries 
- *				  (<WORD_INTMAPENTRY_INIT>)
+ *				  (<WORD_INTHASHENTRY_INIT>)
  *	WORD_TYPE_MINTHASHENTRY	- Mutable Integer Hash Entries 
- *				  (<WORD_MINTMAPENTRY_INIT>)
+ *				  (<WORD_MINTHASHENTRY_INIT>)
  *	WORD_TYPE_STRTRIEMAP	- String Trie Maps (<WORD_STRTRIEMAP_INIT>)
  *	WORD_TYPE_INTTRIEMAP	- Integer Trie Maps (<WORD_INTTRIEMAP_INIT>)
- *	WORD_TYPE_STRTRIENODE	- String Trie Nodes (<WORD_STRTRIENODE_INIT>)
- *	WORD_TYPE_INTTRIENODE	- Integer Trie Nodes (<WORD_INTTRIENODE_INIT>)
- *	WORD_TYPE_TRIELEAF	- Trie Leaves (<WORD_TRIELEAF_INIT>)
- *	WORD_TYPE_INTTRIELEAF	- Integer Trie Leaves (<WORD_INTTRIELEAF_INIT>)
- *	WORD_TYPE_SUBTRIE	- Subtries (<WORD_SUBTRIE_INIT>)
+ *	WORD_TYPE_STRTRIENODE	- Immutable String Trie Nodes 
+ *				  (<WORD_STRTRIENODE_INIT>)
+ *	WORD_TYPE_MSTRTRIENODE	- Mutable String Trie Nodes 
+ *				  (<WORD_MSTRTRIENODE_INIT>)
+ *	WORD_TYPE_INTTRIENODE	- Immutable Integer Trie Nodes 
+ *				  (<WORD_INTTRIENODE_INIT>)
+ *	WORD_TYPE_MINTTRIENODE	- Mutable Integer Trie Nodes 
+ *				  (<WORD_MINTTRIENODE_INIT>)
+ *	WORD_TYPE_TRIELEAF	- Immutable Trie Leaves (<WORD_TRIELEAF_INIT>)
+ *	WORD_TYPE_MTRIELEAF	- Mutable Trie Leaves (<WORD_MTRIELEAF_INIT>)
+ *	WORD_TYPE_INTTRIELEAF	- Immutable Integer Trie Leaves
+ *				  (<WORD_INTTRIELEAF_INIT>)
+ *	WORD_TYPE_MINTTRIELEAF	- Mutable Integer Trie Leaves
+ *				  (<WORD_MINTTRIELEAF_INIT>)
  *	WORD_TYPE_REDIRECT	- Redirects
  *	WORD_TYPE_UNKNOWN	- Used as a tag in the source code to mark 
  *				  places where predefined type specific code is
@@ -704,10 +713,13 @@ void			DeclareCustomWord(Col_Word word,
 #define WORD_TYPE_STRTRIEMAP	74
 #define WORD_TYPE_INTTRIEMAP	78
 #define WORD_TYPE_STRTRIENODE	82
-#define WORD_TYPE_INTTRIENODE	86
-#define WORD_TYPE_TRIELEAF	90
-#define WORD_TYPE_INTTRIELEAF	94
-#define WORD_TYPE_SUBTRIE	98
+#define WORD_TYPE_MSTRTRIENODE	86
+#define WORD_TYPE_INTTRIENODE	90
+#define WORD_TYPE_MINTTRIENODE	94
+#define WORD_TYPE_TRIELEAF	98
+#define WORD_TYPE_MTRIELEAF	102
+#define WORD_TYPE_INTTRIELEAF	106
+#define WORD_TYPE_MINTTRIELEAF	110
 #ifdef PROMOTE_COMPACT
 #   define WORD_TYPE_REDIRECT	254
 #endif
@@ -2077,7 +2089,8 @@ void			DeclareCustomWord(Col_Word word,
  *
  * See also:
  *	<WORD_HASHENTRY_INIT>, <WORD_MHASHENTRY_INIT>, <WORD_INTHASHENTRY_INIT>,
- *	<WORD_MINTHASHENTRY_INIT>, <WORD_TRIELEAF_INIT>, <WORD_INTTRIELEAF_INIT>
+ *	<WORD_MINTHASHENTRY_INIT>, <WORD_TRIELEAF_INIT>, <WORD_MTRIELEAF_INIT>, 
+ *	<WORD_INTTRIELEAF_INIT>, <WORD_MINTTRIELEAF_INIT>
  *---------------------------------------------------------------------------*/
 
 #define WORD_MAPENTRY_KEY(word)		(((Col_Word *)(word))[2])
@@ -2556,7 +2569,7 @@ void			DeclareCustomWord(Col_Word word,
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_STRTRIENODE_INIT
  *
- *	Initializer for string trie nodes.
+ *	Initializer for immutable string trie nodes.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2567,11 +2580,35 @@ void			DeclareCustomWord(Col_Word word,
  *	right	- <WORD_TRIENODE_RIGHT>
  *
  * See also:
- *	<WORD_TYPE_STRTRIENODE>, <StringTrieMapFindEntry>
+ *	<WORD_TYPE_STRTRIENODE>
  *---------------------------------------------------------------------------*/
 
 #define WORD_STRTRIENODE_INIT(word, diff, mask, left, right) \
     WORD_SET_TYPEID((word), WORD_TYPE_STRTRIENODE); \
+    WORD_STRTRIENODE_SET_MASK(word, mask); \
+    WORD_STRTRIENODE_DIFF(word) = (diff); \
+    WORD_TRIENODE_LEFT(word) = (left); \
+    WORD_TRIENODE_RIGHT(word) = (right);
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_MSTRTRIENODE_INIT
+ *
+ *	Initializer for mutable string trie nodes.
+ *
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	diff	- <WORD_STRTRIENODE_DIFF>
+ *	mask	- <WORD_STRTRIENODE_SET_MASK>
+ *	left	- <WORD_TRIENODE_LEFT>
+ *	right	- <WORD_TRIENODE_RIGHT>
+ *
+ * See also:
+ *	<WORD_TYPE_MSTRTRIENODE>, <StringTrieMapFindEntry>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_MSTRTRIENODE_INIT(word, diff, mask, left, right) \
+    WORD_SET_TYPEID((word), WORD_TYPE_MSTRTRIENODE); \
     WORD_STRTRIENODE_SET_MASK(word, mask); \
     WORD_STRTRIENODE_DIFF(word) = (diff); \
     WORD_TRIENODE_LEFT(word) = (left); \
@@ -2607,7 +2644,7 @@ void			DeclareCustomWord(Col_Word word,
  *	accessible for both read/write operations).
  *
  * See also:
- *	<WORD_INTTRIENODE_INIT>
+ *	<WORD_MINTTRIENODE_INIT>
  *---------------------------------------------------------------------------*/
 
 #define WORD_INTTRIENODE_MASK(word)	(((intptr_t *)(word))[1])
@@ -2615,7 +2652,7 @@ void			DeclareCustomWord(Col_Word word,
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_INTTRIENODE_INIT
  *
- *	Initializer for string trie nodes.
+ *	Initializer for immutable integer trie nodes.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2625,7 +2662,7 @@ void			DeclareCustomWord(Col_Word word,
  *	right	- <WORD_TRIENODE_RIGHT>
  *
  * See also:
- *	<WORD_TYPE_INTTRIENODE>, <IntTrieMapFindEntry>
+ *	<WORD_TYPE_INTTRIENODE>
  *---------------------------------------------------------------------------*/
 
 #define WORD_INTTRIENODE_INIT(word, mask, left, right) \
@@ -2635,56 +2672,37 @@ void			DeclareCustomWord(Col_Word word,
     WORD_TRIENODE_RIGHT(word) = (right);
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Trie Leaf Fields
+ * Internal Macro: WORD_MINTTRIENODE_INIT
  *
- *	Accessors for trie leaf fields.
+ *	Initializer for mutable integer trie nodes.
  *
- *	Uses generic map entry fields.
- * 
- * Layout:
- *	On all architectures the cell layout is as follows:
- *
- * (start table)
- *      0     7                                                       n
- *     +-------+-------------------------------------------------------+
- *   0 | Type  |                        Unused                         |
- *     +-------+-------------------------------------------------------+
- *   1 |                              Up                               |
- *     +---------------------------------------------------------------+
- *   2 |                          Key (Generic)                        |
- *     +---------------------------------------------------------------+
- *   3 |                         Value (Generic)                       |
- *     +---------------------------------------------------------------+
- * (end)
- *
- *	WORD_TRIELEAF_UP	- Pointer to deepest common ancestor with the 
- *				  next leaf in iteration order. The next leaf
- *				  will be the leftmost leaf of the ancestor's 
- *				  right subtrie (current leaf being the 
- *				  rightmost leaf of the ancestor's left 
- *				  subtrie).
- *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	mask	- <WORD_INTTRIENODE_MASK>
+ *	left	- <WORD_TRIENODE_LEFT>
+ *	right	- <WORD_TRIENODE_RIGHT>
  *
  * See also:
- *	<Map Entry Fields>, <WORD_TRIELEAF_INIT>, <WORD_INTTRIELEAF_INIT>
+ *	<WORD_TYPE_MINTTRIENODE>, <IntTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
-#define WORD_TRIELEAF_UP(word)	(((Col_Word *)(word))[1])
+#define WORD_MINTTRIENODE_INIT(word, mask, left, right) \
+    WORD_SET_TYPEID((word), WORD_TYPE_MINTTRIENODE); \
+    WORD_INTTRIENODE_MASK(word) = (mask); \
+    WORD_TRIENODE_LEFT(word) = (left); \
+    WORD_TRIENODE_RIGHT(word) = (right);
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_TRIELEAF_INIT
  *
- *	Initializer for trie leaf words.
+ *	Initializer for immutable trie leaf words.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
  *		  macro expansion)
  *	key	- <WORD_MAPENTRY_KEY>
  *	value	- <WORD_MAPENTRY_VALUE>
- *	up	- <WORD_TRIELEAF_UP>
  *
  * Note:
  *	Macros are L-values and side effect-free unless specified (i.e. 
@@ -2694,104 +2712,73 @@ void			DeclareCustomWord(Col_Word word,
  *	<WORD_TYPE_TRIELEAF>
  *---------------------------------------------------------------------------*/
 
-#define WORD_TRIELEAF_INIT(word, key, value, up) \
+#define WORD_TRIELEAF_INIT(word, key, value) \
     WORD_SET_TYPEID((word), WORD_TYPE_TRIELEAF); \
     WORD_MAPENTRY_KEY(word) = (key); \
-    WORD_MAPENTRY_VALUE(word) = (value); \
-    WORD_TRIELEAF_UP(word) = (up);
+    WORD_MAPENTRY_VALUE(word) = (value);
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_MTRIELEAF_INIT
+ *
+ *	Initializer for mutable trie leaf words.
+ *
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	key	- <WORD_MAPENTRY_KEY>
+ *	value	- <WORD_MAPENTRY_VALUE>
+ *
+ * Note:
+ *	Macros are L-values and side effect-free unless specified (i.e. 
+ *	accessible for both read/write operations).
+ *
+ * See also:
+ *	<WORD_TYPE_MTRIELEAF>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_MTRIELEAF_INIT(word, key, value) \
+    WORD_SET_TYPEID((word), WORD_TYPE_MTRIELEAF); \
+    WORD_MAPENTRY_KEY(word) = (key); \
+    WORD_MAPENTRY_VALUE(word) = (value);
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_INTTRIELEAF_INIT
  *
- *	Initializer for integer trie leaf words.
+ *	Initializer for immutable integer trie leaf words.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
  *		  macro expansion)
  *	key	- <WORD_INTMAPENTRY_KEY>
  *	value	- <WORD_MAPENTRY_VALUE>
- *	up	- <WORD_TRIELEAF_UP>
- *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
  *
  * See also:
  *	<WORD_TYPE_INTTRIELEAF>
  *---------------------------------------------------------------------------*/
 
-#define WORD_INTTRIELEAF_INIT(word, key, value, up) \
+#define WORD_INTTRIELEAF_INIT(word, key, value) \
     WORD_SET_TYPEID((word), WORD_TYPE_INTTRIELEAF); \
     WORD_INTMAPENTRY_KEY(word) = (key); \
-    WORD_MAPENTRY_VALUE(word) = (value); \
-    WORD_TRIELEAF_UP(word) = (up);
+    WORD_MAPENTRY_VALUE(word) = (value);
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Subtrie Fields
+ * Internal Macro: WORD_MINTTRIELEAF_INIT
  *
- *	Accessors for subtrie fields.
+ *	Initializer for mutable integer trie leaf words.
  *
- *	Subtries are used when sharing common entries between several tries.
- *	Such subtries are by nature immutable.
- *	
- *
- * Layout:
- *	On all architectures the cell layout is as follows:
- *
- * (start table)
- *      0     7                                                       n
- *     +-------+-------------------------------------------------------+
- *   0 | Type  |                        Unused                         |
- *     +-------+-------------------------------------------------------+
- *   1 |                              Up                               |
- *     +---------------------------------------------------------------+
- *   2 |                             Root                              |
- *     +---------------------------------------------------------------+
- *   3 |                            Parent                             |
- *     +---------------------------------------------------------------+
- * (end)
- *
- *	WORD_SUBTRIE_UP		- Up link. When the end of a subtrie is reached,
- *				  this field is used in place of the terminal
- *				  leaf's <WORD_TRIELEAF_UP> field.
- *	WORD_SUBTRIE_ROOT	- Root node of the subtrie.
- *	WORD_SUBTRIE_PARENT	- Parent node of the root. This is used during
- *				  iteration: if the current leaf's up field
- *				  points to this parent, stop iterating the
- *				  subtrie and resume the current one.
- *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
- *
- * See also:
- *	<WORD_SUBTRIE_INIT>
- *---------------------------------------------------------------------------*/
-
-#define WORD_SUBTRIE_UP(word)		(((Col_Word *)(word))[1])
-#define WORD_SUBTRIE_ROOT(word)		(((Col_Word *)(word))[2])
-#define WORD_SUBTRIE_PARENT(word)	(((Col_Word *)(word))[3])
-
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_SUBTRIE_INIT
- *
- *	Initializer for subtrie words.
- *
- * Argument:
+ * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
  *		  macro expansion)
- *	up	- <WORD_SUBTRIE_UP>
- *	root	- <WORD_SUBTRIE_ROOT>
- *	parent	- <WORD_SUBTRIE_PARENT>
+ *	key	- <WORD_INTMAPENTRY_KEY>
+ *	value	- <WORD_MAPENTRY_VALUE>
  *
  * See also:
- *	<WORD_TYPE_SUBTRIE>
+ *	<WORD_TYPE_MINTTRIELEAF>
  *---------------------------------------------------------------------------*/
 
-#define WORD_SUBTRIE_INIT(word, up, root, parent) \
-    WORD_SET_TYPEID((word), WORD_TYPE_SUBTRIE); \
-    WORD_SUBTRIE_UP(word) = up; \
-    WORD_SUBTRIE_ROOT(word) = root; \
-    WORD_SUBTRIE_PARENT(word) = parent;
+#define WORD_MINTTRIELEAF_INIT(word, key, value) \
+    WORD_SET_TYPEID((word), WORD_TYPE_MINTTRIELEAF); \
+    WORD_INTMAPENTRY_KEY(word) = (key); \
+    WORD_MAPENTRY_VALUE(word) = (value);
 
 #endif /* _COLIBRI_INTERNAL */
