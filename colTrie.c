@@ -916,11 +916,21 @@ Col_StringTrieMapUnset(
     Col_Word key)
 {
     Col_Word node, grandParent, parent, sibling;
-    Col_Char mask;
     Col_RopeIterator itKey;
+    Col_Char mask;
+    Col_Char cKey;
 
     if (WORD_TYPE(map) != WORD_TYPE_STRTRIEMAP) {
 	Col_Error(COL_ERROR, "%x is not a string trie map", map);
+	return 0;
+    }
+
+    if (!WORD_TRIEMAP_ROOT(map)) {
+	/*
+	 * Map is empty.
+	 */
+
+	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
 	return 0;
     }
 
@@ -933,104 +943,77 @@ Col_StringTrieMapUnset(
     node = WORD_TRIEMAP_ROOT(map);
     Col_RopeIterBegin(key, 0, &itKey);
     while (node) {
-	if (WORD_TYPE(node) == WORD_TYPE_MSTRTRIENODE) {
-	    Col_Char c = COL_CHAR_INVALID;
+	if (WORD_TYPE(node) == WORD_TYPE_MTRIELEAF) break;
 
-	    grandParent = parent;
-	    parent = node;
-
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_MSTRTRIENODE);
+	mask = WORD_STRTRIENODE_MASK(node);
+	cKey = COL_CHAR_INVALID;
+	if (!Col_RopeIterEnd(&itKey)) {
+	    Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
 	    if (!Col_RopeIterEnd(&itKey)) {
-		Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
-		if (!Col_RopeIterEnd(&itKey)) {
-		    c = Col_RopeIterAt(&itKey);
-		}
+		cKey = Col_RopeIterAt(&itKey);
 	    }
-	    if (!Col_RopeIterEnd(&itKey)) {
-		Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
-	    }
-	    mask = WORD_STRTRIENODE_MASK(node);
-	    if (c != COL_CHAR_INVALID && (!mask || (c & mask))) {
-		/*
-		 * Recurse on right.
-		 */
-
-		node = WORD_TRIENODE_RIGHT(node);
-	    } else {
-		/*
-		 * Recurse on left.
-		 */
-
-		node = WORD_TRIENODE_LEFT(node);
-	    }
-	    continue;
 	}
+	grandParent = parent;
+	parent = node;
+	if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
+	    node = WORD_TRIENODE_RIGHT(node);
+	} else {
+	    node = WORD_TRIENODE_LEFT(node);
+	}
+    }
 
+    ASSERT(WORD_TYPE(node) == WORD_TYPE_MTRIELEAF);
+    if (Col_CompareRopes(key, WORD_MAPENTRY_KEY(node), 0, SIZE_MAX, NULL, NULL, 
+	    NULL) != 0) {
 	/*
-	 * Leaf node.
+	 * Not found.
 	 */
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_MTRIELEAF);
-	if (Col_CompareRopes(key, WORD_MAPENTRY_KEY(node), 0, SIZE_MAX, NULL,
-		NULL, NULL) == 0) {
-	    /*
-	     * Found!
-	     */
+	return 0;
+    }
 
-	    WORD_TRIEMAP_SIZE(map)--;
+    WORD_TRIEMAP_SIZE(map)--;
 
-	    if (!grandParent) {
-		/*
-		 * Entry was root.
-		 */
+    if (!grandParent) {
+	/*
+	 * Last entry.
+	 */
 
-		ASSERT(parent == map);
-		ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
-		WORD_TRIEMAP_ROOT(map) = WORD_NIL;
-		Col_WordSetModified(map);
-	    } else {
-		ASSERT(WORD_TYPE(parent) == WORD_TYPE_MSTRTRIENODE);
-		if (node == WORD_TRIENODE_RIGHT(parent)) {
-		    /*
-		     * Entry was right.
-		     */
+	ASSERT(parent == map);
+	ASSERT(WORD_TRIEMAP_ROOT(map) == node);
+	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
+	WORD_TRIEMAP_ROOT(map) = WORD_NIL;
+	Col_WordSetModified(map);
 
-		    sibling = WORD_TRIENODE_LEFT(parent);
-		} else {
-		    /*
-		     * Entry was left.
-		     */
-
-		    sibling = WORD_TRIENODE_RIGHT(parent);
-		}
-
-		/*
-		 * Replace parent by sibling.
-		 */
-
-		if (grandParent == map) {
-		    /*
-		     * Parent was root.
-		     */
-
-		    ASSERT(WORD_TRIEMAP_ROOT(map) == parent);
-		    WORD_TRIEMAP_ROOT(map) = sibling;
-		} else if (WORD_TRIENODE_LEFT(grandParent) == parent) {
-		    WORD_TRIENODE_LEFT(grandParent) = sibling;
-		} else {
-		    WORD_TRIENODE_RIGHT(grandParent) = sibling;
-		}
-		Col_WordSetModified(grandParent);
-	    }
-	    return 1;
-	}
-	break;
+	return 1;
     }
 
     /*
-     * Not found.
+     * Replace parent by sibling.
      */
 
-    return 0;
+    ASSERT(WORD_TYPE(parent) == WORD_TYPE_MSTRTRIENODE);
+    if (node == WORD_TRIENODE_RIGHT(parent)) {
+	sibling = WORD_TRIENODE_LEFT(parent);
+    } else {
+	sibling = WORD_TRIENODE_RIGHT(parent);
+    }
+    if (grandParent == map) {
+	/*
+	 * Parent was root.
+	 */
+
+	ASSERT(WORD_TRIEMAP_ROOT(map) == parent);
+	WORD_TRIEMAP_ROOT(map) = sibling;
+    } else if (WORD_TRIENODE_LEFT(grandParent) == parent) {
+	WORD_TRIENODE_LEFT(grandParent) = sibling;
+    } else {
+	WORD_TRIENODE_RIGHT(grandParent) = sibling;
+    }
+    Col_WordSetModified(grandParent);
+
+    return 1;
 }
 
 /*---------------------------------------------------------------------------
@@ -1059,6 +1042,15 @@ Col_IntTrieMapUnset(
 	return 0;
     }
 
+    if (!WORD_TRIEMAP_ROOT(map)) {
+	/*
+	 * Map is empty.
+	 */
+
+	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
+	return 0;
+    }
+
     /*
      * Search for matching entry.
      */
@@ -1067,92 +1059,69 @@ Col_IntTrieMapUnset(
     parent = map;
     node = WORD_TRIEMAP_ROOT(map);
     while (node) {
-	if (WORD_TYPE(node) == WORD_TYPE_MINTTRIENODE) {
-	    grandParent = parent;
-	    parent = node;
+	if (WORD_TYPE(node) == WORD_TYPE_MINTTRIELEAF) break;
 
-	    mask = WORD_INTTRIENODE_MASK(node);
-	    if (mask ? (key & mask) : (key >= 0)) {
-		/*
-		 * Recurse on right.
-		 */
-
-		node = WORD_TRIENODE_RIGHT(node);
-	    } else {
-		/*
-		 * Recurse on left.
-		 */
-
-		node = WORD_TRIENODE_LEFT(node);
-	    }
-	    continue;
+	ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTTRIENODE);
+	mask = WORD_INTTRIENODE_MASK(node);
+	grandParent = parent;
+	parent = node;
+	if (mask ? (key & mask) : (key >= 0)) {
+	    node = WORD_TRIENODE_RIGHT(node);
+	} else {
+	    node = WORD_TRIENODE_LEFT(node);
 	}
+    }
 
+    ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTTRIELEAF);
+    if (key != WORD_INTMAPENTRY_KEY(node)) {
 	/*
-	 * Leaf node.
+	 * Not found.
 	 */
 
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTTRIELEAF);
-	if (key == WORD_INTMAPENTRY_KEY(node)) {
-	    /*
-	     * Found!
-	     */
+	return 0;
+    }
 
-	    WORD_TRIEMAP_SIZE(map)--;
+    WORD_TRIEMAP_SIZE(map)--;
 
-	    if (!grandParent) {
-		/*
-		 * Entry was root.
-		 */
+    if (!grandParent) {
+	/*
+	 * Last entry.
+	 */
 
-		ASSERT(parent == map);
-		ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
-		WORD_TRIEMAP_ROOT(map) = WORD_NIL;
-		Col_WordSetModified(map);
-	    } else {
-		ASSERT(WORD_TYPE(parent) == WORD_TYPE_MINTTRIENODE);
-		if (node == WORD_TRIENODE_RIGHT(parent)) {
-		    /*
-		     * Entry was right.
-		     */
+	ASSERT(parent == map);
+	ASSERT(WORD_TRIEMAP_ROOT(map) == node);
+	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
+	WORD_TRIEMAP_ROOT(map) = WORD_NIL;
+	Col_WordSetModified(map);
 
-		    sibling = WORD_TRIENODE_LEFT(parent);
-		} else {
-		    /*
-		     * Entry was left.
-		     */
-
-		    sibling = WORD_TRIENODE_RIGHT(parent);
-		}
-
-		/*
-		 * Replace parent by sibling.
-		 */
-
-		if (grandParent == map) {
-		    /*
-		     * Parent was root.
-		     */
-
-		    ASSERT(WORD_TRIEMAP_ROOT(map) == parent);
-		    WORD_TRIEMAP_ROOT(map) = sibling;
-		} else if (WORD_TRIENODE_LEFT(grandParent) == parent) {
-		    WORD_TRIENODE_LEFT(grandParent) = sibling;
-		} else {
-		    WORD_TRIENODE_RIGHT(grandParent) = sibling;
-		}
-		Col_WordSetModified(grandParent);
-	    }
-	    return 1;
-	}
-	break;
+	return 1;
     }
 
     /*
-     * Not found.
+     * Replace parent by sibling.
      */
 
-    return 0;
+    ASSERT(WORD_TYPE(parent) == WORD_TYPE_MINTTRIENODE);
+    if (node == WORD_TRIENODE_RIGHT(parent)) {
+	sibling = WORD_TRIENODE_LEFT(parent);
+    } else {
+	sibling = WORD_TRIENODE_RIGHT(parent);
+    }
+    if (grandParent == map) {
+	/*
+	 * Parent was root.
+	 */
+
+	ASSERT(WORD_TRIEMAP_ROOT(map) == parent);
+	WORD_TRIEMAP_ROOT(map) = sibling;
+    } else if (WORD_TRIENODE_LEFT(grandParent) == parent) {
+	WORD_TRIENODE_LEFT(grandParent) = sibling;
+    } else {
+	WORD_TRIENODE_RIGHT(grandParent) = sibling;
+    }
+    Col_WordSetModified(grandParent);
+
+    return 1;
 }
 
 
