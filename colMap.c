@@ -318,7 +318,7 @@ Col_MapIterBegin(
 
 	case WORD_TYPE_STRTRIEMAP:
 	case WORD_TYPE_INTTRIEMAP:
-	    Col_TrieMapIterBegin(map, it);
+	    Col_TrieMapIterFirst(map, it);
 	    break;
 
 	/* WORD_TYPE_UNKNOWN */

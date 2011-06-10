@@ -57,11 +57,8 @@ EXTERN int		Col_IntMapUnset(Col_Word map, intptr_t key);
  *	hash.bucket	- Current bucket index.
  *
  * Trie-specific fields:
- *	trie.up		- Uplink to deepest common ancestor with next entry. The
- *			  next entry will be the leftmost leaf of the ancestor's 
- *			  right subtrie (current entry being the rightmost leaf 
- *			  of the ancestor's left subtrie). If nil, will be
- *			  recomputed by in-depth traversal.
+ *	trie.prev	- Subtrie whose rightmost leaf is the previous entry.
+ *	trie.next	- Subtrie whose leftmost leaf is the next entry.
  *
  * See also:
  *	<Col_MapIterator>
@@ -75,7 +72,8 @@ typedef struct ColMapIterator {
 	    size_t bucket;
 	} hash;
 	struct {
-	    Col_Word up;
+	    Col_Word prev;
+	    Col_Word next;
 	} trie;
     };
 } ColMapIterator;
@@ -89,7 +87,7 @@ typedef struct ColMapIterator {
  * Note:
  *	Datatype is opaque. Fields should not be accessed by client code.
  *
- *	Each iterator takes 3 words on the stack.
+ *	Each iterator takes 4 words on the stack.
  *---------------------------------------------------------------------------*/
 
 typedef ColMapIterator Col_MapIterator;
