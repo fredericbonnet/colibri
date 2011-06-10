@@ -27,11 +27,13 @@
 static Col_Word		LeftmostLeaf(Col_Word node, Col_Word *rightPtr);
 static Col_Word		RightmostLeaf(Col_Word node, Col_Word *leftPtr);
 static Col_Word		StringTrieMapFindNode(Col_Word map, Col_Word key,
-			    int closest, int *comparePtr, Col_Word *parentPtr,
+			    int closest, int *comparePtr, 
+			    Col_Word *grandParentPtr, Col_Word *parentPtr,
 			    Col_Word *leftPtr, Col_Word *rightPtr, 
 			    size_t *diffPtr, Col_Char *maskPtr);
 static Col_Word		IntTrieMapFindNode(Col_Word map, intptr_t key,
-			    int closest, int *comparePtr, Col_Word *parentPtr,
+			    int closest, int *comparePtr, 
+			    Col_Word *grandParentPtr, Col_Word *parentPtr,
 			    Col_Word *leftPtr, Col_Word *rightPtr, 
 			    intptr_t *maskPtr);
 static Col_Word		StringTrieMapFindEntry(Col_Word map, Col_Word key,
@@ -146,7 +148,7 @@ LeftmostLeaf(
  * Results:
  *	The rightmost leaf of subtrie. Additionally (if non-NULL):
  *
- *	leftPtr		- (out) Adjacent left branch.
+ *	leftPtr	- (out) Adjacent left branch.
  *---------------------------------------------------------------------------*/
 
 static Col_Word
@@ -191,6 +193,8 @@ RightmostLeaf(
  *
  *	comparePtr	- (out) Key comparison result: 0 if node matches key, 1
  *			  if key is after node key, -1 if before.
+ *	grandParentPtr	- (out) The node's grandparent word. May be nil, the map
+ *			  or another node.
  *	parentPtr	- (out) The node's parent word. May be the map or 
  *			  another node.
  *	leftPtr		- (out) Adjacent left branch.
@@ -200,6 +204,9 @@ RightmostLeaf(
  *
  *	diffPtr		- (out) Index of first differing character.
  *	maskPtr		- (out) Crit-bit mask.
+ *
+ * See also:
+ *	<Col_CompareRopes>
  *---------------------------------------------------------------------------*/
 
 static Col_Word
@@ -208,6 +215,7 @@ StringTrieMapFindNode(
     Col_Word key,
     int closest,
     int *comparePtr,
+    Col_Word *grandParentPtr,
     Col_Word *parentPtr,
     Col_Word *leftPtr,
     Col_Word *rightPtr,
@@ -215,7 +223,7 @@ StringTrieMapFindNode(
     Col_Char *maskPtr)
 {
     int compare;
-    Col_Word node, parent, left, right;
+    Col_Word node, grandParent, parent, left, right;
     Col_Word entryKey;
     Col_RopeIterator itKey;
     size_t diff;
@@ -236,6 +244,7 @@ StringTrieMapFindNode(
      */
 
     node = WORD_TRIEMAP_ROOT(map);
+    grandParent = WORD_NIL;
     parent = map;
     left = WORD_NIL;
     right = WORD_NIL;
@@ -252,6 +261,8 @@ StringTrieMapFindNode(
 		cKey = Col_RopeIterAt(&itKey);
 	    }
 	}
+
+	grandParent = parent;
 	parent = node;
 	if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
 	    left = WORD_TRIENODE_LEFT(node);
@@ -272,6 +283,7 @@ StringTrieMapFindNode(
 	 */
 
 	if (comparePtr) *comparePtr = compare;
+	if (grandParentPtr) *grandParentPtr = grandParent;
 	if (parentPtr) *parentPtr = parent;
 	if (leftPtr) *leftPtr = left;
 	if (rightPtr) *rightPtr = right;
@@ -303,6 +315,7 @@ StringTrieMapFindNode(
      */
 
     node = WORD_TRIEMAP_ROOT(map);
+    grandParent = WORD_NIL;
     parent = map;
     left = WORD_NIL;
     right = WORD_NIL;
@@ -329,6 +342,7 @@ StringTrieMapFindNode(
 	    }
 	}
 
+	grandParent = parent;
 	parent = node;
 	if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
 	    left = WORD_TRIENODE_LEFT(node);
@@ -349,6 +363,7 @@ StringTrieMapFindNode(
 	*comparePtr = ((cKey != COL_CHAR_INVALID && (!newMask 
 		|| (cKey & newMask))) ? 1 : -1);
     }
+    if (grandParentPtr) *grandParentPtr = grandParent;
     if (parentPtr) *parentPtr = parent;
     if (leftPtr) *leftPtr = left;
     if (rightPtr) *rightPtr = right;
@@ -376,6 +391,8 @@ StringTrieMapFindNode(
  *
  *	comparePtr	- (out) Key comparison result: 0 if node matches key, 1
  *			  if key is after node key, -1 if before.
+ *	grandParentPtr	- (out) The node's grandparent word. May be nil, the map
+ *			  or another node.
  *	parentPtr	- (out) The node's parent word. May be the map or 
  *			  another node.
  *	leftPtr		- (out) Adjacent left branch.
@@ -392,13 +409,14 @@ IntTrieMapFindNode(
     intptr_t key,
     int closest,
     int *comparePtr,
+    Col_Word *grandParentPtr,
     Col_Word *parentPtr,
     Col_Word *leftPtr,
     Col_Word *rightPtr,
     intptr_t *maskPtr)
 {
     int compare;
-    Col_Word node, parent, left, right;
+    Col_Word node, grandParent, parent, left, right;
     intptr_t entryKey;
     intptr_t mask, newMask;
     
@@ -416,6 +434,7 @@ IntTrieMapFindNode(
      */
 
     node = WORD_TRIEMAP_ROOT(map);
+    grandParent = WORD_NIL;
     parent = map;
     left = WORD_NIL;
     right = WORD_NIL;
@@ -424,6 +443,8 @@ IntTrieMapFindNode(
 
 	ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTTRIENODE);
 	mask = WORD_INTTRIENODE_MASK(node);
+
+	grandParent = parent;
 	parent = node;
 	if (mask ? (key & mask) : (key >= 0)) {
 	    left = WORD_TRIENODE_LEFT(node);
@@ -443,6 +464,7 @@ IntTrieMapFindNode(
 	 */
 
 	if (comparePtr) *comparePtr = compare;
+	if (grandParentPtr) *grandParentPtr = grandParent;
 	if (parentPtr) *parentPtr = parent;
 	if (leftPtr) *leftPtr = left;
 	if (rightPtr) *rightPtr = right;
@@ -474,6 +496,7 @@ IntTrieMapFindNode(
      */
 
     node = WORD_TRIEMAP_ROOT(map);
+    grandParent = WORD_NIL;
     parent = map;
     left = WORD_NIL;
     right = WORD_NIL;
@@ -490,6 +513,7 @@ IntTrieMapFindNode(
 	    break;
 	}
 
+	grandParent = parent;
 	parent = node;
 	if (mask ? (key & mask) : (key >= 0)) {
 	    left = WORD_TRIENODE_LEFT(node);
@@ -501,6 +525,7 @@ IntTrieMapFindNode(
     }
     if (comparePtr) *comparePtr = ((newMask ? (key & newMask) : (key >= 0)) ? 1
 	    : -1);
+    if (grandParentPtr) *grandParentPtr = grandParent;
     if (parentPtr) *parentPtr = parent;
     if (leftPtr) *leftPtr = left;
     if (rightPtr) *rightPtr = right;
@@ -525,6 +550,9 @@ IntTrieMapFindNode(
  *	createPtr	- (out) Whether a new entry was created. 
  *	leftPtr		- (out) Adjacent left branch.
  *	rightPtr	- (out) Adjacent right branch.
+ *
+ * See also:
+ *	<StringTrieMapFindNode>
  *---------------------------------------------------------------------------*/
 
 static Col_Word
@@ -542,7 +570,7 @@ StringTrieMapFindEntry(
     Col_Char mask;
     
     node = StringTrieMapFindNode(map, key, (createPtr && *createPtr), &compare, 
-	    &parent, leftPtr, rightPtr, &diff, &mask);
+	    NULL, &parent, leftPtr, rightPtr, &diff, &mask);
     if (node && compare == 0) {
 	/*
 	 * Found!
@@ -642,6 +670,9 @@ StringTrieMapFindEntry(
  *	createPtr	- (out) Whether a new entry was created. 
  *	leftPtr		- (out) Adjacent left branch.
  *	rightPtr	- (out) Adjacent right branch.
+ *
+ * See also:
+ *	<IntTrieMapFindNode>
  *---------------------------------------------------------------------------*/
 
 static Col_Word
@@ -658,7 +689,7 @@ IntTrieMapFindEntry(
     intptr_t mask;
     
     node = IntTrieMapFindNode(map, key, (createPtr && *createPtr), &compare, 
-	    &parent, leftPtr, rightPtr, &mask);
+	    NULL, &parent, leftPtr, rightPtr, &mask);
     if (node && compare == 0) {
 	/*
 	 * Found!
@@ -755,9 +786,12 @@ IntTrieMapFindEntry(
  *	key		- String entry key.
  *	valuePtr	- Returned entry value, if found.
  *
- * Result:
+ * Results:
  *	Whether the key was found in the map. In this case the value is returned
  *	through valuePtr.
+ *
+ * See also:
+ *	<StringTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 int
@@ -793,9 +827,12 @@ Col_StringTrieMapGet(
  *	key		- Integer entry key.
  *	valuePtr	- Returned entry value, if found.
  *
- * Result:
+ * Results:
  *	Whether the key was found in the map. In this case the value is returned
  *	through valuePtr.
+ *
+ * See also:
+ *	<IntTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 int
@@ -836,6 +873,9 @@ Col_IntTrieMapGet(
  *
  * Side effects:
  *	May allocate memory cells.
+ *
+ * See also:
+ *	<StringTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 int
@@ -870,9 +910,12 @@ Col_StringTrieMapSet(
  *	key		- Integer entry key.
  *	valuePtr	- Returned entry value, if found.
  *
- * Result:
+ * Results:
  *	Whether the key was found in the map. In this case the value is returned
  *	through valuePtr.
+ *
+ * See also:
+ *	<IntTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 int
@@ -908,6 +951,9 @@ Col_IntTrieMapSet(
  *
  * Result:
  *	Whether an existing entry was removed.
+ *
+ * See also:
+ *	<StringTrieMapFindNode>
  *---------------------------------------------------------------------------*/
 
 int
@@ -916,56 +962,15 @@ Col_StringTrieMapUnset(
     Col_Word key)
 {
     Col_Word node, grandParent, parent, sibling;
-    Col_RopeIterator itKey;
-    Col_Char mask;
-    Col_Char cKey;
 
     if (WORD_TYPE(map) != WORD_TYPE_STRTRIEMAP) {
 	Col_Error(COL_ERROR, "%x is not a string trie map", map);
 	return 0;
     }
 
-    if (!WORD_TRIEMAP_ROOT(map)) {
-	/*
-	 * Map is empty.
-	 */
-
-	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
-	return 0;
-    }
-
-    /*
-     * Search for matching entry.
-     */
-
-    grandParent = WORD_NIL;
-    parent = map;
-    node = WORD_TRIEMAP_ROOT(map);
-    Col_RopeIterBegin(key, 0, &itKey);
-    while (node) {
-	if (WORD_TYPE(node) == WORD_TYPE_MTRIELEAF) break;
-
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_MSTRTRIENODE);
-	mask = WORD_STRTRIENODE_MASK(node);
-	cKey = COL_CHAR_INVALID;
-	if (!Col_RopeIterEnd(&itKey)) {
-	    Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
-	    if (!Col_RopeIterEnd(&itKey)) {
-		cKey = Col_RopeIterAt(&itKey);
-	    }
-	}
-	grandParent = parent;
-	parent = node;
-	if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
-	    node = WORD_TRIENODE_RIGHT(node);
-	} else {
-	    node = WORD_TRIENODE_LEFT(node);
-	}
-    }
-
-    ASSERT(WORD_TYPE(node) == WORD_TYPE_MTRIELEAF);
-    if (Col_CompareRopes(key, WORD_MAPENTRY_KEY(node), 0, SIZE_MAX, NULL, NULL, 
-	    NULL) != 0) {
+    node = StringTrieMapFindNode(map, key, 0, NULL, &grandParent, &parent, NULL,
+	    NULL, NULL, NULL);
+    if (!node) {
 	/*
 	 * Not found.
 	 */
@@ -1027,6 +1032,9 @@ Col_StringTrieMapUnset(
  *
  * Result:
  *	Whether an existing entry was removed.
+ *
+ * See also:
+ *	<IntTrieMapFindNode>
  *---------------------------------------------------------------------------*/
 
 int
@@ -1035,45 +1043,15 @@ Col_IntTrieMapUnset(
     intptr_t key)
 {
     Col_Word node, grandParent, parent, sibling;
-    intptr_t mask;
 
     if (WORD_TYPE(map) != WORD_TYPE_INTTRIEMAP) {
 	Col_Error(COL_ERROR, "%x is not an integer trie map", map);
 	return 0;
     }
 
-    if (!WORD_TRIEMAP_ROOT(map)) {
-	/*
-	 * Map is empty.
-	 */
-
-	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
-	return 0;
-    }
-
-    /*
-     * Search for matching entry.
-     */
-
-    grandParent = WORD_NIL;
-    parent = map;
-    node = WORD_TRIEMAP_ROOT(map);
-    while (node) {
-	if (WORD_TYPE(node) == WORD_TYPE_MINTTRIELEAF) break;
-
-	ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTTRIENODE);
-	mask = WORD_INTTRIENODE_MASK(node);
-	grandParent = parent;
-	parent = node;
-	if (mask ? (key & mask) : (key >= 0)) {
-	    node = WORD_TRIENODE_RIGHT(node);
-	} else {
-	    node = WORD_TRIENODE_LEFT(node);
-	}
-    }
-
-    ASSERT(WORD_TYPE(node) == WORD_TYPE_MINTTRIELEAF);
-    if (key != WORD_INTMAPENTRY_KEY(node)) {
+    node = IntTrieMapFindNode(map, key, 0, NULL, &grandParent, &parent, NULL, 
+	    NULL, NULL);
+    if (!node) {
 	/*
 	 * Not found.
 	 */
@@ -1138,6 +1116,9 @@ Col_IntTrieMapUnset(
  * Arguments:
  *	map	- Trie map to iterate over.
  *	it	- Iterator to initialize.
+ *
+ * See also:
+ *	<LeftmostLeaf>
  *---------------------------------------------------------------------------*/
 
 void
@@ -1181,6 +1162,9 @@ Col_TrieMapIterFirst(
  * Arguments:
  *	map	- Trie map to iterate over.
  *	it	- Iterator to initialize.
+ *
+ * See also:
+ *	<RightmostLeaf>
  *---------------------------------------------------------------------------*/
 
 void
@@ -1229,6 +1213,9 @@ Col_TrieMapIterLast(
  *
  * Results:
  *	createPtr	- (out) If non-NULL, whether a new entry was created. 
+ *
+ * See also:
+ *	<StringTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 void
@@ -1269,6 +1256,9 @@ Col_StringTrieMapIterFind(
  *
  * Results:
  *	createPtr	- (out) If non-NULL, whether a new entry was created. 
+ *
+ * See also:
+ *	<IntTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 void
@@ -1352,6 +1342,9 @@ Col_TrieMapIterSetValue(
  *
  * Argument:
  *	it	- The iterator to move.
+ *
+ * See also:
+ *	<StringTrieMapFindNode>, <IntTrieMapFindNode>, <LeftmostLeaf>
  *---------------------------------------------------------------------------*/
 
 void
@@ -1373,12 +1366,12 @@ Col_TrieMapIterNext(
 	switch (WORD_TYPE(it->map)) {
 	    case WORD_TYPE_STRTRIEMAP:
 		StringTrieMapFindNode(it->map, WORD_MAPENTRY_KEY(it->entry), 0,
-			NULL, NULL, NULL, &it->trie.next, NULL, NULL);
+			NULL, NULL, NULL, NULL, &it->trie.next, NULL, NULL);
 		break;
 
 	    case WORD_TYPE_INTTRIEMAP:
 		IntTrieMapFindNode(it->map, WORD_INTMAPENTRY_KEY(it->entry), 0,
-			NULL, NULL, NULL, &it->trie.next, NULL);
+			NULL, NULL, NULL, NULL, &it->trie.next, NULL);
 		break;
 	}
     }
@@ -1406,6 +1399,9 @@ Col_TrieMapIterNext(
  *
  * Argument:
  *	it	- The iterator to move.
+ *
+ * See also:
+ *	<StringTrieMapFindNode>, <IntTrieMapFindNode>, <RightmostLeaf>
  *---------------------------------------------------------------------------*/
 
 void
@@ -1427,12 +1423,12 @@ Col_TrieMapIterPrevious(
 	switch (WORD_TYPE(it->map)) {
 	    case WORD_TYPE_STRTRIEMAP:
 		StringTrieMapFindNode(it->map, WORD_MAPENTRY_KEY(it->entry), 0,
-			NULL, NULL, &it->trie.prev, NULL, NULL, NULL);
+			NULL, NULL, NULL, &it->trie.prev, NULL, NULL, NULL);
 		break;
 
 	    case WORD_TYPE_INTTRIEMAP:
 		IntTrieMapFindNode(it->map, WORD_INTMAPENTRY_KEY(it->entry), 0,
-			NULL, NULL, &it->trie.prev, NULL, NULL);
+			NULL, NULL, NULL, &it->trie.prev, NULL, NULL);
 		break;
 	}
     }
