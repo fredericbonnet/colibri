@@ -2733,7 +2733,7 @@ void			DeclareCustomWord(Col_Word word,
  *	accessible for both read/write operations).
  *
  * See also:
- *	<WORD_TYPE_MTRIELEAF>
+ *	<WORD_TYPE_MTRIELEAF>, <StringTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 #define WORD_MTRIELEAF_INIT(word, key, value) \
@@ -2773,7 +2773,7 @@ void			DeclareCustomWord(Col_Word word,
  *	value	- <WORD_MAPENTRY_VALUE>
  *
  * See also:
- *	<WORD_TYPE_MINTTRIELEAF>
+ *	<WORD_TYPE_MINTTRIELEAF>, <IntTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 #define WORD_MINTTRIELEAF_INIT(word, key, value) \

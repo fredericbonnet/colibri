@@ -70,7 +70,7 @@ Col_MapSize(
  *			  however it must match the actual type used by the map.
  *	valuePtr	- Returned entry value, if found.
  *
- * Result:
+ * Results:
  *	Whether the key was found in the map. In this case the value is returned
  *	through valuePtr.
  *---------------------------------------------------------------------------*/
@@ -109,7 +109,7 @@ Col_MapGet(
  *	key		- Integer entry key.
  *	valuePtr	- Returned entry value, if found.
  *
- * Result:
+ * Results:
  *	Whether the key was found in the map. In this case the value is returned
  *	through valuePtr.
  *---------------------------------------------------------------------------*/

@@ -960,7 +960,7 @@ IntHashMapFindEntry(
  *	key		- String entry key.
  *	valuePtr	- Returned entry value, if found.
  *
- * Result:
+ * Results:
  *	Whether the key was found in the map. In this case the value is returned
  *	through valuePtr.
  *---------------------------------------------------------------------------*/
@@ -999,7 +999,7 @@ Col_StringHashMapGet(
  *	key		- Integer entry key.
  *	valuePtr	- Returned entry value, if found.
  *
- * Result:
+ * Results:
  *	Whether the key was found in the map. In this case the value is returned
  *	through valuePtr.
  *---------------------------------------------------------------------------*/
