@@ -690,6 +690,7 @@ ConvertEntryToMutable(
 
 	converted = (Col_Word) AllocCells(1);
 	memcpy((void *) converted, (void *) *prevPtr, sizeof(Cell));
+	ASSERT(!WORD_PINNED(*prevPtr));
 	WORD_SET_TYPEID(converted, WORD_TYPE_MHASHENTRY);
 	*prevPtr = converted;
 
@@ -731,6 +732,7 @@ ConvertIntEntryToMutable(
 
 	converted = (Col_Word) AllocCells(1);
 	memcpy((void *) converted, (void *) *prevPtr, sizeof(Cell));
+	ASSERT(!WORD_PINNED(*prevPtr));
 	WORD_SET_TYPEID(converted, WORD_TYPE_MINTHASHENTRY);
 	*prevPtr = converted;
 
@@ -795,9 +797,10 @@ StringHashMapFindEntry(
 
 	    if (mutable && WORD_TYPE(entry) != WORD_TYPE_MHASHENTRY) {
 		/*
-		 * Entry is immutable, convert.
+		 * Entry is immutable, convert to mutable.
 		 */
 
+		ASSERT(WORD_TYPE(entry) == WORD_TYPE_HASHENTRY);
 		GET_BUCKETS(map, 1, nbBuckets, buckets, bucketParent);
 		entry = ConvertEntryToMutable(entry, &buckets[index]);
 		ASSERT(WORD_TYPE(entry) == WORD_TYPE_MHASHENTRY);
@@ -896,9 +899,10 @@ IntHashMapFindEntry(
 
 	    if (mutable && WORD_TYPE(entry) != WORD_TYPE_MINTHASHENTRY) {
 		/*
-		 * Entry is immutable, convert.
+		 * Entry is immutable, convert to mutable.
 		 */
 
+		ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTHASHENTRY);
 		GET_BUCKETS(map, 1, nbBuckets, buckets, bucketParent);
 		entry = ConvertIntEntryToMutable(entry, &buckets[index]);
 		ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTHASHENTRY);
@@ -1433,7 +1437,7 @@ Col_IntHashMapIterFind(
  *
  *	Set value of hash map iterator.
  *
- * Argument:
+ * Arguments:
  *	it	- Map iterator to set value for.
  *	value	- Value to set.
  *---------------------------------------------------------------------------*/
