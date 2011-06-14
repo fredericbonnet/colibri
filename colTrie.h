@@ -25,6 +25,7 @@
 
 EXTERN Col_Word		Col_NewStringTrieMap();
 EXTERN Col_Word		Col_NewIntTrieMap();
+EXTERN Col_Word		Col_CopyTrieMap(Col_Word map);
 
 
 /****************************************************************************
