@@ -737,28 +737,38 @@ void			DeclareCustomWord(Col_Word word,
  *	Word type identifier.
  *
  * See also:
- *	<Word Type Identifiers>
+ *	<Word Type Identifiers>, <Immediate Word Fields>
  *---------------------------------------------------------------------------*/
+
+static int immediateWordTypes[16] = {
+    WORD_TYPE_NIL,	/* 0000 */
+    WORD_TYPE_SMALLINT,	/* 0001 */
+    WORD_TYPE_CHAR,	/* 0010 */
+    WORD_TYPE_SMALLINT,	/* 0011 */
+    WORD_TYPE_CIRCLIST, /* 0100 */
+    WORD_TYPE_SMALLINT,	/* 0101 */
+    WORD_TYPE_SMALLSTR, /* 0110 */
+    WORD_TYPE_SMALLINT,	/* 0111 */
+    WORD_TYPE_VOIDLIST, /* 1000 */
+    WORD_TYPE_SMALLINT,	/* 1001 */
+    WORD_TYPE_CHAR,	/* 1010 */
+    WORD_TYPE_SMALLINT,	/* 1011 */
+    WORD_TYPE_CIRCLIST, /* 1100 */
+    WORD_TYPE_SMALLINT,	/* 1101 */
+    WORD_TYPE_SMALLSTR,	/* 1110 */
+    WORD_TYPE_SMALLINT,	/* 1111 */
+};
 
 /* Careful: don't give arguments with side effects! */
 #define WORD_TYPE(word) \
-    ((word)?								\
-	 (((uintptr_t)(word))&0xF)?					\
-	    /* Immediate values */					\
-	     (((uintptr_t)(word))&1)?		WORD_TYPE_SMALLINT	\
-	    :(((uintptr_t)(word))&2)?					\
-		 (((uintptr_t)(word))&0x80)?	WORD_TYPE_CHAR		\
-		:				WORD_TYPE_SMALLSTR	\
-	    :(((uintptr_t)(word))&4)?		WORD_TYPE_CIRCLIST	\
-	    :(((uintptr_t)(word))&8)?		WORD_TYPE_VOIDLIST	\
-	    /* Unknown */						\
-	    :					WORD_TYPE_NIL		\
-	/* Pointer or predefined */					\
-	:((((uint8_t *)(word))[0])&2)?					\
-	     WORD_TYPEID(word)			/* Type ID */		\
-	    :					WORD_TYPE_CUSTOM	\
-    :						WORD_TYPE_NIL)
-
+    /* Nil? */							\
+    ((!(word))?				WORD_TYPE_NIL		\
+    /* Immediate Word? */					\
+    :(((uintptr_t)(word))&0xF)?		immediateWordTypes[(((uintptr_t)(word))&0xF)] \
+    /* Predefined Type ID? */					\
+    :((((uint8_t *)(word))[0])&2)?	WORD_TYPEID(word)	\
+    /* Custom Type */						\
+    :					WORD_TYPE_CUSTOM)
 
 /****************************************************************************
  * Internal Group: Immediate Words
@@ -814,13 +824,13 @@ void			DeclareCustomWord(Col_Word word,
  *	<WORD_TYPE_CHAR>
  *
  * (start table)
- *      0 1 2    7 8                 31                               n
- *     +-+-+------+--------------------+-------------------------------+
- *   0 |0|1|111111|      Codepoint     |        Unused (n > 32)        |
- *     +-+-+------+--------------------+-------------------------------+
+ *      0 1 2 3                      31                               n
+ *     +-+-+-+-------------------------+-------------------------------+
+ *   0 |0|1|0|        Codepoint        |        Unused (n > 32)        |
+ *     +-+-+-+-------------------------+-------------------------------+
  * (end)
  *
- *	Unicode char words can store one Unicode character (24-bit, which is
+ *	Unicode char words can store one Unicode character (29-bit, which is
  *	sufficient in the current Unicode standard).
  *	
  *	WORD_CHAR_GET	- Get Unicode codepoint of char word.
@@ -830,10 +840,10 @@ void			DeclareCustomWord(Col_Word word,
  *	<WORD_TYPE_SMALLSTR>
  *
  * (start table)
- *      0 1 2        7 8                                              n
- *     +-+-+----------+------------------------------------------------+
- *   0 |0|1| Length>0 |                     String                     |
- *     +-+-+----------+------------------------------------------------+
+ *      0 1 2 3      7 8                                              n
+ *     +-+-+-+--------+------------------------------------------------+
+ *   0 |0|1|1|Length>0|                     String                     |
+ *     +-+-+-+--------+------------------------------------------------+
  * (end)
  *
  *	Small string words can store short 8-bit strings. Length is the machine
@@ -890,15 +900,15 @@ void			DeclareCustomWord(Col_Word word,
  *---------------------------------------------------------------------------*/
 
 #define WORD_SMALLINT_GET(word)		(((intptr_t)(word))>>1)
-#define WORD_CHAR_GET(word)		((Col_Char)(((uintptr_t)(word))>>8))
-#define WORD_SMALLSTR_LENGTH(value)	((((uintptr_t)(value))&0xFC)>>2)
-#define WORD_SMALLSTR_SET_LENGTH(word, length) (*((uintptr_t *)&(word)) = ((length)<<2)|2)
+#define WORD_CHAR_GET(word)		((Col_Char)(((uintptr_t)(word))>>3))
+#define WORD_SMALLSTR_LENGTH(value)	((((uintptr_t)(value))&0xFF)>>3)
+#define WORD_SMALLSTR_SET_LENGTH(word, length) (*((uintptr_t *)&(word)) = ((length)<<3)|6)
 #ifdef COL_BIGENDIAN
 #   define WORD_SMALLSTR_DATA(word)	((Col_Char1  *)&(word))
 #else
 #   define WORD_SMALLSTR_DATA(word)	(((Col_Char1 *)&(word))+1)
 #endif
-#define WORD_CIRCLIST_CORE(word)	((Col_Word)(((uintptr_t)(word))&~0x7))
+#define WORD_CIRCLIST_CORE(word)	((Col_Word)(((uintptr_t)(word))&~7))
 #define WORD_VOIDLIST_LENGTH(word)	(((size_t)(intptr_t)(word))>>4)
 
 /*---------------------------------------------------------------------------
@@ -922,7 +932,7 @@ void			DeclareCustomWord(Col_Word word,
  *  WORD_LIST_EMPTY	- Empty list.
  *---------------------------------------------------------------------------*/
 
-#define WORD_SMALLSTR_EMPTY	((Col_Word) 2)
+#define WORD_SMALLSTR_EMPTY	((Col_Word) 6)
 #define WORD_LIST_EMPTY		WORD_VOIDLIST_NEW(0)
 
 /*---------------------------------------------------------------------------
@@ -954,7 +964,7 @@ void			DeclareCustomWord(Col_Word word,
  *---------------------------------------------------------------------------*/
 
 #define WORD_CHAR_NEW(value) \
-    ((Col_Word)((((uintptr_t)(value))<<8)|0xFE))
+    ((Col_Word)((((uintptr_t)(value))<<3)|2))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_CIRCLIST_NEW
