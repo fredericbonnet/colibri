@@ -40,8 +40,7 @@ typedef uintptr_t Col_Word;
  *
  *  COL_NIL	- Nil.
  *  COL_CUSTOM	- Custom data type.
- *  COL_CHAR	- Character.
- *  COL_STRING	- String (including ropes).
+ *  COL_STRING	- String (including single characters and ropes).
  *  COL_ROPE	- Custo rope type.
  *  COL_INT	- Integer
  *  COL_VECTOR	- Vector.
@@ -60,7 +59,6 @@ typedef uintptr_t Col_Word;
 typedef enum {
     COL_NIL,
     COL_CUSTOM,
-    COL_CHAR,
     COL_STRING,
     COL_ROPE,
     COL_INT,
@@ -84,7 +82,6 @@ typedef enum {
  *	valid.
  *
  * Fields:
- *	ch			- <COL_CHAR>.
  *	i			- <COL_INT>.
  *	string			- <COL_STRING>:
  *	string.format		- Format of the string. See <Col_StringFormat>.
@@ -106,13 +103,12 @@ typedef enum {
  *---------------------------------------------------------------------------*/
 
 typedef union {
-    Col_Char ch;
     intptr_t i;
     struct {
 	Col_StringFormat format;
 	const void *data;
 	size_t byteLength;
-	Col_Word _smallData;
+	uintptr_t _smallData;
     } string;
     struct {
 	size_t length;

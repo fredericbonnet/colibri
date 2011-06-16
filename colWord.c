@@ -139,11 +139,14 @@ Col_GetWordInfo(
 	    return COL_INT;
 
 	case WORD_TYPE_CHAR:
-	    dataPtr->ch = WORD_CHAR_GET(word);
-	    return COL_CHAR;
+	    dataPtr->string._smallData = (Col_Word) WORD_CHAR_GET(word);
+	    dataPtr->string.format = COL_UCS4;
+	    dataPtr->string.data = &dataPtr->string._smallData;
+	    dataPtr->string.byteLength = 4;
+	    return COL_STRING;
 
 	case WORD_TYPE_SMALLSTR:
-	    dataPtr->string._smallData = word;
+	    dataPtr->string._smallData = (uintptr_t) word;
 	    dataPtr->string.format = COL_UCS1;
 	    dataPtr->string.data 
 		    = WORD_SMALLSTR_DATA(dataPtr->string._smallData);
