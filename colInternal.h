@@ -740,23 +740,40 @@ void			DeclareCustomWord(Col_Word word,
  *	<Word Type Identifiers>, <Immediate Word Fields>
  *---------------------------------------------------------------------------*/
 
-static int immediateWordTypes[16] = {
-    WORD_TYPE_NIL,	/* 0000 */
-    WORD_TYPE_SMALLINT,	/* 0001 */
-    WORD_TYPE_CHAR,	/* 0010 */
-    WORD_TYPE_SMALLINT,	/* 0011 */
-    WORD_TYPE_CIRCLIST, /* 0100 */
-    WORD_TYPE_SMALLINT,	/* 0101 */
-    WORD_TYPE_SMALLSTR, /* 0110 */
-    WORD_TYPE_SMALLINT,	/* 0111 */
-    WORD_TYPE_VOIDLIST, /* 1000 */
-    WORD_TYPE_SMALLINT,	/* 1001 */
-    WORD_TYPE_CHAR,	/* 1010 */
-    WORD_TYPE_SMALLINT,	/* 1011 */
-    WORD_TYPE_CIRCLIST, /* 1100 */
-    WORD_TYPE_SMALLINT,	/* 1101 */
-    WORD_TYPE_SMALLSTR,	/* 1110 */
-    WORD_TYPE_SMALLINT,	/* 1111 */
+#define WORD_TYPE_SMALLFP WORD_TYPE_NIL
+static int immediateWordTypes[32] = {
+    WORD_TYPE_NIL,	/* 00000 */
+    WORD_TYPE_SMALLINT,	/* 00001 */
+    WORD_TYPE_SMALLFP,	/* 00010 */
+    WORD_TYPE_SMALLINT,	/* 00011 */
+    WORD_TYPE_CHAR,	/* 00100 */
+    WORD_TYPE_SMALLINT,	/* 00101 */
+    WORD_TYPE_SMALLFP,	/* 00110 */
+    WORD_TYPE_SMALLINT,	/* 00111 */
+    WORD_TYPE_CIRCLIST,	/* 01000 */
+    WORD_TYPE_SMALLINT,	/* 01001 */
+    WORD_TYPE_SMALLFP,	/* 01010 */
+    WORD_TYPE_SMALLINT,	/* 01011 */
+    WORD_TYPE_SMALLSTR,	/* 01100 */
+    WORD_TYPE_SMALLINT,	/* 01101 */
+    WORD_TYPE_SMALLFP,	/* 01110 */
+    WORD_TYPE_SMALLINT,	/* 01111 */
+    WORD_TYPE_NIL,	/* 10000 */
+    WORD_TYPE_SMALLINT,	/* 10001 */
+    WORD_TYPE_SMALLFP,	/* 10010 */
+    WORD_TYPE_SMALLINT,	/* 10011 */
+    WORD_TYPE_VOIDLIST,	/* 10100 */
+    WORD_TYPE_SMALLINT,	/* 10101 */
+    WORD_TYPE_SMALLFP,	/* 10110 */
+    WORD_TYPE_SMALLINT,	/* 10111 */
+    WORD_TYPE_CIRCLIST,	/* 11000 */
+    WORD_TYPE_SMALLINT,	/* 11001 */
+    WORD_TYPE_SMALLFP,	/* 11010 */
+    WORD_TYPE_SMALLINT,	/* 11011 */
+    WORD_TYPE_CIRCLIST,	/* 11100 */
+    WORD_TYPE_SMALLINT,	/* 11101 */
+    WORD_TYPE_SMALLFP,	/* 11110 */
+    WORD_TYPE_SMALLINT,	/* 11111 */
 };
 
 /* Careful: don't give arguments with side effects! */
@@ -764,7 +781,7 @@ static int immediateWordTypes[16] = {
     /* Nil? */							\
     ((!(word))?				WORD_TYPE_NIL		\
     /* Immediate Word? */					\
-    :(((uintptr_t)(word))&0xF)?		immediateWordTypes[(((uintptr_t)(word))&0xF)] \
+    :(((uintptr_t)(word))&15)?		immediateWordTypes[(((uintptr_t)(word))&31)] \
     /* Predefined Type ID? */					\
     :((((uint8_t *)(word))[0])&2)?	WORD_TYPEID(word)	\
     /* Custom Type */						\
@@ -824,13 +841,13 @@ static int immediateWordTypes[16] = {
  *	<WORD_TYPE_CHAR>
  *
  * (start table)
- *      0 1 2 3                      31                               n
- *     +-+-+-+-------------------------+-------------------------------+
- *   0 |0|1|0|        Codepoint        |        Unused (n > 32)        |
- *     +-+-+-+-------------------------+-------------------------------+
+ *      0   4 5                      31                               n
+ *     +-----+-------------------------+-------------------------------+
+ *   0 |00100|        Codepoint        |        Unused (n > 32)        |
+ *     +-----+-------------------------+-------------------------------+
  * (end)
  *
- *	Unicode char words can store one Unicode character (29-bit, which is
+ *	Unicode char words can store one Unicode character (27-bit, which is
  *	sufficient in the current Unicode standard).
  *	
  *	WORD_CHAR_GET	- Get Unicode codepoint of char word.
@@ -840,10 +857,10 @@ static int immediateWordTypes[16] = {
  *	<WORD_TYPE_SMALLSTR>
  *
  * (start table)
- *      0 1 2 3      7 8                                              n
- *     +-+-+-+--------+------------------------------------------------+
- *   0 |0|1|1|Length>0|                     String                     |
- *     +-+-+-+--------+------------------------------------------------+
+ *      0   4 5            7 8                                        n
+ *     +-----+--------------+------------------------------------------+
+ *   0 |00110| 0<=Length<=7 |                  String                  |
+ *     +-----+--------------+------------------------------------------+
  * (end)
  *
  *	Small string words can store short 8-bit strings. Length is the machine
@@ -859,13 +876,19 @@ static int immediateWordTypes[16] = {
  *	<WORD_TYPE_CIRCLIST>
  *
  * (start table)
- *      0 1 2 3                                                       n
- *     +-+-+-+---------------------------------------------------------+
- *   0 |0|0|1|                          Core                           |
- *     +-+-+-+---------------------------------------------------------+
- * (end)
+ *      0  3 4                                                        n
+ *     +----+----------------------------------------------------------+
+ *   0 |0001|                    Core (regular list)                   |
+ *     +----+----------------------------------------------------------+
  *
+ *      0   4 5                                                       n
+ *     +-----+---------------------------------------------------------+
+ *   0 |00111|                Core length (void list)                   |
+ *     +-----+---------------------------------------------------------+
+ * (end)
+ *	
  *	Circular lists are lists made of a core list that repeats infinitely.
+ *	It can be either a regular list or an immediate void list.
  *	
  *	WORD_CIRCLIST_CORE	- Get core list.
  *
@@ -874,10 +897,10 @@ static int immediateWordTypes[16] = {
  *	<WORD_TYPE_VOIDLIST>
  *
  * (start table)
- *      0 1 2 3 4                                                     n
- *     +-+-+-+-+-------------------------------------------------------+
- *   0 |0|0|0|1|                       Length                          |
- *     +-+-+-+-+-------------------------------------------------------+
+ *      0   4 5                                                       n
+ *     +-----+---------------------------------------------------------+
+ *   0 |00101|                         Length                          |
+ *     +-----+---------------------------------------------------------+
  * (end)
  *
  *	Void lists are lists whose elements are all nil. Length width is the
@@ -900,16 +923,16 @@ static int immediateWordTypes[16] = {
  *---------------------------------------------------------------------------*/
 
 #define WORD_SMALLINT_GET(word)		(((intptr_t)(word))>>1)
-#define WORD_CHAR_GET(word)		((Col_Char)(((uintptr_t)(word))>>3))
-#define WORD_SMALLSTR_LENGTH(value)	((((uintptr_t)(value))&0xFF)>>3)
-#define WORD_SMALLSTR_SET_LENGTH(word, length) (*((uintptr_t *)&(word)) = ((length)<<3)|6)
+#define WORD_CHAR_GET(word)		((Col_Char)(((uintptr_t)(word))>>5))
+#define WORD_SMALLSTR_LENGTH(value)	((((uintptr_t)(value))&0xFF)>>5)
+#define WORD_SMALLSTR_SET_LENGTH(word, length) (*((uintptr_t *)&(word)) = ((length)<<5)|12)
 #ifdef COL_BIGENDIAN
 #   define WORD_SMALLSTR_DATA(word)	((Col_Char1  *)&(word))
 #else
 #   define WORD_SMALLSTR_DATA(word)	(((Col_Char1 *)&(word))+1)
 #endif
-#define WORD_CIRCLIST_CORE(word)	((Col_Word)(((uintptr_t)(word))&~7))
-#define WORD_VOIDLIST_LENGTH(word)	(((size_t)(intptr_t)(word))>>4)
+#define WORD_CIRCLIST_CORE(word)	((Col_Word)(((uintptr_t)(word))&~8))
+#define WORD_VOIDLIST_LENGTH(word)	(((size_t)(intptr_t)(word))>>5)
 
 /*---------------------------------------------------------------------------
  * Internal Constants: Immediate Word Type Limits
@@ -923,7 +946,7 @@ static int immediateWordTypes[16] = {
 #define SMALLINT_MAX		(INTPTR_MAX>>1)
 #define SMALLINT_MIN		(INTPTR_MIN>>1)
 #define SMALLSTR_MAX_LENGTH	(sizeof(Col_Word)-1)
-#define VOIDLIST_MAX_LENGTH	(SIZE_MAX>>4)
+#define VOIDLIST_MAX_LENGTH	(SIZE_MAX>>5)
 
 /*---------------------------------------------------------------------------
  * Internal Constants: Word Singletons
@@ -932,7 +955,7 @@ static int immediateWordTypes[16] = {
  *  WORD_LIST_EMPTY	- Empty list.
  *---------------------------------------------------------------------------*/
 
-#define WORD_SMALLSTR_EMPTY	((Col_Word) 6)
+#define WORD_SMALLSTR_EMPTY	((Col_Word) 12)
 #define WORD_LIST_EMPTY		WORD_VOIDLIST_NEW(0)
 
 /*---------------------------------------------------------------------------
@@ -964,7 +987,7 @@ static int immediateWordTypes[16] = {
  *---------------------------------------------------------------------------*/
 
 #define WORD_CHAR_NEW(value) \
-    ((Col_Word)((((uintptr_t)(value))<<3)|2))
+    ((Col_Word)((((uintptr_t)(value))<<5)|4))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_CIRCLIST_NEW
@@ -979,7 +1002,7 @@ static int immediateWordTypes[16] = {
  *---------------------------------------------------------------------------*/
 
 #define WORD_CIRCLIST_NEW(core) \
-    ((Col_Word)(((uintptr_t)(core))|4))
+    ((Col_Word)(((uintptr_t)(core))|8))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_VOIDLIST_NEW
@@ -994,7 +1017,7 @@ static int immediateWordTypes[16] = {
  *---------------------------------------------------------------------------*/
 
 #define WORD_VOIDLIST_NEW(length) \
-    ((Col_Word)(intptr_t)((((size_t)(length))<<4)|8))
+    ((Col_Word)(intptr_t)((((size_t)(length))<<5)|20))
 
 
 /****************************************************************************
