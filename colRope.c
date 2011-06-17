@@ -566,7 +566,7 @@ CompareChunksProc(
  *	    - A value less than zero indicates the opposite.
  *
  *	Additionally, if ropes differ:
-
+ *
  *	posPtr		- If non-NULL, position of the first differing character
  *			  upon return.
  *	c1Ptr, c2Ptr	- If non-NULL, respective codepoints of differing 

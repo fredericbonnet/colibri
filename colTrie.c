@@ -1176,9 +1176,6 @@ IntTrieMapFindEntry(
  * Results:
  *	Whether the key was found in the map. In this case the value is returned
  *	through valuePtr.
- *
- * See also:
- *	<StringTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 int
@@ -1217,9 +1214,6 @@ Col_StringTrieMapGet(
  * Results:
  *	Whether the key was found in the map. In this case the value is returned
  *	through valuePtr.
- *
- * See also:
- *	<IntTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 int
@@ -1260,9 +1254,6 @@ Col_IntTrieMapGet(
  *
  * Side effects:
  *	May allocate memory cells.
- *
- * See also:
- *	<StringTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 int
@@ -1300,9 +1291,6 @@ Col_StringTrieMapSet(
  * Results:
  *	Whether the key was found in the map. In this case the value is returned
  *	through valuePtr.
- *
- * See also:
- *	<IntTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 int
@@ -1338,9 +1326,6 @@ Col_IntTrieMapSet(
  *
  * Result:
  *	Whether an existing entry was removed.
- *
- * See also:
- *	<StringTrieMapFindNode>
  *---------------------------------------------------------------------------*/
 
 int
@@ -1430,9 +1415,6 @@ Col_StringTrieMapUnset(
  *
  * Result:
  *	Whether an existing entry was removed.
- *
- * See also:
- *	<IntTrieMapFindNode>
  *---------------------------------------------------------------------------*/
 
 int
@@ -1525,9 +1507,6 @@ Col_IntTrieMapUnset(
  * Arguments:
  *	map	- Trie map to iterate over.
  *	it	- Iterator to initialize.
- *
- * See also:
- *	<LeftmostLeaf>
  *---------------------------------------------------------------------------*/
 
 void
@@ -1571,9 +1550,6 @@ Col_TrieMapIterFirst(
  * Arguments:
  *	map	- Trie map to iterate over.
  *	it	- Iterator to initialize.
- *
- * See also:
- *	<RightmostLeaf>
  *---------------------------------------------------------------------------*/
 
 void
@@ -1622,9 +1598,6 @@ Col_TrieMapIterLast(
  *
  * Results:
  *	createPtr	- (out) If non-NULL, whether a new entry was created. 
- *
- * See also:
- *	<StringTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 void
@@ -1666,9 +1639,6 @@ Col_StringTrieMapIterFind(
  *
  * Results:
  *	createPtr	- (out) If non-NULL, whether a new entry was created. 
- *
- * See also:
- *	<IntTrieMapFindEntry>
  *---------------------------------------------------------------------------*/
 
 void
@@ -1773,9 +1743,6 @@ Col_TrieMapIterSetValue(
  *
  * Argument:
  *	it	- The iterator to move.
- *
- * See also:
- *	<StringTrieMapFindNode>, <IntTrieMapFindNode>, <LeftmostLeaf>
  *---------------------------------------------------------------------------*/
 
 void
@@ -1830,9 +1797,6 @@ Col_TrieMapIterNext(
  *
  * Argument:
  *	it	- The iterator to move.
- *
- * See also:
- *	<StringTrieMapFindNode>, <IntTrieMapFindNode>, <RightmostLeaf>
  *---------------------------------------------------------------------------*/
 
 void

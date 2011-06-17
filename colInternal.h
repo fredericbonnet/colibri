@@ -1046,7 +1046,7 @@ typedef union {
  *
  * Argument:
  *	value	- Floating point value.
- *	c	- <Float> conversion structure.
+ *	c	- <FloatConvert> conversion structure.
  *
  * Result:
  *	The new small floating point word.
