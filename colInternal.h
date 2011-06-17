@@ -975,7 +975,7 @@ static const int immediateWordTypes[32] = {
  *	C Type used by immediate floating point words.
  *
  * See also:
- *	<FloatConvert>, <WORD_SMALLFP_NEW>, <WORD_SMALLFP_FITS>
+ *	<FloatConvert>, <WORD_SMALLFP_NEW>
  *---------------------------------------------------------------------------*/
 
 #if SIZE_BIT == 32
@@ -1054,23 +1054,6 @@ typedef union {
 
 #define WORD_SMALLFP_NEW(value, c) \
     ((c).f = (SMALLFP_TYPE)(value), (c).i |= 2, (c).w)
-
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_SMALLFP_FITS
- *
- *	Tests whether floating point value fits immediate word.
- *
- * Argument:
- *	value	- Floating point value. (Caution: evaluated several times after 
- *		  macro expansion)
- *	c	- <Float> conversion structure.
- *
- * Result:
- *	Whether value fits immediate word.
- *---------------------------------------------------------------------------*/
-
-#define WORD_SMALLFP_FITS(value, c) \
-    ((c).f = (SMALLFP_TYPE)(value), (c).f == (value) && !((c).i & 3))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_CHAR_NEW

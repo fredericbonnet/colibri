@@ -99,8 +99,9 @@ Col_NewFloatWord(
      * Return floating point value if possible.
      */
 
-    if (WORD_SMALLFP_FITS(value, c)) {
-	return WORD_SMALLFP_NEW(value, c);
+    word = WORD_SMALLFP_NEW(value, c);
+    if (WORD_SMALLFP_GET(word, c) == value) {
+	return word;
     }
 
     /*
