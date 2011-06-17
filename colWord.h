@@ -40,9 +40,10 @@ typedef uintptr_t Col_Word;
  *
  *  COL_NIL	- Nil.
  *  COL_CUSTOM	- Custom data type.
+ *  COL_INT	- Integer.
+ *  COL_FLOAT	- Floating point.
  *  COL_STRING	- String (including single characters and ropes).
  *  COL_ROPE	- Custo rope type.
- *  COL_INT	- Integer
  *  COL_VECTOR	- Vector.
  *  COL_MVECTOR	- Mutable vector.
  *  COL_LIST	- List.
@@ -59,9 +60,10 @@ typedef uintptr_t Col_Word;
 typedef enum {
     COL_NIL,
     COL_CUSTOM,
+    COL_INT,
+    COL_FLOAT,
     COL_STRING,
     COL_ROPE,
-    COL_INT,
     COL_VECTOR,
     COL_MVECTOR,
     COL_LIST,
@@ -83,6 +85,7 @@ typedef enum {
  *
  * Fields:
  *	i			- <COL_INT>.
+ *	f			- <COL_FLOAT>.
  *	string			- <COL_STRING>:
  *	string.format		- Format of the string. See <Col_StringFormat>.
  *	string.data		- Pointer to format-specific data.
@@ -104,6 +107,7 @@ typedef enum {
 
 typedef union {
     intptr_t i;
+    double f;
     struct {
 	Col_StringFormat format;
 	const void *data;
@@ -234,10 +238,11 @@ typedef struct Col_CustomWordType {
  * Group: Word Creation
  *
  * Declarations:
- *	<Col_NewIntWord>, <Col_NewCustomWord>
+ *	<Col_NewIntWord>, <Col_NewFloatWord>, <Col_NewCustomWord>
  ****************************************************************************/
 
 EXTERN Col_Word		Col_NewIntWord(intptr_t value);
+EXTERN Col_Word		Col_NewFloatWord(double value);
 EXTERN Col_Word		Col_NewCustomWord(Col_CustomWordType *type, size_t size, 
 			    void **dataPtr);
 

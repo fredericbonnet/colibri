@@ -71,6 +71,49 @@ Col_NewIntWord(
 }
 
 /*---------------------------------------------------------------------------
+ * Function: Col_NewFloatWord
+ *
+ *	Create a new floating point word.
+ *
+ *	If the floating point value fits, return an immediate value instead of 
+ *	allocating memory.
+ *
+ * Argument:
+ *	value	- Floating point value of the word to create.
+ *
+ * Result:
+ *	The new floating point word.
+ *
+ * Side effects:
+ *	Allocates memory cells if word is not immediate.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_NewFloatWord(
+    double value)
+{
+    Col_Word word;		/* Resulting word in the general case. */
+    FloatConvert c;
+
+    /*
+     * Return floating point value if possible.
+     */
+
+    if (WORD_SMALLFP_FITS(value, c)) {
+	return WORD_SMALLFP_NEW(value, c);
+    }
+
+    /*
+     * Create a new floating point word.
+     */
+
+    word = (Col_Word) AllocCells(1);
+    WORD_FP_INIT(word, value);
+
+    return word;
+}
+
+/*---------------------------------------------------------------------------
  * Function: Col_NewCustomWord
  *
  *	Create a new custom word.
@@ -138,6 +181,12 @@ Col_GetWordInfo(
 	    dataPtr->i = WORD_SMALLINT_GET(word);
 	    return COL_INT;
 
+	case WORD_TYPE_SMALLFP: {
+	    FloatConvert c;
+	    dataPtr->f = WORD_SMALLFP_GET(word, c);
+	    return COL_FLOAT;
+	}
+
 	case WORD_TYPE_CHAR:
 	    dataPtr->string._smallData = (Col_Word) WORD_CHAR_GET(word);
 	    dataPtr->string.format = COL_UCS4;
@@ -190,6 +239,10 @@ Col_GetWordInfo(
 	case WORD_TYPE_INT:
 	    dataPtr->i = WORD_INT_VALUE(word);
 	    return COL_INT;
+
+	case WORD_TYPE_FP:
+	    dataPtr->f = WORD_FP_VALUE(word);
+	    return COL_FLOAT;
 
 	case WORD_TYPE_VECTOR:
 	    dataPtr->vector.length = WORD_VECTOR_LENGTH(word);
@@ -309,6 +362,7 @@ HasSynonymField(
     switch (WORD_TYPE(word)) {
 	case WORD_TYPE_WRAP:
 	case WORD_TYPE_INT:
+	case WORD_TYPE_FP:
 	case WORD_TYPE_MLIST:
 	case WORD_TYPE_STRHASHMAP:
 	case WORD_TYPE_INTHASHMAP:
@@ -357,6 +411,12 @@ AddSynonymField(
 	case WORD_TYPE_SMALLINT:
 	    WORD_INT_INIT(converted, WORD_SMALLINT_GET(*wordPtr));
 	    break;
+
+	case WORD_TYPE_SMALLFP: {
+	    FloatConvert c;
+	    WORD_FP_INIT(converted, WORD_SMALLFP_GET(*wordPtr, c));
+	    break;
+	}
 
 	case WORD_TYPE_MCONCATLIST:
 	    WORD_MLIST_INIT(converted, *wordPtr);

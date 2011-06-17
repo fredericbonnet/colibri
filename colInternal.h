@@ -621,6 +621,7 @@ void			DeclareCustomWord(Col_Word word,
  *	WORD_TYPE_NIL		- Nil singleton.
  *	WORD_TYPE_CUSTOM	- Custom Words (<WORD_CUSTOM_INIT>)
  *	WORD_TYPE_SMALLINT	- Small Integers (<WORD_SMALLINT_NEW>)
+ *	WORD_TYPE_SMALLFP	- Small Floating Points
  *	WORD_TYPE_CHAR		- Character Words (<WORD_CHAR_NEW>)
  *	WORD_TYPE_SMALLSTR	- Small String Words (<WORD_SMALLSTR_DATA>, 
  *				  <WORD_SMALLSTR_SET_LENGTH>)
@@ -633,6 +634,7 @@ void			DeclareCustomWord(Col_Word word,
  *	WORD_TYPE_SUBROPE	- Subropes (<WORD_SUBROPE_INIT>)
  *	WORD_TYPE_CONCATROPE	- Concat Ropes (<WORD_CONCATROPE_INIT>)
  *	WORD_TYPE_INT		- Integers (<WORD_INT_INIT>)
+ *	WORD_TYPE_FP		- Floating Points (<WORD_FP_INIT>)
  *	WORD_TYPE_VECTOR	- Immutable Vectors (<WORD_VECTOR_INIT>)
  *	WORD_TYPE_MVECTOR	- Mutable Vectors (<WORD_MVECTOR_INIT>)
  *	WORD_TYPE_SUBLIST	- Sublists (<WORD_SUBLIST_INIT>)
@@ -684,10 +686,11 @@ void			DeclareCustomWord(Col_Word word,
 #define WORD_TYPE_CUSTOM	-1
 
 #define WORD_TYPE_SMALLINT	-2
-#define WORD_TYPE_CHAR		-3
-#define WORD_TYPE_SMALLSTR	-4
-#define WORD_TYPE_CIRCLIST	-5
-#define WORD_TYPE_VOIDLIST	-6
+#define WORD_TYPE_SMALLFP	-3
+#define WORD_TYPE_CHAR		-4
+#define WORD_TYPE_SMALLSTR	-5
+#define WORD_TYPE_CIRCLIST	-6
+#define WORD_TYPE_VOIDLIST	-7
 
 #define WORD_TYPE_WRAP		2
 
@@ -697,51 +700,45 @@ void			DeclareCustomWord(Col_Word word,
 #define WORD_TYPE_CONCATROPE	18
 
 #define WORD_TYPE_INT		22
+#define WORD_TYPE_FP		26
 
-#define WORD_TYPE_VECTOR	26
-#define WORD_TYPE_MVECTOR	30
-#define WORD_TYPE_SUBLIST	34
-#define WORD_TYPE_CONCATLIST	38
-#define WORD_TYPE_MCONCATLIST	42
-#define WORD_TYPE_MLIST		46
-#define WORD_TYPE_STRHASHMAP	50
-#define WORD_TYPE_INTHASHMAP	54
-#define WORD_TYPE_HASHENTRY	58
-#define WORD_TYPE_MHASHENTRY	62
-#define WORD_TYPE_INTHASHENTRY	66
-#define WORD_TYPE_MINTHASHENTRY	70
-#define WORD_TYPE_STRTRIEMAP	74
-#define WORD_TYPE_INTTRIEMAP	78
-#define WORD_TYPE_STRTRIENODE	82
-#define WORD_TYPE_MSTRTRIENODE	86
-#define WORD_TYPE_INTTRIENODE	90
-#define WORD_TYPE_MINTTRIENODE	94
-#define WORD_TYPE_TRIELEAF	98
-#define WORD_TYPE_MTRIELEAF	102
-#define WORD_TYPE_INTTRIELEAF	106
-#define WORD_TYPE_MINTTRIELEAF	110
+#define WORD_TYPE_VECTOR	30
+#define WORD_TYPE_MVECTOR	34
+#define WORD_TYPE_SUBLIST	38
+#define WORD_TYPE_CONCATLIST	42
+#define WORD_TYPE_MCONCATLIST	46
+#define WORD_TYPE_MLIST		50
+#define WORD_TYPE_STRHASHMAP	54
+#define WORD_TYPE_INTHASHMAP	58
+#define WORD_TYPE_HASHENTRY	62
+#define WORD_TYPE_MHASHENTRY	66
+#define WORD_TYPE_INTHASHENTRY	70
+#define WORD_TYPE_MINTHASHENTRY	74
+#define WORD_TYPE_STRTRIEMAP	78
+#define WORD_TYPE_INTTRIEMAP	82
+#define WORD_TYPE_STRTRIENODE	86
+#define WORD_TYPE_MSTRTRIENODE	90
+#define WORD_TYPE_INTTRIENODE	94
+#define WORD_TYPE_MINTTRIENODE	98
+#define WORD_TYPE_TRIELEAF	102
+#define WORD_TYPE_MTRIELEAF	106
+#define WORD_TYPE_INTTRIELEAF	110
+#define WORD_TYPE_MINTTRIELEAF	114
 #ifdef PROMOTE_COMPACT
 #   define WORD_TYPE_REDIRECT	254
 #endif
 
 /*---------------------------------------------------------------------------
- * Internal Macro: WORD_TYPE
+ * Internal Variable: immediateWordTypes
  *
- *	Get word type identifier.
- *
- * Argument:
- *	word	- Word to get type for. (Caution: evaluated several times during
- *		  macro expansion)
- *
- * Result:
- *	Word type identifier.
+ *	Lookup table for immediate word types, gives the word type ID from the
+ *	first 5 bits of the word value.
  *
  * See also:
- *	<Word Type Identifiers>, <Immediate Word Fields>
+ *	<Immediate Word Fields>
  *---------------------------------------------------------------------------*/
 
-#define WORD_TYPE_SMALLFP WORD_TYPE_NIL
-static int immediateWordTypes[32] = {
+static const int immediateWordTypes[32] = {
     WORD_TYPE_NIL,	/* 00000 */
     WORD_TYPE_SMALLINT,	/* 00001 */
     WORD_TYPE_SMALLFP,	/* 00010 */
@@ -775,6 +772,22 @@ static int immediateWordTypes[32] = {
     WORD_TYPE_SMALLFP,	/* 11110 */
     WORD_TYPE_SMALLINT,	/* 11111 */
 };
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_TYPE
+ *
+ *	Get word type identifier.
+ *
+ * Argument:
+ *	word	- Word to get type for. (Caution: evaluated several times during
+ *		  macro expansion)
+ *
+ * Result:
+ *	Word type identifier.
+ *
+ * See also:
+ *	<Word Type Identifiers>, <immediateWordTypes>
+ *---------------------------------------------------------------------------*/
 
 /* Careful: don't give arguments with side effects! */
 #define WORD_TYPE(word) \
@@ -835,6 +848,27 @@ static int immediateWordTypes[32] = {
  *	machine integers. Larger integers are cell-based.
  *
  *	WORD_SMALLINT_GET	- Get value of small integer word.
+ *
+ *
+ * Small Floating Points:
+ *	<WORD_TYPE_SMALLFP>
+ *
+ * (start table)
+ *      01 2                                                           n
+ *     +--+------------------------------------------------------------+
+ *   0 |01|                           Value                            |
+ *     +--+------------------------------------------------------------+
+ * (end)
+ *
+ *	Small floating point words are floating points whose lower 2 bits of the
+ *	mantissa are zero, so that they are free for the tag bits. Other values
+ *	are cell-based.
+ *
+ *	Note that because of language restrictions (bitwise operations on 
+ *	floating points are forbidden), we have to use the intermediary union 
+ *	type <FloatConvert> for conversions.
+ *
+ *	WORD_SMALLFP_GET	- Get value of small floating point word.
  *
  *
  * Unicode Chars:
@@ -923,6 +957,7 @@ static int immediateWordTypes[32] = {
  *---------------------------------------------------------------------------*/
 
 #define WORD_SMALLINT_GET(word)		(((intptr_t)(word))>>1)
+#define WORD_SMALLFP_GET(word, c)	((c).w = (word), (c).i &= ~2, (c).f)
 #define WORD_CHAR_GET(word)		((Col_Char)(((uintptr_t)(word))>>5))
 #define WORD_SMALLSTR_LENGTH(value)	((((uintptr_t)(value))&0xFF)>>5)
 #define WORD_SMALLSTR_SET_LENGTH(word, length) (*((uintptr_t *)&(word)) = ((length)<<5)|12)
@@ -935,7 +970,37 @@ static int immediateWordTypes[32] = {
 #define WORD_VOIDLIST_LENGTH(word)	(((size_t)(intptr_t)(word))>>5)
 
 /*---------------------------------------------------------------------------
- * Internal Constants: Immediate Word Type Limits
+ * Internal Macros: SMALLFP_TYPE
+ *
+ *	C Type used by immediate floating point words.
+ *
+ * See also:
+ *	<FloatConvert>, <WORD_SMALLFP_NEW>, <WORD_SMALLFP_FITS>
+ *---------------------------------------------------------------------------*/
+
+#if SIZE_BIT == 32
+#   define SMALLFP_TYPE		float
+#elif SIZE_BIT == 64
+#   define SMALLFP_TYPE		double
+#endif
+
+/*---------------------------------------------------------------------------
+ * Internal Typedef: FloatConvert
+ *
+ *	Utility union type for immediate floating point words.
+ *
+ * See also:
+ *	<WORD_TYPE_SMALLFP>, <WORD_SMALLFP_GET>, <WORD_SMALLFP_NEW>
+ *---------------------------------------------------------------------------*/
+
+typedef union {
+    Col_Word w;
+    uintptr_t i;
+    SMALLFP_TYPE f;
+} FloatConvert;
+
+/*---------------------------------------------------------------------------
+ * Internal Constants: Immediate Word Type Limits and Bitmasks
  *
  *  SMALLINT_MAX	- Maximum value of small integer words.
  *  SMALLINT_MIN	- Minimum value of small integer words.
@@ -973,6 +1038,39 @@ static int immediateWordTypes[32] = {
 
 #define WORD_SMALLINT_NEW(value) \
     ((Col_Word)((((intptr_t)(value))<<1)|1))
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_SMALLFP_NEW
+ *
+ *	Small floating point word creation.
+ *
+ * Argument:
+ *	value	- Floating point value.
+ *	c	- <Float> conversion structure.
+ *
+ * Result:
+ *	The new small floating point word.
+ *---------------------------------------------------------------------------*/
+
+#define WORD_SMALLFP_NEW(value, c) \
+    ((c).f = (SMALLFP_TYPE)(value), (c).i |= 2, (c).w)
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_SMALLFP_FITS
+ *
+ *	Tests whether floating point value fits immediate word.
+ *
+ * Argument:
+ *	value	- Floating point value. (Caution: evaluated several times after 
+ *		  macro expansion)
+ *	c	- <Float> conversion structure.
+ *
+ * Result:
+ *	Whether value fits immediate word.
+ *---------------------------------------------------------------------------*/
+
+#define WORD_SMALLFP_FITS(value, c) \
+    ((c).f = (SMALLFP_TYPE)(value), (c).f == (value) && !((c).i & 3))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_CHAR_NEW
@@ -1319,7 +1417,7 @@ static int immediateWordTypes[32] = {
  *	<WORD_INT_INIT>
  *---------------------------------------------------------------------------*/
 
-#define WORD_INT_VALUE(word)	(*(intptr_t *)(&WORD_SYNONYM(word)+1))
+#define WORD_INT_VALUE(word)	(*(((intptr_t *)(word))+1))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_INT_INIT
@@ -1339,6 +1437,54 @@ static int immediateWordTypes[32] = {
     WORD_SET_TYPEID((word), WORD_TYPE_INT); \
     WORD_SYNONYM(word) = WORD_NIL; \
     WORD_INT_VALUE(word) = (value);
+
+/*---------------------------------------------------------------------------
+ * Internal Macros: Floating Point Word Fields
+ *
+ *	Accessors for floating point word fields.
+ *
+ * Layout:
+ *	On all architectures the cell layout is as follows:
+ *
+ * (start table)
+ *      0     7                                                       n
+ *     +-------+-------------------------------------------------------+
+ *   0 | Type  |                        Unused                         |
+ *     +-------+-------------------------------------------------------+
+ *   1 |                            Synonym                            |
+ *     +---------------------------------------------------------------+
+ *   2 |                             Value                             |
+ *     + - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +
+ *   3 |                       (Unused on 64 bit)                      |
+ *     +---------------------------------------------------------------+
+ * (end)
+ *
+ *	WORD_FP_VALUE	- Floating point value.
+ *
+ * See also:
+ *	<WORD_FP_INIT>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_FP_VALUE(word)	(*(((double *)(word))+1))
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_FP_INIT
+ *
+ *	Initializer for floating point words.
+ *
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	value	- <WORD_FP_VALUE>
+ *
+ * See also:
+ *	<WORD_TYPE_FP>, <Col_NewFloatWord>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_FP_INIT(word, value) \
+    WORD_SET_TYPEID((word), WORD_TYPE_FP); \
+    WORD_SYNONYM(word) = WORD_NIL; \
+    WORD_FP_VALUE(word) = (value);
 
 /*---------------------------------------------------------------------------
  * Internal Macros: Redirect Word Fields

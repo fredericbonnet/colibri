@@ -310,6 +310,7 @@ Col_PreserveWord(
     switch (WORD_TYPE(word)) {
 	case WORD_TYPE_NIL:
 	case WORD_TYPE_SMALLINT:
+	case WORD_TYPE_SMALLFP:
 	case WORD_TYPE_CHAR:
 	case WORD_TYPE_SMALLSTR:
 	case WORD_TYPE_VOIDLIST:
@@ -514,6 +515,7 @@ Col_ReleaseWord(
     switch (WORD_TYPE(word)) {
 	case WORD_TYPE_NIL:
 	case WORD_TYPE_SMALLINT:
+	case WORD_TYPE_SMALLFP:
 	case WORD_TYPE_CHAR:
 	case WORD_TYPE_SMALLSTR:
 	case WORD_TYPE_VOIDLIST:
@@ -1232,6 +1234,7 @@ start:
     switch (type) {
 	case WORD_TYPE_NIL:
 	case WORD_TYPE_SMALLINT:
+	case WORD_TYPE_SMALLFP:
 	case WORD_TYPE_CHAR:
 	case WORD_TYPE_SMALLSTR:
 	case WORD_TYPE_VOIDLIST:
@@ -1358,6 +1361,7 @@ start:
 	    TAIL_RECURSE(&WORD_CONCATROPE_RIGHT(*wordPtr), page);
 
 	case WORD_TYPE_INT:
+	case WORD_TYPE_FP:
 	    /*
 	     * Tail recurse on synonym.
 	     */
