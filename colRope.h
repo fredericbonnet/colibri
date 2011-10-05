@@ -21,11 +21,12 @@
  * Group: Rope Creation
  *
  * Declarations:
- *	<Col_EmptyRope>, <Col_NewRopeFromString>, <Col_NewRope>
+ *	<Col_EmptyRope>, <Col_NewRopeFromString>, <Col_NewChar>, <Col_NewRope>
  ****************************************************************************/
 
 EXTERN Col_Word		Col_EmptyRope();
 EXTERN Col_Word		Col_NewRopeFromString(const char *string);
+EXTERN Col_Word		Col_NewChar(Col_Char c);
 EXTERN Col_Word		Col_NewRope(Col_StringFormat format, const void *data, 
 			    size_t byteLength);
 
@@ -139,9 +140,9 @@ EXTERN int		Col_TraverseRopeChunks(size_t number, Col_Word *ropes,
  * Group: Rope Iterators
  *
  * Declarations: 
- *	<Col_RopeIterBegin>, <Col_RopeIterCompare>, <Col_RopeIterMoveTo>, 
- *	<Col_RopeIterForward>, <Col_RopeIterBackward>, 
- *	<ColRopeIterUpdateTraversalInfo>
+ *	<Col_RopeIterBegin>, <Col_RopeIterFirst>, <Col_RopeIterLast>, 
+ *	<Col_RopeIterCompare>, <Col_RopeIterMoveTo>, <Col_RopeIterForward>, 
+ *	<Col_RopeIterBackward>, <ColRopeIterUpdateTraversalInfo>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -324,6 +325,8 @@ typedef ColRopeIterator Col_RopeIterator;
 
 EXTERN void		Col_RopeIterBegin(Col_Word rope, size_t index, 
 			    Col_RopeIterator *it);
+EXTERN void		Col_RopeIterFirst(Col_Word rope, Col_RopeIterator *it);
+EXTERN void		Col_RopeIterLast(Col_Word rope, Col_RopeIterator *it);
 EXTERN int		Col_RopeIterCompare(Col_RopeIterator *it1, 
 			    Col_RopeIterator *it2);
 EXTERN void		Col_RopeIterMoveTo(Col_RopeIterator *it, size_t index);

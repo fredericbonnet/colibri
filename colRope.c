@@ -115,6 +115,44 @@ Col_NewRopeFromString(
 }
 
 /*---------------------------------------------------------------------------
+ * Function: Col_NewChar
+ *
+ *	Create a new rope from a single character.
+ *
+ * Arguments:
+ *	c	- Character.
+ *
+ * Result:
+ *	A new rope made of the single character.
+ *
+ * See also:
+ *	<Col_NewRope>
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_NewChar(
+    Col_Char c)
+{
+    if (c <= UCHAR_MAX) {
+	/* 
+	 * Return small string value.
+	 */
+
+	Col_Word rope;
+	WORD_SMALLSTR_SET_LENGTH(rope, 1);
+	*WORD_SMALLSTR_DATA(rope) = (Col_Char1) c;
+	return rope;
+    } else if (c <= ROPE_CHAR_MAX) {
+	/*
+	 * Return char value.
+	 */
+
+	return WORD_CHAR_NEW(c);
+    }
+    return Col_NewRope(COL_UCS4, &c, sizeof(c));
+}
+
+/*---------------------------------------------------------------------------
  * Function: Col_NewRope
  *
  *	Create a new rope from flat character data. This can either be a 
@@ -403,7 +441,7 @@ Col_RopeAt(
     Col_RopeIterator it;
     
     Col_RopeIterBegin(rope, index, &it);
-    return Col_RopeIterAt(&it);
+    return Col_RopeIterEnd(&it) ? COL_CHAR_INVALID : Col_RopeIterAt(&it);
 }
 
 /*---------------------------------------------------------------------------
@@ -2501,6 +2539,83 @@ Col_RopeIterBegin(
 
     it->rope = rope;
     it->index = index;
+
+    /*
+     * Traversal info will be lazily computed.
+     */
+
+    it->traversal.subrope = WORD_NIL;
+    it->traversal.leaf = WORD_NIL;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_RopeIterFirst
+ *
+ *	Initialize the rope iterator so that it points to the first
+ *	character within the rope. If rope is empty, the iterator is initialized
+ *	to the end iterator (i.e. whose rope field is nil).
+ *
+ * Arguments:
+ *	rope	- Rope to iterate over.
+ *	it	- Iterator to initialize.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_RopeIterFirst(
+    Col_Word rope,
+    Col_RopeIterator *it)
+{
+    if (Col_RopeLength(rope) == 0) {
+	/*
+	 * End of rope.
+	 */
+
+	it->rope = WORD_NIL;
+
+	return;
+    }
+
+    it->rope = rope;
+    it->index = 0;
+
+    /*
+     * Traversal info will be lazily computed.
+     */
+
+    it->traversal.subrope = WORD_NIL;
+    it->traversal.leaf = WORD_NIL;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_RopeIterLast
+ *
+ *	Initialize the rope iterator so that it points to the last
+ *	character within the rope. If rope is empty, the iterator is initialized
+ *	to the end iterator (i.e. whose rope field is nil).
+ *
+ * Arguments:
+ *	rope	- Rope to iterate over.
+ *	it	- Iterator to initialize.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_RopeIterLast(
+    Col_Word rope,
+    Col_RopeIterator *it)
+{
+    size_t length = Col_RopeLength(rope);
+    if (length == 0) {
+	/*
+	 * End of rope.
+	 */
+
+	it->rope = WORD_NIL;
+
+	return;
+    }
+
+    it->rope = rope;
+    it->index = length-1;
 
     /*
      * Traversal info will be lazily computed.
