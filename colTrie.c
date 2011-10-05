@@ -1530,7 +1530,6 @@ Col_TrieMapIterFirst(
 	 */
 
 	it->map = WORD_NIL;
-	it->entry = WORD_NIL;
 	return;
     }
 
@@ -1573,7 +1572,6 @@ Col_TrieMapIterLast(
 	 */
 
 	it->map = WORD_NIL;
-	it->entry = WORD_NIL;
 	return;
     }
 
@@ -1621,7 +1619,11 @@ Col_StringTrieMapIterFind(
 	 */
 
 	it->map = WORD_NIL;
+	return;
     }
+
+    ASSERT(WORD_TRIEMAP_ROOT(map));
+    it->map = map;
     ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_TRIELEAF || WORD_TYPE(it->entry) == WORD_TYPE_MTRIELEAF);
 }
 
@@ -1662,7 +1664,11 @@ Col_IntTrieMapIterFind(
 	 */
 
 	it->map = WORD_NIL;
+	return;
     }
+
+    ASSERT(WORD_TRIEMAP_ROOT(map));
+    it->map = map;
     ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTTRIELEAF || WORD_TYPE(it->entry) == WORD_TYPE_MINTTRIELEAF);
 }
 
