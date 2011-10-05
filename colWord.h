@@ -48,7 +48,6 @@ typedef uintptr_t Col_Word;
  *  COL_MVECTOR	- Mutable vector.
  *  COL_LIST	- List.
  *  COL_MLIST	- Mutable list.
- *  COL_MAP	- Map.
  *  COL_STRMAP	- String-keyed map.
  *  COL_INTMAP	- Integer-keyed map.
  *  COL_HASHMAP	- Custom hash map type.
@@ -68,7 +67,6 @@ typedef enum {
     COL_MVECTOR,
     COL_LIST,
     COL_MLIST,
-    COL_MAP,
     COL_STRMAP,
     COL_INTMAP,
     COL_HASHMAP

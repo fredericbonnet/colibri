@@ -162,7 +162,7 @@ Col_NewCustomWord(
  * Results:
  *	A type ID or pointer. Additionally:
  *
- *	dataPtr	- Type-specific info.
+ *	dataPtr	- If non-NULL, type-specific info.
  *---------------------------------------------------------------------------*/
 
 Col_WordType
@@ -179,28 +179,33 @@ Col_GetWordInfo(
 	    return COL_NIL;
 	    
 	case WORD_TYPE_SMALLINT:
-	    dataPtr->i = WORD_SMALLINT_GET(word);
+	    if (dataPtr) dataPtr->i = WORD_SMALLINT_GET(word);
 	    return COL_INT;
 
-	case WORD_TYPE_SMALLFP: {
-	    FloatConvert c;
-	    dataPtr->f = WORD_SMALLFP_GET(word, c);
+	case WORD_TYPE_SMALLFP:
+	    if (dataPtr) {
+		FloatConvert c;
+		dataPtr->f = WORD_SMALLFP_GET(word, c);
+	    }
 	    return COL_FLOAT;
-	}
 
 	case WORD_TYPE_CHAR:
-	    dataPtr->string._smallData = (Col_Word) WORD_CHAR_GET(word);
-	    dataPtr->string.format = COL_UCS4;
-	    dataPtr->string.data = &dataPtr->string._smallData;
-	    dataPtr->string.byteLength = 4;
+	    if (dataPtr) {
+		dataPtr->string._smallData = (Col_Word) WORD_CHAR_GET(word);
+		dataPtr->string.format = COL_UCS4;
+		dataPtr->string.data = &dataPtr->string._smallData;
+		dataPtr->string.byteLength = 4;
+	    }
 	    return COL_STRING;
 
 	case WORD_TYPE_SMALLSTR:
-	    dataPtr->string._smallData = (uintptr_t) word;
-	    dataPtr->string.format = COL_UCS1;
-	    dataPtr->string.data 
-		    = WORD_SMALLSTR_DATA(dataPtr->string._smallData);
-	    dataPtr->string.byteLength = WORD_SMALLSTR_LENGTH(word);
+	    if (dataPtr) {
+		dataPtr->string._smallData = (uintptr_t) word;
+		dataPtr->string.format = COL_UCS1;
+		dataPtr->string.data 
+			= WORD_SMALLSTR_DATA(dataPtr->string._smallData);
+		dataPtr->string.byteLength = WORD_SMALLSTR_LENGTH(word);
+	    }
 	    return COL_STRING;
 
 	case WORD_TYPE_CIRCLIST:
@@ -221,16 +226,20 @@ Col_GetWordInfo(
 	    return Col_GetWordInfo(word, dataPtr);
 
 	case WORD_TYPE_UCSSTR:
-	    dataPtr->string.format = WORD_UCSSTR_FORMAT(word);
-	    dataPtr->string.data = WORD_UCSSTR_DATA(word);
-	    dataPtr->string.byteLength = WORD_UCSSTR_LENGTH(word)
-		    * WORD_UCSSTR_FORMAT(word);
+	    if (dataPtr) {
+		dataPtr->string.format = WORD_UCSSTR_FORMAT(word);
+		dataPtr->string.data = WORD_UCSSTR_DATA(word);
+		dataPtr->string.byteLength = WORD_UCSSTR_LENGTH(word)
+			* WORD_UCSSTR_FORMAT(word);
+	    }
 	    return COL_STRING;
 
 	case WORD_TYPE_UTF8STR:
-	    dataPtr->string.format = COL_UTF8;
-	    dataPtr->string.data = WORD_UCSSTR_DATA(word);
-	    dataPtr->string.byteLength = WORD_UTF8STR_BYTELENGTH(word);
+	    if (dataPtr) {
+		dataPtr->string.format = COL_UTF8;
+		dataPtr->string.data = WORD_UCSSTR_DATA(word);
+		dataPtr->string.byteLength = WORD_UTF8STR_BYTELENGTH(word);
+	    }
 	    return COL_STRING;
 
 	case WORD_TYPE_SUBROPE:
@@ -238,23 +247,28 @@ Col_GetWordInfo(
 	    return COL_ROPE;
 
 	case WORD_TYPE_INT:
-	    dataPtr->i = WORD_INT_VALUE(word);
+	    if (dataPtr) dataPtr->i = WORD_INT_VALUE(word);
 	    return COL_INT;
 
 	case WORD_TYPE_FP:
-	    dataPtr->f = WORD_FP_VALUE(word);
+	    if (dataPtr) dataPtr->f = WORD_FP_VALUE(word);
 	    return COL_FLOAT;
 
 	case WORD_TYPE_VECTOR:
-	    dataPtr->vector.length = WORD_VECTOR_LENGTH(word);
-	    dataPtr->vector.elements = WORD_VECTOR_ELEMENTS(word);
+	    if (dataPtr) {
+		dataPtr->vector.length = WORD_VECTOR_LENGTH(word);
+		dataPtr->vector.elements = WORD_VECTOR_ELEMENTS(word);
+	    }
 	    return COL_VECTOR;
 
 	case WORD_TYPE_MVECTOR:
-	    dataPtr->mvector.maxLength 
-		    = VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(word) * CELL_SIZE);
-	    dataPtr->mvector.length = WORD_VECTOR_LENGTH(word);
-	    dataPtr->mvector.elements = WORD_VECTOR_ELEMENTS(word);
+	    if (dataPtr) {
+		dataPtr->mvector.maxLength 
+			= VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(word) 
+			* CELL_SIZE);
+		dataPtr->mvector.length = WORD_VECTOR_LENGTH(word);
+		dataPtr->mvector.elements = WORD_VECTOR_ELEMENTS(word);
+	    }
 	    return COL_MVECTOR;
 
 	case WORD_TYPE_SUBLIST:
@@ -277,12 +291,14 @@ Col_GetWordInfo(
 	 * Custom word.
 	 */
 
-	case WORD_TYPE_CUSTOM: {
-	    Col_CustomWordType *typeInfo = WORD_TYPEINFO(word);
-	    dataPtr->custom.type = typeInfo;
-	    dataPtr->custom.data = WORD_CUSTOM_DATA(word, dataPtr->custom.type);
+	case WORD_TYPE_CUSTOM:
+	    if (dataPtr) {
+		Col_CustomWordType *typeInfo = WORD_TYPEINFO(word);
+		dataPtr->custom.type = typeInfo;
+		dataPtr->custom.data = WORD_CUSTOM_DATA(word, 
+			dataPtr->custom.type);
+	    }
 	    return COL_CUSTOM;
-	}
 
 	/* WORD_TYPE_UNKNOWN */
 
@@ -303,7 +319,7 @@ Col_GetWordInfo(
  * Results:
  *	The word or nil if not found. Additionally:
  *
- *	dataPtr	- Type-specific info.
+ *	dataPtr	- If non-NULL, type-specific info.
  *---------------------------------------------------------------------------*/
 
 Col_Word
