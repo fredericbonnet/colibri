@@ -91,23 +91,22 @@ EXTERN Col_Word		Col_ListReplace(Col_Word list, size_t first,
  * Group: Mutable List Creation
  *
  * Declarations:
- *	<Col_NewMList>
+ *	<Col_NewMList>, <Col_CopyMList>
  ****************************************************************************/
 
 EXTERN Col_Word		Col_NewMList();
+EXTERN Col_Word		Col_CopyMList(Col_Word mlist);
 
 
 /****************************************************************************
  * Group: Mutable List Operations
  *
  * Declarations:
- *	<Col_FreezeMList>, <Col_MListSetLength>, <Col_MListLoop>,
- *	<Col_MListSetAt>, <Col_MListInsert>, <Col_MListRemove>,
- *	<Col_MListReplace>
+ *	<Col_MListSetLength>, <Col_MListLoop>, <Col_MListSetAt>, 
+ *	<Col_MListInsert>, <Col_MListRemove>, <Col_MListReplace>
  *	
  ****************************************************************************/
 
-EXTERN Col_Word		Col_FreezeMList(Col_Word mlist);
 EXTERN void		Col_MListSetLength(Col_Word mlist, size_t length);
 EXTERN void		Col_MListLoop(Col_Word mlist);
 EXTERN void		Col_MListSetAt(Col_Word mlist, size_t index, 
@@ -176,9 +175,9 @@ EXTERN int		Col_TraverseListChunks(size_t number, Col_Word *lists,
  * Group: List Iterators
  *
  * Declarations: 
- *	<Col_ListIterBegin>, <Col_ListIterCompare>, <Col_ListIterMoveTo>, 
- *	<Col_ListIterForward>, <Col_ListIterBackward>, 
- *	<ColListIterUpdateTraversalInfo>
+ *	<Col_ListIterBegin>, <Col_ListIterFirst>, <Col_ListIterLast>, 
+ *	<Col_ListIterCompare>, <Col_ListIterMoveTo>, <Col_ListIterForward>, 
+ *	<Col_ListIterBackward>, <ColListIterUpdateTraversalInfo>
  *
  * Note:
  *	Works with mutable or immutable lists and vectors, however modifying a 
@@ -367,6 +366,8 @@ typedef ColListIterator Col_ListIterator;
 
 EXTERN int		Col_ListIterBegin(Col_Word list, size_t index, 
 			    Col_ListIterator *it);
+EXTERN void		Col_ListIterFirst(Col_Word list, Col_ListIterator *it);
+EXTERN void		Col_ListIterLast(Col_Word list, Col_ListIterator *it);
 EXTERN int		Col_ListIterCompare(Col_ListIterator *it1, 
 			    Col_ListIterator *it2);
 EXTERN int		Col_ListIterMoveTo(Col_ListIterator *it, size_t index);

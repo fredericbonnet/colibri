@@ -311,7 +311,7 @@ Col_ListAt(
     Col_ListIterator it;
     
     Col_ListIterBegin(list, index, &it);
-    return Col_ListIterAt(&it);
+    return Col_ListIterEnd(&it) ? WORD_NIL : Col_ListIterAt(&it);
 }
 
 
@@ -1092,7 +1092,7 @@ Col_ConcatListsA(
      */
 
     if (number == 0) {return WORD_NIL;}
-    if (number == 1) {return Col_FreezeMList(lists[0]);}
+    if (number == 1) {return Col_CopyMList(lists[0]);}
     if (number == 2) {return Col_ConcatLists(lists[0], lists[1]);}
 
     /* 
@@ -1202,7 +1202,7 @@ Col_RepeatList(
      */
 
     if (count == 0) {return WORD_NIL;}
-    if (count == 1) {return Col_FreezeMList(list);}
+    if (count == 1) {return Col_CopyMList(list);}
     if (count == 2) {return Col_ConcatLists(list, list);}
 
     if (count & 1) {
@@ -1242,7 +1242,7 @@ Col_CircularList(
 	return WORD_LIST_EMPTY;
     }
 
-    core = Col_FreezeMList(core);
+    core = Col_CopyMList(core);
     if (Col_ListLoopLength(core)) {
 	/*
 	 * List is cyclic, no-op.
@@ -1287,7 +1287,7 @@ Col_ListInsert(
 {
     size_t length, loop;
 
-    into = Col_FreezeMList(into);
+    into = Col_CopyMList(into);
     if (Col_ListLength(list) == 0) {
 	/*
 	 * No-op.
@@ -1395,7 +1395,7 @@ Col_ListRemove(
 	 * No-op. 
 	 */
 
-	return Col_FreezeMList(list);
+	return Col_CopyMList(list);
     }
 
     list = GetRoot(list);
@@ -1483,7 +1483,7 @@ Col_ListRemove(
 	 * No-op.
 	 */
 
-	return Col_FreezeMList(list);
+	return Col_CopyMList(list);
     } else if (first == 0) {
 	/*
 	 * Trim begin.
@@ -1610,19 +1610,15 @@ Col_NewMList()
     return mlist;
 }
 
-
-/****************************************************************************
- * Group: Mutable List Operations
- ****************************************************************************/
-
 /*---------------------------------------------------------------------------
- * Function: Col_FreezeMList
+ * Function: Col_CopyMList
  *
- *	Get an immutable list from a mutable list content. If an immutable list
- *	is given, does nothing. Mutable vectors are copied.
+ *	Create an immutable list from a mutable list. If an immutable list is 
+ *	given, it is simply returned. If a mutable list is given, its content
+ *	is frozen and shared with the new one. Mutable vectors are copied.
  *
  * Argument:
- *	mlist	- The mutable list to get frozen content from.
+ *	mlist	- The mutable list to copy.
  *
  * Side effects:
  *	The content of a mutable list is frozen.
@@ -1631,7 +1627,7 @@ Col_NewMList()
  *---------------------------------------------------------------------------*/
 
 Col_Word
-Col_FreezeMList(
+Col_CopyMList(
     Col_Word mlist)
 {
     switch (WORD_TYPE(mlist)) {
@@ -1640,15 +1636,14 @@ Col_FreezeMList(
 	     * Recurse on source.
 	     */
 
-	    return Col_FreezeMList(WORD_WRAP_SOURCE(mlist));
+	    return Col_CopyMList(WORD_WRAP_SOURCE(mlist));
 
 	case WORD_TYPE_CIRCLIST:
 	    /*
 	     * Recurse on core.
 	     */
 
-	    return WORD_CIRCLIST_NEW(Col_FreezeMList(
-		    WORD_CIRCLIST_CORE(mlist)));
+	    return WORD_CIRCLIST_NEW(Col_CopyMList(WORD_CIRCLIST_CORE(mlist)));
 
 	case WORD_TYPE_VOIDLIST:
 	case WORD_TYPE_VECTOR:
@@ -1678,7 +1673,7 @@ Col_FreezeMList(
 
 	case WORD_TYPE_MLIST:
 	    /*
-	     * Freeze content.
+	     * Freeze and return content.
 	     */
 
 	    FreezeMList(WORD_MLIST_ROOT(mlist));
@@ -1700,7 +1695,7 @@ Col_FreezeMList(
  *	mlist	- Mutable list to freeze.
  *
  * See also:
- *	<Col_FreezeMList>
+ *	<Col_CopyMList>
  *---------------------------------------------------------------------------*/
 
 static void
@@ -1759,6 +1754,11 @@ start:
 	    return;
     }
 }
+
+
+/****************************************************************************
+ * Group: Mutable List Operations
+ ****************************************************************************/
 
 /*---------------------------------------------------------------------------
  * Function: Col_MListSetLength
@@ -2570,7 +2570,7 @@ Col_MListInsert(
 	 * Target is empty, replace content with input.
 	 */
 
-	WORD_MLIST_ROOT(into) = Col_FreezeMList(list);
+	WORD_MLIST_ROOT(into) = Col_CopyMList(list);
 	Col_WordSetModified(into);
 	return;
     }
@@ -2603,7 +2603,7 @@ Col_MListInsert(
 	}
 	Col_MListSetLength(into, index);
 
-	list = Col_FreezeMList(list);
+	list = Col_CopyMList(list);
 	if (WORD_TYPE(list) == WORD_TYPE_CONCATLIST) {
 	    /*
 	     * Append head to destination first.
@@ -2641,7 +2641,7 @@ Col_MListInsert(
 	     * Insert before loop: concat list and loop.
 	     */
 
-	    Col_Word node = NewMConcatList(Col_FreezeMList(list), root);
+	    Col_Word node = NewMConcatList(Col_CopyMList(list), root);
 	    WORD_MLIST_ROOT(into) = node;
 	    Col_WordSetModified(into);
 	} else {
@@ -2749,7 +2749,7 @@ MListInsert(
 	 * Replace content.
 	 */
 
-	*nodePtr = Col_FreezeMList(list);;
+	*nodePtr = Col_CopyMList(list);;
 	Col_WordSetModified(parent);
 	return;
     }
@@ -4086,6 +4086,83 @@ Col_ListIterBegin(
     it->traversal.leaf = WORD_NIL;
 
     return looped;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterFirst
+ *
+ *	Initialize the list iterator so that it points to the first
+ *	character within the list. If list is empty, the iterator is initialized
+ *	to the end iterator (i.e. whose list field is nil).
+ *
+ * Arguments:
+ *	list	- List to iterate over.
+ *	it	- Iterator to initialize.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_ListIterFirst(
+    Col_Word list,
+    Col_ListIterator *it)
+{
+    if (Col_ListLength(list) == 0) {
+	/*
+	 * End of list.
+	 */
+
+	it->list = WORD_NIL;
+
+	return;
+    }
+
+    it->list = list;
+    it->index = 0;
+
+    /*
+     * Traversal info will be lazily computed.
+     */
+
+    it->traversal.subnode = WORD_NIL;
+    it->traversal.leaf = WORD_NIL;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterLast
+ *
+ *	Initialize the list iterator so that it points to the last
+ *	character within the list. If list is empty, the iterator is initialized
+ *	to the end iterator (i.e. whose list field is nil).
+ *
+ * Arguments:
+ *	list	- List to iterate over.
+ *	it	- Iterator to initialize.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_ListIterLast(
+    Col_Word list,
+    Col_ListIterator *it)
+{
+    size_t length = Col_ListLength(list);
+    if (length == 0) {
+	/*
+	 * End of list.
+	 */
+
+	it->list = WORD_NIL;
+
+	return;
+    }
+
+    it->list = list;
+    it->index = length-1;
+
+    /*
+     * Traversal info will be lazily computed.
+     */
+
+    it->traversal.subnode = WORD_NIL;
+    it->traversal.leaf = WORD_NIL;
 }
 
 /*---------------------------------------------------------------------------
