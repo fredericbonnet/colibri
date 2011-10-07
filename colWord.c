@@ -263,11 +263,11 @@ Col_GetWordInfo(
 
 	case WORD_TYPE_MVECTOR:
 	    if (dataPtr) {
+		dataPtr->mvector.length = WORD_VECTOR_LENGTH(word);
+		dataPtr->mvector.elements = WORD_VECTOR_ELEMENTS(word);
 		dataPtr->mvector.maxLength 
 			= VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(word) 
 			* CELL_SIZE);
-		dataPtr->mvector.length = WORD_VECTOR_LENGTH(word);
-		dataPtr->mvector.elements = WORD_VECTOR_ELEMENTS(word);
 	    }
 	    return COL_MVECTOR;
 
@@ -310,34 +310,53 @@ Col_GetWordInfo(
 /*---------------------------------------------------------------------------
  * Function: Col_FindWordInfo
  *
- *	Find data for a word with the given type.
+ *	Find data for a word with the given type in the synonym chain. If none 
+ *	found, optionally find first word matching a given set of types.
  *
  * Arguments:
- *	word	- The word to get data from.
- *	type	- The required type.
+ *	word		- The word to get data from.
+ *	type		- The required type.
+ *	altTypePtr	- If non-NULL, OR-ed set of acceptable types for 
+ *			  alternate word.
  *
  * Results:
  *	The word or nil if not found. Additionally:
  *
- *	dataPtr	- If non-NULL, type-specific info.
+ *	dataPtr		- If non-NULL, type-specific info.
+ *	altTypePtr	- If non-NULL, actual type of any alternate word found.
+ *	altWordPtr	- If non-NULL, alternate word found.
  *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_FindWordInfo(
     Col_Word word,
     Col_WordType type,
-    Col_WordData *dataPtr)
+    Col_WordData *dataPtr,
+    int *altTypePtr,
+    Col_Word *altWordPtr)
 {
     Col_Word synonym;
 
     synonym = word;
     while (synonym) {
-	if (Col_GetWordInfo(synonym, dataPtr) == type) {
+	Col_WordType wordType = Col_GetWordInfo(synonym, dataPtr);
+	if (wordType & type) {
 	    /*
 	     * Found !
 	     */
 
 	    return synonym;
+	}
+
+	if (altTypePtr && altWordPtr  && (wordType & *altTypePtr)) {
+	    /*
+	     * Alternate word found. Prevent further finds by NULLing pointers.
+	     */
+
+	    *altTypePtr = wordType;
+	    *altWordPtr = synonym;
+	    altTypePtr = NULL;
+	    altWordPtr = NULL;
 	}
 
 	if (!HasSynonymField(synonym)) {
@@ -357,6 +376,8 @@ Col_FindWordInfo(
 	    break;
 	}
     }
+    if (altTypePtr) *altTypePtr = COL_NIL;
+    if (altWordPtr) *altWordPtr = WORD_NIL;
     return WORD_NIL;
 }
 

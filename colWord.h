@@ -36,40 +36,42 @@ typedef uintptr_t Col_Word;
 /*---------------------------------------------------------------------------
  * Enum: Col_WordType
  *
- *	Data types recognized by Colibri.
+ *	Data types recognized by Colibri. Subtype identifiers are OR'ed with 
+ *	generic ones. For example, flat strings are also ropes, so (<COL_STRING>
+ *	& <COL_ROPE>) == <COL_ROPE>.
  *
  *  COL_NIL	- Nil.
  *  COL_CUSTOM	- Custom data type.
  *  COL_INT	- Integer.
  *  COL_FLOAT	- Floating point.
- *  COL_STRING	- String (including single characters and ropes).
- *  COL_ROPE	- Custo rope type.
+ *  COL_ROPE	- Generic rope.
+ *  COL_STRING	- Flat string.
+ *  COL_LIST	- Generic list.
+ *  COL_MLIST	- Mutable list.
  *  COL_VECTOR	- Vector.
  *  COL_MVECTOR	- Mutable vector.
- *  COL_LIST	- List.
- *  COL_MLIST	- Mutable list.
  *  COL_STRMAP	- String-keyed map.
  *  COL_INTMAP	- Integer-keyed map.
  *  COL_HASHMAP	- Custom hash map type.
  *
  * See also:
- *	<Col_GetWordInfo>, <Col_FindWordInfo>
+ *	<Col_GetWordInfo>, <Col_FindWordInfo>, <Col_CustomWordType>
  *---------------------------------------------------------------------------*/
 
 typedef enum {
-    COL_NIL,
-    COL_CUSTOM,
-    COL_INT,
-    COL_FLOAT,
-    COL_STRING,
-    COL_ROPE,
-    COL_VECTOR,
-    COL_MVECTOR,
-    COL_LIST,
-    COL_MLIST,
-    COL_STRMAP,
-    COL_INTMAP,
-    COL_HASHMAP
+    COL_NIL	= 1,
+    COL_CUSTOM	= 2,
+    COL_INT	= 4,
+    COL_FLOAT	= 8,
+    COL_ROPE	= 16,
+    COL_STRING	= 48,		/* = 32 | COL_ROPE */
+    COL_LIST	= 64,
+    COL_MLIST	= 192,		/* = 128 | COL_LIST */
+    COL_VECTOR	= 320,		/* = 256 | COL_LIST */
+    COL_MVECTOR	= 960,		/* = 512 | COL_VECTOR | COL_MLIST */
+    COL_STRMAP	= 1024,
+    COL_INTMAP	= 2048,
+    COL_HASHMAP	= 4096
 } Col_WordType;
 
 /*---------------------------------------------------------------------------
@@ -92,15 +94,16 @@ typedef enum {
  *	vector.length		- Length of vector.
  *	vector.elements		- Array of word elements.
  *	mvector			- <COL_MVECTOR>:
- *	mvector.maxLength	- Maximum length of vector.
  *	mvector.length		- Actual length of vector.
  *	mvector.elements	- Array of word elements.
+ *	mvector.maxLength	- Maximum length of vector.
  *	custom			- Custom types:
  *	custom.type		- The word type.
  *	custom.data		- Pointer to the allocated data.
  *
  * See also:
- *	<Col_WordType>, <Col_GetWordInfo>, <Col_FindWordInfo>
+ *	<Col_WordType>, <Col_GetWordInfo>, <Col_FindWordInfo>, 
+ *	<Col_CustomWordType>
  *---------------------------------------------------------------------------*/
 
 typedef union {
@@ -117,9 +120,9 @@ typedef union {
 	const Col_Word *elements;
     } vector;
     struct {
-	size_t maxLength;
 	size_t length;
 	Col_Word *elements;
+	size_t maxLength;
     } mvector;
     struct {
 	struct Col_CustomWordType *type;
@@ -205,10 +208,11 @@ typedef void (Col_CustomWordChildrenProc) (Col_Word word,
 /*---------------------------------------------------------------------------
  * Typedef: Col_CustomWordType
  *
- *	Custom word type descriptor.
+ *	Custom word type descriptor. 
  *
  * Fields:
- *	type		- Type identifier. 
+ *	type		- Type identifier. Type field must be equal to 
+ *			  <COL_CUSTOM>.
  *	name		- Name of the type, e.g. "int".
  *	sizeProc	- Called to get the size in bytes of the word. Must be 
  *			  constant during the whole lifetime.
@@ -255,7 +259,8 @@ EXTERN Col_Word		Col_NewCustomWord(Col_CustomWordType *type, size_t size,
 
 EXTERN Col_WordType	Col_GetWordInfo(Col_Word word, Col_WordData *dataPtr);
 EXTERN Col_Word		Col_FindWordInfo(Col_Word word, Col_WordType type, 
-			    Col_WordData *dataPtr);
+			    Col_WordData *dataPtr, int *altTypePtr, 
+			    Col_Word *altWordPtr);
 EXTERN Col_Word		Col_GetWordSynonym(Col_Word word);
 EXTERN void		Col_AddWordSynonym(Col_Word *wordPtr, Col_Word synonym,
 			    Col_Word parent);
