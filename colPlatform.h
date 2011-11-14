@@ -20,8 +20,7 @@
  *
  * Declarations:
  *	<PlatEnter>, <PlatLeave>, <PlatEnterProtectRoots>, 
- *	<PlatLeaveProtectRoots>, <PlatEnterProtectDirties>, 
- *	<PlatLeaveProtectDirties>, <PlatSyncPauseGC>, <PlatTrySyncPauseGC>, 
+ *	<PlatLeaveProtectRoots>, <PlatSyncPauseGC>, <PlatTrySyncPauseGC>, 
  *	<PlatSyncResumeGC>
  ****************************************************************************/
 
@@ -29,8 +28,6 @@ int			PlatEnter(unsigned int model);
 int			PlatLeave(void);
 void			PlatEnterProtectRoots(GroupData *data);
 void			PlatLeaveProtectRoots(GroupData *data);
-void			PlatEnterProtectDirties(GroupData *data);
-void			PlatLeaveProtectDirties(GroupData *data);
 void			PlatSyncPauseGC(GroupData *data);
 int			PlatTrySyncPauseGC(GroupData *data);
 void			PlatSyncResumeGC(GroupData *data, int schedule);
@@ -44,7 +41,7 @@ void			PlatSyncResumeGC(GroupData *data, int schedule);
  *	data	- Group-specific data.
  *
  * Side effects:
- *	When model isn't <COL_SHARED>, calls <PlatEnterProtectRoots>.
+ *	When model is <COL_SHARED>, calls <PlatEnterProtectRoots>.
  *
  * See also:
  *	<PlatEnterProtectRoots>, <LeaveProtectRoots>
@@ -62,7 +59,7 @@ void			PlatSyncResumeGC(GroupData *data, int schedule);
  *	data	- Group-specific data.
  *
  * Side effects:
- *	When model isn't <COL_SHARED>, calls <PlatLeaveProtectRoots>.
+ *	When model is <COL_SHARED>, calls <PlatLeaveProtectRoots>.
  *
  * See also:
  *	<PlatLeaveProtectRoots>, <EnterProtectRoots>
@@ -70,42 +67,6 @@ void			PlatSyncResumeGC(GroupData *data, int schedule);
 
 #define LeaveProtectRoots(data) \
     if ((data)->model >= COL_SHARED) {PlatLeaveProtectRoots(data);}
-
-/*---------------------------------------------------------------------------
- * Internal Macro: EnterProtectDirties
- *
- *	Enter protected section around dirty page management structures.
- *
- * Argument:
- *	data	- Group-specific data.
- *
- * Side effects:
- *	When model isn't <COL_SHARED>, calls <PlatEnterProtectDirties>.
- *
- * See also:
- *	<PlatEnterProtectDirties>, <LeaveProtectDirties>
- *---------------------------------------------------------------------------*/
-
-#define EnterProtectDirties(data) \
-    if ((data)->model >= COL_SHARED) {PlatEnterProtectDirties(data);}
-
-/*---------------------------------------------------------------------------
- * Internal Macro: LeaveProtectDirties
- *
- *	Leave protected section around dirty page management structures.
- *
- * Argument:
- *	data	- Group-specific data.
- *
- * Side effects:
- *	When model isn't <COL_SHARED>, calls <PlatLeaveProtectDirties>.
- *
- * See also:
- *	<PlatLeaveProtectDirties>, <EnterProtectDirties>
- *---------------------------------------------------------------------------*/
-
-#define LeaveProtectDirties(data) \
-    if ((data)->model >= COL_SHARED) {PlatLeaveProtectDirties(data);}
 
 /*---------------------------------------------------------------------------
  * Internal Macro: SyncPauseGC
@@ -116,7 +77,7 @@ void			PlatSyncResumeGC(GroupData *data, int schedule);
  *	data	- Group-specific data.
  *
  * Side effects:
- *	When model isn't <COL_SHARED>, calls <PlatSyncPauseGC>, which may block
+ *	When model isn't <COL_SINGLE>, calls <PlatSyncPauseGC>, which may block
  *	as long as a GC is underway.
  *
  * See also:
@@ -139,7 +100,7 @@ void			PlatSyncResumeGC(GroupData *data, int schedule);
  *	isn't <COL_SINGLE>).
  *
  * Side effects:
- *	When model isn't <COL_SHARED>, calls <PlatTrySyncPauseGC>.
+ *	When model isn't <COL_SINGLE>, calls <PlatTrySyncPauseGC>.
  *
  * See also:
  *	<Col_TryPauseGC>, <PlatTrySyncPauseGC>, <SyncResumeGC>
@@ -159,7 +120,7 @@ void			PlatSyncResumeGC(GroupData *data, int schedule);
  *
  * Side effects:
  *	If performGC is non-zero, calls <PerformGC> eventually: synchronously
- *	if model is <COL_SHARED>, else asynchronously.
+ *	if model is <COL_SINGLE>, else asynchronously.
  *
  * See also:
  *	<Col_ResumeGC>, <PlatSyncResumeGC>, <PerformGC>, <SyncPauseGC>, 
@@ -175,12 +136,20 @@ void			PlatSyncResumeGC(GroupData *data, int schedule);
  * Internal Group: System Page Allocation
  *
  * Declarations:
- *	<systemPageSize>, <PlatSysPageAlloc>, <PlatSysPageFree>
+ *	<systemPageSize>, <allocGranularity>, <shiftPage>, 
+ *	<PlatReserveRange>, <PlatReleaseRange>, <PlatAllocPages>,
+ *	<PlatFreePages>
  ****************************************************************************/
 
 extern size_t systemPageSize;
+extern size_t allocGranularity;
+extern size_t shiftPage;
 
-void *			PlatSysPageAlloc(size_t number);
-void			PlatSysPageFree(void * page, size_t number);
+void *			PlatReserveRange(size_t size, int alloc);
+int			PlatReleaseRange(void *base, size_t size);
+int			PlatAllocPages(void *addr, size_t number);
+int			PlatFreePages(void *addr, size_t number);
+int			PlatProtectPages(void *addr, size_t number, 
+				int protect);
 
 #endif /* _COLIBRI_PLATFORM */

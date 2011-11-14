@@ -34,8 +34,8 @@
 static size_t		GetNbCells(Col_Word word);
 static void		ClearPoolBitmasks(MemoryPool *pool);
 static void		MarkReachableCellsFromRoots(GroupData *data);
-static void		MarkReachableCellsFromParents(GroupData *data,
-			    Cell *dirties);
+static void		MarkReachableCellsFromParents(GroupData *data);
+static void		PurgeParents(GroupData *data);
 static void		MarkWord(GroupData *data, Col_Word *wordPtr, 
 			    Page *parentPage);
 static void		SweepUnreachableCells(GroupData *data, 
@@ -199,68 +199,6 @@ GetNbCells(
 	default:
 	    return 1;
     }
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_WordSetModified
- *
- *	Mark cell as modified.
- *
- *	As the GC uses a generational scheme, it must keep track of cells from 
- *	older generations that refer to newer ones. Cells from older generations
- *	that are marked as modified potentially point to younger cells; their
- *	page is marked as dirty, and its cells must be followed during the next 
- *	GC in any case so that their children don't get collected by mistake.
- *
- * Argument:
- *	word	- Modified word.
- *
- * Side effects:
- *	May allocate memory cells.
- *---------------------------------------------------------------------------*/
-
-void
-Col_WordSetModified(
-    Col_Word word)
-{
-    ThreadData *data = PlatGetThreadData();
-    unsigned int generation;
-    Cell *root;
-    Page *page;
-
-    if (!data->pauseGC) {
-	/*
-	 * Can't be called outside of a GC protected section.
-	 */
-
-	Col_Error(COL_ERROR, "Called outside of a GC-protected section");
-	return;
-    }
-
-    page = CELL_PAGE(word);
-    generation = PAGE_GENERATION(page);
-    if (generation <= 1) {
-	/*
-	 * Word is from the youngest generation, no need to keep track.
-	 */
-
-	return;
-    }
-
-    EnterProtectDirties(data->groupData); 
-    {
-	if (!(PAGE_FLAGS(page) & PAGE_FLAG_DIRTY)) {
-	    /* 
-	     * Create a new dirty node, and insert at head of dirty node list.
-	     */
-
-	    PAGE_FLAGS(page) |= PAGE_FLAG_DIRTY;
-	    root = PoolAllocCells(&data->groupData->rootPool, 1);
-	    DIRTY_INIT(root, data->groupData->dirties, page, generation);
-	    data->groupData->dirties = root;
-	}
-    }
-    LeaveProtectDirties(data->groupData);
 }
 
 /*---------------------------------------------------------------------------
@@ -812,6 +750,7 @@ Col_ResumeGC()
 	 */
 
 	size_t threshold = data->groupData->pools[0].nbPages / GC_GEN_FACTOR;
+
 	/* 
 	 * GC is needed when the number of pages allocated since the last GC 
 	 * exceed a given threshold.
@@ -857,7 +796,6 @@ PerformGC(
     GroupData *data)
 {
     unsigned int generation;
-    Cell *dirties;
     ThreadData *threadData;
 
     /*
@@ -874,6 +812,7 @@ PerformGC(
 
     for (generation = 2; generation < GC_MAX_GENERATIONS; generation++) {
 	MemoryPool *pool = &data->pools[generation-2];
+
 	if (generation+1 < GC_MAX_GENERATIONS) {
 	    /*
 	     * Intermediary generations. 
@@ -929,20 +868,25 @@ PerformGC(
 #endif
 
     /*
-     * Reset the dirty page list, the actual list will be rebuilt during the
-     * mark phase.
+     * Refresh parent list by adding pages written since the last GC.
      */
 
-    dirties = data->dirties;
-    data->dirties = NULL;
+    UpdateParents(data);
 
     /* 
-     * Mark all cells that are reachable from known roots and from dirty pages 
-     * of uncollected pools. This also marks still valid roots in the process.
+     * Mark all cells that are reachable from roots of collected pools, and from
+     * parent pages of uncollected pools. This also marks still valid roots and 
+     * parents in the process.
      */
 
     MarkReachableCellsFromRoots(data);
-    MarkReachableCellsFromParents(data, dirties);
+    MarkReachableCellsFromParents(data);
+
+    /*
+     * Purge stale parents.
+     */
+
+    PurgeParents(data);
 
     /*
      * Perform cleanup on all custom words that need sweeping.
@@ -1026,7 +970,6 @@ ClearPoolBitmasks(
 
     for (page = pool->pages; page; page = PAGE_NEXT(page)) {
 	ASSERT(PAGE_GENERATION(page) == pool->generation);
-	PAGE_FLAGS(page) &= ~PAGE_FLAG_DIRTY;
 	ClearAllCells(page);
     }
 }
@@ -1106,7 +1049,6 @@ MarkReachableCellsFromRoots(
  *
  * Arguments:
  *	data	- Group-specific data.
- *	dirties	- Dirty page list.
  *
  * See also:
  *	<MarkWord>
@@ -1114,55 +1056,118 @@ MarkReachableCellsFromRoots(
 
 static void 
 MarkReachableCellsFromParents(
-    GroupData *data,
-    Cell *dirties)
+    GroupData *data)
 {
-    unsigned int generation;
     Col_Word word;
     Page *page;
+    Cell *cell;
     size_t index, nbCells;
 
     /*
-     * Follow cells in parent pages from uncollected generations, destroying
-     * the list in the process (i.e. clearing the cells) since the actual list
-     * is rebuilt during the mark phase.
+     * Follow cells in parent pages from uncollected generations.
      */
 
-    while (dirties) {
-	ASSERT(TestCell(CELL_PAGE(dirties), CELL_INDEX(dirties)));
-	ClearCells(CELL_PAGE(dirties), CELL_INDEX(dirties), 1);
+    for (cell = data->parents; cell; cell = PARENT_NEXT(cell)) {
+	ASSERT(TestCell(CELL_PAGE(cell), CELL_INDEX(cell)));
 
-	page = DIRTY_PAGE(dirties);
-	generation = DIRTY_GENERATION(dirties);
-
-	dirties = DIRTY_NEXT(dirties);
-
-	if (generation <= data->maxCollectedGeneration) {
+	page = PARENT_PAGE(cell);
+	if (PAGE_GENERATION(page) <= data->maxCollectedGeneration) {
 	    continue;
 	}
 
 	/*
-	 * Iterate over cells in page.
+	 * Iterate over logical pages in page group.
 	 */
 
-	ASSERT(PAGE_FLAGS(page) & PAGE_FLAG_DIRTY);
-	PAGE_FLAGS(page) &= ~PAGE_FLAG_DIRTY;
-	for (index = RESERVED_CELLS; index < CELLS_PER_PAGE; index += nbCells) {
-	    if (!TestCell(page, index)) {
-		nbCells = 1;
-		continue;
-	    }
-
-	    word = (Col_Word) PAGE_CELL(page, index);
-	    nbCells = GetNbCells(word);
-
+	for (; page; page = PAGE_NEXT(page)) {
 	    /*
-	     * Follow word. Clearing the first cell is sufficient, as it will 
-	     * be set again during the mark phase. 
+	     * Iterate over cells in page.
 	     */
 
-	    ClearCells(page, index, 1);
-	    MarkWord(data, &word, page);
+	    for (index = RESERVED_CELLS; index < CELLS_PER_PAGE; 
+		    index += nbCells) {
+		if (!TestCell(page, index)) {
+		    nbCells = 1;
+		    continue;
+		}
+
+		word = (Col_Word) PAGE_CELL(page, index);
+		nbCells = GetNbCells(word);
+
+		/*
+		 * Follow word. Clearing the first cell is sufficient, as it 
+		 * will be set again during the mark phase. 
+		 */
+
+		ClearCells(page, index, 1);
+		MarkWord(data, &word, page);
+	    }
+
+	    if (PAGE_FLAG(page, PAGE_FLAG_LAST)) break;
+	}
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PurgeParents
+ *
+ *	Purge all parent nodes whose page is not marked as parent.
+ *
+ * Argument:
+ *	data	- Group-specific data.
+ *---------------------------------------------------------------------------*/
+
+static void 
+PurgeParents(
+    GroupData *data)
+{
+    Page *page;
+    Cell *cell, *next, *stale;
+    int parent;
+
+    for (cell = data->parents, data->parents = NULL, stale = NULL; cell; 
+	    cell = next) {
+	ASSERT(TestCell(CELL_PAGE(cell), CELL_INDEX(cell)));
+
+	next = PARENT_NEXT(cell);
+	parent = 0;
+	for (page = PARENT_PAGE(cell); page; page = PAGE_NEXT(page)) {
+	    parent |= PAGE_FLAG(page, PAGE_FLAG_PARENT);
+	    if (PAGE_FLAG(page, PAGE_FLAG_LAST)) break;
+	}
+	if (parent) {
+	    /*
+	     * Keep parent.
+	     */
+
+	    PARENT_NEXT(cell) = data->parents;
+	    data->parents = cell;
+	} else {
+	    /*
+	     * Forget parent.
+	     */
+
+	    PARENT_NEXT(cell) = stale;
+	    stale = cell;
+	}
+    }
+
+    /*
+     * Now drop stale parents.
+     */
+
+    for (cell = stale; cell; cell = PARENT_NEXT(cell)) {
+	ASSERT(TestCell(CELL_PAGE(cell), CELL_INDEX(cell)));
+	ClearCells(CELL_PAGE(cell), CELL_INDEX(cell), 1);
+
+	/*
+	 * Protect pages from uncollected generations. Those from collected
+	 * generations will be protected when promoted.
+	 */
+
+	page = PARENT_PAGE(cell);
+	if (PAGE_GENERATION(page) > data->maxCollectedGeneration) {
+	    SysPageProtect(page, 1);
 	}
     }
 }
@@ -1246,7 +1251,7 @@ start:
 
 	case WORD_TYPE_CIRCLIST: {
 	    /*
-	     * Recurse on core list and update immediate word.
+	     * Recurse on core list and update immediate word if needed.
 	     */
 
 	    Col_Word core = WORD_CIRCLIST_CORE(*wordPtr);
@@ -1270,16 +1275,12 @@ start:
 
     page = CELL_PAGE(*wordPtr);
     if (PAGE_GENERATION(page) < PAGE_GENERATION(parentPage) 
-	    && !(PAGE_FLAGS(parentPage) & PAGE_FLAG_DIRTY)) {
-	/* 
-	 * Create a new dirty node, and insert at head of dirty page list.
+	    && !PAGE_FLAG(parentPage, PAGE_FLAG_PARENT)) {
+	/*
+	 * Mark page as parent.
 	 */
 
-	Cell *root = PoolAllocCells(&data->rootPool, 1);
-	PAGE_FLAGS(parentPage) |= PAGE_FLAG_DIRTY;
-	DIRTY_INIT(root, data->dirties, parentPage, 
-		PAGE_GENERATION(parentPage));
-	data->dirties = root;
+	PAGE_SET_FLAG(parentPage, PAGE_FLAG_PARENT);
     }
 
     /* 
@@ -1530,6 +1531,7 @@ SweepUnreachableCells(
     Col_Word word, *previousPtr;
     Col_CustomWordType *typeInfo;
 
+    ASSERT(pool->generation <= data->maxCollectedGeneration);
     for (previousPtr = &pool->sweepables, word = pool->sweepables; word; 
 	    word = *previousPtr) {
 	/*
@@ -1602,10 +1604,12 @@ PromotePages(
     GroupData *data,
     MemoryPool *pool)
 {
-    void *page;
+    Page *page;
     size_t i;
     MemoryPool *nextPool;
+    int parent;
 
+    ASSERT(pool->generation <= data->maxCollectedGeneration);
     if (pool->generation+1 >= GC_MAX_GENERATIONS) {
 	/*
 	 * Can't promote past the last possible generation.
@@ -1623,22 +1627,28 @@ PromotePages(
     }
 
     /*
-     * Update promoted pages' generation.
+     * Update promoted pages' generation, and protect pages without parents.
      */
 
+    parent = 0;
     for (page = pool->pages; page; page = PAGE_NEXT(page)) {
 	ASSERT(PAGE_GENERATION(page) == pool->generation);
-	PAGE_GENERATION(page)++;
+	PAGE_SET_GENERATION(page, pool->generation+1);
+	parent |= PAGE_FLAG(page, PAGE_FLAG_PARENT);
+	if (PAGE_FLAG(page, PAGE_FLAG_LAST)) {
+	    if (!parent) SysPageProtect(page, 1);
+	    parent = 0;
+	}
     }
 
     /*
      * Move the promoted pages to the head of the target pool's page list.
-     * Note that root & dirty lists are already updated at this point.
+     * Note that root & parent lists are already updated at this point.
      */
 
     ASSERT(pool->lastPage);
     nextPool = &data->pools[pool->generation-1];
-    PAGE_NEXT(pool->lastPage) = nextPool->pages;
+    PAGE_SET_NEXT(pool->lastPage, nextPool->pages);
     nextPool->pages = pool->pages;
     if (!nextPool->lastPage) {
 	nextPool->lastPage = pool->lastPage;

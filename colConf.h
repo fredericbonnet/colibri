@@ -76,6 +76,9 @@
  *	times less frequently than the youngest generation. With one GC every 
  *	1/10th of second, that would mean about 1 major GC a day.
  *
+ * Note:
+ *	Value should not exceed 15 (see <PAGE_GENERATION>).
+ *
  * See also:
  *	<GC_GEN_FACTOR>
  *---------------------------------------------------------------------------*/
@@ -157,6 +160,9 @@
  *	Large page size. This is the number of pages above which cell groups are
  *	allocated in their own dedicated page range, i.e. no free cell remain
  *	after allocation.
+ *
+ * Note:
+ *	Value should not exceed 128 (see <AddressRange>).
  *
  * See also:
  *	<PoolAllocPages>

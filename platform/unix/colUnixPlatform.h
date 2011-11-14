@@ -13,7 +13,7 @@
 /****************************************************************************
  * Internal Group: Thread-Local Storage
  *
- * Definitions:
+ * Declarations:
  *	<tsdKey>
  ****************************************************************************/
 
@@ -30,5 +30,45 @@ extern pthread_key_t tsdKey;
 
 #define PlatGetThreadData() \
     ((ThreadData *) pthread_getspecific(tsdKey))
+
+
+/****************************************************************************
+ * Internal Group: System Page Allocation
+ *
+ * Declarations:
+ *	<mutexRange>
+ ****************************************************************************/
+
+extern pthread_mutex_t mutexRange;
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: PlatEnterProtectAddressRanges
+ *
+ *	Enter protected section around address range management structures.
+ *
+ * Side effects:
+ *	Blocks until no thread owns the section.
+ *
+ * See also:
+ *	<PlatLeaveProtectAddressRanges>
+ *---------------------------------------------------------------------------*/
+
+#define PlatEnterProtectAddressRanges() \
+    pthread_mutex_lock(&mutexRange)
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: PlatLeaveProtectAddressRanges
+ *
+ *	Leave protected section around address range management structures.
+ *
+ * Side effects:
+ *	May unblock any thread waiting for the section.
+ *
+ * See also:
+ *	<PlatEnterProtectAddressRanges>
+ *---------------------------------------------------------------------------*/
+
+#define PlatLeaveProtectAddressRanges() \
+    pthread_mutex_unlock(&mutexRange)
 
 #endif /* _COLIBRI_UNIXPLATFORM */

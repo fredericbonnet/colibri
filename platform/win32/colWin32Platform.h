@@ -13,7 +13,7 @@
 /****************************************************************************
  * Internal Group: Thread-Local Storage
  *
- * Definitions:
+ * Declarations:
  *	<tlsToken>
  ****************************************************************************/
 
@@ -30,5 +30,45 @@ extern DWORD tlsToken;
 
 #define PlatGetThreadData() \
     ((ThreadData *) TlsGetValue(tlsToken))
+
+
+/****************************************************************************
+ * Internal Group: System Page Allocation
+ *
+ * Declarations:
+ *	<csRange>
+ ****************************************************************************/
+
+extern CRITICAL_SECTION csRange;
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: PlatEnterProtectAddressRanges
+ *
+ *	Enter protected section around address range management structures.
+ *
+ * Side effects:
+ *	Blocks until no thread owns the section.
+ *
+ * See also:
+ *	<PlatLeaveProtectAddressRanges>
+ *---------------------------------------------------------------------------*/
+
+#define PlatEnterProtectAddressRanges() \
+    EnterCriticalSection(&csRange)
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: PlatLeaveProtectAddressRanges
+ *
+ *	Leave protected section around address range management structures.
+ *
+ * Side effects:
+ *	May unblock any thread waiting for the section.
+ *
+ * See also:
+ *	<PlatEnterProtectAddressRanges>
+ *---------------------------------------------------------------------------*/
+
+#define PlatLeaveProtectAddressRanges() \
+    LeaveCriticalSection(&csRange)
 
 #endif /* _COLIBRI_WIN32PLATFORM */

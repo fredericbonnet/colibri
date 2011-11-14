@@ -18,6 +18,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <signal.h>
 
 /*
  * Bit twiddling hack for computing the log2 of a power of 2.
@@ -65,8 +66,7 @@ pthread_key_t tsdKey;
  *	data			- Generic <GroupData> structure.
  *	next			- Next active group in list.
  *	mutexRoots		- Mutex protecting root management.
- *	mutexDirties		- Mutex protecting dirty page management.
- *	mutexGc			- Critical section protecting GC from worker 
+ *	mutexGc			- Mutex protecting GC from worker 
  *				  threads.
  *	condGcScheduled		- Triggers GC thread.
  *	condGcDone		- Barrier for worker threads.
@@ -83,7 +83,6 @@ typedef struct PlatGroupData {
     GroupData data;
     struct PlatGroupData *next;
     pthread_mutex_t mutexRoots;
-    pthread_mutex_t mutexDirties;
 
     pthread_mutex_t mutexGc;
     pthread_cond_t condGcScheduled;
@@ -150,7 +149,6 @@ AllocGroupData(
 
 	//TODO error handling.
 	pthread_mutex_init(&groupData->mutexRoots, NULL);
-	pthread_mutex_init(&groupData->mutexDirties, NULL);
 
 	pthread_mutex_init(&groupData->mutexGc, NULL);
 	pthread_cond_init(&groupData->condGcDone, NULL);
@@ -207,7 +205,6 @@ FreeGroupData(
 	pthread_cond_destroy(&groupData->condGcDone);
 	pthread_mutex_destroy(&groupData->mutexGc);
 
-	pthread_mutex_destroy(&groupData->mutexDirties);
 	pthread_mutex_destroy(&groupData->mutexRoots);
     }
 
@@ -547,7 +544,7 @@ PlatSyncResumeGC(
 }
 
 /*---------------------------------------------------------------------------
- * Internal Macro: PlatEnterProtectRoots
+ * Internal Function: PlatEnterProtectRoots
  *
  *	Enter protected section around root management structures.
  *
@@ -570,7 +567,7 @@ PlatEnterProtectRoots(
 }
 
 /*---------------------------------------------------------------------------
- * Internal Macro: PlatLeaveProtectRoots
+ * Internal Function: PlatLeaveProtectRoots
  *
  *	Leave protected section around root management structures.
  *
@@ -585,116 +582,175 @@ PlatEnterProtectRoots(
  *---------------------------------------------------------------------------*/
 
 void
-PlatLeaveProtectRoots(GroupData *data)
+PlatLeaveProtectRoots(
+    GroupData *data)
 {
     PlatGroupData *groupData = (PlatGroupData *) data;
     pthread_mutex_unlock(&groupData->mutexRoots);
 }
 
-/*---------------------------------------------------------------------------
- * Internal Macro: PlatEnterProtectDirties
- *
- *	Enter protected section around dirty page management structures.
- *
- * Argument:
- *	data	- Group-specific data.
- *
- * Side effects:
- *	Blocks until no thread owns the section.
- *
- * See also:
- *	<PlatLeaveProtectDirties>, <EnterProtectDirtiess>
- *---------------------------------------------------------------------------*/
-
-void
-PlatEnterProtectDirties(GroupData *data)
-{
-    PlatGroupData *groupData = (PlatGroupData *) data;
-    pthread_mutex_lock(&groupData->mutexDirties);
-}
-
-/*---------------------------------------------------------------------------
- * Internal Macro: PlatLeaveProtectDirties
- *
- *	Leave protected section around dirty page management structures.
- *
- * Argument:
- *	data	- Group-specific data.
- *
- * Side effects:
- *	May unblock any thread waiting for the section.
- *
- * See also:
- *	<PlatEnterProtectDirties>, <LeaveProtectDirties>
- *---------------------------------------------------------------------------*/
-
-void
-PlatLeaveProtectDirties(GroupData *data)
-{
-    PlatGroupData *groupData = (PlatGroupData *) data;
-    pthread_mutex_unlock(&groupData->mutexDirties);
-}
-
 
 /****************************************************************************
  * Internal Group: System Page Allocation
- *
- *  Memory is allocated with mmap in anonymous mode, which manages single pages.
  ****************************************************************************/
 
-static size_t shiftPage;
-
 /*---------------------------------------------------------------------------
- * Internal Function: PlatSysPageAlloc
+ * Internal Variable: mutexRange
  *
- *	Allocate system pages.
+ *	Mutex protecting address range management.
  *
- * Argument:
- *	number	- Number of system pages to alloc.
- *
- * Result:
- *	The allocated system pages' base address.
+ *  ranges		- Reserved address ranges for general purpose.
+ *  dedicatedRanges	- Dedicated address ranges for large pages.
  *
  * See also:
- *	<PlatSysPageFree>
+ *	<PlatEnterProtectAddressRanges>, <PlatLeaveProtectAddressRanges>
  *---------------------------------------------------------------------------*/
 
-void * 
-PlatSysPageAlloc(
-    size_t number)
-{
-    void * page = mmap(NULL, number << shiftPage, PROT_READ | PROT_WRITE, 
-	    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (page == MAP_FAILED) {
-	/* TODO: exception handling. */
-	return NULL;
-    }
+pthread_mutex_t mutexRange = PTHREAD_MUTEX_INITIALIZER;
 
-    return page;
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatReserveRange
+ *
+ *	Reserve an address range.
+ *
+ * Arguments:
+ *	size	- Number of pages to reserve.
+ *	alloc	- Whether to allocate the range pages as well.
+ *
+ * Result:
+ *	The reserved range's base address, or NULL if failure.
+ *---------------------------------------------------------------------------*/
+
+void *
+PlatReserveRange(
+    size_t size,
+    int alloc)
+{
+    void *addr = mmap(NULL, size << shiftPage,
+	    (alloc ? PROT_READ | PROT_WRITE : PROT_NONE), 
+	    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    return (addr == MAP_FAILED ? NULL : addr);
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: PlatSysPageFree
+ * Internal Function: PlatReleaseRange
  *
- *	Free system pages.
+ *	Release an address range.
  *
  * Arguments:
- *	page	- Base address of the pages to free.
- *	number	- Number of pages to free.
+ *	base	- Base address of range to release.
+ *	size	- Number of pages in range.
  *
- * Side Effects:
- *	May release virtual ranges.
- *
- * See also:
- *	<PlatSysPageAlloc>
+ * Result:
+ *	Nonzero for success.
  *---------------------------------------------------------------------------*/
 
-void 
-PlatSysPageFree(
-    void * page,
+int
+PlatReleaseRange(
+    void *base,
+    size_t size)
+{
+    return !munmap(base, size << shiftPage);
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatAllocPages
+ *
+ *	Allocate pages in reserved range.
+ *
+ * Arguments:
+ *	addr	- Address of first page to allocate.
+ *	number	- Number of pages to allocate.
+ *
+ * Result:
+ *	Nonzero for success.
+ *---------------------------------------------------------------------------*/
+
+int
+PlatAllocPages(
+    void *addr,
     size_t number)
 {
-    munmap(page, number << shiftPage);
+    return !mprotect(addr, number << shiftPage, PROT_READ | PROT_WRITE);
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatFreePages
+ *
+ *	Free pages in reserved range.
+ *
+ * Arguments:
+ *	addr	- Address of first page to free.
+ *	number	- Number of pages to free.
+ *
+ * Result:
+ *	Nonzero for success.
+ *---------------------------------------------------------------------------*/
+
+int
+PlatFreePages(
+    void *addr,
+    size_t number)
+{
+    return !mprotect(addr, number << shiftPage, PROT_NONE);
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PlatProtectPages
+ *
+ *	Protect/unprotect pages in reserved range.
+ *
+ * Arguments:
+ *	addr	- Address of first page to protect/unprotect
+ *	number	- Number of pages to protect/unprotect.
+ *	protect	- Whether to protect or unprotect pages.
+ *
+ * Result:
+ *	Nonzero for success.
+ *---------------------------------------------------------------------------*/
+
+int
+PlatProtectPages(
+    void *addr,
+    size_t number,
+    int protect)
+{
+    return !mprotect(addr, number << shiftPage, 
+	    PROT_READ | (protect ? PROT_WRITE : 0));
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: PageProtectSigAction
+ *
+ *	Called upon memory protection signal (SIGSEGV).
+ *
+ * Argument:
+ *	signo	- Signal numbercaught.
+ *	info	- Signal information.
+ *
+ * See also:
+ *	<SysPageProtect>
+ *---------------------------------------------------------------------------*/
+
+static void 
+PageProtectSigAction(
+    int signo,
+    siginfo_t *info,
+    void *dummy) 
+{
+    if (signo != SIGSEGV || info->si_code != SEGV_ACCERR) {
+	/*
+	 * Not a memory protection signal.
+	 */
+
+	return;
+    }
+
+    /*
+     * Remove write protection and remember page for parent tracking.
+     */
+
+    SysPageProtect(info->si_addr, 0);
 }
 
 
@@ -709,6 +765,7 @@ PlatSysPageFree(
  *
  * Side effects:
  *	Create thread-specific data key <tsdKey> (never freed).
+ *	Install memory protection signal handler for parent tracking.
  *
  * See also:
  *	<PlatEnter>
@@ -717,10 +774,17 @@ PlatSysPageFree(
 static void
 Init()
 {
+    struct sigaction sa;
     if (pthread_key_create(&tsdKey, NULL)) {
 	/* TODO: exception */
 	return;
     }
     systemPageSize = sysconf(_SC_PAGESIZE);
+    allocGranularity = systemPageSize * 16;
     shiftPage = LOG2(systemPageSize);
+
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_sigaction = PageProtectSigAction;
+    sa.sa_flags = SA_SIGINFO | SA_RESTART;
+    sigaction(SIGSEGV, &sa, NULL);
 }

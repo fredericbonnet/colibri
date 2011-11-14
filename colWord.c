@@ -528,8 +528,6 @@ Col_GetWordSynonym(
  *		  process (in this case the original word will be part of the
  *		  returned word's synonym chain).
  *	synonym	- The synonym to add.
- *	parent	- If non-nil, parent of the given word. It will be marked as
- *		  modified is wordPtr is overwritten.
  *
  * Side effects:
  *	Modifies the chain of synonyms, may allocate new words.
@@ -538,8 +536,7 @@ Col_GetWordSynonym(
 void
 Col_AddWordSynonym(
     Col_Word *wordPtr,
-    Col_Word synonym,
-    Col_Word parent)
+    Col_Word synonym)
 {
     Col_Word word;
 
@@ -557,7 +554,6 @@ Col_AddWordSynonym(
 
     if (!HasSynonymField(*wordPtr)) {
 	AddSynonymField(wordPtr);
-	if (parent) Col_WordSetModified(parent);
     }
     word = *wordPtr;
 
@@ -577,7 +573,6 @@ Col_AddWordSynonym(
 	     */
 
 	    WORD_SYNONYM(word) = synonym;
-	    Col_WordSetModified(word);
 	    return;
 	}
 	AddSynonymField(&synonym);
@@ -615,8 +610,6 @@ Col_AddWordSynonym(
 	WORD_SYNONYM(word) = WORD_SYNONYM(synonym);
 	WORD_SYNONYM(synonym) = tmp;
     }
-    Col_WordSetModified(word);
-    Col_WordSetModified(synonym);
 }
 
 /*---------------------------------------------------------------------------
@@ -659,6 +652,5 @@ Col_ClearWordSynonym(
 	ASSERT(HasSynonymField(synonym));
     }
     WORD_SYNONYM(synonym) = WORD_SYNONYM(word);
-    Col_WordSetModified(synonym);
     WORD_SYNONYM(word) = WORD_NIL;
 }

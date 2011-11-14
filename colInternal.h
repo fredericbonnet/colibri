@@ -48,6 +48,7 @@ extern const char nbBitsSet[256];
  * Internal Group: System Page Allocation
  *
  * Declarations:
+ *	<SysPageProtect>
  *
  * Description:
  *	Pages are divided into cells. On a 32-bit system with 1024-byte logical 
@@ -57,6 +58,8 @@ extern const char nbBitsSet[256];
  *	Each page has reserved cells that store information about the page. The 
  *	remaining cells store word info. 
  ****************************************************************************/
+
+void			SysPageProtect(void *page, int protect);
 
 /*---------------------------------------------------------------------------
  * Internal Typedef: Page
@@ -126,44 +129,31 @@ typedef char Cell[CELL_SIZE];
  *	Accessors for page fields.
  *
  * Layout:
- *	On 32-bit architectures with 1024-byte pages, the first cell is reserved
- *	and is formatted as follows:
+ *	On all architectures, the first cell is reserved and is formatted as
+ *	follows:
  *
  * (start table)
- *      0             7 8            15 16                           31
- *     +---------------+---------------+-------------------------------+
- *   0 |                             Next                              |
- *     +---------------+---------------+-------------------------------+
- *   1 |  Generation   |     Flags     |             Size              |
- *     +---------------+---------------+-------------------------------+
+ *      0     3 4     7 8                                             n
+ *     +-------+-------+-----------------------------------------------+
+ *   0 |  Gen  | Flags |                     Next                      |
+ *     +-------+-------+-----------------------------------------------+
+ *   1 |                           Group Data                          |
+ *     +---------------------------------------------------------------+
  *   2 |                                                               |
  *     +                            Bitmask                            +
  *   3 |                                                               |
  *     +---------------------------------------------------------------+
  * (end)
  *
- *
- *	On 64-bit architectures with 4096-byte pages, the first cell is reserved
- *	and is formatted as follows:
- *
- * (start table)
- *      0     7 8    15 16           31 32                           63
- *     +-------+-------+---------------+-------------------------------+
- *   0 |                             Next                              |
- *     +-------+-------+---------------+-------------------------------+
- *   1 |  Gen  | Flags |    Unused     |             Size              |
- *     +-------+-------+---------------+-------------------------------+
- *   2 |                                                               |
- *     +                            Bitmask                            +
- *   3 |                                                               |
- *     +---------------------------------------------------------------+
- * (end)
- *
- *	PAGE_NEXT	- Pointer to next page in pool. 
- *	PAGE_GENERATION	- Generation of pool containing this page. 
- *	PAGE_FLAGS	- Page flags.
- *	PAGE_SYSTEMSIZE	- Size of system page group containing this page.
- *	PAGE_BITMASK	- Bitmask for allocated cells in page.
+ *	PAGE_NEXT		- Get next page in pool.
+ *	PAGE_SET_NEXT		- Set next page in pool. 
+ *	PAGE_GENERATION		- Get generation of pool containing this page. 
+ *	PAGE_SET_GENERATION	- Set generation of pool containing this page. 
+ *	PAGE_FLAG		- Get flag.
+ *	PAGE_SET_FLAG		- Set flag.
+ *	PAGE_CLEAR_FLAG		- Clear flag.
+ *	PAGE_GROUPDATA		- Data for the thread group the page belongs to.
+ *	PAGE_BITMASK		- Bitmask for allocated cells in page.
  *
  * Note:
  *	Macros are L-values and side effect-free unless specified (i.e. 
@@ -173,17 +163,31 @@ typedef char Cell[CELL_SIZE];
  *	<Page>
  *---------------------------------------------------------------------------*/
 
-#define PAGE_NEXT(page)		(*(Page **)(page))
-#define PAGE_GENERATION(page)	(*((uint8_t *)(page)+sizeof(Page *)))
-#define PAGE_FLAGS(page)	(*((uint8_t *)(page)+sizeof(Page *)+1))
-#define PAGE_FLAG_DIRTY		1
-#define PAGE_FLAG_LAST		2
-#if SIZE_BIT == 32
-#   define PAGE_SYSTEMSIZE(page) (*(uint16_t *)((uint8_t *)(page)+sizeof(Page *)+2))
-#elif SIZE_BIT == 64
-#   define PAGE_SYSTEMSIZE(page) (*(uint32_t *)((unsigned char *)(page)+sizeof(Page *)+4))
-#endif
-#define PAGE_BITMASK(page)	((uint8_t *)(page)+sizeof(Page *)*2)
+#define PAGE_NEXT_MASK			(~(PAGE_GENERATION_MASK|PAGE_FLAGS_MASK))
+#define PAGE_GENERATION_MASK		0x0F
+#define PAGE_FLAGS_MASK			0xF0
+#define PAGE_NEXT(page)			((Page *)((*(uintptr_t *)(page)) & PAGE_NEXT_MASK))
+#define PAGE_SET_NEXT(page, next)	(*(uintptr_t *)(page) &= ~PAGE_NEXT_MASK, *(uintptr_t *)(page) |= ((uintptr_t)(next)) & PAGE_NEXT_MASK)
+#define PAGE_GENERATION(page)		((*(uintptr_t *)(page)) & PAGE_GENERATION_MASK)
+#define PAGE_SET_GENERATION(page, gen)	(*(uintptr_t *)(page) &= ~PAGE_GENERATION_MASK, *(uintptr_t *)(page) |= (gen) & PAGE_GENERATION_MASK)
+#define PAGE_FLAG(page, flag)		((*(uintptr_t *)(page)) & (flag))
+#define PAGE_SET_FLAG(page, flag)	((*(uintptr_t *)(page)) |= (flag))
+#define PAGE_CLEAR_FLAG(page, flag)	((*(uintptr_t *)(page)) &= ~(flag))
+#define PAGE_GROUPDATA(page)		(*((GroupData **)(page)+1))
+#define PAGE_BITMASK(page)		((uint8_t *)(page)+sizeof(Page *)*2)
+
+/*---------------------------------------------------------------------------
+ * Internal Constants: Page flags
+ *
+ *  PAGE_FLAG_LAST	- Marks last page in group.
+ *  PAGE_FLAG_PARENT	- Marks pages having parent cells.
+ *
+ * See also:
+ *	<PAGE_FLAG>, <PAGE_SET_FLAG>, <PAGE_CLEAR_FLAG>
+ *---------------------------------------------------------------------------*/
+
+#define PAGE_FLAG_LAST			0x10
+#define PAGE_FLAG_PARENT		0x20
 
 /*---------------------------------------------------------------------------
  * Internal Macro: PAGE_CELL
@@ -317,11 +321,11 @@ size_t			NbSetCells(Page *page);
  *
  * Fields:
  *	model			- Threading model.
- *	rootPool		- Memory pool used to store root & dirty page 
+ *	rootPool		- Memory pool used to store root & parent page 
  *				  descriptor cells.
  *	roots			- Root descriptors are stored in a trie indexed 
  *				  by the root cell address.
- *	dirties			- Dirty page descriptors are stored in a linked 
+ *	parents			- Parent descriptors are stored in a linked 
  *				  list.
  *	pools			- Memory pools used to store words for 
  *				  generations older than eden 
@@ -340,7 +344,7 @@ typedef struct GroupData {
     unsigned int model;
     MemoryPool rootPool;
     Cell *roots;
-    Cell *dirties;
+    Cell *parents;
     MemoryPool pools[GC_MAX_GENERATIONS-2];
     unsigned int maxCollectedGeneration;
 #ifdef PROMOTE_COMPACT
@@ -407,7 +411,7 @@ void			PerformGC(GroupData *data);
 
 
 /****************************************************************************
- * Internal Group: Word Modification and Lifetime Management
+ * Internal Group: Word Lifetime Management
  *
  * Declarations:
  *	<DeclareCustomWord>
@@ -418,8 +422,13 @@ void			DeclareCustomWord(Col_Word word,
 
 
 /****************************************************************************
- * Internal Group: Roots and Dirty Pages
+ * Internal Group: Roots and Parents
+ *
+ * Declarations:
+ *	<UpdateParents>
  ****************************************************************************/
+
+void			UpdateParents(GroupData *data);
 
 /*---------------------------------------------------------------------------
  * Internal Macros: Root Cells
@@ -553,60 +562,61 @@ void			DeclareCustomWord(Col_Word word,
     ROOT_LEAF_SOURCE(cell) = source;
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Dirty Page Cells
+ * Internal Macros: Parent Cells
  *
- * When a page of an older generation is modified, this means that one of its
- * cell potential point to children of a newer generation. Such "dirty" pages 
- * are tracked in a linked list that is rebuilt at each GC.
- * Parent roots are like automatic roots: they belong to dirty pages whose cells 
- * potentially have children in newer generations.
+ *	Parents are cells pointing to other cells of a newer generation. During
+ *	GC, parents from uncollected generations are traversed in addition to
+ *	roots from collected generations, and the parent list is updated.
+ *
+ *	When a page of an older generation is written, this means that it may
+ *	contain parents. Such "dirty" pages are added to the parent list at each
+ *	GC, and each page is checked for potential parents.
  *
  * Layout:
  *	On all architectures the single-cell layout is as follows:
  *
  * (start table)
- *      0                            31                               n
- *     +-------------------------------+-------------------------------+
- *   0 |          Generation           |        Unused (n > 32)        |
- *     +-------------------------------+-------------------------------+
- *   1 |                             Next                              |
+ *      0                                                             n
  *     +---------------------------------------------------------------+
- *   2 |                             Page                              |
+ *   0 |                             Next                              |
  *     +---------------------------------------------------------------+
- *   3 |                            Unused                             |
+ *   1 |                             Page                              |
+ *     +---------------------------------------------------------------+
+ *   2 |                                                               |
+ *     +                            Unused                             +
+ *   3 |                                                               |
  *     +---------------------------------------------------------------+
  * (end)
  *
- *	DIRTY_GENERATION	- Generation of the source page.
- *	DIRTY_NEXT		- Dirty nodes are linked together in a 
+ *	PARENT_NEXT		- Parent nodes are linked together in a 
  *				  singly-linked list for traversal during GC.
- *	DIRTY_PAGE		- Pointer to source page.
+ *	PARENT_PAGE		- Pointer to source page.
  *
  * See also:
- *	<DIRTY_INIT>, <Col_WordSetModified>, <MarkReachableCellsFromParents>
+ *	<PARENT_INIT>, <MarkReachableCellsFromParents>
  *---------------------------------------------------------------------------*/
 
-#define DIRTY_GENERATION(cell)	(((unsigned int *)(cell))[0])
-#define DIRTY_NEXT(cell)	(((Cell **)(cell))[1])
-#define DIRTY_PAGE(cell)	(((Page **)(cell))[2])
+#define PARENT_NEXT(cell)	(((Cell **)(cell))[1])
+#define PARENT_PAGE(cell)	(((Page **)(cell))[2])
 
 /*---------------------------------------------------------------------------
- * Internal Macro: DIRTY_INIT
+ * Internal Macro: PARENT_INIT
  *
- *	Initializer for dirty page cells.
+ *	Initializer for parent cells.
  *
  * Arguments:
  *	cell		- Cell to initialize. (Caution: evaluated several times
  *			  during macro expansion)
- *	next		- <DIRTY_NEXT>
- *	page		- <DIRTY_PAGE>
- *	generation	- <DIRTY_GENERATION>
+ *	next		- <PARENT_NEXT>
+ *	page		- <PARENT_PAGE>
+ *
+ * See also:
+ *	<MarkReachableCellsFromParents>
  *---------------------------------------------------------------------------*/
 
-#define DIRTY_INIT(cell, next, page, generation) \
-    DIRTY_NEXT(cell) = next; \
-    DIRTY_PAGE(cell) = page; \
-    DIRTY_GENERATION(cell) = generation;
+#define PARENT_INIT(cell, next, page) \
+    PARENT_NEXT(cell) = next; \
+    PARENT_PAGE(cell) = page;
 
 
 /****************************************************************************

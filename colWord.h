@@ -262,19 +262,17 @@ EXTERN Col_Word		Col_FindWordInfo(Col_Word word, Col_WordType type,
 			    Col_WordData *dataPtr, int *altTypePtr, 
 			    Col_Word *altWordPtr);
 EXTERN Col_Word		Col_GetWordSynonym(Col_Word word);
-EXTERN void		Col_AddWordSynonym(Col_Word *wordPtr, Col_Word synonym,
-			    Col_Word parent);
+EXTERN void		Col_AddWordSynonym(Col_Word *wordPtr, Col_Word synonym);
 EXTERN void		Col_ClearWordSynonym(Col_Word word);
 
 
 /****************************************************************************
- * Group: Word Modification and Lifetime Management
+ * Group: Word Lifetime Management
  *
  * Declarations:
- *	<Col_WordSetModified>, <Col_PreserveWord>, <Col_ReleaseWord>
+ *	<Col_PreserveWord>, <Col_ReleaseWord>
  ****************************************************************************/
 
-EXTERN void		Col_WordSetModified(Col_Word word);
 EXTERN void		Col_PreserveWord(Col_Word word);
 EXTERN void		Col_ReleaseWord(Col_Word word);
 

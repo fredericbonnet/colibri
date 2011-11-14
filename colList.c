@@ -45,19 +45,16 @@ static void		GetArms(Col_Word node, Col_Word * leftPtr,
 			    Col_Word * rightPtr);
 static void		FreezeMList(Col_Word mlist);
 static void		MListSetAt(Col_Word * nodePtr, size_t index, 
-			    Col_Word element, Col_Word parent);
+			    Col_Word element);
 static Col_Word		NewMConcatList(Col_Word left, Col_Word right);
-static void		ConvertToMutableAt(Col_Word *nodePtr, Col_Word parent, 
-				size_t index);
-static void		SplitMutableAt(Col_Word *nodePtr, Col_Word parent, 
-				size_t index);
-static void		ConvertToMConcatNode(Col_Word *nodePtr, 
-				Col_Word parent);
+static void		ConvertToMutableAt(Col_Word *nodePtr, size_t index);
+static void		SplitMutableAt(Col_Word *nodePtr, size_t index);
+static void		ConvertToMConcatNode(Col_Word *nodePtr);
 static void		UpdateMConcatNode(Col_Word node);
 static void		MListInsert(Col_Word * nodePtr, size_t index,
-				Col_Word list, Col_Word parent);
+				Col_Word list);
 static void		MListRemove(Col_Word * nodePtr, size_t first, 
-				size_t last, Col_Word parent);
+				size_t last);
 static ColListIterLeafAtProc IterAtVector, IterAtVoid;
 
 
@@ -1815,7 +1812,6 @@ Col_MListSetLength(
 
 	    WORD_MLIST_ROOT(mlist) = Col_Sublist(root, 0, length-1);
 	}
-	Col_WordSetModified(mlist);
 	return;
     } else if (listLoop) {
 	/*
@@ -1835,14 +1831,13 @@ Col_MListSetLength(
 	    WORD_MLIST_ROOT(mlist) = WORD_CONCATLIST_LEFT(root);
 	    ASSERT(Col_ListLength(mlist) >= length);
 	    Col_MListSetLength(mlist, length);
-	    Col_WordSetModified(mlist);
 	} else {
 	    /*
 	     * Shorten tail. Temporarily use tail as root before recursive call.
 	     */
 
 	    if (WORD_TYPE(root) != WORD_TYPE_MCONCATLIST) {
-		ConvertToMConcatNode(&root, mlist);
+		ConvertToMConcatNode(&root);
 	    }
 	    ASSERT(WORD_TYPE(root) == WORD_TYPE_MCONCATLIST);
 	    WORD_MLIST_ROOT(mlist) = WORD_CONCATLIST_RIGHT(root);
@@ -1915,7 +1910,6 @@ Col_MListLoop(
      */
 
     WORD_MLIST_ROOT(mlist) = WORD_CIRCLIST_NEW(WORD_MLIST_ROOT(mlist));
-    Col_WordSetModified(mlist);
 }
 
 /*---------------------------------------------------------------------------
@@ -1962,7 +1956,7 @@ Col_MListSetAt(
 
 	index = (index - (length-loop)) % loop + (length-loop);
     }
-    MListSetAt(&WORD_MLIST_ROOT(mlist), index, element, mlist);
+    MListSetAt(&WORD_MLIST_ROOT(mlist), index, element);
 }
 
 /*---------------------------------------------------------------------------
@@ -1976,16 +1970,13 @@ Col_MListSetAt(
  *		  converted to mutable.
  *	index	- Element index.
  *	element	- New element.
- *	parent	- nodePtr parent. Set as modified in case nodePtr is converted
- *		  (see <Col_WordSetModified>).
  *---------------------------------------------------------------------------*/
 
 static void
 MListSetAt(
     Col_Word * nodePtr, 
     size_t index,
-    Col_Word element,
-    Col_Word parent)
+    Col_Word element)
 {
     /*
      * Note: bounds checking is done upfront.
@@ -2011,15 +2002,14 @@ start:
 		 * Recurse on left.
 		 */
 
-		MListSetAt(&WORD_CONCATLIST_LEFT(*nodePtr), index, element, 
-			*nodePtr);
+		MListSetAt(&WORD_CONCATLIST_LEFT(*nodePtr), index, element);
 	    } else {
 		/*
 		 * Recurse on right.
 		 */
 
 		MListSetAt(&WORD_CONCATLIST_RIGHT(*nodePtr), index - leftLength,
-			element, *nodePtr);
+			element);
 	    }
 
 	    /*
@@ -2036,7 +2026,6 @@ start:
 	     */
 
 	    WORD_VECTOR_ELEMENTS(*nodePtr)[index] = element;
-	    Col_WordSetModified(*nodePtr);
 	    return;
 
 	/*
@@ -2048,7 +2037,7 @@ start:
 	     * Convert to mutable concat then retry.
 	     */
 
-	    ConvertToMConcatNode(nodePtr, parent);
+	    ConvertToMConcatNode(nodePtr);
 	    goto start;
 
 	case WORD_TYPE_SUBLIST:
@@ -2057,7 +2046,7 @@ start:
 		 * Source is concat. Convert to mutable then retry.
 		 */
 
-		ConvertToMConcatNode(nodePtr, parent);
+		ConvertToMConcatNode(nodePtr);
 		goto start;
 	    }
 	    /* continued. */
@@ -2066,7 +2055,7 @@ start:
 	     * Convert to mutable around index then retry.
 	     */
 
-	    ConvertToMutableAt(nodePtr, parent, index);
+	    ConvertToMutableAt(nodePtr, index);
 	    goto start;
     }
 }
@@ -2111,15 +2100,12 @@ NewMConcatList(
  *
  * Arguments:
  *	nodePtr	- Mutable list node to convert. Gets overwritten upon return.
- *	parent	- nodePtr parent. Set as modified upon return (see 
- *		  <Col_WordSetModified>).
  *	index	- Element index.
  *---------------------------------------------------------------------------*/
 
 static void
 ConvertToMutableAt(
     Col_Word *nodePtr,
-    Col_Word parent,
     size_t index)
 {
     size_t length;
@@ -2193,7 +2179,6 @@ ConvertToMutableAt(
     }
 
     *nodePtr = converted;
-    Col_WordSetModified(parent);
 }
 
 /*---------------------------------------------------------------------------
@@ -2204,14 +2189,11 @@ ConvertToMutableAt(
  *
  * Arguments:
  *	nodePtr	- Mutable list node to convert. Gets overwritten upon return.
- *	parent	- nodePtr parent. Set as modified upon return (see 
- *		  <Col_WordSetModified>).
  *---------------------------------------------------------------------------*/
 
 static void
 ConvertToMConcatNode(
-    Col_Word *nodePtr,
-    Col_Word parent)
+    Col_Word *nodePtr)
 {
     Col_Word converted;
 
@@ -2250,7 +2232,6 @@ ConvertToMConcatNode(
     }
 
     *nodePtr = converted;
-    Col_WordSetModified(parent);
 }
 
 /*---------------------------------------------------------------------------
@@ -2300,7 +2281,7 @@ UpdateMConcatNode(
 
 		ASSERT(leftDepth >= 2);
 		if (WORD_TYPE(left) != WORD_TYPE_MCONCATLIST) {
-		    ConvertToMConcatNode(&left, node);
+		    ConvertToMConcatNode(&left);
 		}
 		ASSERT(WORD_TYPE(left) == WORD_TYPE_MCONCATLIST);
 
@@ -2317,7 +2298,7 @@ UpdateMConcatNode(
 		    unsigned char left21Depth, left22Depth;
 
 		    if (WORD_TYPE(left2) != WORD_TYPE_MCONCATLIST) {
-			ConvertToMConcatNode(&left2, node);
+			ConvertToMConcatNode(&left2);
 		    }
 		    ASSERT(WORD_TYPE(left2) == WORD_TYPE_MCONCATLIST);
 		    ASSERT(WORD_CONCATLIST_DEPTH(left2) >= 1);
@@ -2337,7 +2318,6 @@ UpdateMConcatNode(
 		    WORD_MCONCATLIST_INIT(left, leftDepth, 
 			    leftLength+Col_ListLength(left21), leftLength,
 			    left1, left21);
-		    Col_WordSetModified(left);
 
 		    /*
 		     * Update right node.
@@ -2349,7 +2329,6 @@ UpdateMConcatNode(
 		    WORD_MCONCATLIST_INIT(left2, rightDepth, 
 			leftLength+Col_ListLength(right), leftLength, left22,
 			right);
-		    Col_WordSetModified(left2);
 
 		    /*
 		     * Update node.
@@ -2380,7 +2359,6 @@ UpdateMConcatNode(
 		    WORD_MCONCATLIST_INIT(left, rightDepth, 
 			    leftLength+Col_ListLength(right), leftLength, left2,
 			    right);
-		    Col_WordSetModified(left);
 
 		    /*
 		     * Update node.
@@ -2402,7 +2380,7 @@ UpdateMConcatNode(
 
 		ASSERT(rightDepth >= 2);
 		if (WORD_TYPE(right) != WORD_TYPE_MCONCATLIST) {
-		    ConvertToMConcatNode(&right, node);
+		    ConvertToMConcatNode(&right);
 		}
 		ASSERT(WORD_TYPE(right) == WORD_TYPE_MCONCATLIST);
 
@@ -2418,7 +2396,7 @@ UpdateMConcatNode(
 		    unsigned char right11Depth, right12Depth;
 
 		    if (WORD_TYPE(right1) != WORD_TYPE_MCONCATLIST) {
-			ConvertToMConcatNode(&right1, node);
+			ConvertToMConcatNode(&right1);
 		    }
 		    ASSERT(WORD_TYPE(right1) == WORD_TYPE_MCONCATLIST);
 		    ASSERT(WORD_CONCATLIST_DEPTH(right1) >= 1);
@@ -2438,7 +2416,6 @@ UpdateMConcatNode(
 		    WORD_MCONCATLIST_INIT(right1, leftDepth, 
 			    leftLength+Col_ListLength(right11), leftLength,
 			    left, right11);
-		    Col_WordSetModified(right1);
 
 		    /*
 		     * Update right node.
@@ -2450,7 +2427,6 @@ UpdateMConcatNode(
 		    WORD_MCONCATLIST_INIT(right, rightDepth, 
 			    leftLength+Col_ListLength(right2), leftLength, 
 			    right12, right2);
-		    Col_WordSetModified(right);
 
 		    /*
 		     * Update node.
@@ -2481,7 +2457,6 @@ UpdateMConcatNode(
 		    WORD_MCONCATLIST_INIT(right, rightDepth,
 			    leftLength+Col_ListLength(right1), leftLength, left, 
 			    right1);
-		    Col_WordSetModified(right);
 
 		    /*
 		     * Update node.
@@ -2515,7 +2490,6 @@ UpdateMConcatNode(
     if (pinned) {
 	WORD_SET_PINNED(node);
     }
-    Col_WordSetModified(node);
 }
 
 /*---------------------------------------------------------------------------
@@ -2571,7 +2545,6 @@ Col_MListInsert(
 	 */
 
 	WORD_MLIST_ROOT(into) = Col_CopyMList(list);
-	Col_WordSetModified(into);
 	return;
     }
 
@@ -2620,7 +2593,6 @@ Col_MListInsert(
 	ASSERT(WORD_TYPE(list) == WORD_TYPE_CIRCLIST);
 	node = NewMConcatList(WORD_MLIST_ROOT(into), list);
 	WORD_MLIST_ROOT(into) = node;
-	Col_WordSetModified(into);
 	return;
     }
 
@@ -2643,7 +2615,6 @@ Col_MListInsert(
 
 	    Col_Word node = NewMConcatList(Col_CopyMList(list), root);
 	    WORD_MLIST_ROOT(into) = node;
-	    Col_WordSetModified(into);
 	} else {
 	    /*
 	     * Insert into loop.
@@ -2652,7 +2623,7 @@ Col_MListInsert(
 	    index %= loop;
 	    if (index == 0) index = loop;
 	    root = WORD_CIRCLIST_CORE(root);
-	    MListInsert(&root, index, list, into);
+	    MListInsert(&root, index, list);
 	    WORD_MLIST_ROOT(into) = WORD_CIRCLIST_NEW(root);
 	}
 	return;
@@ -2663,7 +2634,7 @@ Col_MListInsert(
 
 	Col_Word root = WORD_MLIST_ROOT(into);
 	if (WORD_TYPE(root) != WORD_TYPE_MCONCATLIST) {
-	    ConvertToMConcatNode(&root, into);
+	    ConvertToMConcatNode(&root);
 	    WORD_MLIST_ROOT(into) = root;
 	}
 	ASSERT(WORD_TYPE(root) == WORD_TYPE_MCONCATLIST);
@@ -2674,7 +2645,7 @@ Col_MListInsert(
 	     * Insert within head.
 	     */
 
-	    MListInsert(&WORD_CONCATLIST_LEFT(root), index, list, root);
+	    MListInsert(&WORD_CONCATLIST_LEFT(root), index, list);
 	} else {
 	    /*
 	     * Insert within tail. Temporarily use tail as root before recursive
@@ -2685,7 +2656,6 @@ Col_MListInsert(
 	    Col_MListInsert(into, index - (length-loop), list);
 	    WORD_CONCATLIST_RIGHT(root) = WORD_MLIST_ROOT(into);
 	    ASSERT(WORD_TYPE(WORD_CONCATLIST_RIGHT(root)) == WORD_TYPE_CIRCLIST);
-	    Col_WordSetModified(root);
 	    WORD_MLIST_ROOT(into) = root;
 	}
 	UpdateMConcatNode(root);
@@ -2708,7 +2678,7 @@ Col_MListInsert(
      * General case. 
      */
 
-    MListInsert(&WORD_MLIST_ROOT(into), index, list, into);
+    MListInsert(&WORD_MLIST_ROOT(into), index, list);
 }
 
 /*---------------------------------------------------------------------------
@@ -2722,8 +2692,6 @@ Col_MListInsert(
  *		  process (e.g. if it gets converted to mutable).
  *	index	- Index of insertion point.
  *	list	- List to insert.
- *	parent	- nodePtr parent. Set as modified in case nodePtr is itself
- *		  modified (see <Col_WordSetModified>).
  *
  * See also:
  *	<Col_MListInsert>
@@ -2733,8 +2701,7 @@ static void
 MListInsert(
     Col_Word * nodePtr, 
     size_t index,
-    Col_Word list,
-    Col_Word parent)
+    Col_Word list)
 {
     size_t length = Col_ListLength(*nodePtr);
     size_t listLength = Col_ListLength(list);
@@ -2750,7 +2717,6 @@ MListInsert(
 	 */
 
 	*nodePtr = Col_CopyMList(list);;
-	Col_WordSetModified(parent);
 	return;
     }
 
@@ -2785,7 +2751,7 @@ start:
 		     */
 
 		    MListInsert(&WORD_CONCATLIST_LEFT(*nodePtr), index, 
-			    list, *nodePtr);
+			    list);
 		    UpdateMConcatNode(*nodePtr);
 		    return;
 		}
@@ -2796,15 +2762,14 @@ start:
 		 * Insert into left.
 		 */
 
-		MListInsert(&WORD_CONCATLIST_LEFT(*nodePtr), index, list, 
-			*nodePtr);
+		MListInsert(&WORD_CONCATLIST_LEFT(*nodePtr), index, list);
 	    } else {
 		/*
 		 * Insert into right.
 		 */
 
 		MListInsert(&WORD_CONCATLIST_RIGHT(*nodePtr), 
-			index-leftLength, list, *nodePtr);
+			index-leftLength, list);
 	    }
 	    UpdateMConcatNode(*nodePtr);
 	    return;
@@ -2839,7 +2804,6 @@ start:
 		Col_TraverseListChunks(1, &list, 0, listLength, MergeChunksProc, 
 			&info, NULL);
 		ASSERT(info.length == index+listLength);
-		Col_WordSetModified(*nodePtr);
 		return;
 	    }
 
@@ -2873,7 +2837,6 @@ start:
 	ASSERT(info.length == length+listLength);
 
 	*nodePtr = node;
-	Col_WordSetModified(parent);
 	return;
     }
 
@@ -2887,7 +2850,7 @@ start:
 	     * Convert to mutable concat then retry.
 	     */
 
-	    ConvertToMConcatNode(nodePtr, parent);
+	    ConvertToMConcatNode(nodePtr);
 	    goto start;
 
 	case WORD_TYPE_SUBLIST:
@@ -2896,7 +2859,7 @@ start:
 		 * Source is concat. Convert to mutable concat then retry.
 		 */
 
-		ConvertToMConcatNode(nodePtr, parent);
+		ConvertToMConcatNode(nodePtr);
 		goto start;
 	    }
 	    /* continued. */
@@ -2906,7 +2869,7 @@ start:
 		 * Split at insertion point then retry.
 		 */
 
-		SplitMutableAt(nodePtr, parent, index);
+		SplitMutableAt(nodePtr, index);
 		goto start;
 	    }
 
@@ -2928,7 +2891,6 @@ start:
 		ASSERT(index >= length);
 		*nodePtr = NewMConcatList(*nodePtr, list);
 	    }
-	    Col_WordSetModified(parent);
 	    return;
     }
 }
@@ -2940,15 +2902,12 @@ start:
  *
  * Arguments:
  *	nodePtr	- Mutable list node to split. Gets overwritten upon return.
- *	parent	- nodePtr parent. Set as modified upon return (see 
- *		  <Col_WordSetModified>).
  *	index	- Index of split point.
  *---------------------------------------------------------------------------*/
 
 static void
 SplitMutableAt(
     Col_Word *nodePtr, 
-    Col_Word parent, 
     size_t index)
 {
     size_t length;
@@ -3010,7 +2969,6 @@ SplitMutableAt(
     }
 
     *nodePtr = converted;
-    Col_WordSetModified(parent);
 }
 
 /*---------------------------------------------------------------------------
@@ -3080,20 +3038,19 @@ Col_MListRemove(
 		head = Col_Sublist(mlist, 0, last);
 		root = WORD_CIRCLIST_CORE(root);
 		if (first < length) {
-		    MListRemove(&root, first, length-1, mlist);
+		    MListRemove(&root, first, length-1);
 		}
-		MListRemove(&root, 0, last, mlist);
+		MListRemove(&root, 0, last);
 
 		node = NewMConcatList(head, WORD_CIRCLIST_NEW(root));
 		WORD_MLIST_ROOT(mlist) = node;
-		Col_WordSetModified(mlist);
 	    } else {
 		/*
 		 * Remove inner part of loop.
 		 */
 
 		root = WORD_CIRCLIST_CORE(root);
-		MListRemove(&root, first, last, mlist);
+		MListRemove(&root, first, last);
 		WORD_MLIST_ROOT(mlist) = WORD_CIRCLIST_NEW(root);
 	    }
 	}
@@ -3105,7 +3062,7 @@ Col_MListRemove(
 
 	Col_Word root = WORD_MLIST_ROOT(mlist);
 	if (WORD_TYPE(root) != WORD_TYPE_MCONCATLIST) {
-	    ConvertToMConcatNode(&root, mlist);
+	    ConvertToMConcatNode(&root);
 	    WORD_MLIST_ROOT(mlist) = root;
 	}
 	ASSERT(WORD_TYPE(root) == WORD_TYPE_MCONCATLIST);
@@ -3117,7 +3074,6 @@ Col_MListRemove(
 	     */
 
 	    WORD_MLIST_ROOT(mlist) = WORD_CONCATLIST_RIGHT(root);
-	    Col_WordSetModified(mlist);
 	    if (last >= length-loop) {
 		Col_MListRemove(mlist, 0, last - (length-loop));
 	    }
@@ -3129,7 +3085,7 @@ Col_MListRemove(
 	     * Remove within head.
 	     */
 
-	    MListRemove(&WORD_CONCATLIST_LEFT(root), first, last, root);
+	    MListRemove(&WORD_CONCATLIST_LEFT(root), first, last);
 	} else {
 	    /*
 	     * Remove part of tail.
@@ -3145,8 +3101,7 @@ Col_MListRemove(
 		 * Remove end of head first.
 		 */
 
-		MListRemove(&WORD_CONCATLIST_LEFT(root), first, length-loop-1, 
-			root);
+		MListRemove(&WORD_CONCATLIST_LEFT(root), first, length-loop-1);
 		first = 0;
 		last -= length-loop;
 	    }
@@ -3165,7 +3120,7 @@ Col_MListRemove(
 		 */
 
 		if (WORD_TYPE(tail) != WORD_TYPE_MCONCATLIST) {
-		    ConvertToMConcatNode(&tail, root);
+		    ConvertToMConcatNode(&tail);
 		}
 		ASSERT(WORD_TYPE(tail) == WORD_TYPE_MCONCATLIST);
 		WORD_CONCATLIST_RIGHT(root) = WORD_CONCATLIST_RIGHT(tail);
@@ -3176,7 +3131,6 @@ Col_MListRemove(
 	    } else {
 		WORD_CONCATLIST_RIGHT(root) = tail;
 	    }
-	    Col_WordSetModified(root);
 
 	    ASSERT(WORD_TYPE(root) == WORD_TYPE_MCONCATLIST);
 	    ASSERT(WORD_TYPE(WORD_CONCATLIST_RIGHT(root)) == WORD_TYPE_CIRCLIST);
@@ -3186,7 +3140,6 @@ Col_MListRemove(
 	     */
 
 	    WORD_MLIST_ROOT(mlist) = root;
-	    Col_WordSetModified(mlist);
 	}
 	UpdateMConcatNode(root);
 	return;
@@ -3212,7 +3165,7 @@ Col_MListRemove(
      * General case. 
      */
 
-    MListRemove(&WORD_MLIST_ROOT(mlist), first, last, mlist);
+    MListRemove(&WORD_MLIST_ROOT(mlist), first, last);
 }
 
 /*---------------------------------------------------------------------------
@@ -3225,8 +3178,6 @@ Col_MListRemove(
  *	nodePtr		- Mutable list node to modify. May be overwritten in the
  *			  process (e.g. if it gets converted to mutable).
  *	first, last	- Range of elements to remove.
- *	parent		- nodePtr parent. Set as modified in case nodePtr is 
- *			  itself modified (see <Col_WordSetModified>).
  *
  * See also:
  *	<Col_MListRemove>
@@ -3236,8 +3187,7 @@ static void
 MListRemove(
     Col_Word * nodePtr, 
     size_t first, 
-    size_t last,
-    Col_Word parent)
+    size_t last)
 {
     size_t length = Col_ListLength(*nodePtr);
     Col_Word node;
@@ -3279,8 +3229,7 @@ start:
 		 */
 
 		MListRemove(&WORD_CONCATLIST_RIGHT(*nodePtr), 
-			(first<leftLength?0:first-leftLength), 
-			last-leftLength, *nodePtr);
+			(first<leftLength?0:first-leftLength), last-leftLength);
 	    }
 	    if (first < leftLength) {
 		/*
@@ -3288,7 +3237,7 @@ start:
 		 */
 
 		MListRemove(&WORD_CONCATLIST_LEFT(*nodePtr), first, 
-			(last<leftLength?last:leftLength-1), *nodePtr);
+			(last<leftLength?last:leftLength-1));
 		leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(*nodePtr));
 	    }
 
@@ -3298,7 +3247,6 @@ start:
 		 */
 
 		*nodePtr = WORD_CONCATLIST_RIGHT(*nodePtr);
-		Col_WordSetModified(parent);
 	    } else if (Col_ListLength(WORD_CONCATLIST_RIGHT(*nodePtr)) 
 		    == 0) {
 		/*
@@ -3306,7 +3254,6 @@ start:
 		 */
 
 		*nodePtr = WORD_CONCATLIST_LEFT(*nodePtr);
-		Col_WordSetModified(parent);
 	    } else {
 		/*
 		 * Update & rebalance node.
@@ -3363,7 +3310,6 @@ start:
 	ASSERT(info.length == length-(last-first+1));
 
 	*nodePtr = node;
-	Col_WordSetModified(parent);
 	return;
     }
 
@@ -3377,7 +3323,7 @@ start:
 	     * Convert to mutable concat then retry.
 	     */
 
-	    ConvertToMConcatNode(nodePtr, parent);
+	    ConvertToMConcatNode(nodePtr);
 	    goto start;
 
 	case WORD_TYPE_SUBLIST: 
@@ -3386,7 +3332,7 @@ start:
 		 * Source is concat. Convert to mutable concat then retry.
 		 */
 
-		ConvertToMConcatNode(nodePtr, parent);
+		ConvertToMConcatNode(nodePtr);
 		goto start;
 	    }
 	    /* continued. */
@@ -3412,7 +3358,6 @@ start:
 			Col_Sublist(*nodePtr, last+1, length-1));
 	    }
 	    *nodePtr = node;
-	    Col_WordSetModified(parent);
 	    return;
     }
 }

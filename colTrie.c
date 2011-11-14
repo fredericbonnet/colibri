@@ -333,14 +333,13 @@ ConvertStringNodeToMutable(
     Col_Word map, 
     Col_Word prefix)
 {
-    Col_Word parent, *nodePtr, existing, converted;
+    Col_Word *nodePtr, existing, converted;
     Col_RopeIterator itKey;
     Col_Char mask;
     Col_Char cKey;
 
     ASSERT(WORD_TYPE(node) == WORD_TYPE_INTTRIENODE || WORD_TYPE(node) == WORD_TYPE_INTTRIELEAF);
     nodePtr = &WORD_TRIEMAP_ROOT(map);
-    parent = map;
     Col_RopeIterBegin(prefix, 0, &itKey);
     for (;;) {
 	existing = *nodePtr;
@@ -355,7 +354,6 @@ ConvertStringNodeToMutable(
 		ASSERT(!WORD_PINNED(existing));
 		WORD_SET_TYPEID(converted, WORD_TYPE_MSTRTRIENODE);
 		*nodePtr = converted;
-		Col_WordSetModified(parent);
 		if (existing == node) {
 		    return converted;
 		}
@@ -376,7 +374,6 @@ ConvertStringNodeToMutable(
 		 * Descend.
 		 */
 
-		parent = existing;
 		if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
 		    existing = WORD_TRIENODE_RIGHT(existing);
 		} else {
@@ -395,7 +392,6 @@ ConvertStringNodeToMutable(
 		ASSERT(!WORD_PINNED(existing));
 		WORD_SET_TYPEID(converted, WORD_TYPE_MTRIELEAF);
 		*nodePtr = converted;
-		Col_WordSetModified(parent);
 		return converted;
 	}
     }
@@ -421,12 +417,11 @@ ConvertIntNodeToMutable(
     Col_Word map, 
     intptr_t prefix)
 {
-    Col_Word parent, *nodePtr, existing, converted;
+    Col_Word *nodePtr, existing, converted;
     intptr_t mask;
 
     ASSERT(WORD_TYPE(node) == WORD_TYPE_INTTRIENODE || WORD_TYPE(node) == WORD_TYPE_INTTRIELEAF);
     nodePtr = &WORD_TRIEMAP_ROOT(map);
-    parent = map;
     for (;;) {
 	existing = *nodePtr;
 	switch (WORD_TYPE(existing)) {
@@ -440,7 +435,6 @@ ConvertIntNodeToMutable(
 		ASSERT(!WORD_PINNED(existing));
 		WORD_SET_TYPEID(converted, WORD_TYPE_MINTTRIENODE);
 		*nodePtr = converted;
-		Col_WordSetModified(parent);
 		if (existing == node) {
 		    return converted;
 		}
@@ -454,7 +448,6 @@ ConvertIntNodeToMutable(
 		 * Descend.
 		 */
 
-		parent = existing;
 		if (mask ? (prefix & mask) : (prefix >= 0)) {
 		    existing = WORD_TRIENODE_RIGHT(existing);
 		} else {
@@ -473,7 +466,6 @@ ConvertIntNodeToMutable(
 		ASSERT(!WORD_PINNED(existing));
 		WORD_SET_TYPEID(converted, WORD_TYPE_MINTTRIELEAF);
 		*nodePtr = converted;
-		Col_WordSetModified(parent);
 		return converted;
 	}
     }
@@ -967,7 +959,6 @@ StringTrieMapFindEntry(
 	ASSERT(!leftPtr || !*leftPtr);
 	ASSERT(!rightPtr || !*rightPtr);
 	WORD_TRIEMAP_ROOT(map) = entry;
-	Col_WordSetModified(map);
 
 	return entry;
     }
@@ -1018,7 +1009,6 @@ StringTrieMapFindEntry(
 	WORD_MSTRTRIENODE_INIT(node, diff, mask, entry, *nodePtr);
     }
     *nodePtr = node;
-    Col_WordSetModified(parent);
 
     return entry;
 }
@@ -1103,7 +1093,6 @@ IntTrieMapFindEntry(
 	ASSERT(!leftPtr || !*leftPtr);
 	ASSERT(!rightPtr || !*rightPtr);
 	WORD_TRIEMAP_ROOT(map) = entry;
-	Col_WordSetModified(map);
 
 	return entry;
     }
@@ -1153,7 +1142,6 @@ IntTrieMapFindEntry(
 	WORD_MINTTRIENODE_INIT(node, mask, entry, *nodePtr);
     }
     *nodePtr = node;
-    Col_WordSetModified(parent);
 
     return entry;
 }
@@ -1273,7 +1261,6 @@ Col_StringTrieMapSet(
     entry = StringTrieMapFindEntry(map, key, 1, &create, NULL, NULL);
     ASSERT(entry);
     ASSERT(WORD_TYPE(entry) == WORD_TYPE_MTRIELEAF);
-    Col_WordSetModified(entry);
     WORD_MAPENTRY_VALUE(entry) = value;
     return create;
 }
@@ -1310,7 +1297,6 @@ Col_IntTrieMapSet(
     entry = IntTrieMapFindEntry(map, key, 1, &create, NULL, NULL);
     ASSERT(entry);
     ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTTRIELEAF);
-    Col_WordSetModified(entry);
     WORD_MAPENTRY_VALUE(entry) = value;
     return create;
 }
@@ -1361,7 +1347,6 @@ Col_StringTrieMapUnset(
 	ASSERT(WORD_TRIEMAP_ROOT(map) == node);
 	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
 	WORD_TRIEMAP_ROOT(map) = WORD_NIL;
-	Col_WordSetModified(map);
 
 	return 1;
     }
@@ -1399,7 +1384,6 @@ Col_StringTrieMapUnset(
 	    WORD_TRIENODE_RIGHT(grandParent) = sibling;
 	}
     }
-    Col_WordSetModified(grandParent);
 
     return 1;
 }
@@ -1450,7 +1434,6 @@ Col_IntTrieMapUnset(
 	ASSERT(WORD_TRIEMAP_ROOT(map) == node);
 	ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
 	WORD_TRIEMAP_ROOT(map) = WORD_NIL;
-	Col_WordSetModified(map);
 
 	return 1;
     }
@@ -1488,7 +1471,6 @@ Col_IntTrieMapUnset(
 	    WORD_TRIENODE_RIGHT(grandParent) = sibling;
 	}
     }
-    Col_WordSetModified(grandParent);
 
     return 1;
 }
@@ -1712,7 +1694,6 @@ Col_TrieMapIterSetValue(
 
 	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MTRIELEAF);
 	    WORD_MAPENTRY_VALUE(it->entry) = value;
-	    Col_WordSetModified(it->entry);
 	    break;
 
 	case WORD_TYPE_INTTRIEMAP:
@@ -1732,7 +1713,6 @@ Col_TrieMapIterSetValue(
 
 	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MINTTRIELEAF);
 	    WORD_MAPENTRY_VALUE(it->entry) = value;
-	    Col_WordSetModified(it->entry);
 	    break;
 
 	/* WORD_TYPE_UNKNOWN */

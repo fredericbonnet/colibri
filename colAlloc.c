@@ -15,6 +15,12 @@
  * Prototypes for functions used only in this file.
  */
 
+typedef struct AddressRange *pAddressRange;
+static size_t		FindFreePagesInRange(struct AddressRange *range, 
+			    size_t number, size_t index);
+static void *		SysPageAlloc(size_t number);
+static void		SysPageFree(void * base);
+static void		SysPageTrim(void * base);
 static Cell *		PageAllocCells(size_t number, Cell *firstCell);
 static size_t		FindFreeCells(void *page, size_t number, size_t index);
 
@@ -247,7 +253,7 @@ PoolInit(
  *	pool		- Pool to clenup.
  *
  * See also:
- *	<PlatSysPageFree>
+ *	<SysPageFree>
  *---------------------------------------------------------------------------*/
 
 void
@@ -261,25 +267,848 @@ PoolCleanup(
      */
 
     for (base = pool->pages; base; base = next) {
-	for (page = base; !(PAGE_FLAGS(page) & PAGE_FLAG_LAST); 
+	for (page = base; !PAGE_FLAG(page, PAGE_FLAG_LAST); 
 		page = PAGE_NEXT(page));
 	next = PAGE_NEXT(page);
-	PlatSysPageFree(base, PAGE_SYSTEMSIZE(base));
+	SysPageFree(base);
     }
 }
 
 
 /****************************************************************************
- * Internal Group: Page Allocation
+ * Internal Group: System Page Allocation
+ *
+ *	Granularity-free system page allocation based on address range 
+ *	reservation.
+ *
+ *	Some systems allow single system page allocations (e.g. POSIX mmap), 
+ *	while others require coarser grained schemes (e.g. Windows 
+ *	VirtualAlloc). However in both cases we have to keep track of allocated
+ *	pages, especially for generational page write monitoring. So address 
+ *	ranges are reserved, and individual pages can be allocated and freed 
+ *	within these ranges. From a higher level this allows for per-page 
+ *	allocation, while at the same time providing enough metadata for memory
+ *	introspection.
+ *
+ *	When the number of pages to allocate exceeds a certain size (defined as 
+ *	<LARGE_PAGE_SIZE>), a dedicated address range is reserved and allocated, 
+ *	which must be freed all at once. Else, pages are allocated within larger 
+ *	address ranges using the following scheme: 
+ *	
+ *	Address ranges are reserved in geometrically increasing sizes up to a 
+ *	maximum size (the first being a multiple of the allocation granularity). 
+ *	Ranges form a singly-linked list in allocation order (so that search 
+ *	times are geometrically increasing too). A descriptor structure is 
+ *	malloc'd along with the range and consists of a pointer to the next 
+ *	descriptor, the base address of the range, the total and free numbers of 
+ *	pages and the index of the first free page in range, and a page alloc
+ *	info table indicating:
+ *
+ *		- For free pages, zero.
+ *		- For first page in group, the negated size of the group.
+ *		- For remaining pages, the index in group.
+ *
+ *	That way, page group info can be known via direct access from the page
+ *	index in range:
+ *
+ *		- When alloc info is zero, the page is free.
+ *		- When negative, the page is the first in a group of the given
+ *		  negated size.
+ *		- When positive, the page is the n-th in a group whose first 
+ *		  page is the n-th previous one.
+ *	
+ *	To allocate a group of pages in an address range, the alloc info table
+ *	is scanned until a large enough group of free pages is found. 
+ *
+ *	To free a group of pages, the containing address range is found by 
+ *	scanning all ranges in order (this is fast, as this only involves 
+ *	address comparison and the ranges grow geometrically). In either cases 
+ *	the descriptor is updated accordingly. If a containing range is not 
+ *	found we assume that it was a dedicated range and we attempt to release
+ *	it at once. 
+ *
+ *	Just following this alloc info table is a bitmask table used for write
+ *	tracking. With our generational GC, pages of older generations are 
+ *	write-protected so that references pointing to younger cells can be
+ *	tracked during the mark phase: such modified pages contain potential
+ *	parent cells that must be followed along with roots. Regular ranges use
+ *	a bitmask array, while dedicated ranges only have to store one value 
+ *	for the whole range.
+ *	
+ *	This allocation scheme may not look optimal at first sight (especially 
+ *	the alloc info table scanning step), but keep in mind that the typical 
+ *	use case only involves single page allocations. Multiple page 
+ *	allocations only occur when allocating large, multiple cell-based 
+ *	structures, and most structures are single cell sized. And very large 
+ *	pages will end up in their own dedicated range with no group management.
+ *	Moreover stress tests have shown that this scheme yielded similar or 
+ *	better performances than the previous schemes.
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Variable: systemPageSize
+ * Internal Variables: System Page Size and Granularity
  *
- *	System page size in bytes. Allocated by platform specific code.
+ *	System-dependent variables.
+ *
+ *  systemPageSize	- System page size in bytes.
+ *  allocGranularity	- Allocation granularity of address ranges.
+ *  shiftPage		- Bits to shift to convert between pages and bytes.
  *---------------------------------------------------------------------------*/
 
 size_t systemPageSize;
+size_t allocGranularity;
+size_t shiftPage;
+
+/*---------------------------------------------------------------------------
+ * Internal Typedef: AddressRange
+ *
+ *	Address range descriptor for allocated system pages.
+ *
+ * Fields:
+ *	next		- Next descriptor in list.
+ *	base		- Base address.
+ *	size		- Size in pages.
+ *	free		- Number of free pages in range.
+ *	first		- First free page in range.
+ *	allocInfo	- Info about allocated pages in range.
+ *
+ * See also:
+ *	<SysPageAlloc>, <SysPageFree>
+ *---------------------------------------------------------------------------*/
+
+typedef struct AddressRange {
+    struct AddressRange *next;
+    void *base;
+    size_t size;
+    size_t free;
+    size_t first;
+    char allocInfo[0];
+} AddressRange;
+
+/*---------------------------------------------------------------------------
+ * Internal Variables: Address Ranges
+ *
+ *  ranges		- Reserved address ranges for general purpose.
+ *  dedicatedRanges	- Dedicated address ranges for large pages.
+ *
+ * See also:
+ *	<AddressRange>, <SysPageAlloc>, <SysPageFree>
+ *---------------------------------------------------------------------------*/
+
+static AddressRange *ranges = NULL;
+static AddressRange *dedicatedRanges = NULL;
+
+/*---------------------------------------------------------------------------
+ * Internal Constant: Address Range Sizes
+ *
+ *  FIRST_RANGE_SIZE	- Size of first reserved range.
+ *  MAX_RANGE_SIZE	- Maximul size of ranges.
+ *---------------------------------------------------------------------------*/
+
+#define FIRST_RANGE_SIZE	256	/* 1 MB */
+#define MAX_RANGE_SIZE		32768	/* 128 MB */
+
+/*---------------------------------------------------------------------------
+ * Internal Function: FindFreePagesInRange
+ *
+ *	Find given number of free consecutive pages in alloc info table.
+ *
+ * Argument:
+ *	range	- Address range to look into.
+ *	number	- Number of free cnsecutive entries to find.
+ *	index	- First entry to consider.
+ *
+ * Result:
+ *	Index of first page of sequence, or -1 if none found.
+ *---------------------------------------------------------------------------*/
+
+static size_t 
+FindFreePagesInRange(
+    AddressRange *range,
+    size_t number,
+    size_t index)
+{
+    size_t i, first = (size_t)-1, remaining;
+
+    /* 
+     * Iterate over alloc info table to find a chain of <number> zero entries. 
+     */
+
+    remaining = number;
+    for (i = index; i < range->size; i++) {
+	if (range->allocInfo[i] == 0) {
+	    if (remaining == number) {
+		/* 
+		 * Beginning of sequence. 
+		 */
+
+		first = i;
+	    }
+
+	    remaining--;
+	    if (remaining == 0) {
+		/*
+		 * End of sequence reached.
+		 */
+
+		return first;
+	    }
+
+	} else {
+	    /* 
+	     * Sequence interrupted, restart. 
+	     */
+
+	    remaining = number;
+	}
+    }
+
+    /*
+     * None found.
+     */
+
+    return (size_t) -1;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: SysPageAlloc
+ *
+ *	Allocate system pages.
+ *
+ * Argument:
+ *	number	- Number of system pages to alloc.
+ *
+ * Result:
+ *	The allocated system pages' base address.
+ *
+ * Side effects:
+ *	May reserve new address ranges.
+ *
+ * See also:
+ *	<SysPageFree>
+ *---------------------------------------------------------------------------*/
+
+static void * 
+SysPageAlloc(
+    size_t number)
+{
+    void *addr = NULL;
+    AddressRange *range, **prevPtr;
+    size_t first, size, i;
+
+    if (number > LARGE_PAGE_SIZE || !(number 
+	    & ((allocGranularity >> shiftPage)-1))) {
+	/*
+	 * Length exceeds a certain threshold or is a multiple of the allocation
+	 * granularity, allocate dedicated address range.
+	 */
+
+	addr = PlatReserveRange(number, 1);
+	if (!addr) {
+	    /*
+	     * Fatal error!
+	     */
+
+	    Col_Error(COL_FATAL, "Address range allocation failed");
+	    return NULL;
+	}
+
+	/*
+	 * Create descriptor without page alloc table and insert at head.
+	 */
+
+	PlatEnterProtectAddressRanges();
+	{
+	    range = (AddressRange *) (malloc(sizeof(AddressRange)+1));
+	    range->next = dedicatedRanges;
+	    range->base = addr;
+	    range->size = number;
+	    range->free = 0;
+	    range->first = number;
+	    range->allocInfo[0] = 0;
+	    dedicatedRanges = range;
+	}
+	PlatLeaveProtectAddressRanges();
+
+	return addr;
+    }
+
+    /*
+     * Try to find address range with enough consecutive pages.
+     */
+
+    PlatEnterProtectAddressRanges();
+    {
+	first = (size_t)-1;
+	prevPtr = &ranges;
+	range = ranges;
+	while (range) {
+	    size = range->size;
+	    if (range->free >= number) {
+		/*
+		 * Range has the required number of pages.
+		 */
+
+		first = range->first;
+
+		if (number == 1 && !range->allocInfo[first]) {
+		    /*
+		     * Fast-track the most common case: allocate the first free 
+		     * page.
+		     */
+
+		    break;
+		}
+    	    
+		/*
+		 * Find the first available bit sequence.
+		 */
+
+		first = FindFreePagesInRange(range, number, first);
+		if (first != (size_t)-1) {
+		    break;
+		}
+	    }
+
+	    /*
+	     * Not found, try next range.
+	     */
+
+	    prevPtr = &range->next;
+	    range = range->next;
+	}
+
+	if (!range) {
+	    /*
+	     * No range was found with available pages. Create a new one.
+	     */
+
+	    if (!ranges) {
+		size = FIRST_RANGE_SIZE;
+	    } else {
+		/*
+		 * New range size is double that of the previous one.
+		 */
+
+		size <<= 1;
+		if (size > MAX_RANGE_SIZE) size = MAX_RANGE_SIZE;
+	    }
+	    ASSERT(number <= size-1);
+
+	    /*
+	     * Reserve address range.
+	     */
+
+	    addr = PlatReserveRange(size, 0);
+	    if (!addr) {
+		/*
+		 * Fatal error!
+		 */
+
+		Col_Error(COL_FATAL, "Address range reservation failed");
+		goto end;
+	    }
+
+	    /*
+	     * Create descriptor.
+	     */
+
+	    range = (AddressRange *) (malloc(sizeof(AddressRange) + size 
+			+ ((size+7)>>3)));
+	    *prevPtr = range;
+	    range->base = addr;
+	    range->next = NULL;
+	    range->size = size;
+	    range->free = size;
+	    range->first = 0;
+	    memset(range->allocInfo, 0, size + ((size+7)>>3));
+	    first = 0;
+	}
+
+	/*
+	 * Allocate pages. 
+	 */
+
+	ASSERT(first+number <= size);
+	ASSERT(number <= range->free);
+	addr = (char *) range->base + (first << shiftPage);
+	if (!PlatAllocPages(addr, number)) {
+	    /*
+	     * Fatal error!
+	     */
+
+	    Col_Error(COL_FATAL, "Page allocation failed");
+	    goto end;
+	}
+
+	/*
+	 * Update metadata. Only clear first page's written flag.
+	 */
+
+	ASSERT(number < LARGE_PAGE_SIZE && number-1 <= CHAR_MAX && -(char) number >= CHAR_MIN);
+	range->allocInfo[first] = -(char) number;
+	for (i=1; i < number; i++) {
+	    range->allocInfo[first+i] = (char) i;
+	}
+	range->allocInfo[range->size+(first>>3)] &= ~(1<<(first&7));
+	range->free -= number;
+	if (first == range->first) {
+	    /* 
+	     * Simply increase the first free page index, the actual index will be 
+	     * updated on next allocation.
+	     */
+
+	    range->first += number;
+	}
+    }
+end:
+    PlatLeaveProtectAddressRanges();
+    return addr;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: SysPageFree
+ *
+ *	Free system pages.
+ *
+ * Argument:
+ *	base	- Base address of the pages to free.
+ *
+ * Side Effects:
+ *	May release address ranges.
+ *
+ * See also:
+ *	<SysPageAlloc>
+ *---------------------------------------------------------------------------*/
+
+static void 
+SysPageFree(
+    void * base)
+{
+    size_t index, size, i;
+    AddressRange * range;
+
+    PlatEnterProtectAddressRanges();
+    {
+	/*
+	 * Get range info for page. 
+	 */
+
+	range = ranges;
+	while (range) {
+	    if (base >= range->base && (char *) base < (char *) range->base 
+		    + (range->size << shiftPage)) {
+		break;
+	    }
+	    range = range->next;
+	}
+	if (!range) {
+	    /*
+	     * Likely dedicated address range. 
+	     */
+
+	    AddressRange **prevPtr = &dedicatedRanges;
+	    range = dedicatedRanges;
+	    while (range) {
+		if (base >= range->base && (char *) base < (char *) range->base 
+			+ (range->size << shiftPage)) {
+		    break;
+		}
+		prevPtr = &range->next;
+		range = range->next;
+	    }
+	    if (!range) {
+		/*
+		 * Not found.
+		 */
+
+		Col_Error(COL_FATAL, "Page not found %p", base);
+		goto end;
+	    }
+
+	    /*
+	     * Release whole range.
+	     */
+
+	    if (!PlatReleaseRange(range->base, range->size)) {
+		/*
+		 * Fatal error!
+		 */
+
+		Col_Error(COL_FATAL, "Address range release failed");
+		goto end;
+	    }
+
+	    /*
+	     * Remove from dedicated range list.
+	     */
+
+	    *prevPtr = range->next;
+	    free(range);
+	    goto end;
+	}
+
+	index = ((char *) base - (char *) range->base) >> shiftPage;
+	size = -range->allocInfo[index];
+	ASSERT(size > 0);
+	ASSERT(index+size <= range->size);
+
+	/*
+	 * Free pages.
+	 */
+
+	if (!PlatFreePages(base, size)) {
+	    /*
+	     * Fatal error!
+	     */
+
+	    Col_Error(COL_FATAL, "Page deallocation failed");
+	    goto end;
+	}
+
+	/*
+	 * Update metadata.
+	 */
+
+	for (i=index; i < index+size; i++) {
+	    range->allocInfo[i] = 0;
+	}
+	range->free += size;
+	ASSERT(range->free <= range->size);
+	if (range->first > index) {
+	    /*
+	     * Old first free page is beyond the one we just freed, update.
+	     */
+    	 
+	    range->first = index;
+	}
+    }
+end:
+    PlatLeaveProtectAddressRanges();
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: SysPageTrim
+ *
+ *	Free trailing pages of system page groups, keeping only the first page.
+ *
+ * Argument:
+ *	base	- Base address of the pages to free.
+ *
+ * See also:
+ *	<SysPageFree>
+ *---------------------------------------------------------------------------*/
+
+static void 
+SysPageTrim(
+    void * base)
+{
+    size_t index, size, i;
+    AddressRange * range;
+
+    PlatEnterProtectAddressRanges();
+    {
+	/*
+	 * Get range info for page. 
+	 */
+
+	range = ranges;
+	while (range) {
+	    if (base >= range->base && (char *) base < (char *) range->base 
+		    + (range->size << shiftPage)) {
+		break;
+	    }
+	    range = range->next;
+	}
+	if (!range) {
+	    /*
+	     * Not found. Cannot trim dedicated ranges.
+	     */
+
+	    Col_Error(COL_FATAL, "Page not found %p", base);
+	    goto end;
+	}
+
+	index = ((char *) base - (char *) range->base) >> shiftPage;
+	size = -range->allocInfo[index];
+	ASSERT(size > 0);
+	ASSERT(index+size <= range->size);
+
+	if (size == 1) {
+	    /*
+	     * No trailing page.
+	     */
+
+	    goto end;
+	}
+
+	/*
+	 * Free trailing pages.
+	 */
+
+	if (!PlatFreePages((char *) base + systemPageSize, size-1)) {
+	    /*
+	     * Fatal error!
+	     */
+
+	    Col_Error(COL_FATAL, "Page deallocation failed");
+	    goto end;
+	}
+
+	/*
+	 * Update metadata.
+	 */
+
+	range->allocInfo[index] = -1;
+	for (i=index+1; i < index+size; i++) {
+	    range->allocInfo[i] = 0;
+	}
+	range->free += size-1;
+	ASSERT(range->free <= range->size);
+	if (range->first > index) {
+	    /*
+	     * Old first free page is beyond the one we just freed, update.
+	     */
+    	 
+	    range->first = index;
+	}
+    }
+end:
+    PlatLeaveProtectAddressRanges();
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: SysPageProtect
+ *
+ *	Write-protect system page group.
+ *
+ * Argument:
+ *	page	- Page belonging to page group to protect.
+ *	protect	- Whether t protect or unprotect page group.
+ *---------------------------------------------------------------------------*/
+
+void 
+SysPageProtect(
+    void * page,
+    int protect)
+{
+    size_t index, size;
+    AddressRange * range;
+
+    PlatEnterProtectAddressRanges();
+    {
+	/*
+	 * Get range info for page. 
+	 */
+
+	range = ranges;
+	while (range) {
+	    if (page >= range->base && (char *) page < (char *) range->base 
+		    + (range->size << shiftPage)) {
+		break;
+	    }
+	    range = range->next;
+	}
+	if (!range) {
+	    /*
+	     * Likely dedicated address range. 
+	     */
+
+	    range = dedicatedRanges;
+	    while (range) {
+		if (page >= range->base && (char *) page < (char *) range->base 
+			+ (range->size << shiftPage)) {
+		    break;
+		}
+		range = range->next;
+	    }
+	    if (!range) {
+		/*
+		 * Not found.
+		 */
+
+		Col_Error(COL_FATAL, "Page not found %p", page);
+		goto end;
+	    }
+
+	    /*
+	     * Update protection & write tracking flag for whole range.
+	     */
+
+	    PlatProtectPages(range->base, range->size, protect);
+	    range->allocInfo[0] = !protect;
+	    goto end;
+	}
+
+	index = ((char *) page - (char *) range->base) >> shiftPage;
+	ASSERT(range->allocInfo[index] != 0);
+	if (range->allocInfo[index] > 0) index -= range->allocInfo[index];
+	size = -range->allocInfo[index];
+	ASSERT(size > 0);
+	ASSERT(index+size <= range->size);
+
+	/*
+	 * Update protection & write tracking flag for page group (only mark 
+	 * first one in page group).
+	 */
+
+	PlatProtectPages((char *) range->base + (index << shiftPage), size, 
+		protect);
+	if (protect) {
+	    range->allocInfo[range->size+(index>>3)] &= ~(1<<(index&7));
+	} else {
+	    range->allocInfo[range->size+(index>>3)] |= 1<<(index&7);
+	}
+    }
+end:
+    PlatLeaveProtectAddressRanges();
+}
+
+
+/****************************************************************************
+ * Internal Group: Roots and Parents
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: UpdateParents
+ *
+ *	Add pages written since the last GC to parent tracking structures. Then 
+ *	each page's parent flag is cleared for the mark phase.
+ *
+ * Argument:
+ *	data	- Group-specific data.
+ *---------------------------------------------------------------------------*/
+
+void 
+UpdateParents(
+    GroupData *data)
+{
+    Page *page;
+    size_t i, size;
+    AddressRange * range;
+    Cell *cell;
+
+    /*
+     * First clear parent flags for existing parents.
+     */
+
+    for (cell = data->parents; cell; cell = PARENT_NEXT(cell)) {
+	ASSERT(TestCell(CELL_PAGE(cell), CELL_INDEX(cell)));
+	for (page = PARENT_PAGE(cell); page; page = PAGE_NEXT(page)) {
+	    PAGE_CLEAR_FLAG(page, PAGE_FLAG_PARENT);
+	    if (PAGE_FLAG(page, PAGE_FLAG_LAST)) break;
+	}
+    }
+
+    /*
+     * Iterate over ranges and find modified page groups belonging to the given
+     * thread group, adding them to its parent list.
+     */
+
+    PlatEnterProtectAddressRanges();
+    {
+	/*
+	 * First iterate over regular ranges.
+	 */
+
+	for (range = ranges; range ; range = range->next) {
+	    /*
+	     * Iterate over modified page groups.
+	     */
+
+	    for (i = 0; i < range->size; /* increment within loop */) {
+		if (!range->allocInfo[i]) {
+		    /*
+		     * Free page.
+		     */
+
+		    i++;
+		    continue;
+		}
+
+		size = -range->allocInfo[i];
+		if (!(range->allocInfo[range->size+(i>>3)] & 1<<(i&7))) {
+		    /*
+		     * Not modified.
+		     */
+
+		    i += size;
+		    continue;
+		}
+
+		page = (Page *) ((char *) range->base + (i << shiftPage));
+		if (PAGE_GROUPDATA(page) != data) {
+		    /*
+		     * Page belongs to another thread group.
+		     */
+
+		    i += size;
+		    continue;
+		}
+
+		/*
+		 * Clear write tracking flag.
+		 */
+
+		range->allocInfo[range->size+(i>>3)] &= ~(1<<(i&7));
+
+		/*
+		 * Add first page to the thread group's parent list.
+		 */
+
+		cell = PoolAllocCells(&data->rootPool, 1);
+		PARENT_INIT(cell, data->parents, page);
+		data->parents = cell;
+
+		i += size;
+	    }
+	}
+
+	/*
+	 * Now iterate over dedicated ranges.
+	 */
+
+	for (range = dedicatedRanges; range; range= range->next) {
+	    if (!range->allocInfo[0]) {
+		/*
+		 * Not modified.
+		 */
+
+		continue;
+	    }
+
+	    page = (Page *) range->base;
+	    if (PAGE_GROUPDATA(page) != data) {
+		/*
+		 * Page belongs to another thread group.
+		 */
+
+		continue;
+	    }
+
+	    /*
+	     * Clear write tracking flag.
+	     */
+
+	    range->allocInfo[0] = 0;
+
+	    /*
+	     * Add first page to the thread group's parent list.
+	     */
+
+	    cell = PoolAllocCells(&data->rootPool, 1);
+	    PARENT_INIT(cell, data->parents, page);
+	    data->parents = cell;
+	}
+    }
+    PlatLeaveProtectAddressRanges();
+}
+
+
+
+/****************************************************************************
+ * Internal Group: Page Allocation
+ ****************************************************************************/
 
 /*---------------------------------------------------------------------------
  * Internal Function: PoolAllocPages
@@ -293,7 +1122,7 @@ size_t systemPageSize;
  *	number	- Number of pages to allocate.
  *
  * See also:
- *	<PlatSysPageAlloc>
+ *	<SysPageAlloc>
  *---------------------------------------------------------------------------*/
 
 void 
@@ -301,6 +1130,7 @@ PoolAllocPages(
     MemoryPool *pool,
     size_t number)
 {
+    ThreadData *data = PlatGetThreadData();
     Page *base, *page, *prev;
     const size_t nbPagesPerSysPage = systemPageSize/PAGE_SIZE;
     size_t nbSysPages, nbPages;
@@ -322,13 +1152,17 @@ PoolAllocPages(
 	div_t d = div((int) number, (int) nbPagesPerSysPage);
 	nbSysPages = d.quot + (d.rem?1:0);
 	if (nbSysPages >= LARGE_PAGE_SIZE) {
+	    /*
+	     * Pages are in their own dedicated range.
+	     */
+	    
 	    nbPages = 1;
 	} else {
 	    nbPages = (nbSysPages * nbPagesPerSysPage) - number + 1;
 	}
     }
 
-    base = (Page *) PlatSysPageAlloc(nbSysPages);
+    base = (Page *) SysPageAlloc(nbSysPages);
 
     if (!pool->pages) {
 	pool->pages = base;
@@ -352,21 +1186,20 @@ PoolAllocPages(
 	 */
 
 	if (prev) {
-	    PAGE_NEXT(prev) = page;
+	    PAGE_SET_NEXT(prev, page);
 	}
 	prev = page;
 
-	/* Flags. */
-	PAGE_GENERATION(page) = (unsigned char) pool->generation;
-	PAGE_FLAGS(page) = 0;
-	PAGE_SYSTEMSIZE(page) = (unsigned short) nbSysPages;//FIXME: gets truncated with large page groups
+	PAGE_SET_GENERATION(page, pool->generation);
+	PAGE_CLEAR_FLAG(page, PAGE_FLAGS_MASK);
+	PAGE_GROUPDATA(page) = data->groupData;
 
 	/* Initialize bit mask for allocated cells. */
 	ClearAllCells(page);
     }
     pool->lastPage = prev;
-    PAGE_NEXT(prev) = NULL;
-    PAGE_FLAGS(prev) |= PAGE_FLAG_LAST;
+    PAGE_SET_NEXT(prev, NULL);
+    PAGE_SET_FLAG(prev, PAGE_FLAG_LAST);
 }
 
 /*---------------------------------------------------------------------------
@@ -378,13 +1211,14 @@ PoolAllocPages(
  *	pool	- Pool with pages to free.
  *
  * See also:
- *	<PlatSysPageFree>
+ *	<SysPageFree>
  *---------------------------------------------------------------------------*/
 
 void 
 PoolFreeEmptyPages(
     MemoryPool *pool)
 {
+    ThreadData *data = PlatGetThreadData();
     Page *page, *base, *prev, *next;
     const size_t nbPagesPerSysPage = systemPageSize/PAGE_SIZE;
     size_t nbSetCells, nbPages, i;
@@ -406,7 +1240,7 @@ PoolFreeEmptyPages(
 	for (page = base; ; page = PAGE_NEXT(page)) {
 	    nbPages++;
 	    nbSetCells += NbSetCells(page);
-	    if (PAGE_FLAGS(page) & PAGE_FLAG_LAST) break;
+	    if (PAGE_FLAG(page, PAGE_FLAG_LAST)) break;
 	}
 	next = PAGE_NEXT(page);
 	if (nbSetCells > RESERVED_CELLS * nbPages) {
@@ -419,17 +1253,7 @@ PoolFreeEmptyPages(
 		 * If there was a trailing large cell group, it is unused now.
 		 */
 
-		if (PAGE_SYSTEMSIZE(base) > 1) {
-		    /*
-		     * Free extra system pages used by trailing cells.
-		     */
-
-		    PlatSysPageFree(base + nbPagesPerSysPage, 
-			    PAGE_SYSTEMSIZE(base) - 1);
-		    for (i = 0; i < nbPages; i++) {
-			PAGE_SYSTEMSIZE(base+i) = 1;
-		    }
-		}
+		SysPageTrim(base);
 
 		if (nbPages < nbPagesPerSysPage) {
 		    /*
@@ -437,16 +1261,14 @@ PoolFreeEmptyPages(
 		     * trailing cells.
 		     */
 
-		    PAGE_FLAGS(page) &= ~PAGE_FLAG_LAST;
+		    PAGE_CLEAR_FLAG(page, PAGE_FLAG_LAST);
 		    for (i = nbPages; i < nbPagesPerSysPage; i++) {
-			PAGE_NEXT(page) = page+1;
+			PAGE_SET_NEXT(page, page+1);
 			page++;
 
-			/* Flags. */
-			PAGE_GENERATION(page) 
-				= (unsigned char) pool->generation;
-			PAGE_FLAGS(page) = 0;
-			PAGE_SYSTEMSIZE(page) = 1;
+			PAGE_SET_GENERATION(page, pool->generation);
+			PAGE_CLEAR_FLAG(page, PAGE_FLAGS_MASK);
+			PAGE_GROUPDATA(page) = data->groupData;
 
 			/* Initialize bit mask for allocated cells. */
 			ClearAllCells(page);
@@ -454,8 +1276,8 @@ PoolFreeEmptyPages(
 			nbPages++;
 			nbSetCells++;
 		    }
-		    PAGE_FLAGS(page) |= PAGE_FLAG_LAST;
-		    PAGE_NEXT(page) = next;
+		    PAGE_SET_FLAG(page, PAGE_FLAG_LAST);
+		    PAGE_SET_NEXT(page, next);
 		}
 	    }
 	    prev = page;
@@ -471,7 +1293,7 @@ PoolFreeEmptyPages(
 		 * Middle of list. 
 		 */
 
-		PAGE_NEXT(prev) = next;
+		PAGE_SET_NEXT(prev, next);
 	    } else {
 		/* 
 		 * Head of list. 
@@ -484,7 +1306,7 @@ PoolFreeEmptyPages(
 	     * Free the system page. 
 	     */
 
-	    PlatSysPageFree(base, PAGE_SYSTEMSIZE(base));
+	    SysPageFree(base);
 	}
     }
     ASSERT(!prev||!PAGE_NEXT(prev));
