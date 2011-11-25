@@ -180,7 +180,7 @@ HashString(
     Col_Word key)
 {
     uintptr_t hash = 0;
-    Col_TraverseRopeChunks(1, &key, 0, SIZE_MAX, HashChunkProc, &hash, NULL);
+    Col_TraverseRopeChunks(key, 0, SIZE_MAX, HashChunkProc, &hash, NULL);
     return hash;
 }
 
@@ -777,8 +777,7 @@ StringHashMapFindEntry(
     while (entry) {
 	ASSERT(WORD_TYPE(entry) == WORD_TYPE_HASHENTRY || WORD_TYPE(entry) == WORD_TYPE_MHASHENTRY);
 	if (WORD_HASHENTRY_HASH(entry) == (hash & HASHENTRY_HASH_MASK)
-		&& Col_CompareRopes(WORD_MAPENTRY_KEY(entry), key, 0, SIZE_MAX,
-		NULL, NULL, NULL) == 0) {
+		&& Col_CompareRopes(WORD_MAPENTRY_KEY(entry), key) == 0) {
 	    /*
 	     * Found!
 	     */
@@ -1137,8 +1136,7 @@ Col_StringHashMapUnset(
     entry = buckets[index];
     while (entry) {
 	if (WORD_HASHENTRY_HASH(entry) == (hash & HASHENTRY_HASH_MASK)
-		&& Col_CompareRopes(WORD_MAPENTRY_KEY(entry), key, 0, SIZE_MAX,
-		NULL, NULL, NULL) == 0) {
+		&& Col_CompareRopes(WORD_MAPENTRY_KEY(entry), key) == 0) {
 	    /*
 	     * Found! Unlink & remove entry.
 	     */

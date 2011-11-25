@@ -31,17 +31,51 @@ EXTERN Col_Word		Col_NewRope(Col_StringFormat format, const void *data,
 			    size_t byteLength);
 
 /****************************************************************************
- * Group: Rope Access and Comparison
+ * Group: Rope Access
  *
  * Declarations:
- *	<Col_RopeLength>, <Col_RopeAt>, <Col_CompareRopes>
+ *	<Col_RopeLength>, <Col_RopeAt>, <Col_CompareRopesL>, 
+ *	<Col_RopeFindFirstL>, <Col_RopeFindLastL>
  ****************************************************************************/
 
 EXTERN size_t		Col_RopeLength(Col_Word rope);
 EXTERN Col_Char		Col_RopeAt(Col_Word rope, size_t index);
-EXTERN int		Col_CompareRopes(Col_Word rope1, Col_Word rope2,
+EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 			    size_t start, size_t max, size_t *posPtr, 
 			    Col_Char *c1Ptr, Col_Char *c2Ptr);
+/*TODO
+EXTERN size_t		Col_RopeFindFirstL(Col_Word rope, Col_Char c, 
+			    size_t start, size_t max);
+EXTERN size_t		Col_RopeFindLastL(Col_Word rope, Col_Char c, 
+			    size_t start, size_t max);
+*/
+
+/*---------------------------------------------------------------------------
+ * Macro: Col_CompareRopes
+ *
+ *	Simple version of <Col_CompareRopesL>, compare two ropes. This is the 
+ *	rope counterpart to strcmp.
+ *
+ * See also:
+ *	<Col_CompareRopesL>
+ *---------------------------------------------------------------------------*/
+
+#define Col_CompareRopes(rope1, rope2) \
+	Col_CompareRopesL((rope1), (rope2), 0, SIZE_MAX, NULL, NULL, NULL)
+
+/*---------------------------------------------------------------------------
+ * Macro: Col_CompareRopesN
+ *
+ *	Simple version of <Col_CompareRopesL> compare two ropes up to a given
+ *	number of characters. This is the rope counterpart to strncmp.
+ *
+ * See also:
+ *	<Col_CompareRopesL>
+ *---------------------------------------------------------------------------*/
+
+#define Col_CompareRopesN(rope1, rope2, max) \
+	Col_CompareRopesL((rope1), (rope2), 0, (max), NULL, NULL, NULL)
+
 
 /****************************************************************************
  * Group: Rope Operations
@@ -82,7 +116,7 @@ EXTERN Col_Word		Col_RopeReplace(Col_Word rope, size_t first,
  * Group: Rope Traversal
  *
  * Declarations:
- *	<Col_TraverseRopeChunks>
+ *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -130,9 +164,12 @@ typedef struct Col_RopeChunk {
 typedef int (Col_RopeChunksTraverseProc) (size_t index, size_t length, 
 	size_t number, const Col_RopeChunk *chunks, Col_ClientData clientData);
 
-EXTERN int		Col_TraverseRopeChunks(size_t number, Col_Word *ropes, 
+EXTERN int		Col_TraverseRopeChunksN(size_t number, Col_Word *ropes, 
 			    size_t start, size_t max, 
 			    Col_RopeChunksTraverseProc *proc, 
+			    Col_ClientData clientData, size_t *lengthPtr);
+EXTERN int		Col_TraverseRopeChunks(Col_Word rope, size_t start, 
+			    size_t max, Col_RopeChunksTraverseProc *proc, 
 			    Col_ClientData clientData, size_t *lengthPtr);
 
 

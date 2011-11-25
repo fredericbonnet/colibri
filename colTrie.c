@@ -503,7 +503,7 @@ ConvertIntNodeToMutable(
  *	maskPtr		- (out) Crit-bit mask.
  *
  * See also:
- *	<Col_CompareRopes>
+ *	<Col_CompareRopesL>
  *---------------------------------------------------------------------------*/
 
 static Col_Word
@@ -584,7 +584,7 @@ StringTrieMapFindNode(
 
     ASSERT(WORD_TYPE(node) == WORD_TYPE_TRIELEAF || WORD_TYPE(node) == WORD_TYPE_MTRIELEAF);
     entryKey = WORD_MAPENTRY_KEY(node);
-    compare = Col_CompareRopes(key, entryKey, 0, SIZE_MAX, &diff, &cKey, 
+    compare = Col_CompareRopesL(key, entryKey, 0, SIZE_MAX, &diff, &cKey, 
 	    &cEntryKey);
     if (compare == 0 || !closest) {
 	/*

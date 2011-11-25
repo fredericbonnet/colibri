@@ -38,6 +38,7 @@
  * Prototypes for functions used only in this file.
  */
 
+typedef struct ChunkTraverseInfo *pChunkTraverseInfo;
 static Col_ListChunksTraverseProc MergeChunksProc;
 static unsigned char	GetDepth(Col_Word list);
 static Col_Word		GetRoot(Col_Word list);
@@ -55,6 +56,9 @@ static void		MListInsert(Col_Word * nodePtr, size_t index,
 				Col_Word list);
 static void		MListRemove(Col_Word * nodePtr, size_t first, 
 				size_t last);
+static void		GetChunk(struct ChunkTraverseInfo *info, 
+			    const Col_Word **elements);
+static void		NextChunk(struct ChunkTraverseInfo *info, size_t nb);
 static ColListIterLeafAtProc IterAtVector, IterAtVoid;
 
 
@@ -728,7 +732,7 @@ Col_Sublist(
 
 	info.length = 0;
 	info.vector = WORD_VOIDLIST_NEW(length);
-	Col_TraverseListChunks(1, &list, first, length, MergeChunksProc, &info, 
+	Col_TraverseListChunks(list, first, length, MergeChunksProc, &info, 
 		NULL);
 	ASSERT(info.length == length);
 
@@ -968,10 +972,10 @@ Col_ConcatLists(
 
 	info.length = 0;
 	info.vector = WORD_VOIDLIST_NEW(leftLength + rightLength);
-	Col_TraverseListChunks(1, &left, 0, leftLength, MergeChunksProc, &info, 
+	Col_TraverseListChunks(left, 0, leftLength, MergeChunksProc, &info, 
 		NULL);
-	Col_TraverseListChunks(1, &right, 0, rightLength, MergeChunksProc, 
-		&info, NULL);
+	Col_TraverseListChunks(right, 0, rightLength, MergeChunksProc, &info,
+		NULL);
 	ASSERT(info.length == leftLength+rightLength);
 
 	return info.vector;
@@ -2801,7 +2805,7 @@ start:
 
 		info.length = index;
 		info.vector = *nodePtr;
-		Col_TraverseListChunks(1, &list, 0, listLength, MergeChunksProc, 
+		Col_TraverseListChunks(list, 0, listLength, MergeChunksProc, 
 			&info, NULL);
 		ASSERT(info.length == index+listLength);
 		return;
@@ -2828,12 +2832,11 @@ start:
 
 	info.length = 0;
 	info.vector = node;
-	Col_TraverseListChunks(1, nodePtr, 0, index, MergeChunksProc, 
+	Col_TraverseListChunks(*nodePtr, 0, index, MergeChunksProc, &info, NULL);
+	Col_TraverseListChunks(list, 0, listLength, MergeChunksProc, &info, 
+		NULL);
+	Col_TraverseListChunks(*nodePtr, index, length-index, MergeChunksProc, 
 		&info, NULL);
-	Col_TraverseListChunks(1, &list, 0, listLength, MergeChunksProc, 
-		&info, NULL);
-	Col_TraverseListChunks(1, nodePtr, index, length-index, 
-		MergeChunksProc, &info, NULL);
 	ASSERT(info.length == length+listLength);
 
 	*nodePtr = node;
@@ -3303,10 +3306,10 @@ start:
 
 	info.length = 0;
 	info.vector = node;
-	Col_TraverseListChunks(1, nodePtr, 0, first, 
-		MergeChunksProc, &info, NULL);
-	Col_TraverseListChunks(1, nodePtr, last+1, length-last, 
-		MergeChunksProc, &info, NULL);
+	Col_TraverseListChunks(*nodePtr, 0, first, MergeChunksProc, &info, 
+		NULL);
+	Col_TraverseListChunks(*nodePtr, last+1, length-last, MergeChunksProc, 
+		&info, NULL);
 	ASSERT(info.length == length-(last-first+1));
 
 	*nodePtr = node;
@@ -3436,7 +3439,225 @@ Col_MListReplace(
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Function: Col_TraverseListChunks
+ * Internal Typedef: ChunkTraverseInfo
+ *
+ *	Structure used during recursive list chunk traversal. This avoids
+ *	recursive procedure calls thanks to a pre-allocated backtracking 
+ *	structure: since the algorithms only recurse on concat nodes and since
+ *	we know their depth, we can allocate the needed space once for all.
+ *
+ * Fields:
+ *	backtracks	- Pre-allocated backtracking structure.
+ *	list		- Currently traversed list.
+ *	start		- Index of first element traversed in list.
+ *	max		- Max number of elements traversed in list.
+ *	maxDepth	- Depth of toplevel concat node.
+ *	prevDepth	- Depth of next concat node for backtracking.
+ *
+ * Backtrack stack element fields:
+ *	backtracks.prevDepth	- Depth of next concat node for backtracking.
+ *	backtracks.list		- List.
+ *	backtracks.max		- Max number of elements traversed in list.
+ *
+ * See also:
+ *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
+ *---------------------------------------------------------------------------*/
+
+typedef struct ChunkTraverseInfo {
+    struct {
+	int prevDepth;
+	Col_Word list;
+	size_t max;
+    } *backtracks;
+    Col_Word list;
+    size_t start, max;
+    int maxDepth, prevDepth;
+} ChunkTraverseInfo;
+
+/*---------------------------------------------------------------------------
+ * Internal Function: GetChunk
+ *
+ *	Get chunk from given traversal info.
+ *
+ * Arguments:
+ *	info		- Traversal info.
+ *	elements	- Chunk info for leaf.
+ *
+ * See also:
+ *	<ChunkTraverseInfo>, <Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
+ *---------------------------------------------------------------------------*/
+
+static void
+GetChunk(
+    ChunkTraverseInfo *info,
+    const Col_Word **elements)
+{
+    int type;
+
+    for (;;) {
+	/*
+	 * Descend into structure until we find a suitable leaf.
+	 */
+
+	type = WORD_TYPE(info->list);
+	switch (type) {
+	    case WORD_TYPE_CIRCLIST:
+		/* 
+		 * Recurse on core.
+		 */
+
+		info->list = WORD_CIRCLIST_CORE(info->list);
+		continue;
+
+	    case WORD_TYPE_WRAP:
+		/* 
+		 * Recurse on source.
+		 */
+
+		info->list = WORD_WRAP_SOURCE(info->list);
+		continue;
+
+	    case WORD_TYPE_SUBLIST:
+		/* 
+		 * Sublist: recurse on source list.
+		 */
+
+		info->start += WORD_SUBLIST_FIRST(info->list);
+		info->list = WORD_SUBLIST_SOURCE(info->list);
+		continue;
+        	    
+	    case WORD_TYPE_CONCATLIST:
+	    case WORD_TYPE_MCONCATLIST: {
+		/* 
+		 * Concat: descend into covered arms.
+		 */
+
+		int depth;
+		size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(
+			info->list);
+		if (leftLength == 0) {
+		    leftLength = Col_ListLength(
+			    WORD_CONCATLIST_LEFT(info->list));
+		}
+		if (info->start + info->max <= leftLength) {
+		    /* 
+		     * Recurse on left arm only. 
+		     */
+
+		    info->list = WORD_CONCATLIST_LEFT(info->list);
+		    continue;
+		}
+		if (info->start >= leftLength) {
+		    /* 
+		     * Recurse on right arm only. 
+		     */
+
+		    info->start -= leftLength;
+		    info->list = WORD_CONCATLIST_RIGHT(info->list);
+		    continue;
+		} 
+
+		/*
+		 * Push right onto stack and recurse on left.
+		 */
+
+		ASSERT(info->backtracks);
+		depth = WORD_CONCATLIST_DEPTH(info->list);
+		ASSERT(depth <= info->maxDepth);
+		info->backtracks[depth-1].prevDepth = info->prevDepth;
+		info->backtracks[depth-1].list 
+			= WORD_CONCATLIST_RIGHT(info->list);
+		info->backtracks[depth-1].max = info->max
+			- (leftLength-info->start);
+		info->prevDepth = depth;
+
+		info->max = leftLength-info->start;
+		info->list = WORD_CONCATLIST_LEFT(info->list);
+		continue;
+	    }
+
+	    case WORD_TYPE_MLIST:
+		/* 
+		 * Recurse on list root.
+		 */
+
+		info->list = WORD_MLIST_ROOT(info->list);
+		continue;
+
+	    /* WORD_TYPE_UNKNOWN */
+	}
+	break;
+    }
+
+    /*
+     * Get leaf data.
+     */
+
+    switch (type) {
+	case WORD_TYPE_VECTOR:
+	case WORD_TYPE_MVECTOR:
+	    *elements = WORD_VECTOR_ELEMENTS(info->list) + info->start;
+	    break;
+
+	case WORD_TYPE_VOIDLIST:
+	    *elements = COL_LISTCHUNK_VOID;
+	    break;
+
+	/* WORD_TYPE_UNKNOWN */
+
+	default:
+	    /* CANTHAPPEN */
+	    ASSERT(0);
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: NextChunk
+ *
+ *	Get next chunk in traversal order.
+ *
+ * Arguments:
+ *	info	- Traversal info.
+ *	nb	- Number of elements to skip, must be < info->max.
+ *
+ * See also:
+ *	<ChunkTraverseInfo>, <Col_TraverseListChunksN>, <Col_TraverseListChunks>
+ *---------------------------------------------------------------------------*/
+
+static void 
+NextChunk(
+    ChunkTraverseInfo *info,
+    size_t nb)
+{
+    ASSERT(info->max >= nb);
+    info->max -= nb;
+    if (info->max > 0) {
+	/*
+	 * Still in leaf, advance.
+	 */
+
+	info->start += nb;
+    } else if (info->prevDepth == INT_MAX) {
+	/*
+	 * Already at toplevel => end of list.
+	 */
+
+	info->list = WORD_NIL;
+    } else {
+	/*
+	 * Reached end of leaf, backtracks.
+	 */
+
+	ASSERT(info->backtracks);
+	info->list = info->backtracks[info->prevDepth-1].list;
+	info->max = info->backtracks[info->prevDepth-1].max;
+	info->start = 0;
+	info->prevDepth = info->backtracks[info->prevDepth-1].prevDepth;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_TraverseListChunksN
  *
  *	Iterate over the chunks of a number of lists.
  *
@@ -3465,7 +3686,7 @@ Col_MListReplace(
  *---------------------------------------------------------------------------*/
 
 int 
-Col_TraverseListChunks(
+Col_TraverseListChunksN(
     size_t number,
     Col_Word *lists,
     size_t start,
@@ -3474,26 +3695,9 @@ Col_TraverseListChunks(
     Col_ClientData clientData,
     size_t *lengthPtr)
 {
-    struct {
-	/*
-	 * Non-recursive backtracking structure. Since the algorithm only 
-	 * recurses on concat nodes and since we know their depth, we can 
-	 * allocate the needed space on the stack.
-	 */
-
-	struct {
-	    int prevDepth;
-	    Col_Word list;
-	    size_t max;
-	} *backtracks;
-
-	Col_Word list;
-	size_t start, max;
-	int maxDepth, prevDepth;
-    } *info;
     size_t i;
+    ChunkTraverseInfo *info;
     const Col_Word **elements;
-    int type;
     int result;
 
     info = alloca(sizeof(*info) * number);
@@ -3535,9 +3739,10 @@ Col_TraverseListChunks(
     for (i=0; i < number; i++) {
 	ASSERT(info[i].max <= max);
 	info[i].list = lists[i];
-	info[i].backtracks = NULL;
 	info[i].start = start;
-	info[i].maxDepth = 0;
+	info[i].maxDepth = GetDepth(lists[i]);
+	info[i].backtracks = (info[i].maxDepth ? 
+	    alloca(sizeof(*info[i].backtracks) * info[i].maxDepth) : NULL);
 	info[i].prevDepth = INT_MAX;
     }
 
@@ -3552,131 +3757,7 @@ Col_TraverseListChunks(
 		continue;
 	    }
 
-	    for (;;) {
-		/*
-		 * Descend into structure until we find a suitable leaf.
-		 */
-
-		type = WORD_TYPE(info[i].list);
-		switch (type) {
-		    case WORD_TYPE_CIRCLIST:
-			/* 
-			 * Recurse on core.
-			 */
-
-			info[i].list = WORD_CIRCLIST_CORE(info[i].list);
-			continue;
-
-		    case WORD_TYPE_WRAP:
-			/* 
-			 * Recurse on source.
-			 */
-
-			info[i].list = WORD_WRAP_SOURCE(info[i].list);
-			continue;
-
-		    case WORD_TYPE_SUBLIST:
-			/* 
-			 * Sublist: recurse on source list.
-			 */
-
-			info[i].start += WORD_SUBLIST_FIRST(info[i].list);
-			info[i].list = WORD_SUBLIST_SOURCE(info[i].list);
-			continue;
-            	    
-		    case WORD_TYPE_CONCATLIST:
-		    case WORD_TYPE_MCONCATLIST: {
-			/* 
-			 * Concat: descend into covered arms.
-			 */
-
-			int depth;
-			size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(
-				info[i].list);
-			if (leftLength == 0) {
-			    leftLength = Col_ListLength(
-				    WORD_CONCATLIST_LEFT(info[i].list));
-			}
-			if (info[i].start + info[i].max <= leftLength) {
-			    /* 
-			     * Recurse on left arm only. 
-			     */
-
-			    info[i].list = WORD_CONCATLIST_LEFT(info[i].list);
-			    continue;
-			}
-			if (info[i].start >= leftLength) {
-			    /* 
-			     * Recurse on right arm only. 
-			     */
-
-			    info[i].start -= leftLength;
-			    info[i].list = WORD_CONCATLIST_RIGHT(info[i].list);
-			    continue;
-			} 
-
-			/*
-			 * Push right onto stack and recurse on left.
-			 */
-
-			depth = WORD_CONCATLIST_DEPTH(info[i].list);
-			if (!info[i].backtracks) {
-			    ASSERT(info[i].maxDepth == 0);
-			    ASSERT(info[i].prevDepth == INT_MAX);
-			    info[i].maxDepth = depth;
-			    info[i].backtracks = alloca(
-				    sizeof(*info[i].backtracks) * depth);
-			} else {
-			    ASSERT(depth <= info[i].maxDepth);
-			}
-			info[i].backtracks[depth-1].prevDepth 
-				= info[i].prevDepth;
-			info[i].backtracks[depth-1].list 
-				= WORD_CONCATLIST_RIGHT(info[i].list);
-			info[i].backtracks[depth-1].max = info[i].max
-				- (leftLength-info[i].start);
-			info[i].prevDepth = depth;
-
-			info[i].max = leftLength-info[i].start;
-			info[i].list = WORD_CONCATLIST_LEFT(info[i].list);
-			continue;
-		    }
-
-		    case WORD_TYPE_MLIST:
-			/* 
-			 * Recurse on list root.
-			 */
-
-			info[i].list = WORD_MLIST_ROOT(info[i].list);
-			continue;
-
-		    /* WORD_TYPE_UNKNOWN */
-		}
-		break;
-	    }
-
-	    /*
-	     * Get leaf data.
-	     */
-
-	    switch (type) {
-		case WORD_TYPE_VECTOR:
-		case WORD_TYPE_MVECTOR:
-		    elements[i] = WORD_VECTOR_ELEMENTS(info[i].list)
-			    + info[i].start;
-		    break;
-
-		case WORD_TYPE_VOIDLIST:
-		    elements[i] = COL_LISTCHUNK_VOID;
-		    break;
-
-		/* WORD_TYPE_UNKNOWN */
-
-		default:
-		    /* CANTHAPPEN */
-		    ASSERT(0);
-		    return 0;
-	    }
+	    GetChunk(info+i, elements+i);
 	}
 
 	/*
@@ -3691,7 +3772,7 @@ Col_TraverseListChunks(
 	}
 
 	/*
-	 * Call proc on leaves' data.
+	 * Call proc on leaves data.
 	 */
 
 	if (lengthPtr) *lengthPtr += max;
@@ -3708,35 +3789,121 @@ Col_TraverseListChunks(
 	     * Continue iteration.
 	     */
 
-	    size_t nbEnd = 0;
+	    int next = 0;
 	    for (i=0; i < number; i++) {
-		ASSERT(info[i].max >= max);
-		info[i].max -= max;
-		if (info[i].max > 0) {
-		    info[i].start += max;
-		} else if (info[i].prevDepth == INT_MAX) {
-		    /*
-		     * Already at toplevel => end of list.
-		     */
-
-		    info[i].list = WORD_NIL;
-		    nbEnd++;
-		} else {
-		    /*
-		     * Reached end of leaf, backtrack.
-		     */
-
-		    ASSERT(info[i].backtracks);
-		    info[i].list = info[i].backtracks[info[i].prevDepth-1].list;
-		    info[i].max = info[i].backtracks[info[i].prevDepth-1].max;
-		    info[i].start = 0;
-		    info[i].prevDepth 
-			    = info[i].backtracks[info[i].prevDepth-1].prevDepth;
-		}
+		if (info[i].list) NextChunk(info+i, max);
+		if (info[i].list) next = 1;
 	    }
-	    if (nbEnd == number) {
+	    if (!next) {
 		/*
-		 * Reached end of all lists, stop there.
+		 * Reached end of all ropes, stop there.
+		 */
+
+		return 0;
+	    }
+	}
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_TraverseListChunks
+ *
+ *	Iterate over the chunks of a list.
+ *
+ *	For each traversed chunk, proc is called back with the opaque data as
+ *	well as the position within the list. If it returns a non-zero result 
+ *	then the iteration ends. 
+ *
+ * Note:
+ *	The algorithm is naturally recursive but this implementation avoids
+ *	recursive calls thanks to a stack-allocated backtracking structure. 
+ *	This procedure is an optimized version of <Col_TraverseListChunksN>.
+ *
+ * Arguments:
+ *	list		- List to traverse.
+ *	start		- Index of first element.
+ *	max		- Max number of elements.
+ *	proc		- Callback proc called on each chunk.
+ *	clientData	- Opaque data passed as is to above proc.
+ *
+ * Results:
+ *	The return value of the last called proc, or -1 if no traversal was
+ *	performed. Additionally:
+ *
+ *	lengthPtr	- If non-NULL, incremented by the total number of 
+ *			  elements traversed upon completion.
+ *---------------------------------------------------------------------------*/
+
+int 
+Col_TraverseListChunks(
+    Col_Word list,
+    size_t start,
+    size_t max,
+    Col_ListChunksTraverseProc *proc,
+    Col_ClientData clientData,
+    size_t *lengthPtr)
+{
+    ChunkTraverseInfo info;
+    Col_Word *elements;
+    int result;
+    size_t listLength = Col_ListLength(list);
+
+    if (start > listLength) {
+	/* 
+	 * Start is past the end of the list.
+	 */
+
+	max = 0;
+    } else if (max > listLength-start) {
+	/* 
+	 * Adjust max to the remaining length. 
+	 */
+
+	max = listLength-start;
+    }
+
+    if (max == 0) {
+	/*
+	 * Nothing to traverse.
+	 */
+
+	return -1;
+    }
+
+    info.list = list;
+    info.start = start;
+    info.max = max;
+    info.maxDepth = GetDepth(list);
+    info.backtracks = (info.maxDepth ? 
+	    alloca(sizeof(*info.backtracks) * info.maxDepth) : NULL);
+    info.prevDepth = INT_MAX;
+
+    for (;;) {
+	GetChunk(&info, &elements);
+	max = info.max;
+
+	/*
+	 * Call proc on leaf data.
+	 */
+
+	if (lengthPtr) *lengthPtr += max;
+	result = proc(start, max, 1, &elements, clientData);
+	start += max;
+	if (result != 0) {
+	    /*
+	     * Stop there.
+	     */
+
+	    return result;
+	} else {
+	    /*
+	     * Continue iteration.
+	     */
+
+	    NextChunk(&info, max);
+	    if (!info.list) {
+		/*
+		 * Reached end of list, stop there.
 		 */
 
 		return 0;

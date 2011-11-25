@@ -25,10 +25,15 @@
  * Prototypes for functions used only in this file.
  */
 
+typedef struct ChunkTraverseInfo *pChunkTraverseInfo;
 static Col_RopeChunksTraverseProc MergeChunksProc;
+static Col_RopeChunksTraverseProc CompareChunksProc;
+static unsigned char	GetDepth(Col_Word rope);
 static void		GetArms(Col_Word rope, Col_Word * leftPtr, 
 			    Col_Word * rightPtr);
-static Col_RopeChunksTraverseProc CompareChunksProc;
+static void		GetChunk(struct ChunkTraverseInfo *info, 
+			    Col_RopeChunk *chunk);
+static void		NextChunk(struct ChunkTraverseInfo *info, size_t nb);
 static ColRopeIterLeafAtProc IterAtUcs1, IterAtUcs2, IterAtUcs4, IterAtUtf8;
 
 
@@ -456,7 +461,7 @@ Col_RopeAt(
  *			  characters.
  *
  * See also:
- *	<CompareChunksProc>, <Col_CompareRopes>
+ *	<CompareChunksProc>, <Col_CompareRopesL>
  *---------------------------------------------------------------------------*/
 
 typedef struct CompareChunksInfo {
@@ -584,7 +589,7 @@ CompareChunksProc(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_CompareRopes
+ * Function: Col_CompareRopesL
  *
  *	Compare two ropes and find the first differing characters if any. This
  *	is the rope counterpart to strncmp with extra features.
@@ -612,7 +617,7 @@ CompareChunksProc(
  *---------------------------------------------------------------------------*/
 
 int
-Col_CompareRopes(
+Col_CompareRopesL(
     Col_Word rope1, 
     Col_Word rope2,
     size_t start, 
@@ -652,7 +657,7 @@ Col_CompareRopes(
     info.posPtr = posPtr;
     info.c1Ptr = c1Ptr;
     info.c2Ptr = c2Ptr;
-    return Col_TraverseRopeChunks(2, ropes, start, max, CompareChunksProc, 
+    return Col_TraverseRopeChunksN(2, ropes, start, max, CompareChunksProc, 
 	    &info, NULL);
 }
 
@@ -934,6 +939,45 @@ MergeChunksProc(
 }
 
 /*---------------------------------------------------------------------------
+ * Internal Function: GetDepth
+ *
+ *	Get the depth of the rope.
+ *
+ * Arguments:
+ *	node	- Rope node to get depth from.
+ *
+ * Result:
+ *	Depth of rope.
+ *
+ * See also:
+ *	<Col_ConcatRopes>
+ *---------------------------------------------------------------------------*/
+
+static unsigned char
+GetDepth(
+    Col_Word rope)
+{
+    for (;;) {
+	switch (WORD_TYPE(rope)) {
+	    case WORD_TYPE_WRAP:
+		rope = WORD_WRAP_SOURCE(rope);
+		break;
+
+ 	   case WORD_TYPE_SUBROPE:
+		return WORD_SUBROPE_DEPTH(rope);
+
+	    case WORD_TYPE_CONCATROPE:
+		return WORD_CONCATROPE_DEPTH(rope);
+
+	    /* WORD_TYPE_UNKNOWN */
+
+	    default:
+		return 0;
+	}
+    }
+}
+
+/*---------------------------------------------------------------------------
  * Internal Function: GetArms
  *
  *	Get the left and right arms of a rope, i.e. a concat or one of its 
@@ -1161,8 +1205,8 @@ Col_Subrope(
 	info.length = 0;
 	info.byteLength = 0;
 
-	if (Col_TraverseRopeChunks(1, &rope, first, length, MergeChunksProc, 
-			&info, NULL) == 0) {
+	if (Col_TraverseRopeChunks(rope, first, length, MergeChunksProc, &info, 
+		NULL) == 0) {
 	    /* 
 	     * Zero result means data fits into one short leaf. 
 	     */
@@ -1261,8 +1305,8 @@ Col_ConcatRopes(
     Col_Word right)
 {
     Col_Word concatRope;	/* Resulting rope in the general case. */
-    unsigned char leftDepth=0, rightDepth=0; 
-				/* Respective depths of left and right ropes. */
+    unsigned char leftDepth, rightDepth; 
+				/* Respective depths of left and right lists. */
     size_t leftLength, rightLength;
 				/* Respective lengths. */
 
@@ -1306,11 +1350,6 @@ Col_ConcatRopes(
 		return Col_Subrope(WORD_SUBROPE_SOURCE(left), 
 			WORD_SUBROPE_FIRST(left), WORD_SUBROPE_LAST(right));
 	    }
-	    leftDepth = WORD_SUBROPE_DEPTH(left);
-	    break;
-
-	case WORD_TYPE_CONCATROPE:
-	    leftDepth = WORD_CONCATROPE_DEPTH(left);
 	    break;
 
 	case WORD_TYPE_CUSTOM: {
@@ -1329,14 +1368,6 @@ Col_ConcatRopes(
 	/* WORD_TYPE_UNKNOWN */
     }
     switch (WORD_TYPE(right)) {
-	case WORD_TYPE_SUBROPE:
-	    rightDepth = WORD_SUBROPE_DEPTH(right);
-	    break;
-
-	case WORD_TYPE_CONCATROPE:
-	    rightDepth = WORD_CONCATROPE_DEPTH(right);
-	    break;
-
 	case WORD_TYPE_CUSTOM: {
 	    Col_CustomRopeType *typeInfo 
 		    = (Col_CustomRopeType *) WORD_TYPEINFO(right);
@@ -1365,10 +1396,9 @@ Col_ConcatRopes(
 	info.length = 0;
 	info.byteLength = 0;
 
-	if (Col_TraverseRopeChunks(1, &left, 0, leftLength, MergeChunksProc, 
-			&info, NULL) == 0
-		&& Col_TraverseRopeChunks(1, &right, 0, rightLength, 
-			MergeChunksProc, &info, NULL) == 0) {
+	if (Col_TraverseRopeChunks(left, 0, leftLength, MergeChunksProc, &info, 
+		NULL) == 0 && Col_TraverseRopeChunks(right, 0, rightLength, 
+		MergeChunksProc, &info, NULL) == 0) {
 	    /* 
 	     * Zero result means data fits into one short leaf. 
 	     */
@@ -1387,26 +1417,19 @@ Col_ConcatRopes(
      * construction it cannot point to another subrope (see Col_Subrope). 
      */
 
+    leftDepth = GetDepth(left);
+    rightDepth = GetDepth(right);
     if (leftDepth > rightDepth+1) {
 	/* 
 	 * Left is deeper by more than 1 level, rebalance.
 	 */
 
-	unsigned char left1Depth=0, left2Depth=0;
 	Col_Word left1, left2;
 
 	ASSERT(leftDepth >= 2);
 
 	GetArms(left, &left1, &left2);
-	switch (WORD_TYPE(left1)) {
-	    case WORD_TYPE_SUBROPE: left1Depth = WORD_SUBROPE_DEPTH(left1); break;
-	    case WORD_TYPE_CONCATROPE: left1Depth = WORD_CONCATROPE_DEPTH(left1); break;
-	}
-	switch (WORD_TYPE(left2)) {
-	    case WORD_TYPE_SUBROPE: left2Depth = WORD_SUBROPE_DEPTH(left2); break;
-	    case WORD_TYPE_CONCATROPE: left2Depth = WORD_CONCATROPE_DEPTH(left2); break;
-	}
-	if (left1Depth < left2Depth) {
+	if (GetDepth(left1) < GetDepth(left2)) {
 	    /* 
 	     * Left2 is deeper, split it between both arms. 
 	     */
@@ -1427,21 +1450,12 @@ Col_ConcatRopes(
 	 * Right is deeper by more than 1 level, rebalance. 
 	 */
 
-	unsigned char right1Depth=0, right2Depth=0;
 	Col_Word right1, right2;
 
 	ASSERT(rightDepth >= 2);
 
 	GetArms(right, &right1, &right2);
-	switch (WORD_TYPE(right1)) {
-	    case WORD_TYPE_SUBROPE: right1Depth = WORD_SUBROPE_DEPTH(right1); break;
-	    case WORD_TYPE_CONCATROPE: right1Depth = WORD_CONCATROPE_DEPTH(right1); break;
-	}
-	switch (WORD_TYPE(right2)) {
-	    case WORD_TYPE_SUBROPE: right2Depth = WORD_SUBROPE_DEPTH(right2); break;
-	    case WORD_TYPE_CONCATROPE: right2Depth = WORD_CONCATROPE_DEPTH(right2); break;
-	}
-	if (right2Depth < right1Depth) {
+	if (GetDepth(right1) > GetDepth(right2)) {
 	    /* 
 	     * Right1 is deeper, split it between both arms. 
 	     */
@@ -1784,7 +1798,268 @@ Col_RopeReplace(
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Function: Col_TraverseRopeChunks
+ * Internal Typedef: ChunkTraverseInfo
+ *
+ *	Structure used during recursive rope chunk traversal. This avoids
+ *	recursive procedure calls thanks to a pre-allocated backtracking 
+ *	structure: since the algorithms only recurse on concat nodes and since
+ *	we know their depth, we can allocate the needed space once for all.
+ *
+ * Fields:
+ *	backtracks	- Pre-allocated backtracking structure.
+ *	rope		- Currently traversed rope.
+ *	c		- Character used as buffer for single char ropes (e.g.
+ *			  immediate chars of char-based custom ropes).
+ *	start		- Index of first character traversed in rope.
+ *	max		- Max number of characters traversed in rope.
+ *	maxDepth	- Depth of toplevel concat node.
+ *	prevDepth	- Depth of next concat node for backtracking.
+ *
+ * Backtrack stack element fields:
+ *	backtracks.prevDepth	- Depth of next concat node for backtracking.
+ *	backtracks.rope		- Rope.
+ *	backtracks.max		- Max number of characters traversed in rope.
+ *
+ * See also:
+ *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
+ *---------------------------------------------------------------------------*/
+
+typedef struct ChunkTraverseInfo {
+    struct {
+	int prevDepth;
+	Col_Word rope;
+	size_t max;
+    } *backtracks;
+    Col_Word rope;
+    Col_Char4 c;
+    size_t start, max;
+    int maxDepth, prevDepth;
+} ChunkTraverseInfo;
+
+/*---------------------------------------------------------------------------
+ * Internal Function: GetChunk
+ *
+ *	Get chunk from given traversal info.
+ *
+ * Note: 
+ *	This doesn't compute the chunk bytelength as it depends on the
+ *	algorithm (for example, Col_TraverseRopeChunksN truncates chunks to the
+ *	shortest one in the group of traversed ropes).
+ *
+ * Arguments:
+ *	info	- Traversal info.
+ *	chunk	- Chunk info for leaf.
+ *
+ * See also:
+ *	<ChunkTraverseInfo>, <Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
+ *---------------------------------------------------------------------------*/
+
+static void
+GetChunk(
+    ChunkTraverseInfo *info,
+    Col_RopeChunk *chunk)
+{
+    int type;
+
+    for (;;) {
+	/*
+	 * Descend into structure until we find a suitable leaf.
+	 */
+
+	type = WORD_TYPE(info->rope);
+	switch (type) {
+	    case WORD_TYPE_WRAP:
+		/* 
+		 * Recurse on source.
+		 */
+
+		info->rope = WORD_WRAP_SOURCE(info->rope);
+		continue;
+
+	    case WORD_TYPE_SUBROPE:
+		/* 
+		 * Subrope: recurse on source rope.
+		 */
+
+		info->start += WORD_SUBROPE_FIRST(info->rope);
+		info->rope = WORD_SUBROPE_SOURCE(info->rope);
+		continue;
+        	    
+	    case WORD_TYPE_CONCATROPE: {
+		/* 
+		 * Concat: descend into covered arms.
+		 */
+
+		int depth;
+		size_t leftLength = WORD_CONCATROPE_LEFT_LENGTH(
+			info->rope);
+		if (leftLength == 0) {
+		    leftLength = Col_RopeLength(
+			    WORD_CONCATROPE_LEFT(info->rope));
+		}
+		if (info->start + info->max <= leftLength) {
+		    /* 
+		     * Recurse on left arm only. 
+		     */
+
+		    info->rope = WORD_CONCATROPE_LEFT(info->rope);
+		    continue;
+		}
+		if (info->start >= leftLength) {
+		    /* 
+		     * Recurse on right arm only. 
+		     */
+
+		    info->start -= leftLength;
+		    info->rope = WORD_CONCATROPE_RIGHT(info->rope);
+		    continue;
+		} 
+
+		/*
+		 * Push right onto stack and recurse on left.
+		 */
+
+		ASSERT(info->backtracks);
+		depth = WORD_CONCATROPE_DEPTH(info->rope);
+		ASSERT(depth <= info->maxDepth);
+		info->backtracks[depth-1].prevDepth 
+			= info->prevDepth;
+		info->backtracks[depth-1].rope 
+			= WORD_CONCATROPE_RIGHT(info->rope);
+		info->backtracks[depth-1].max = info->max
+			- (leftLength-info->start);
+		info->prevDepth = depth;
+
+		info->max = leftLength-info->start;
+		info->rope = WORD_CONCATROPE_LEFT(info->rope);
+		continue;
+
+	    /* WORD_TYPE_UNKNOWN */
+	    }
+	}
+	break;
+    }
+
+    /*
+     * Get leaf data.
+     */
+
+    switch (type) {
+	case WORD_TYPE_CHAR:
+	    ASSERT(info->start == 0);
+	    ASSERT(info->max == 1);
+	    chunk->format = COL_UCS4;
+	    info->c = WORD_CHAR_GET(info->rope);
+	    chunk->data = &info->c;
+	    break;
+
+	case WORD_TYPE_SMALLSTR:
+	    chunk->format = COL_UCS1;
+	    chunk->data = WORD_SMALLSTR_DATA(info->rope)
+		    + info->start;
+	    break;
+
+	case WORD_TYPE_UCSSTR: {
+	    /* 
+	     * Fixed-width flat strings: traverse range of chars.
+	     *
+	     * Note: the integer values of the format enums match the char size.
+	     */
+
+	    chunk->format = WORD_UCSSTR_FORMAT(info->rope);
+	    chunk->data = WORD_UCSSTR_DATA(info->rope)
+		    + info->start*chunk->format;
+	    break;
+	}
+        	    
+	case WORD_TYPE_UTF8STR:
+	    /*
+	     * Variable-width flat string.
+	     */
+
+	    chunk->format = COL_UTF8;
+	    chunk->data = Col_Utf8CharAddr(
+		    WORD_UTF8STR_DATA(info->rope), info->start, 
+		    WORD_UTF8STR_LENGTH(info->rope), 
+		    WORD_UTF8STR_BYTELENGTH(info->rope));
+	    break;
+
+	case WORD_TYPE_CUSTOM: {
+	    Col_CustomRopeType *typeInfo 
+		    = (Col_CustomRopeType *) WORD_TYPEINFO(info->rope);
+	    ASSERT(typeInfo->type.type == COL_ROPE);
+	    if (typeInfo->chunkAtProc) {
+		typeInfo->chunkAtProc(info->rope, info->start,
+		    info->max, &info->max, chunk);
+	    } else {
+		/*
+		 * Traverse chars individually.
+		 */
+
+		info->max = 1;
+		chunk->format = COL_UCS4;
+		info->c = typeInfo->charAtProc(info->rope, 
+			info->start);
+		chunk->data = &info->c;
+	    }
+	    break;
+	}
+
+	/* WORD_TYPE_UNKNOWN */
+
+	default:
+	    /* CANTHAPPEN */
+	    ASSERT(0);
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: NextChunk
+ *
+ *	Get next chunk in traversal order.
+ *
+ * Arguments:
+ *	info	- Traversal info.
+ *	nb	- Number of characters to skip, must be < info->max.
+ *
+ * See also:
+ *	<ChunkTraverseInfo>, <Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
+ *---------------------------------------------------------------------------*/
+
+static void 
+NextChunk(
+    ChunkTraverseInfo *info,
+    size_t nb)
+{
+    ASSERT(info->max >= nb);
+    info->max -= nb;
+    if (info->max > 0) {
+	/*
+	 * Still in leaf, advance.
+	 */
+
+	info->start += nb;
+    } else if (info->prevDepth == INT_MAX) {
+	/*
+	 * Already at toplevel => end of rope.
+	 */
+
+	info->rope = WORD_NIL;
+    } else {
+	/*
+	 * Reached end of leaf, backtracks.
+	 */
+
+	ASSERT(info->backtracks);
+	info->rope = info->backtracks[info->prevDepth-1].rope;
+	info->max = info->backtracks[info->prevDepth-1].max;
+	info->start = 0;
+	info->prevDepth = info->backtracks[info->prevDepth-1].prevDepth;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_TraverseRopeChunksN
  *
  *	Iterate over the chunks of a number of ropes.
  *
@@ -1813,7 +2088,7 @@ Col_RopeReplace(
  *---------------------------------------------------------------------------*/
 
 int 
-Col_TraverseRopeChunks(
+Col_TraverseRopeChunksN(
     size_t number,
     Col_Word *ropes,
     size_t start,
@@ -1822,27 +2097,9 @@ Col_TraverseRopeChunks(
     Col_ClientData clientData,
     size_t *lengthPtr)
 {
-    struct {
-	/*
-	 * Non-recursive backtracking structure. Since the algorithm only 
-	 * recurses on concat nodes and since we know their depth, we can 
-	 * allocate the needed space on the stack.
-	 */
-
-	struct {
-	    int prevDepth;
-	    Col_Word rope;
-	    size_t max;
-	} *backtracks;
-
-	Col_Word rope;
-	Col_Char4 c;
-	size_t start, max;
-	int maxDepth, prevDepth;
-    } *info;
     size_t i;
+    ChunkTraverseInfo *info;
     Col_RopeChunk *chunks;
-    int type;
     int result;
 
     info = alloca(sizeof(*info) * number);
@@ -1884,9 +2141,10 @@ Col_TraverseRopeChunks(
     for (i=0; i < number; i++) {
 	ASSERT(info[i].max <= max);
 	info[i].rope = ropes[i];
-	info[i].backtracks = NULL;
 	info[i].start = start;
-	info[i].maxDepth = 0;
+	info[i].maxDepth = GetDepth(ropes[i]);
+	info[i].backtracks = (info[i].maxDepth ? 
+	    alloca(sizeof(*info[i].backtracks) * info[i].maxDepth) : NULL);
 	info[i].prevDepth = INT_MAX;
     }
 
@@ -1901,164 +2159,7 @@ Col_TraverseRopeChunks(
 		continue;
 	    }
 
-	    for (;;) {
-		/*
-		 * Descend into structure until we find a suitable leaf.
-		 */
-
-		type = WORD_TYPE(info[i].rope);
-		switch (type) {
-		    case WORD_TYPE_WRAP:
-			/* 
-			 * Recurse on source.
-			 */
-
-			info[i].rope = WORD_WRAP_SOURCE(info[i].rope);
-			continue;
-
-		    case WORD_TYPE_SUBROPE:
-			/* 
-			 * Subrope: recurse on source rope.
-			 */
-
-			info[i].start += WORD_SUBROPE_FIRST(info[i].rope);
-			info[i].rope = WORD_SUBROPE_SOURCE(info[i].rope);
-			continue;
-            	    
-		    case WORD_TYPE_CONCATROPE: {
-			/* 
-			 * Concat: descend into covered arms.
-			 */
-
-			int depth;
-			size_t leftLength = WORD_CONCATROPE_LEFT_LENGTH(
-				info[i].rope);
-			if (leftLength == 0) {
-			    leftLength = Col_RopeLength(
-				    WORD_CONCATROPE_LEFT(info[i].rope));
-			}
-			if (info[i].start + info[i].max <= leftLength) {
-			    /* 
-			     * Recurse on left arm only. 
-			     */
-
-			    info[i].rope = WORD_CONCATROPE_LEFT(info[i].rope);
-			    continue;
-			}
-			if (info[i].start >= leftLength) {
-			    /* 
-			     * Recurse on right arm only. 
-			     */
-
-			    info[i].start -= leftLength;
-			    info[i].rope = WORD_CONCATROPE_RIGHT(info[i].rope);
-			    continue;
-			} 
-
-			/*
-			 * Push right onto stack and recurse on left.
-			 */
-
-			depth = WORD_CONCATROPE_DEPTH(info[i].rope);
-			if (!info[i].backtracks) {
-			    ASSERT(info[i].maxDepth == 0);
-			    ASSERT(info[i].prevDepth == INT_MAX);
-			    info[i].maxDepth = depth;
-			    info[i].backtracks = alloca(
-				    sizeof(*info[i].backtracks) * depth);
-			} else {
-			    ASSERT(depth <= info[i].maxDepth);
-			}
-			info[i].backtracks[depth-1].prevDepth 
-				= info[i].prevDepth;
-			info[i].backtracks[depth-1].rope 
-				= WORD_CONCATROPE_RIGHT(info[i].rope);
-			info[i].backtracks[depth-1].max = info[i].max
-				- (leftLength-info[i].start);
-			info[i].prevDepth = depth;
-
-			info[i].max = leftLength-info[i].start;
-			info[i].rope = WORD_CONCATROPE_LEFT(info[i].rope);
-			continue;
-
-		    /* WORD_TYPE_UNKNOWN */
-		    }
-		}
-		break;
-	    }
-
-	    /*
-	     * Get leaf data.
-	     */
-
-	    switch (type) {
-		case WORD_TYPE_CHAR:
-		    ASSERT(info[i].start == 0);
-		    ASSERT(info[i].max == 1);
-		    chunks[i].format = COL_UCS4;
-		    info[i].c = WORD_CHAR_GET(info[i].rope);
-		    chunks[i].data = &info[i].c;
-		    break;
-
-		case WORD_TYPE_SMALLSTR:
-		    chunks[i].format = COL_UCS1;
-		    chunks[i].data = WORD_SMALLSTR_DATA(info[i].rope)
-			    + info[i].start;
-		    break;
-
-		case WORD_TYPE_UCSSTR: {
-		    /* 
-		     * Fixed-width flat strings: traverse range of chars.
-		     *
-		     * Note: the integer values of the format enums match the char size.
-		     */
-
-		    chunks[i].format = WORD_UCSSTR_FORMAT(info[i].rope);
-		    chunks[i].data = WORD_UCSSTR_DATA(info[i].rope)
-			    + info[i].start*chunks[i].format;
-		    break;
-		}
-            	    
-		case WORD_TYPE_UTF8STR:
-		    /*
-		     * Variable-width flat string.
-		     */
-
-		    chunks[i].format = COL_UTF8;
-		    chunks[i].data = Col_Utf8CharAddr(
-			    WORD_UTF8STR_DATA(info[i].rope), info[i].start, 
-			    WORD_UTF8STR_LENGTH(info[i].rope), 
-			    WORD_UTF8STR_BYTELENGTH(info[i].rope));
-		    break;
-
-		case WORD_TYPE_CUSTOM: {
-		    Col_CustomRopeType *typeInfo 
-			    = (Col_CustomRopeType *) WORD_TYPEINFO(info[i].rope);
-		    ASSERT(typeInfo->type.type == COL_ROPE);
-		    if (typeInfo->chunkAtProc) {
-			typeInfo->chunkAtProc(info[i].rope, info[i].start,
-			    info[i].max, &info[i].max, chunks+i);
-		    } else {
-			/*
-			 * Traverse chars individually.
-			 */
-
-			info[i].max = 1;
-			chunks[i].format = COL_UCS4;
-			info[i].c = typeInfo->charAtProc(info[i].rope, 
-				info[i].start);
-			chunks[i].data = &info[i].c;
-		    }
-		    break;
-		}
-
-		/* WORD_TYPE_UNKNOWN */
-
-		default:
-		    /* CANTHAPPEN */
-		    ASSERT(0);
-		    return 0;
-	    }
+	    GetChunk(info+i, chunks+i);
 	}
 
 	/*
@@ -2097,7 +2198,7 @@ Col_TraverseRopeChunks(
 	}
 
 	/*
-	 * Call proc on leaves' data.
+	 * Call proc on leaves data.
 	 */
 
 	if (lengthPtr) *lengthPtr += max;
@@ -2114,35 +2215,142 @@ Col_TraverseRopeChunks(
 	     * Continue iteration.
 	     */
 
-	    size_t nbEnd = 0;
+	    int next = 0;
 	    for (i=0; i < number; i++) {
-		ASSERT(info[i].max >= max);
-		info[i].max -= max;
-		if (info[i].max > 0) {
-		    info[i].start += max;
-		} else if (info[i].prevDepth == INT_MAX) {
-		    /*
-		     * Already at toplevel => end of rope.
-		     */
-
-		    info[i].rope = WORD_NIL;
-		    nbEnd++;
-		} else {
-		    /*
-		     * Reached end of leaf, backtrack.
-		     */
-
-		    ASSERT(info[i].backtracks);
-		    info[i].rope = info[i].backtracks[info[i].prevDepth-1].rope;
-		    info[i].max = info[i].backtracks[info[i].prevDepth-1].max;
-		    info[i].start = 0;
-		    info[i].prevDepth 
-			    = info[i].backtracks[info[i].prevDepth-1].prevDepth;
-		}
+		if (info[i].rope) NextChunk(info+i, max);
+		if (info[i].rope) next = 1;
 	    }
-	    if (nbEnd == number) {
+	    if (!next) {
 		/*
 		 * Reached end of all ropes, stop there.
+		 */
+
+		return 0;
+	    }
+	}
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_TraverseRopeChunks
+ *
+ *	Iterate over the chunks of a rope.
+ *
+ *	For each traversed chunk, proc is called back with the opaque data as
+ *	well as the position within the rope. If it returns a non-zero result 
+ *	then the iteration ends. 
+ *
+ * Note:
+ *	The algorithm is naturally recursive but this implementation avoids
+ *	recursive calls thanks to a stack-allocated backtracking structure. 
+ *	This procedure is an optimized version of <Col_TraverseRopeChunksN>.
+ *
+ * Arguments:
+ *	rope		- Rope to traverse.
+ *	start		- Index of first character.
+ *	max		- Max number of characters.
+ *	proc		- Callback proc called on each chunk.
+ *	clientData	- Opaque data passed as is to above proc.
+ *
+ * Results:
+ *	The return value of the last called proc, or -1 if no traversal was
+ *	performed. Additionally:
+ *
+ *	lengthPtr	- If non-NULL, incremented by the total number of 
+ *			  characters traversed upon completion.
+ *---------------------------------------------------------------------------*/
+
+int 
+Col_TraverseRopeChunks(
+    Col_Word rope,
+    size_t start,
+    size_t max,
+    Col_RopeChunksTraverseProc *proc,
+    Col_ClientData clientData,
+    size_t *lengthPtr)
+{
+    ChunkTraverseInfo info;
+    Col_RopeChunk chunk;
+    int result;
+    size_t ropeLength = Col_RopeLength(rope);
+
+    if (start > ropeLength) {
+	/* 
+	 * Start is past the end of the rope.
+	 */
+
+	max = 0;
+    } else if (max > ropeLength-start) {
+	/* 
+	 * Adjust max to the remaining length. 
+	 */
+
+	max = ropeLength-start;
+    }
+
+    if (max == 0) {
+	/*
+	 * Nothing to traverse.
+	 */
+
+	return -1;
+    }
+
+    info.rope = rope;
+    info.start = start;
+    info.max = max;
+    info.maxDepth = GetDepth(rope);
+    info.backtracks = (info.maxDepth ? 
+	    alloca(sizeof(*info.backtracks) * info.maxDepth) : NULL);
+    info.prevDepth = INT_MAX;
+
+    for (;;) {
+	GetChunk(&info, &chunk);
+	max = info.max;
+
+	/*
+	 * Compute actual byte length.
+	 */
+
+	switch (chunk.format) {
+	    case COL_UCS1:
+	    case COL_UCS2:
+	    case COL_UCS4:
+		chunk.byteLength = max * chunk.format;
+		break;
+
+	    case COL_UTF8:
+		chunk.byteLength = Col_Utf8CharAddr(
+			(const char *) chunk.data, max, info.max, 
+			WORD_UTF8STR_BYTELENGTH(info.rope)
+			- ((const char *) chunk.data
+			- WORD_UTF8STR_DATA(info.rope)))
+			- (const char *) chunk.data;
+		break;
+	}
+
+	/*
+	 * Call proc on leaf data.
+	 */
+
+	if (lengthPtr) *lengthPtr += max;
+	result = proc(start, max, 1, &chunk, clientData);
+	start += max;
+	if (result != 0) {
+	    /*
+	     * Stop there.
+	     */
+
+	    return result;
+	} else {
+	    /*
+	     * Continue iteration.
+	     */
+
+	    NextChunk(&info, max);
+	    if (!info.rope) {
+		/*
+		 * Reached end of rope, stop there.
 		 */
 
 		return 0;

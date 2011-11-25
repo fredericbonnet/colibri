@@ -123,7 +123,7 @@ EXTERN void		Col_MListReplace(Col_Word mlist, size_t first,
  * Group: List Traversal
  *
  * Declarations:
- *	<Col_TraverseListChunks>
+ *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -165,9 +165,12 @@ typedef int (Col_ListChunksTraverseProc) (size_t index, size_t length,
 #define COL_LISTCHUNK_VOID \
     ((void *)-1)
 
-EXTERN int		Col_TraverseListChunks(size_t number, Col_Word *lists, 
+EXTERN int		Col_TraverseListChunksN(size_t number, Col_Word *lists, 
 			    size_t start, size_t max, 
 			    Col_ListChunksTraverseProc *proc, 
+			    Col_ClientData clientData, size_t *lengthPtr);
+EXTERN int		Col_TraverseListChunks(Col_Word list, size_t start, 
+			    size_t max, Col_ListChunksTraverseProc *proc, 
 			    Col_ClientData clientData, size_t *lengthPtr);
 
 
