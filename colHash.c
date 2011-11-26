@@ -180,7 +180,7 @@ HashString(
     Col_Word key)
 {
     uintptr_t hash = 0;
-    Col_TraverseRopeChunks(key, 0, SIZE_MAX, HashChunkProc, &hash, NULL);
+    Col_TraverseRopeChunks(key, 0, SIZE_MAX, 0, HashChunkProc, &hash, NULL);
     return hash;
 }
 

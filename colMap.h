@@ -97,7 +97,7 @@ typedef ColMapIterator Col_MapIterator;
  *
  *	Test whether iterator reached end of map.
  *
- * Arguments:
+ * Argument:
  *	it	- The iterator to test.
  *
  * Result:
@@ -115,7 +115,7 @@ typedef ColMapIterator Col_MapIterator;
  *
  *	Get map for iterator.
  *
- * Arguments:
+ * Argument:
  *	it	- The iterator to get map for.
  *
  * Result:
