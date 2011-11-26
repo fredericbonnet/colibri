@@ -123,7 +123,8 @@ EXTERN void		Col_MListReplace(Col_Word mlist, size_t first,
  * Group: List Traversal
  *
  * Declarations:
- *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>
+ *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>,
+ *	Col_TraverseListChunksR>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -140,13 +141,14 @@ EXTERN void		Col_MListReplace(Col_Word mlist, size_t first,
  *			  chunk is <COL_LISTCHUNK_VOID>, means the traversed 
  *			  list is a void list.
  *	clientData	- Opaque client data. Same value as passed to 
- *			  <Col_TraverseListChunks>
+ *			  <Col_TraverseListChunks> procedure family.
  *
  * Returns:
  *	If non-zero, interrupts the traversal.
  *
  * See also: 
- *	<Col_TraverseListChunks>
+ *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>,
+ *	<Col_TraverseListChunksR>
  *---------------------------------------------------------------------------*/
 
 typedef int (Col_ListChunksTraverseProc) (size_t index, size_t length, 
@@ -159,7 +161,7 @@ typedef int (Col_ListChunksTraverseProc) (size_t index, size_t length,
  *	void lists.
  *
  * See also: 
- *	<Col_TraverseListChunks>, <Col_ListChunksTraverseProc>
+ *	<Col_ListChunksTraverseProc>
  *---------------------------------------------------------------------------*/
 
 #define COL_LISTCHUNK_VOID \
@@ -170,6 +172,9 @@ EXTERN int		Col_TraverseListChunksN(size_t number, Col_Word *lists,
 			    Col_ListChunksTraverseProc *proc, 
 			    Col_ClientData clientData, size_t *lengthPtr);
 EXTERN int		Col_TraverseListChunks(Col_Word list, size_t start, 
+			    size_t max, Col_ListChunksTraverseProc *proc, 
+			    Col_ClientData clientData, size_t *lengthPtr);
+EXTERN int		Col_TraverseListChunksR(Col_Word list, size_t start, 
 			    size_t max, Col_ListChunksTraverseProc *proc, 
 			    Col_ClientData clientData, size_t *lengthPtr);
 

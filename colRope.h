@@ -44,9 +44,9 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 			    size_t start, size_t max, size_t *posPtr, 
 			    Col_Char *c1Ptr, Col_Char *c2Ptr);
 /*TODO
-EXTERN size_t		Col_RopeFindFirstL(Col_Word rope, Col_Char c, 
+EXTERN size_t		Col_RopeFindFirstN(Col_Word rope, Col_Char c, 
 			    size_t start, size_t max);
-EXTERN size_t		Col_RopeFindLastL(Col_Word rope, Col_Char c, 
+EXTERN size_t		Col_RopeFindLastN(Col_Word rope, Col_Char c, 
 			    size_t start, size_t max);
 */
 
@@ -116,7 +116,8 @@ EXTERN Col_Word		Col_RopeReplace(Col_Word rope, size_t first,
  * Group: Rope Traversal
  *
  * Declarations:
- *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
+ *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>, 
+ *	<Col_TraverseRopeChunksR>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -152,13 +153,14 @@ typedef struct Col_RopeChunk {
  *	chunks		- Array of chunks. When chunk is NULL, means the
  *			  index is past the end of the traversed rope.
  *	clientData	- Opaque client data. Same value as passed to 
- *			  <Col_TraverseRopeChunks>
+ *			  <Col_TraverseRopeChunks> procedure family.
  *
  * Returns:
  *	If non-zero, interrupts the traversal.
  *
  * See also: 
- *	<Col_TraverseRopeChunks>
+ *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>,
+ *  <Col_TraverseRopeChunksR>
  *---------------------------------------------------------------------------*/
 
 typedef int (Col_RopeChunksTraverseProc) (size_t index, size_t length, 
@@ -169,6 +171,9 @@ EXTERN int		Col_TraverseRopeChunksN(size_t number, Col_Word *ropes,
 			    Col_RopeChunksTraverseProc *proc, 
 			    Col_ClientData clientData, size_t *lengthPtr);
 EXTERN int		Col_TraverseRopeChunks(Col_Word rope, size_t start, 
+			    size_t max, Col_RopeChunksTraverseProc *proc, 
+			    Col_ClientData clientData, size_t *lengthPtr);
+EXTERN int		Col_TraverseRopeChunksR(Col_Word rope, size_t start, 
 			    size_t max, Col_RopeChunksTraverseProc *proc, 
 			    Col_ClientData clientData, size_t *lengthPtr);
 
