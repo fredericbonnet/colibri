@@ -733,7 +733,7 @@ Col_Sublist(
 
 	info.length = 0;
 	info.vector = WORD_VOIDLIST_NEW(length);
-	Col_TraverseListChunks(list, first, length, MergeChunksProc, &info, 
+	Col_TraverseListChunks(list, first, length, 0, MergeChunksProc, &info, 
 		NULL);
 	ASSERT(info.length == length);
 
@@ -973,9 +973,9 @@ Col_ConcatLists(
 
 	info.length = 0;
 	info.vector = WORD_VOIDLIST_NEW(leftLength + rightLength);
-	Col_TraverseListChunks(left, 0, leftLength, MergeChunksProc, &info, 
+	Col_TraverseListChunks(left, 0, leftLength, 0, MergeChunksProc, &info, 
 		NULL);
-	Col_TraverseListChunks(right, 0, rightLength, MergeChunksProc, &info,
+	Col_TraverseListChunks(right, 0, rightLength, 0, MergeChunksProc, &info,
 		NULL);
 	ASSERT(info.length == leftLength+rightLength);
 
@@ -2806,7 +2806,7 @@ start:
 
 		info.length = index;
 		info.vector = *nodePtr;
-		Col_TraverseListChunks(list, 0, listLength, MergeChunksProc, 
+		Col_TraverseListChunks(list, 0, listLength, 0, MergeChunksProc, 
 			&info, NULL);
 		ASSERT(info.length == index+listLength);
 		return;
@@ -2833,11 +2833,12 @@ start:
 
 	info.length = 0;
 	info.vector = node;
-	Col_TraverseListChunks(*nodePtr, 0, index, MergeChunksProc, &info, NULL);
-	Col_TraverseListChunks(list, 0, listLength, MergeChunksProc, &info, 
+	Col_TraverseListChunks(*nodePtr, 0, index, 0, MergeChunksProc, &info, 
 		NULL);
-	Col_TraverseListChunks(*nodePtr, index, length-index, MergeChunksProc, 
-		&info, NULL);
+	Col_TraverseListChunks(list, 0, listLength, 0, MergeChunksProc, &info, 
+		NULL);
+	Col_TraverseListChunks(*nodePtr, index, length-index, 0, 
+		MergeChunksProc, &info, NULL);
 	ASSERT(info.length == length+listLength);
 
 	*nodePtr = node;
@@ -3307,10 +3308,10 @@ start:
 
 	info.length = 0;
 	info.vector = node;
-	Col_TraverseListChunks(*nodePtr, 0, first, MergeChunksProc, &info, 
+	Col_TraverseListChunks(*nodePtr, 0, first, 0, MergeChunksProc, &info, 
 		NULL);
-	Col_TraverseListChunks(*nodePtr, last+1, length-last, MergeChunksProc, 
-		&info, NULL);
+	Col_TraverseListChunks(*nodePtr, last+1, length-last, 0, 
+		MergeChunksProc, &info, NULL);
 	ASSERT(info.length == length-(last-first+1));
 
 	*nodePtr = node;
@@ -3461,8 +3462,7 @@ Col_MListReplace(
  *	backtracks.max		- Max number of elements traversed in list.
  *
  * See also:
- *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>, 
- *	<Col_TraverseListChunksR>
+ *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>
  *---------------------------------------------------------------------------*/
 
 typedef struct ListChunkTraverseInfo {
@@ -3488,7 +3488,7 @@ typedef struct ListChunkTraverseInfo {
  *
  * See also:
  *	<ListChunkTraverseInfo>, <Col_TraverseListChunksN>, 
- *	<Col_TraverseListChunks>, <Col_TraverseListChunksR>
+ *	<Col_TraverseListChunks>
  *---------------------------------------------------------------------------*/
 
 static void
@@ -3642,7 +3642,7 @@ GetChunk(
  *
  * See also:
  *	<ListChunkTraverseInfo>, <Col_TraverseListChunksN>, 
- *	<Col_TraverseListChunks>, <Col_TraverseListChunksR>
+ *	<Col_TraverseListChunks>
  *---------------------------------------------------------------------------*/
 
 static void 
@@ -3849,6 +3849,7 @@ Col_TraverseListChunksN(
  *	list		- List to traverse.
  *	start		- Index of first element.
  *	max		- Max number of elements.
+ *	reverse		- Whether to traverse in reverse order.
  *	proc		- Callback proc called on each chunk.
  *	clientData	- Opaque data passed as is to above proc.
  *
@@ -3865,6 +3866,7 @@ Col_TraverseListChunks(
     Col_Word list,
     size_t start,
     size_t max,
+    int reverse,
     Col_ListChunksTraverseProc *proc,
     Col_ClientData clientData,
     size_t *lengthPtr)
@@ -3874,18 +3876,44 @@ Col_TraverseListChunks(
     int result;
     size_t listLength = Col_ListLength(list);
 
-    if (start > listLength) {
-	/* 
-	 * Start is past the end of the list.
+    if (listLength == 0) {
+	/*
+	 * Nothing to traverse.
 	 */
 
-	max = 0;
-    } else if (max > listLength-start) {
-	/* 
-	 * Adjust max to the remaining length. 
-	 */
+	return -1;
+    }
 
-	max = listLength-start;
+    if (reverse) {
+	if (start > listLength) {
+	    /* 
+	     * Start is past the end of the list.
+	     */
+
+	    start = listLength-1;
+	}
+	if (max > start+1) {
+	    /* 
+	     * Adjust max to the remaining length. 
+	     */
+
+	    max = start+1;
+	}
+    } else {
+	if (start > listLength) {
+	    /* 
+	     * Start is past the end of the list.
+	     */
+
+	    return -1;
+	}
+	if (max > listLength-start) {
+	    /* 
+	     * Adjust max to the remaining length. 
+	     */
+
+	    max = listLength-start;
+	}
     }
 
     if (max == 0) {
@@ -3905,7 +3933,7 @@ Col_TraverseListChunks(
     info.prevDepth = INT_MAX;
 
     for (;;) {
-	GetChunk(&info, &elements, 0);
+	GetChunk(&info, &elements, reverse);
 	max = info.max;
 
 	/*
@@ -3913,8 +3941,13 @@ Col_TraverseListChunks(
 	 */
 
 	if (lengthPtr) *lengthPtr += max;
-	result = proc(start, max, 1, &elements, clientData);
-	start += max;
+	if (reverse) {
+	    result = proc(start-max+1, max, 1, &elements, clientData);
+	    start -= max;
+	} else {
+	    result = proc(start, max, 1, &elements, clientData);
+	    start += max;
+	}
 	if (result != 0) {
 	    /*
 	     * Stop there.
@@ -3926,7 +3959,7 @@ Col_TraverseListChunks(
 	     * Continue iteration.
 	     */
 
-	    NextChunk(&info, max, 0);
+	    NextChunk(&info, max, reverse);
 	    if (!info.list) {
 		/*
 		 * Reached end of list, stop there.

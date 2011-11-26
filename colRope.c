@@ -1206,8 +1206,8 @@ Col_Subrope(
 	info.length = 0;
 	info.byteLength = 0;
 
-	if (Col_TraverseRopeChunks(rope, first, length, MergeChunksProc, &info, 
-		NULL) == 0) {
+	if (Col_TraverseRopeChunks(rope, first, length, 0, MergeChunksProc, 
+		&info, NULL) == 0) {
 	    /* 
 	     * Zero result means data fits into one short leaf. 
 	     */
@@ -1397,9 +1397,9 @@ Col_ConcatRopes(
 	info.length = 0;
 	info.byteLength = 0;
 
-	if (Col_TraverseRopeChunks(left, 0, leftLength, MergeChunksProc, &info, 
-		NULL) == 0 && Col_TraverseRopeChunks(right, 0, rightLength, 
-		MergeChunksProc, &info, NULL) == 0) {
+	if (Col_TraverseRopeChunks(left, 0, leftLength, 0, MergeChunksProc, 
+		&info, NULL) == 0 && Col_TraverseRopeChunks(right, 0, 
+		rightLength, 0, MergeChunksProc, &info, NULL) == 0) {
 	    /* 
 	     * Zero result means data fits into one short leaf. 
 	     */
@@ -1822,8 +1822,7 @@ Col_RopeReplace(
  *	backtracks.max		- Max number of characters traversed in rope.
  *
  * See also:
- *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>, 
- *	<Col_TraverseRopeChunksR>
+ *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
  *---------------------------------------------------------------------------*/
 
 typedef struct RopeChunkTraverseInfo {
@@ -1855,7 +1854,7 @@ typedef struct RopeChunkTraverseInfo {
  *
  * See also:
  *	<RopeChunkTraverseInfo>, <Col_TraverseRopeChunksN>, 
- *	<Col_TraverseRopeChunks>, <Col_TraverseRopeChunksR>
+ *	<Col_TraverseRopeChunks>
  *---------------------------------------------------------------------------*/
 
 static void
@@ -2044,7 +2043,7 @@ GetChunk(
  *
  * See also:
  *	<RopeChunkTraverseInfo>, <Col_TraverseRopeChunksN>, 
- *	<Col_TraverseRopeChunks>, <Col_TraverseRopeChunksR>
+ *	<Col_TraverseRopeChunks>
  *---------------------------------------------------------------------------*/
 
 static void 
@@ -2275,6 +2274,7 @@ Col_TraverseRopeChunksN(
  *	rope		- Rope to traverse.
  *	start		- Index of first character.
  *	max		- Max number of characters.
+ *	reverse		- Whether to traverse in reverse order.
  *	proc		- Callback proc called on each chunk.
  *	clientData	- Opaque data passed as is to above proc.
  *
@@ -2291,6 +2291,7 @@ Col_TraverseRopeChunks(
     Col_Word rope,
     size_t start,
     size_t max,
+    int reverse,
     Col_RopeChunksTraverseProc *proc,
     Col_ClientData clientData,
     size_t *lengthPtr)
@@ -2300,18 +2301,44 @@ Col_TraverseRopeChunks(
     int result;
     size_t ropeLength = Col_RopeLength(rope);
 
-    if (start > ropeLength) {
-	/* 
-	 * Start is past the end of the rope.
+    if (ropeLength == 0) {
+	/*
+	 * Nothing to traverse.
 	 */
 
-	max = 0;
-    } else if (max > ropeLength-start) {
-	/* 
-	 * Adjust max to the remaining length. 
-	 */
+	return -1;
+    }
 
-	max = ropeLength-start;
+    if (reverse) {
+	if (start > ropeLength) {
+	    /* 
+	     * Start is past the end of the rope.
+	     */
+
+	    start = ropeLength-1;
+	}
+	if (max > start+1) {
+	    /* 
+	     * Adjust max to the remaining length. 
+	     */
+
+	    max = start+1;
+	}
+    } else {
+	if (start > ropeLength) {
+	    /* 
+	     * Start is past the end of the rope.
+	     */
+
+	    return -1;
+	}
+	if (max > ropeLength-start) {
+	    /* 
+	     * Adjust max to the remaining length. 
+	     */
+
+	    max = ropeLength-start;
+	}
     }
 
     if (max == 0) {
@@ -2331,7 +2358,7 @@ Col_TraverseRopeChunks(
     info.prevDepth = INT_MAX;
 
     for (;;) {
-	GetChunk(&info, &chunk, 0);
+	GetChunk(&info, &chunk, reverse);
 	max = info.max;
 
 	/*
@@ -2360,8 +2387,13 @@ Col_TraverseRopeChunks(
 	 */
 
 	if (lengthPtr) *lengthPtr += max;
-	result = proc(start, max, 1, &chunk, clientData);
-	start += max;
+	if (reverse) {
+	    result = proc(start-max+1, max, 1, &chunk, clientData);
+	    start -= max;
+	} else {
+	    result = proc(start, max, 1, &chunk, clientData);
+	    start += max;
+	}
 	if (result != 0) {
 	    /*
 	     * Stop there.
@@ -2373,137 +2405,7 @@ Col_TraverseRopeChunks(
 	     * Continue iteration.
 	     */
 
-	    NextChunk(&info, max, 0);
-	    if (!info.rope) {
-		/*
-		 * Reached end of rope, stop there.
-		 */
-
-		return 0;
-	    }
-	}
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_TraverseRopeChunksR
- *
- *	Iterate over the chunks of a rope in reverse order.
- *
- *	For each traversed chunk, proc is called back with the opaque data as
- *	well as the position within the rope. If it returns a non-zero result 
- *	then the iteration ends. 
- *
- * Note:
- *	The algorithm is naturally recursive but this implementation avoids
- *	recursive calls thanks to a stack-allocated backtracking structure. 
- *	This procedure is an optimized version of <Col_TraverseRopeChunksN>.
- *
- * Arguments:
- *	rope		- Rope to traverse.
- *	start		- Index of first character.
- *	max		- Max number of characters.
- *	proc		- Callback proc called on each chunk.
- *	clientData	- Opaque data passed as is to above proc.
- *
- * Results:
- *	The return value of the last called proc, or -1 if no traversal was
- *	performed. Additionally:
- *
- *	lengthPtr	- If non-NULL, incremented by the total number of 
- *			  characters traversed upon completion.
- *---------------------------------------------------------------------------*/
-
-int 
-Col_TraverseRopeChunksR(
-    Col_Word rope,
-    size_t start,
-    size_t max,
-    Col_RopeChunksTraverseProc *proc,
-    Col_ClientData clientData,
-    size_t *lengthPtr)
-{
-    RopeChunkTraverseInfo info;
-    Col_RopeChunk chunk;
-    int result;
-    size_t ropeLength = Col_RopeLength(rope);
-
-    if (ropeLength == 0 || max == 0) {
-	/*
-	 * Nothing to traverse.
-	 */
-
-	return -1;
-    }
-
-    if (start > ropeLength) {
-	/* 
-	 * Start is past the end of the rope.
-	 */
-
-	start = ropeLength-1;
-    }
-
-    if (max > start+1) {
-	/* 
-	 * Adjust max to the remaining length. 
-	 */
-
-	max = start+1;
-    }
-
-    info.rope = rope;
-    info.start = start;
-    info.max = max;
-    info.maxDepth = GetDepth(rope);
-    info.backtracks = (info.maxDepth ? 
-	    alloca(sizeof(*info.backtracks) * info.maxDepth) : NULL);
-    info.prevDepth = INT_MAX;
-
-    for (;;) {
-	GetChunk(&info, &chunk, 1);
-	max = info.max;
-
-	/*
-	 * Compute actual byte length.
-	 */
-
-	switch (chunk.format) {
-	    case COL_UCS1:
-	    case COL_UCS2:
-	    case COL_UCS4:
-		chunk.byteLength = max * chunk.format;
-		break;
-
-	    case COL_UTF8:
-		chunk.byteLength = Col_Utf8CharAddr(
-			(const char *) chunk.data, max, info.max, 
-			WORD_UTF8STR_BYTELENGTH(info.rope)
-			- ((const char *) chunk.data
-			- WORD_UTF8STR_DATA(info.rope)))
-			- (const char *) chunk.data;
-		break;
-	}
-
-	/*
-	 * Call proc on leaf data.
-	 */
-
-	if (lengthPtr) *lengthPtr += max;
-	result = proc(start-max+1, max, 1, &chunk, clientData);
-	start -= max;
-	if (result != 0) {
-	    /*
-	     * Stop there.
-	     */
-
-	    return result;
-	} else {
-	    /*
-	     * Continue iteration.
-	     */
-
-	    NextChunk(&info, max, 1);
+	    NextChunk(&info, max, reverse);
 	    if (!info.rope) {
 		/*
 		 * Reached end of rope, stop there.

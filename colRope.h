@@ -34,27 +34,34 @@ EXTERN Col_Word		Col_NewRope(Col_StringFormat format, const void *data,
  * Group: Rope Access
  *
  * Declarations:
- *	<Col_RopeLength>, <Col_RopeAt>, <Col_CompareRopesL>, 
- *	<Col_RopeFindFirstL>, <Col_RopeFindLastL>
+ *	<Col_RopeLength>, <Col_RopeAt>, <Col_RopeFind>, <Col_CompareRopesL>
  ****************************************************************************/
 
 EXTERN size_t		Col_RopeLength(Col_Word rope);
 EXTERN Col_Char		Col_RopeAt(Col_Word rope, size_t index);
+EXTERN size_t		Col_RopeFind(Col_Word rope, Col_Char c, size_t start, 
+			    size_t max, int reverse);
 EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 			    size_t start, size_t max, size_t *posPtr, 
 			    Col_Char *c1Ptr, Col_Char *c2Ptr);
-/*TODO
-EXTERN size_t		Col_RopeFindFirstN(Col_Word rope, Col_Char c, 
-			    size_t start, size_t max);
-EXTERN size_t		Col_RopeFindLastN(Col_Word rope, Col_Char c, 
-			    size_t start, size_t max);
-*/
 
 /*---------------------------------------------------------------------------
  * Macro: Col_CompareRopes
  *
  *	Simple version of <Col_CompareRopesL>, compare two ropes. This is the 
  *	rope counterpart to strcmp.
+ *
+ * Arguments:
+ *	rope1, rope2	- Ropes to compare.
+ *
+ * Results:
+ *	Returns an integral value indicating the relationship between the 
+ *	ropes:
+ *	    - A zero value indicates that both strings are equal;
+ *	    - A value greater than zero indicates that the first character that 
+ *	      does not match has a greater value in rope1 than in rope2, or that
+ *	      rope1 is longer than rope2; 
+ *	    - A value less than zero indicates the opposite.
  *
  * See also:
  *	<Col_CompareRopesL>
@@ -68,6 +75,20 @@ EXTERN size_t		Col_RopeFindLastN(Col_Word rope, Col_Char c,
  *
  *	Simple version of <Col_CompareRopesL> compare two ropes up to a given
  *	number of characters. This is the rope counterpart to strncmp.
+ *
+ * Arguments:
+ *	rope1, rope2	- Ropes to compare.
+ *	max		- Maximum number of characters to compare.
+ *
+ * Results:
+ *	Returns an integral value indicating the relationship between the 
+ *	ropes:
+ *	    - A zero value indicates that both strings are equal;
+ *	    - A value greater than zero indicates that the first character that 
+ *	      does not match has a greater value in rope1 than in rope2, or that
+ *	      rope1 is longer than rope2; 
+ *	    - A value less than zero indicates the opposite.
+ *
  *
  * See also:
  *	<Col_CompareRopesL>
@@ -104,6 +125,9 @@ EXTERN Col_Word		Col_RopeReplace(Col_Word rope, size_t first,
  *	Variadic macro version of <Col_ConcatRopesNV> that deduces its number
  *	of arguments automatically.
  *
+ * Arguments:
+ *	List of ropes to concatenate.
+ *
  * See also:
  *	<COL_ARGCOUNT>
  *---------------------------------------------------------------------------*/
@@ -116,8 +140,7 @@ EXTERN Col_Word		Col_RopeReplace(Col_Word rope, size_t first,
  * Group: Rope Traversal
  *
  * Declarations:
- *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>, 
- *	<Col_TraverseRopeChunksR>
+ *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -159,8 +182,7 @@ typedef struct Col_RopeChunk {
  *	If non-zero, interrupts the traversal.
  *
  * See also: 
- *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>,
- *  <Col_TraverseRopeChunksR>
+ *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
  *---------------------------------------------------------------------------*/
 
 typedef int (Col_RopeChunksTraverseProc) (size_t index, size_t length, 
@@ -171,10 +193,8 @@ EXTERN int		Col_TraverseRopeChunksN(size_t number, Col_Word *ropes,
 			    Col_RopeChunksTraverseProc *proc, 
 			    Col_ClientData clientData, size_t *lengthPtr);
 EXTERN int		Col_TraverseRopeChunks(Col_Word rope, size_t start, 
-			    size_t max, Col_RopeChunksTraverseProc *proc, 
-			    Col_ClientData clientData, size_t *lengthPtr);
-EXTERN int		Col_TraverseRopeChunksR(Col_Word rope, size_t start, 
-			    size_t max, Col_RopeChunksTraverseProc *proc, 
+			    size_t max, int reverse, 
+			    Col_RopeChunksTraverseProc *proc, 
 			    Col_ClientData clientData, size_t *lengthPtr);
 
 
@@ -258,7 +278,7 @@ typedef ColRopeIterator Col_RopeIterator;
  *
  *	Test whether iterator reached end of rope.
  *
- * Arguments:
+ * Argument:
  *	it	- The iterator to test.
  *
  * Result:
@@ -276,7 +296,7 @@ typedef ColRopeIterator Col_RopeIterator;
  *
  *	Get rope for iterator.
  *
- * Arguments:
+ * Argument:
  *	it	- The iterator to get rope for.
  *
  * Result:
@@ -294,7 +314,7 @@ typedef ColRopeIterator Col_RopeIterator;
  *
  *	Get current index within rope for iterator.
  *
- * Arguments:
+ * Argument:
  *	it	- The iterator to get index for.
  *
  * Result:
@@ -312,7 +332,7 @@ typedef ColRopeIterator Col_RopeIterator;
  *
  *	Get current rope character for iterator.
  *
- * Arguments:
+ * Argument:
  *	it	- The iterator to get character for.
  *
  * Result:
@@ -387,7 +407,7 @@ EXTERN void		ColRopeIterUpdateTraversalInfo(Col_RopeIterator *it);
  *
  *	Function signature of custom rope length procs.
  *
- * Arguments:
+ * Argument:
  *	rope	- Custom rope to get length for.
  *
  * Result:

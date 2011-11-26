@@ -79,6 +79,9 @@ EXTERN Col_Word		Col_ListReplace(Col_Word list, size_t first,
  *	Variadic macro version of <Col_ConcatListsNV> that deduces its number
  *	of arguments automatically.
  *
+ * Arguments:
+ *	List of lists to concatenate.
+ *
  * See also:
  *	<COL_ARGCOUNT>
  *---------------------------------------------------------------------------*/
@@ -123,8 +126,7 @@ EXTERN void		Col_MListReplace(Col_Word mlist, size_t first,
  * Group: List Traversal
  *
  * Declarations:
- *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>,
- *	Col_TraverseListChunksR>
+ *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -147,8 +149,7 @@ EXTERN void		Col_MListReplace(Col_Word mlist, size_t first,
  *	If non-zero, interrupts the traversal.
  *
  * See also: 
- *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>,
- *	<Col_TraverseListChunksR>
+ *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>
  *---------------------------------------------------------------------------*/
 
 typedef int (Col_ListChunksTraverseProc) (size_t index, size_t length, 
@@ -172,10 +173,8 @@ EXTERN int		Col_TraverseListChunksN(size_t number, Col_Word *lists,
 			    Col_ListChunksTraverseProc *proc, 
 			    Col_ClientData clientData, size_t *lengthPtr);
 EXTERN int		Col_TraverseListChunks(Col_Word list, size_t start, 
-			    size_t max, Col_ListChunksTraverseProc *proc, 
-			    Col_ClientData clientData, size_t *lengthPtr);
-EXTERN int		Col_TraverseListChunksR(Col_Word list, size_t start, 
-			    size_t max, Col_ListChunksTraverseProc *proc, 
+			    size_t max, int reverse, 
+			    Col_ListChunksTraverseProc *proc, 
 			    Col_ClientData clientData, size_t *lengthPtr);
 
 
@@ -261,7 +260,7 @@ typedef ColListIterator Col_ListIterator;
  *
  *	Test whether iterator reached end of list.
  *
- * Arguments:
+ * Argument:
  *	it	- The iterator to test.
  *
  * Result:
@@ -280,7 +279,7 @@ typedef ColListIterator Col_ListIterator;
  *
  *	Get list for iterator.
  *
- * Arguments:
+ * Argument:
  *	it	- The iterator to get list for.
  *
  * Result:
@@ -298,7 +297,7 @@ typedef ColListIterator Col_ListIterator;
  *
  *	Get current index within list for iterator.
  *
- * Arguments:
+ * Argument:
  *	it	- The iterator to get index for.
  *
  * Result:
@@ -316,7 +315,7 @@ typedef ColListIterator Col_ListIterator;
  *
  *	Get current list element for iterator.
  *
- * Arguments:
+ * Argument:
  *	it	- The iterator to get element for.
  *
  * Result:
