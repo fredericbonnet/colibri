@@ -28,6 +28,7 @@
 typedef struct RopeChunkTraverseInfo *pRopeChunkTraverseInfo;
 static Col_RopeChunksTraverseProc MergeChunksProc;
 static Col_RopeChunksTraverseProc FindCharProc;
+static Col_RopeChunksTraverseProc SearchSubropeProc;
 static Col_RopeChunksTraverseProc CompareChunksProc;
 static unsigned char	GetDepth(Col_Word rope);
 static void		GetArms(Col_Word rope, Col_Word * leftPtr, 
@@ -506,46 +507,43 @@ FindCharProc(
     ASSERT(number == 1);
 
     /*
-     * Compare char by char.
+     * Search for character.
      */
 
     ASSERT(chunks[0].data);
-    if (info->reverse) {
-	data = (const char *) chunks[0].data;
-	if (chunks[0].format == COL_UTF8) data += chunks[0].byteLength;
-	for (i = length-1; i >= 0; i--) {
-	    switch (chunks[0].format) {
-		case COL_UCS1: c = ((Col_Char1 *) data)[i]; break;
-		case COL_UCS2: c = ((Col_Char2 *) data)[i]; break;
-		case COL_UCS4: c = ((Col_Char4 *) data)[i]; break;
-		case COL_UTF8: COL_UTF8_PREVIOUS(data); c = Col_Utf8CharAt(data); break;
+    data = (const char *) chunks[0].data;
+    if (info->reverse) data += chunks[0].byteLength;
+    for (i = (info->reverse ? length-1 : 0); 
+	    (info->reverse ? i >= 0 : i < length); 
+	    (info->reverse ? i-- : i++)) {
+	if (info->reverse) {
+	    if (chunks[0].format == COL_UTF8) {
+		COL_UTF8_PREVIOUS(data); 
+	    } else {
+		data -= chunks[0].format;
 	    }
-	    if (c == info->c) {
-		/*
-		 * Found!
-		 */
-
-		info->pos = index+i;
-		return 1;
-	    }
-	    if (i == 0) break; /* Avoids overflow. */
 	}
-    } else {
-	data = (const char *) chunks[0].data;
-	for (i = 0; i < length; i++) {
-	    switch (chunks[0].format) {
-		case COL_UCS1: c = ((Col_Char1 *) data)[i]; break;
-		case COL_UCS2: c = ((Col_Char2 *) data)[i]; break;
-		case COL_UCS4: c = ((Col_Char4 *) data)[i]; break;
-		case COL_UTF8: c = Col_Utf8CharAt(data); COL_UTF8_NEXT(data); break;
-	    }
-	    if (c == info->c) {
-		/*
-		 * Found!
-		 */
+	switch (chunks[0].format) {
+	    case COL_UCS1: c = *(Col_Char1 *) data; break;
+	    case COL_UCS2: c = *(Col_Char2 *) data; break;
+	    case COL_UCS4: c = *(Col_Char4 *) data; break;
+	    case COL_UTF8: c = Col_Utf8CharAt(data); break;
+	}
+	if (c == info->c) {
+	    /*
+	     * Found!
+	     */
 
-		info->pos = index+i;
-		return 1;
+	    info->pos = index+i;
+	    return 1;
+	}
+	if (info->reverse) {
+	    if (i == 0) break; /* Avoids overflow. */
+	} else {
+	    if (chunks[0].format == COL_UTF8) {
+		COL_UTF8_NEXT(data); 
+	    } else {
+		data += chunks[0].format;
 	    }
 	}
     }
@@ -588,9 +586,210 @@ Col_RopeFind(
 {
     FindCharInfo info = {c, reverse, SIZE_MAX};
 
-    size_t result = SIZE_MAX;
     Col_TraverseRopeChunks(rope, start, max, reverse, FindCharProc, &info, 
 	    NULL);
+
+    return info.pos;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Typedef: SearchSubropeInfo
+ *
+ *	Structure used to collect data during subrope search.
+ *
+ * Fields:
+ *	rope		- Rope to search subrope into.
+ *	subrope		- Subrope to search for.
+ *	first		- First character of rope to search for.
+ *	reverse		- Whether to traverse in reverse order.
+ *	pos		- Upon return, position of character if found
+ *
+ * See also:
+ *	<FindCharProc>, <Col_RopeFind>
+ *---------------------------------------------------------------------------*/
+
+typedef struct SearchSubropeInfo {
+    Col_Word rope, subrope;
+    Col_Char first;
+    int reverse;
+    size_t pos;
+} SearchSubropeInfo;
+
+/*---------------------------------------------------------------------------
+ * Internal Function: SearchSubropeProc
+ *
+ *	Rope traversal procedure used to find subrope in ropes. Follows 
+ *	<Col_RopeChunksTraverseProc> signature.
+ *
+ * Arguments:
+ *	index		- Rope-relative index where chunks begin.
+ *	length		- Length of chunks.
+ *	number		- Number of chunks. Always 2.
+ *	chunks		- Array of chunks. When chunk is NULL, means the
+ *			  index is past the end of the traversed rope.
+ *	clientData	- Points to <SearchSubropeInfo>.
+ *
+ * Results:
+ *	1 if character was found, else 0. Additional info returned through 
+ *	clientData.
+ *---------------------------------------------------------------------------*/
+
+static int 
+SearchSubropeProc(
+    size_t index,
+    size_t length,
+    size_t number, 
+    const Col_RopeChunk *chunks,
+    Col_ClientData clientData) 
+{
+    SearchSubropeInfo *info = (SearchSubropeInfo *) clientData;
+    size_t i;
+    const char *data;
+    Col_Char c;
+
+    ASSERT(number == 1);
+
+    /*
+     * Search for character.
+     */
+
+    ASSERT(chunks[0].data);
+    data = (const char *) chunks[0].data;
+    if (info->reverse) data += chunks[0].byteLength;
+    for (i = (info->reverse ? length-1 : 0); 
+	    (info->reverse ? i >= 0 : i < length); 
+	    (info->reverse ? i-- : i++)) {
+	if (info->reverse) {
+	    if (chunks[0].format == COL_UTF8) {
+		COL_UTF8_PREVIOUS(data); 
+	    } else {
+		data -= chunks[0].format;
+	    }
+	}
+	switch (chunks[0].format) {
+	    case COL_UCS1: c = *(Col_Char1 *) data; break;
+	    case COL_UCS2: c = *(Col_Char2 *) data; break;
+	    case COL_UCS4: c = *(Col_Char4 *) data; break;
+	    case COL_UTF8: c = Col_Utf8CharAt(data); break;
+	}
+	if (c == info->first) {
+	    /*
+	     * Found first character, look for remainder.
+	     */
+
+	    Col_RopeIterator it1, it2;
+	    for (Col_RopeIterBegin(info->rope, index+i, &it1), 
+		    Col_RopeIterFirst(info->subrope, &it2);
+		    !Col_RopeIterEnd(&it1) && !Col_RopeIterEnd(&it2)
+		    && Col_RopeIterAt(&it1) == Col_RopeIterAt(&it2);
+		    Col_RopeIterNext(&it1), Col_RopeIterNext(&it2));
+	    if (Col_RopeIterEnd(&it2)) {
+		/*
+		 * Found!
+		 */
+
+		info->pos = index+i;
+		return 1;
+	    }
+	}
+	if (info->reverse) {
+	    if (i == 0) break; /* Avoids overflow. */
+	} else {
+	    if (chunks[0].format == COL_UTF8) {
+		COL_UTF8_NEXT(data); 
+	    } else {
+		data += chunks[0].format;
+	    }
+	}
+    }
+
+    /*
+     * Not found.
+     */
+
+    return 0;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_RopeSearch
+ *
+ *	Find first occurrence of a subrope in a rope.
+ *
+ * Arguments:
+ *	rope	- Rope to search subrope into.
+ *	subrope	- Subrope to search for.
+ *	start	- Starting index.
+ *	max	- Maximum number of characters to search.
+ *	reverse	- Whether to traverse in reverse order.
+ *
+ * Results:
+ *	If found, returns the position of the subrope in rope. Else returns
+ *	SIZE_MAX (which is an invalid character index since this is the maximum
+ *	rope length, and indices are zero-based).
+ *
+ * See also:
+ *	<Col_TraverseRopeChunks>
+ *---------------------------------------------------------------------------*/
+
+size_t
+Col_RopeSearch(
+    Col_Word rope, 
+    Col_Word subrope, 
+    size_t start, 
+    size_t max, 
+    int reverse)
+{
+    SearchSubropeInfo info = {rope, subrope, Col_RopeAt(subrope, 0), reverse, 
+	    SIZE_MAX};
+    size_t length = Col_RopeLength(rope), 
+	    subropeLength = Col_RopeLength(subrope);
+
+    if (subropeLength == 0) {
+	/*
+	 * Subrope is empty.
+	 */
+
+	return SIZE_MAX;
+    } else if (subropeLength == 1) {
+	/*
+	 * Single char subrope: find char instead.
+	 */
+
+	return Col_RopeFind(rope, Col_RopeAt(subrope, 0), start, max, reverse);
+    }
+    
+    if (length-start < subropeLength) {
+	/*
+	 * Rope tail is shorter than subrope, adjust indices.
+	 */
+
+	if (!reverse) {
+	    /*
+	     * Not enough characters to fit subrope into.
+	     */
+
+	    return SIZE_MAX;
+	} else {
+	    size_t offset = subropeLength-(length-start);
+	    if (max <= offset || start < offset) {
+		/*
+		 * Not enough characters to fit subrope into.
+		 */
+
+		return SIZE_MAX;
+	    }
+	    max -= offset;
+	    start -= offset;
+	}
+    }
+
+    /*
+     * Generic case.
+     */
+
+    Col_TraverseRopeChunks(rope, start, max, reverse, SearchSubropeProc,
+	    &info, NULL);
+
     return info.pos;
 }
 
@@ -2312,7 +2511,7 @@ Col_TraverseRopeChunksN(
 
     for (i=0; i < number; i++) {
 	ASSERT(info[i].max <= max);
-	info[i].rope = ropes[i];
+	info[i].rope = (info[i].max ? ropes[i] : WORD_NIL);
 	info[i].start = start;
 	info[i].maxDepth = GetDepth(ropes[i]);
 	info[i].backtracks = (info[i].maxDepth ? 

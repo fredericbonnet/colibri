@@ -34,13 +34,16 @@ EXTERN Col_Word		Col_NewRope(Col_StringFormat format, const void *data,
  * Group: Rope Access
  *
  * Declarations:
- *	<Col_RopeLength>, <Col_RopeAt>, <Col_RopeFind>, <Col_CompareRopesL>
+ *	<Col_RopeLength>, <Col_RopeAt>, <Col_RopeFind>, <Col_RopeSearch>,
+ *	<Col_CompareRopesL>
  ****************************************************************************/
 
 EXTERN size_t		Col_RopeLength(Col_Word rope);
 EXTERN Col_Char		Col_RopeAt(Col_Word rope, size_t index);
 EXTERN size_t		Col_RopeFind(Col_Word rope, Col_Char c, size_t start, 
 			    size_t max, int reverse);
+EXTERN size_t		Col_RopeSearch(Col_Word rope, Col_Word subrope, 
+			    size_t start, size_t max, int reverse);
 EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 			    size_t start, size_t max, size_t *posPtr, 
 			    Col_Char *c1Ptr, Col_Char *c2Ptr);
@@ -137,6 +140,52 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 
 #define Col_RopeFindLastN(rope, c, max) \
 	Col_RopeFind((rope), (c), SIZE_MAX, (max), 1)
+
+/*---------------------------------------------------------------------------
+ * Function: Col_RopeSearchFirst
+ *
+ *	Simple version of <Col_RopeSearch>, find first occurrence of a subrope
+ *	in whole rope from its beginning. This is the rope counterpart to C's
+ *	strstr.
+ *
+ * Arguments:
+ *	rope	- Rope to search character into.
+ *	subrope	- Subrope to search for.
+ *
+ * Results:
+ *	If found, returns the position of the subrope in rope. Else returns
+ *	SIZE_MAX (which is an invalid character index since this is the maximum
+ *	rope length, and indices are zero-based).
+ *
+ * See also:
+ *	<Col_RopeSearch>
+ *---------------------------------------------------------------------------*/
+
+#define Col_RopeSearchFirst(rope, subrope) \
+	Col_RopeSearch((rope), (subrope), 0, SIZE_MAX, 0)
+
+/*---------------------------------------------------------------------------
+ * Function: Col_RopeSearchLast
+ *
+ *	Simple version of <Col_RopeSearch>, find last occurrence of a subrope
+ *	in whole rope from its end. This is the rope counterpart to C's
+ *	strstr.
+ *
+ * Arguments:
+ *	rope	- Rope to search character into.
+ *	subrope	- Subrope to search for.
+ *
+ * Results:
+ *	If found, returns the position of the subrope in rope. Else returns
+ *	SIZE_MAX (which is an invalid character index since this is the maximum
+ *	rope length, and indices are zero-based).
+ *
+ * See also:
+ *	<Col_RopeSearch>
+ *---------------------------------------------------------------------------*/
+
+#define Col_RopeSearchLast(rope, subrope) \
+	Col_RopeSearch((rope), (subrope), SIZE_MAX, SIZE_MAX, 1)
 
 /*---------------------------------------------------------------------------
  * Macro: Col_CompareRopes

@@ -3764,7 +3764,7 @@ Col_TraverseListChunksN(
 
     for (i=0; i < number; i++) {
 	ASSERT(info[i].max <= max);
-	info[i].list = lists[i];
+	info[i].list = (info[i].max ? lists[i] : WORD_NIL);
 	info[i].start = start;
 	info[i].maxDepth = GetDepth(lists[i]);
 	info[i].backtracks = (info[i].maxDepth ? 
