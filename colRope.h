@@ -46,10 +46,103 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 			    Col_Char *c1Ptr, Col_Char *c2Ptr);
 
 /*---------------------------------------------------------------------------
+ * Function: Col_RopeFindFirst
+ *
+ *	Simple version of <Col_RopeFind>, find first occurrence of a character 
+ *	in whole rope from its beginning. This is the rope counterpart to C's
+ *	strchr.
+ *
+ * Arguments:
+ *	rope	- Rope to search character into.
+ *	c	- Character to search for.
+ *
+ * Results:
+ *	If found, returns the position of the character in rope. Else returns
+ *	SIZE_MAX (which is an invalid character index since this is the maximum
+ *	rope length, and indices are zero-based).
+ *
+ * See also:
+ *	<Col_RopeFind>
+ *---------------------------------------------------------------------------*/
+
+#define Col_RopeFindFirst(rope, c) \
+	Col_RopeFind((rope), (c), 0, SIZE_MAX, 0)
+
+/*---------------------------------------------------------------------------
+ * Function: Col_RopeFindFirstN
+ *
+ *	Simple version of <Col_RopeFind>, find first occurrence of a character 
+ *	in rope from its beginning up to a given number of characters. This is
+ *	the rope counterpart to C's strnchr.
+ *
+ * Arguments:
+ *	rope	- Rope to search character into.
+ *	c	- Character to search for.
+ *	max	- Maximum number of characters to search.
+ *
+ * Results:
+ *	If found, returns the position of the character in rope. Else returns
+ *	SIZE_MAX (which is an invalid character index since this is the maximum
+ *	rope length, and indices are zero-based).
+ *
+ * See also:
+ *	<Col_RopeFind>
+ *---------------------------------------------------------------------------*/
+
+#define Col_RopeFindFirstN(rope, c, max) \
+	Col_RopeFind((rope), (c), 0, (max), 0)
+
+/*---------------------------------------------------------------------------
+ * Function: Col_RopeFindLast
+ *
+ *	Simple version of <Col_RopeFind>, find last occurrence of a character 
+ *	in whole rope from its end. This is the rope counterpart to C's strrchr.
+ *
+ * Arguments:
+ *	rope	- Rope to search character into.
+ *	c	- Character to search for.
+ *
+ * Results:
+ *	If found, returns the position of the character in rope. Else returns
+ *	SIZE_MAX (which is an invalid character index since this is the maximum
+ *	rope length, and indices are zero-based).
+ *
+ * See also:
+ *	<Col_RopeFind>
+ *---------------------------------------------------------------------------*/
+
+#define Col_RopeFindLast(rope, c) \
+	Col_RopeFind((rope), (c), SIZE_MAX, SIZE_MAX, 1)
+
+/*---------------------------------------------------------------------------
+ * Function: Col_RopeFindLastN
+ *
+ *	Simple version of <Col_RopeFind>, find last occurrence of a character 
+ *	in rope from its end up to a given number of characters. This function
+ *	has no C counterpart and is provided for symmetry.
+ *
+ * Arguments:
+ *	rope	- Rope to search character into.
+ *	c	- Character to search for.
+ *	max	- Maximum number of characters to search.
+ *
+ * Results:
+ *	If found, returns the position of the character in rope. Else returns
+ *	SIZE_MAX (which is an invalid character index since this is the maximum
+ *	rope length, and indices are zero-based).
+ *
+ * See also:
+ *	<Col_RopeFind>
+ *---------------------------------------------------------------------------*/
+
+#define Col_RopeFindLastN(rope, c, max) \
+	Col_RopeFind((rope), (c), SIZE_MAX, (max), 1)
+
+/*---------------------------------------------------------------------------
  * Macro: Col_CompareRopes
  *
  *	Simple version of <Col_CompareRopesL>, compare two ropes. This is the 
- *	rope counterpart to strcmp.
+ *	rope counterpart to C's strcmp.
  *
  * Arguments:
  *	rope1, rope2	- Ropes to compare.
@@ -73,8 +166,8 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 /*---------------------------------------------------------------------------
  * Macro: Col_CompareRopesN
  *
- *	Simple version of <Col_CompareRopesL> compare two ropes up to a given
- *	number of characters. This is the rope counterpart to strncmp.
+ *	Simple version of <Col_CompareRopesL>, compare two ropes up to a given
+ *	number of characters. This is the rope counterpart to C's strncmp.
  *
  * Arguments:
  *	rope1, rope2	- Ropes to compare.

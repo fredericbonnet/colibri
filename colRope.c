@@ -27,6 +27,7 @@
 
 typedef struct RopeChunkTraverseInfo *pRopeChunkTraverseInfo;
 static Col_RopeChunksTraverseProc MergeChunksProc;
+static Col_RopeChunksTraverseProc FindCharProc;
 static Col_RopeChunksTraverseProc CompareChunksProc;
 static unsigned char	GetDepth(Col_Word rope);
 static void		GetArms(Col_Word rope, Col_Word * leftPtr, 
@@ -451,6 +452,149 @@ Col_RopeAt(
 }
 
 /*---------------------------------------------------------------------------
+ * Internal Typedef: FindCharInfo
+ *
+ *	Structure used to collect data during character search.
+ *
+ * Fields:
+ *	c	- Character to search for.
+ *	reverse	- Whether to traverse in reverse order.
+ *	pos	- Upon return, position of character if found
+ *
+ * See also:
+ *	<FindCharProc>, <Col_RopeFind>
+ *---------------------------------------------------------------------------*/
+
+typedef struct FindCharInfo {
+    Col_Char c;
+    int reverse;
+    size_t pos;
+} FindCharInfo;
+
+/*---------------------------------------------------------------------------
+ * Internal Function: FindCharProc
+ *
+ *	Rope traversal procedure used to find characters in ropes. Follows 
+ *	<Col_RopeChunksTraverseProc> signature.
+ *
+ * Arguments:
+ *	index		- Rope-relative index where chunks begin.
+ *	length		- Length of chunks.
+ *	number		- Number of chunks. Always 2.
+ *	chunks		- Array of chunks. When chunk is NULL, means the
+ *			  index is past the end of the traversed rope.
+ *	clientData	- Points to <FindCharInfo>.
+ *
+ * Results:
+ *	1 if character was found, else 0. Additional info returned through 
+ *	clientData.
+ *---------------------------------------------------------------------------*/
+
+static int 
+FindCharProc(
+    size_t index,
+    size_t length,
+    size_t number, 
+    const Col_RopeChunk *chunks,
+    Col_ClientData clientData) 
+{
+    FindCharInfo *info = (FindCharInfo *) clientData;
+    size_t i;
+    const char *data;
+    Col_Char c;
+
+    ASSERT(number == 1);
+
+    /*
+     * Compare char by char.
+     */
+
+    ASSERT(chunks[0].data);
+    if (info->reverse) {
+	data = (const char *) chunks[0].data;
+	if (chunks[0].format == COL_UTF8) data += chunks[0].byteLength;
+	for (i = length-1; i >= 0; i--) {
+	    switch (chunks[0].format) {
+		case COL_UCS1: c = ((Col_Char1 *) data)[i]; break;
+		case COL_UCS2: c = ((Col_Char2 *) data)[i]; break;
+		case COL_UCS4: c = ((Col_Char4 *) data)[i]; break;
+		case COL_UTF8: COL_UTF8_PREVIOUS(data); c = Col_Utf8CharAt(data); break;
+	    }
+	    if (c == info->c) {
+		/*
+		 * Found!
+		 */
+
+		info->pos = index+i;
+		return 1;
+	    }
+	    if (i == 0) break; /* Avoids overflow. */
+	}
+    } else {
+	data = (const char *) chunks[0].data;
+	for (i = 0; i < length; i++) {
+	    switch (chunks[0].format) {
+		case COL_UCS1: c = ((Col_Char1 *) data)[i]; break;
+		case COL_UCS2: c = ((Col_Char2 *) data)[i]; break;
+		case COL_UCS4: c = ((Col_Char4 *) data)[i]; break;
+		case COL_UTF8: c = Col_Utf8CharAt(data); COL_UTF8_NEXT(data); break;
+	    }
+	    if (c == info->c) {
+		/*
+		 * Found!
+		 */
+
+		info->pos = index+i;
+		return 1;
+	    }
+	}
+    }
+
+    /*
+     * Not found.
+     */
+
+    return 0;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_RopeFind
+ *
+ *	Find first occurrence of a character in a rope.
+ *
+ * Arguments:
+ *	rope	- Rope to search character into.
+ *	c	- Character to search for.
+ *	start	- Starting index.
+ *	max	- Maximum number of characters to search.
+ *	reverse	- Whether to traverse in reverse order.
+ *
+ * Results:
+ *	If found, returns the position of the character in rope. Else returns
+ *	SIZE_MAX (which is an invalid character index since this is the maximum
+ *	rope length, and indices are zero-based).
+ *
+ * See also:
+ *	<Col_TraverseRopeChunks>
+ *---------------------------------------------------------------------------*/
+
+size_t
+Col_RopeFind(
+    Col_Word rope, 
+    Col_Char c, 
+    size_t start, 
+    size_t max, 
+    int reverse)
+{
+    FindCharInfo info = {c, reverse, SIZE_MAX};
+
+    size_t result = SIZE_MAX;
+    Col_TraverseRopeChunks(rope, start, max, reverse, FindCharProc, &info, 
+	    NULL);
+    return info.pos;
+}
+
+/*---------------------------------------------------------------------------
  * Internal Typedef: CompareChunksInfo
  *
  *	Structure used to collect data during rope comparison.
@@ -615,6 +759,9 @@ CompareChunksProc(
  *			  upon return.
  *	c1Ptr, c2Ptr	- If non-NULL, respective codepoints of differing 
  *			  characters upon return.
+ *
+ * See also:
+ *	<Col_TraverseRopeChunksN>
  *---------------------------------------------------------------------------*/
 
 int
