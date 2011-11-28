@@ -808,7 +808,6 @@ StringHashMapFindEntry(
     if (!createPtr || !*createPtr) {
 	return WORD_NIL;
     }
-    ASSERT(mutable);
     *createPtr = 1;
 
     if (WORD_HASHMAP_SIZE(map) >= nbBuckets * LOAD_FACTOR
@@ -909,7 +908,6 @@ IntHashMapFindEntry(
     if (!createPtr || !*createPtr) {
 	return WORD_NIL;
     }
-    ASSERT(mutable);
     *createPtr = 1;
 
     if (WORD_HASHMAP_SIZE(map) >= nbBuckets * LOAD_FACTOR
