@@ -179,6 +179,7 @@ typedef char Cell[CELL_SIZE];
 /*---------------------------------------------------------------------------
  * Internal Constants: Page flags
  *
+ *  PAGE_FLAG_FIRST	- Marks first page in group.
  *  PAGE_FLAG_LAST	- Marks last page in group.
  *  PAGE_FLAG_PARENT	- Marks pages having parent cells.
  *
@@ -186,8 +187,9 @@ typedef char Cell[CELL_SIZE];
  *	<PAGE_FLAG>, <PAGE_SET_FLAG>, <PAGE_CLEAR_FLAG>
  *---------------------------------------------------------------------------*/
 
-#define PAGE_FLAG_LAST			0x10
-#define PAGE_FLAG_PARENT		0x20
+#define PAGE_FLAG_FIRST			0x10
+#define PAGE_FLAG_LAST			0x20
+#define PAGE_FLAG_PARENT		0x40
 
 /*---------------------------------------------------------------------------
  * Internal Macro: PAGE_CELL

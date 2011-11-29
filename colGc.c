@@ -952,7 +952,7 @@ PerformGC(
 /*---------------------------------------------------------------------------
  * Internal Function: ClearPoolBitmasks
  *
- *	Clear all bitmasks in the pool's pages.
+ *	Unprotect and clear all bitmasks in the pool's pages.
  *
  * Argument:
  *	pool	- The pool to traverse.
@@ -964,12 +964,11 @@ ClearPoolBitmasks(
 {
     void * page;
 
-    /* 
-     * Clear all bitmasks in pool. 
-     */
-
     for (page = pool->pages; page; page = PAGE_NEXT(page)) {
 	ASSERT(PAGE_GENERATION(page) == pool->generation);
+	if (pool->generation > 1 && PAGE_FLAG(page, PAGE_FLAG_FIRST)) {
+	    SysPageProtect(page, 0);
+	}
 	ClearAllCells(page);
     }
 }
@@ -1079,6 +1078,7 @@ MarkReachableCellsFromParents(
 	 * Iterate over logical pages in page group.
 	 */
 
+	ASSERT(PAGE_FLAG(page, PAGE_FLAG_FIRST));
 	for (; page; page = PAGE_NEXT(page)) {
 	    /*
 	     * Iterate over cells in page.
@@ -1131,6 +1131,7 @@ PurgeParents(
 
 	next = PARENT_NEXT(cell);
 	parent = 0;
+	ASSERT(PAGE_FLAG(PARENT_PAGE(cell), PAGE_FLAG_FIRST));
 	for (page = PARENT_PAGE(cell); page; page = PAGE_NEXT(page)) {
 	    parent |= PAGE_FLAG(page, PAGE_FLAG_PARENT);
 	    if (PAGE_FLAG(page, PAGE_FLAG_LAST)) break;
@@ -1166,6 +1167,7 @@ PurgeParents(
 	 */
 
 	page = PARENT_PAGE(cell);
+	ASSERT(PAGE_FLAG(page, PAGE_FLAG_FIRST));
 	if (PAGE_GENERATION(page) > data->maxCollectedGeneration) {
 	    SysPageProtect(page, 1);
 	}

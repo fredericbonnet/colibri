@@ -270,6 +270,7 @@ PoolCleanup(
 	for (page = base; !PAGE_FLAG(page, PAGE_FLAG_LAST); 
 		page = PAGE_NEXT(page));
 	next = PAGE_NEXT(page);
+	ASSERT(PAGE_FLAG(base, PAGE_FLAG_FIRST));
 	SysPageFree(base);
     }
 }
@@ -994,6 +995,7 @@ UpdateParents(
 
     for (cell = data->parents; cell; cell = PARENT_NEXT(cell)) {
 	ASSERT(TestCell(CELL_PAGE(cell), CELL_INDEX(cell)));
+	ASSERT(PAGE_FLAG(PARENT_PAGE(cell), PAGE_FLAG_FIRST));
 	for (page = PARENT_PAGE(cell); page; page = PAGE_NEXT(page)) {
 	    PAGE_CLEAR_FLAG(page, PAGE_FLAG_PARENT);
 	    if (PAGE_FLAG(page, PAGE_FLAG_LAST)) break;
@@ -1198,6 +1200,7 @@ PoolAllocPages(
 	ClearAllCells(page);
     }
     pool->lastPage = prev;
+    PAGE_SET_FLAG(base, PAGE_FLAG_FIRST);
     PAGE_SET_NEXT(prev, NULL);
     PAGE_SET_FLAG(prev, PAGE_FLAG_LAST);
 }
@@ -1237,6 +1240,7 @@ PoolFreeEmptyPages(
 
 	nbPages = 0;
 	nbSetCells = 0;
+	ASSERT(PAGE_FLAG(base, PAGE_FLAG_FIRST));
 	for (page = base; ; page = PAGE_NEXT(page)) {
 	    nbPages++;
 	    nbSetCells += NbSetCells(page);
