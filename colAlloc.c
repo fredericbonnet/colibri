@@ -18,7 +18,7 @@
 typedef struct AddressRange *pAddressRange;
 static size_t		FindFreePagesInRange(struct AddressRange *range, 
 			    size_t number, size_t index);
-static void *		SysPageAlloc(size_t number);
+static void *		SysPageAlloc(size_t number, int written);
 static void		SysPageFree(void * base);
 static void		SysPageTrim(void * base);
 static Cell *		PageAllocCells(size_t number, Cell *firstCell);
@@ -476,8 +476,9 @@ FindFreePagesInRange(
  *
  *	Allocate system pages.
  *
- * Argument:
+ * Arguments:
  *	number	- Number of system pages to alloc.
+ *	written	- Initial write tracking flag value.
  *
  * Result:
  *	The allocated system pages' base address.
@@ -491,7 +492,8 @@ FindFreePagesInRange(
 
 static void * 
 SysPageAlloc(
-    size_t number)
+    size_t number,
+    int written)
 {
     void *addr = NULL;
     AddressRange *range, **prevPtr;
@@ -526,7 +528,7 @@ SysPageAlloc(
 	    range->size = number;
 	    range->free = 0;
 	    range->first = number;
-	    range->allocInfo[0] = 0;
+	    range->allocInfo[0] = written;
 	    dedicatedRanges = range;
 	}
 	PlatLeaveProtectAddressRanges();
@@ -651,7 +653,11 @@ SysPageAlloc(
 	for (i=1; i < number; i++) {
 	    range->allocInfo[first+i] = (char) i;
 	}
-	range->allocInfo[range->size+(first>>3)] &= ~(1<<(first&7));
+	if (written) {
+	    range->allocInfo[range->size+(first>>3)] |= (1<<(first&7));
+	} else {
+	    range->allocInfo[range->size+(first>>3)] &= ~(1<<(first&7));
+	}
 	range->free -= number;
 	if (first == range->first) {
 	    /* 
@@ -958,7 +964,7 @@ SysPageProtect(
 	if (protect) {
 	    range->allocInfo[range->size+(index>>3)] &= ~(1<<(index&7));
 	} else {
-	    range->allocInfo[range->size+(index>>3)] |= 1<<(index&7);
+	    range->allocInfo[range->size+(index>>3)] |= (1<<(index&7));
 	}
     }
 end:
@@ -1061,6 +1067,10 @@ UpdateParents(
 		cell = PoolAllocCells(&data->rootPool, 1);
 		PARENT_INIT(cell, data->parents, page);
 		data->parents = cell;
+		for (; page; page = PAGE_NEXT(page)) {
+		    PAGE_CLEAR_FLAG(page, PAGE_FLAG_PARENT);
+		    if (PAGE_FLAG(page, PAGE_FLAG_LAST)) break;
+		}
 
 		i += size;
 	    }
@@ -1164,7 +1174,12 @@ PoolAllocPages(
 	}
     }
 
-    base = (Page *) SysPageAlloc(nbSysPages);
+    /*
+     * Allocate system pages. Make sure to mark pages as written for older
+     * generations for proper parent tracking.
+     */
+
+    base = (Page *) SysPageAlloc(nbSysPages, (pool->generation >= 2));
 
     if (!pool->pages) {
 	pool->pages = base;
