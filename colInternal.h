@@ -251,7 +251,7 @@ typedef char Cell[CELL_SIZE];
  *	Memory pools are a set of pages storing the cells of a given generation.
  *
  * Fields:
- *	generation	- Generation level; 0 = younger.
+ *	generation	- Generation level; 0 = younger, 1 = eden, 2+ = older.
  *	pages		- Pages form a singly-linked list.
  *	lastPage	- Last page in pool. 
  *	lastFreeCell	- Last cell sequence of a given size found.
