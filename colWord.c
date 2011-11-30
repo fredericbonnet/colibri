@@ -440,7 +440,6 @@ AddSynonymField(
     ASSERT(!HasSynonymField(*wordPtr));
 
     converted = (Col_Word) AllocCells(1);
-    TRACE("\t\tAdding synonym field to 0x%p => 0x%p\n", *wordPtr, converted);
     switch (WORD_TYPE(*wordPtr)) {
 	/*
 	 * Some types have dedicated wrappers.
