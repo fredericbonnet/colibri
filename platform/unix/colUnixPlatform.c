@@ -271,9 +271,11 @@ PlatEnter(
      * Initialize thread data.
      */
 
-    data = (ThreadData *) malloc(sizeof(ThreadData));
+    data = (ThreadData *) malloc(sizeof(*data)
+	    + sizeof(UNIX_PROTECT_ADDRESS_RANGES_RECURSE(data)));
     memset(data, 0, sizeof(*data));
     data->nestCount = 1;
+    UNIX_PROTECT_ADDRESS_RANGES_RECURSE(data) = 0;
     GcInitThread(data);
     pthread_setspecific(tsdKey, data);
 
@@ -716,7 +718,7 @@ PlatProtectPages(
     int protect)
 {
     return !mprotect(addr, number << shiftPage, 
-	    PROT_READ | (protect ? PROT_WRITE : 0));
+	    PROT_READ | (protect ? 0 : PROT_WRITE));
 }
 
 /*---------------------------------------------------------------------------
