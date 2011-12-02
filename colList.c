@@ -3872,7 +3872,7 @@ Col_TraverseListChunks(
     size_t *lengthPtr)
 {
     ListChunkTraverseInfo info;
-    Col_Word *elements;
+    const Col_Word *elements;
     int result;
     size_t listLength = Col_ListLength(list);
 
@@ -3960,115 +3960,6 @@ Col_TraverseListChunks(
 	     */
 
 	    NextChunk(&info, max, reverse);
-	    if (!info.list) {
-		/*
-		 * Reached end of list, stop there.
-		 */
-
-		return 0;
-	    }
-	}
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_TraverseListChunksR
- *
- *	Iterate over the chunks of a list in reverse order.
- *
- *	For each traversed chunk, proc is called back with the opaque data as
- *	well as the position within the list. If it returns a non-zero result 
- *	then the iteration ends. 
- *
- * Note:
- *	The algorithm is naturally recursive but this implementation avoids
- *	recursive calls thanks to a stack-allocated backtracking structure. 
- *	This procedure is an optimized version of <Col_TraverseListChunksN>.
- *
- * Arguments:
- *	list		- List to traverse.
- *	start		- Index of first character.
- *	max		- Max number of characters.
- *	proc		- Callback proc called on each chunk.
- *	clientData	- Opaque data passed as is to above proc.
- *
- * Results:
- *	The return value of the last called proc, or -1 if no traversal was
- *	performed. Additionally:
- *
- *	lengthPtr	- If non-NULL, incremented by the total number of 
- *			  characters traversed upon completion.
- *---------------------------------------------------------------------------*/
-
-int 
-Col_TraverseListChunksR(
-    Col_Word list,
-    size_t start,
-    size_t max,
-    Col_ListChunksTraverseProc *proc,
-    Col_ClientData clientData,
-    size_t *lengthPtr)
-{
-    ListChunkTraverseInfo info;
-    Col_Word *elements;
-    int result;
-    size_t listLength = Col_ListLength(list);
-
-    if (listLength == 0 || max == 0) {
-	/*
-	 * Nothing to traverse.
-	 */
-
-	return -1;
-    }
-
-    if (start > listLength) {
-	/* 
-	 * Start is past the end of the list.
-	 */
-
-	start = listLength-1;
-    }
-
-    if (max > start+1) {
-	/* 
-	 * Adjust max to the remaining length. 
-	 */
-
-	max = start+1;
-    }
-
-    info.list = list;
-    info.start = start;
-    info.max = max;
-    info.maxDepth = GetDepth(list);
-    info.backtracks = (info.maxDepth ? 
-	    alloca(sizeof(*info.backtracks) * info.maxDepth) : NULL);
-    info.prevDepth = INT_MAX;
-
-    for (;;) {
-	GetChunk(&info, &elements, 1);
-	max = info.max;
-
-	/*
-	 * Call proc on leaf data.
-	 */
-
-	if (lengthPtr) *lengthPtr += max;
-	result = proc(start-max+1, max, 1, &elements, clientData);
-	start -= max;
-	if (result != 0) {
-	    /*
-	     * Stop there.
-	     */
-
-	    return result;
-	} else {
-	    /*
-	     * Continue iteration.
-	     */
-
-	    NextChunk(&info, max, 1);
 	    if (!info.list) {
 		/*
 		 * Reached end of list, stop there.
