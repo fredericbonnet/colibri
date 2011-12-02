@@ -1638,6 +1638,15 @@ PromotePages(
 	PAGE_SET_GENERATION(page, pool->generation+1);
 	parent |= PAGE_FLAG(page, PAGE_FLAG_PARENT);
 	if (PAGE_FLAG(page, PAGE_FLAG_LAST)) {
+	    if (!PAGE_NEXT(page)) {
+		/*
+		 * Stop there. This avoids protecting the last page before
+		 * updating its next pointer (see below).
+		 */
+
+		ASSERT(page == pool->lastPage);
+		break;
+	    }
 	    if (!parent) SysPageProtect(page, 1);
 	    parent = 0;
 	}
@@ -1651,6 +1660,7 @@ PromotePages(
     ASSERT(pool->lastPage);
     nextPool = &data->pools[pool->generation-1];
     PAGE_SET_NEXT(pool->lastPage, nextPool->pages);
+    if (!parent) SysPageProtect(pool->lastPage, 1);
     nextPool->pages = pool->pages;
     if (!nextPool->lastPage) {
 	nextPool->lastPage = pool->lastPage;
