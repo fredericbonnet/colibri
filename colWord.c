@@ -237,7 +237,7 @@ Col_GetWordInfo(
 	case WORD_TYPE_UTF8STR:
 	    if (dataPtr) {
 		dataPtr->string.format = COL_UTF8;
-		dataPtr->string.data = WORD_UCSSTR_DATA(word);
+		dataPtr->string.data = WORD_UTF8STR_DATA(word);
 		dataPtr->string.byteLength = WORD_UTF8STR_BYTELENGTH(word);
 	    }
 	    return COL_STRING;
