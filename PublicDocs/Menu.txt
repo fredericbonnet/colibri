@@ -43,57 +43,61 @@ Footer: Copyright (C) 2010 Frédéric Bonnet
 # --------------------------------------------------------------------------
 
 
-Group: General  {
+Group: API Reference  {
 
-   Text: Including <colibri.h> will include all other files.
-   File: colibri.h  (colibri.h)
-   File: colibri.c  (colibri.c)
-   File: colGc.c  (colGc.c)
-   File: colUtils.h  (colUtils.h)
-   }  # Group: General
+   Group: General  {
 
-Group: Words  {
+      Text: Including <colibri.h> will include all other files.
+      File: colibri.h  (colibri.h)
+      File: colibri.c  (colibri.c)
+      File: colGc.c  (colGc.c)
+      File: colUtils.h  (colUtils.h)
+      }  # Group: General
 
-   File: colWord.h  (colWord.h)
-   File: colWord.c  (colWord.c)
-   }  # Group: Words
+   Group: Words  {
 
-Group: Strings and Ropes  {
+      File: colWord.h  (colWord.h)
+      File: colWord.c  (colWord.c)
+      }  # Group: Words
 
-   File: colRope.h  (colRope.h)
-   File: colRope.c  (colRope.c)
-   }  # Group: Strings and Ropes
+   Group: Strings and Ropes  {
 
-Group: Containers  {
+      File: colRope.h  (colRope.h)
+      File: colRope.c  (colRope.c)
+      }  # Group: Strings and Ropes
 
-   Group: Vectors and Lists  {
+   Group: Containers  {
 
-      File: colVector.h  (colVector.h)
-      File: colVector.c  (colVector.c)
-      File: colList.h  (colList.h)
-      }  # Group: Vectors and Lists
+      Group: Vectors and Lists  {
 
-   Group: Maps  {
+         File: colVector.h  (colVector.h)
+         File: colVector.c  (colVector.c)
+         File: colList.h  (colList.h)
+         File: colList.c  (colList.c)
+         }  # Group: Vectors and Lists
 
-      File: colMap.h  (colMap.h)
-      File: colMap.c  (colMap.c)
-      File: colHash.h  (colHash.h)
-      File: colHash.c  (colHash.c)
-      File: colTrie.h  (colTrie.h)
-      File: colTrie.c  (colTrie.c)
-      File: colList.c  (colList.c)
-      }  # Group: Maps
+      Group: Maps  {
 
-   }  # Group: Containers
+         File: colMap.h  (colMap.h)
+         File: colMap.c  (colMap.c)
+         File: colHash.h  (colHash.h)
+         File: colHash.c  (colHash.c)
+         File: colTrie.h  (colTrie.h)
+         File: colTrie.c  (colTrie.c)
+         }  # Group: Maps
+
+      }  # Group: Containers
+
+   }  # Group: API Reference
 
 Group: Index  {
 
    Index: Everything
-   Constant Index: Constants
    File Index: Files
+   Type Index: Types
+   Constant Index: Constants
    Function Index: Functions
    Macro Index: Macros
-   Type Index: Types
    }  # Group: Index
 
 Link: Built with Natural Docs  (http://www.naturaldocs.org)

@@ -1,5 +1,5 @@
 /*
- * Internal File: colWin32Platform.h
+ * Internal Header: colWin32Platform.h
  *
  *	This header file defines Win32-specific features.
  */
@@ -11,7 +11,7 @@
 
 
 /****************************************************************************
- * Internal Group: Thread-Local Storage
+ * Internal Section: Thread-Local Storage
  *
  * Declarations:
  *	<tlsToken>
@@ -33,7 +33,7 @@ extern DWORD tlsToken;
 
 
 /****************************************************************************
- * Internal Group: System Page Allocation
+ * Internal Section: System Page Allocation
  *
  * Declarations:
  *	<csRange>

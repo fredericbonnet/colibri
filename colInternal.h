@@ -1,5 +1,5 @@
 /*
- * Internal File: colInternal.h
+ * Internal Header: colInternal.h
  *
  *	This header file defines internal structures and macros, notably 
  *	predefined word types.
@@ -33,7 +33,7 @@
 
 
 /****************************************************************************
- * Internal Group: Bit Handling
+ * Internal Section: Bit Handling
  *
  * Declarations:
  *	<firstZeroBitSequence>, <longestLeadingZeroBitSequence>, <nbBitsSet>
@@ -45,7 +45,7 @@ extern const char nbBitsSet[256];
 
 
 /****************************************************************************
- * Internal Group: System Page Allocation
+ * Internal Section: System Page Allocation
  *
  * Declarations:
  *	<SysPageProtect>
@@ -92,8 +92,7 @@ typedef char Cell[CELL_SIZE];
  *	<AVAILABLE_CELLS>
  *---------------------------------------------------------------------------*/
 
-#define RESERVED_CELLS \
-    1
+#define RESERVED_CELLS		1
 
 /*---------------------------------------------------------------------------
  * Internal Constant: AVAILABLE_CELLS
@@ -105,8 +104,7 @@ typedef char Cell[CELL_SIZE];
  *	<CELLS_PER_PAGE>, <RESERVED_CELLS>
  *---------------------------------------------------------------------------*/
 
-#define AVAILABLE_CELLS \
-    (CELLS_PER_PAGE-RESERVED_CELLS)
+#define AVAILABLE_CELLS		(CELLS_PER_PAGE-RESERVED_CELLS)
 
 /*---------------------------------------------------------------------------
  * Internal Macro: NB_CELLS
@@ -124,9 +122,9 @@ typedef char Cell[CELL_SIZE];
     (((size)+CELL_SIZE-1)/CELL_SIZE)
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Page Fields
+ * Internal Macros: PAGE_* Accessors
  *
- *	Accessors for page fields.
+ *	Page field accessor macros.
  *
  * Layout:
  *	On all architectures, the first cell is reserved and is formatted as
@@ -177,7 +175,9 @@ typedef char Cell[CELL_SIZE];
 #define PAGE_BITMASK(page)		((uint8_t *)(page)+sizeof(Page *)*2)
 
 /*---------------------------------------------------------------------------
- * Internal Constants: Page flags
+ * Internal Constants: PAGE_FLAG_* Constants
+ *
+ *	Page flag constants.
  *
  *  PAGE_FLAG_FIRST	- Marks first page in group.
  *  PAGE_FLAG_LAST	- Marks last page in group.
@@ -239,7 +239,7 @@ typedef char Cell[CELL_SIZE];
 
 
 /****************************************************************************
- * Internal Group: Memory Pools
+ * Internal Section: Memory Pools
  *
  * Declarations:
  *	<PoolInit>, <PoolCleanup>
@@ -283,7 +283,7 @@ void			PoolCleanup(MemoryPool *pool);
 
 
 /****************************************************************************
- * Internal Group: Page Allocation
+ * Internal Section: Page Allocation
  *
  * Declarations:
  *	<PoolAllocPages>, <PoolFreeEmptyPages>
@@ -294,7 +294,7 @@ void			PoolFreeEmptyPages(MemoryPool *pool);
 
 
 /****************************************************************************
- * Internal Group: Cell Allocation
+ * Internal Section: Cell Allocation
  *
  * Declarations:
  *	<PoolAllocCells>, <SetCells>, <ClearCells>, <ClearAllCells>, <TestCell>,
@@ -310,7 +310,7 @@ size_t			NbSetCells(Page *page);
 
 
 /****************************************************************************
- * Internal Group: Process & Threads
+ * Internal Section: Process & Threads
  *
  * Declarations:
  *	<GcInitThread>, <GcInitGroup>, <GcCleanupThread>, <GcCleanupGroup>
@@ -393,7 +393,7 @@ void			GcCleanupGroup(GroupData *data);
 
 
 /****************************************************************************
- * Internal Group: Cell Allocation
+ * Internal Section: Cell Allocation
  *
  * Declarations:
  *	<AllocCells>
@@ -403,7 +403,7 @@ Cell *			AllocCells(size_t number);
 
 
 /****************************************************************************
- * Internal Group: Garbage Collection
+ * Internal Section: Garbage Collection
  *
  * Declarations:
  *	<PerformGC>
@@ -413,7 +413,7 @@ void			PerformGC(GroupData *data);
 
 
 /****************************************************************************
- * Internal Group: Word Lifetime Management
+ * Internal Section: Word Lifetime Management
  *
  * Declarations:
  *	<DeclareCustomWord>
@@ -424,7 +424,7 @@ void			DeclareCustomWord(Col_Word word,
 
 
 /****************************************************************************
- * Internal Group: Roots and Parents
+ * Internal Section: Roots and Parents
  *
  * Declarations:
  *	<UpdateParents>
@@ -433,7 +433,9 @@ void			DeclareCustomWord(Col_Word word,
 void			UpdateParents(GroupData *data);
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Root Cells
+ * Internal Macros: ROOT_* Accessors
+ *
+ *	Root cell accessor macros.
  *
  *	Roots are explicitly preserved words, using a reference count.
  *
@@ -526,7 +528,7 @@ void			UpdateParents(GroupData *data);
 /*---------------------------------------------------------------------------
  * Internal Macro: ROOT_NODE_INIT
  *
- *	Initializer for root trie nodes.
+ *	Root trie node initializer.
  *
  * Arguments:
  *	cell	- Cell to initialize. (Caution: evaluated several times after 
@@ -546,7 +548,7 @@ void			UpdateParents(GroupData *data);
 /*---------------------------------------------------------------------------
  * Internal Macro: ROOT_LEAF_INIT
  *
- *	Initializer for root trie leaves.
+ *	Root trie leaf initializer.
  *
  * Arguments:
  *	cell		- Cell to initialize. (Caution: evaluated several times
@@ -564,7 +566,9 @@ void			UpdateParents(GroupData *data);
     ROOT_LEAF_SOURCE(cell) = source;
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Parent Cells
+ * Internal Macros: PARENT_* Accessors
+ *
+ *	Parent cell accessor macros.
  *
  *	Parents are cells pointing to other cells of a newer generation. During
  *	GC, parents from uncollected generations are traversed in addition to
@@ -604,7 +608,7 @@ void			UpdateParents(GroupData *data);
 /*---------------------------------------------------------------------------
  * Internal Macro: PARENT_INIT
  *
- *	Initializer for parent cells.
+ *	Parent cell initializer.
  *
  * Arguments:
  *	cell		- Cell to initialize. (Caution: evaluated several times
@@ -622,64 +626,64 @@ void			UpdateParents(GroupData *data);
 
 
 /****************************************************************************
- * Internal Group: Word Types
+ * Internal Section: Word Types
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Constants: Word Type Identifiers
+ * Internal Constants: WORD_TYPE_* Constants
  *
- *	Word types are identified by a numerical ID. 
+ *	Word type identifier constants.
  *
- *	WORD_TYPE_NIL		- Nil singleton.
- *	WORD_TYPE_CUSTOM	- Custom Words (<WORD_CUSTOM_INIT>)
- *	WORD_TYPE_SMALLINT	- Small Integers (<WORD_SMALLINT_NEW>)
- *	WORD_TYPE_SMALLFP	- Small Floating Points
- *	WORD_TYPE_CHAR		- Character Words (<WORD_CHAR_NEW>)
- *	WORD_TYPE_SMALLSTR	- Small String Words (<WORD_SMALLSTR_DATA>, 
+ *  WORD_TYPE_NIL		- Nil singleton.
+ *  WORD_TYPE_CUSTOM		- Custom Words (<WORD_CUSTOM_INIT>)
+ *  WORD_TYPE_SMALLINT		- Small Integers (<WORD_SMALLINT_NEW>)
+ *  WORD_TYPE_SMALLFP		- Small Floating Points
+ *  WORD_TYPE_CHAR		- Character Words (<WORD_CHAR_NEW>)
+ *  WORD_TYPE_SMALLSTR		- Small String Words (<WORD_SMALLSTR_DATA>, 
  *				  <WORD_SMALLSTR_SET_LENGTH>)
- *	WORD_TYPE_CIRCLIST	- Circular Lists (<WORD_CIRCLIST_NEW>)
- *	WORD_TYPE_VOIDLIST	- Void Lists (<WORD_VOIDLIST_NEW>)
- *	WORD_TYPE_WRAP		- Wrap Words (<WORD_WRAP_INIT>)
- *	WORD_TYPE_UCSSTR	- Fixed-Width Ropes (<WORD_UCSSTR_INIT>)
- *	WORD_TYPE_UTF8STR	- Variable-Width UTF-8 ropes 
- *				  (<WORD_UTF8STR_INIT>)
- *	WORD_TYPE_SUBROPE	- Subropes (<WORD_SUBROPE_INIT>)
- *	WORD_TYPE_CONCATROPE	- Concat Ropes (<WORD_CONCATROPE_INIT>)
- *	WORD_TYPE_INT		- Integers (<WORD_INT_INIT>)
- *	WORD_TYPE_FP		- Floating Points (<WORD_FP_INIT>)
- *	WORD_TYPE_VECTOR	- Immutable Vectors (<WORD_VECTOR_INIT>)
- *	WORD_TYPE_MVECTOR	- Mutable Vectors (<WORD_MVECTOR_INIT>)
- *	WORD_TYPE_SUBLIST	- Sublists (<WORD_SUBLIST_INIT>)
- *	WORD_TYPE_CONCATLIST	- Immutable Concat Lists 
+ *  WORD_TYPE_CIRCLIST		- Circular Lists (<WORD_CIRCLIST_NEW>)
+ *  WORD_TYPE_VOIDLIST		- Void Lists (<WORD_VOIDLIST_NEW>)
+ *  WORD_TYPE_WRAP		- Wrap Words (<WORD_WRAP_INIT>)
+ *  WORD_TYPE_UCSSTR		- Fixed-Width Ropes (<WORD_UCSSTR_INIT>)
+ *  WORD_TYPE_UTFSTR		- Variable-Width UTF-8/16 ropes
+ *				  (<WORD_UTFSTR_INIT>)
+ *  WORD_TYPE_SUBROPE		- Subropes (<WORD_SUBROPE_INIT>)
+ *  WORD_TYPE_CONCATROPE	- Concat Ropes (<WORD_CONCATROPE_INIT>)
+ *  WORD_TYPE_INT		- Integers (<WORD_INT_INIT>)
+ *  WORD_TYPE_FP		- Floating Points (<WORD_FP_INIT>)
+ *  WORD_TYPE_VECTOR		- Immutable Vectors (<WORD_VECTOR_INIT>)
+ *  WORD_TYPE_MVECTOR		- Mutable Vectors (<WORD_MVECTOR_INIT>)
+ *  WORD_TYPE_SUBLIST		- Sublists (<WORD_SUBLIST_INIT>)
+ *  WORD_TYPE_CONCATLIST	- Immutable Concat Lists 
  *				  (<WORD_CONCATLIST_INIT>)
- *	WORD_TYPE_MCONCATLIST	- Mutable Concat Lists (<WORD_MCONCATLIST_INIT>)
- *	WORD_TYPE_MLIST		- Mutable Lists (<WORD_MLIST_INIT>)
- *	WORD_TYPE_STRHASHMAP	- String Hash Maps (<WORD_STRHASHMAP_INIT>)
- *	WORD_TYPE_INTHASHMAP	- Integer Hash Maps (<WORD_INTHASHMAP_INIT>)
- *	WORD_TYPE_HASHENTRY	- Immutable Hash Entries (<WORD_HASHENTRY_INIT>)
- *	WORD_TYPE_MHASHENTRY	- Mutable Hash Entries (<WORD_MHASHENTRY_INIT>)
- *	WORD_TYPE_INTHASHENTRY	- Immutable Integer Hash Entries 
+ *  WORD_TYPE_MCONCATLIST	- Mutable Concat Lists (<WORD_MCONCATLIST_INIT>)
+ *  WORD_TYPE_MLIST		- Mutable Lists (<WORD_MLIST_INIT>)
+ *  WORD_TYPE_STRHASHMAP	- String Hash Maps (<WORD_STRHASHMAP_INIT>)
+ *  WORD_TYPE_INTHASHMAP	- Integer Hash Maps (<WORD_INTHASHMAP_INIT>)
+ *  WORD_TYPE_HASHENTRY		- Immutable Hash Entries (<WORD_HASHENTRY_INIT>)
+ *  WORD_TYPE_MHASHENTRY	- Mutable Hash Entries (<WORD_MHASHENTRY_INIT>)
+ *  WORD_TYPE_INTHASHENTRY	- Immutable Integer Hash Entries 
  *				  (<WORD_INTHASHENTRY_INIT>)
- *	WORD_TYPE_MINTHASHENTRY	- Mutable Integer Hash Entries 
+ *  WORD_TYPE_MINTHASHENTRY	- Mutable Integer Hash Entries 
  *				  (<WORD_MINTHASHENTRY_INIT>)
- *	WORD_TYPE_STRTRIEMAP	- String Trie Maps (<WORD_STRTRIEMAP_INIT>)
- *	WORD_TYPE_INTTRIEMAP	- Integer Trie Maps (<WORD_INTTRIEMAP_INIT>)
- *	WORD_TYPE_STRTRIENODE	- Immutable String Trie Nodes 
+ *  WORD_TYPE_STRTRIEMAP	- String Trie Maps (<WORD_STRTRIEMAP_INIT>)
+ *  WORD_TYPE_INTTRIEMAP	- Integer Trie Maps (<WORD_INTTRIEMAP_INIT>)
+ *  WORD_TYPE_STRTRIENODE	- Immutable String Trie Nodes 
  *				  (<WORD_STRTRIENODE_INIT>)
- *	WORD_TYPE_MSTRTRIENODE	- Mutable String Trie Nodes 
+ *  WORD_TYPE_MSTRTRIENODE	- Mutable String Trie Nodes 
  *				  (<WORD_MSTRTRIENODE_INIT>)
- *	WORD_TYPE_INTTRIENODE	- Immutable Integer Trie Nodes 
+ *  WORD_TYPE_INTTRIENODE	- Immutable Integer Trie Nodes 
  *				  (<WORD_INTTRIENODE_INIT>)
- *	WORD_TYPE_MINTTRIENODE	- Mutable Integer Trie Nodes 
+ *  WORD_TYPE_MINTTRIENODE	- Mutable Integer Trie Nodes 
  *				  (<WORD_MINTTRIENODE_INIT>)
- *	WORD_TYPE_TRIELEAF	- Immutable Trie Leaves (<WORD_TRIELEAF_INIT>)
- *	WORD_TYPE_MTRIELEAF	- Mutable Trie Leaves (<WORD_MTRIELEAF_INIT>)
- *	WORD_TYPE_INTTRIELEAF	- Immutable Integer Trie Leaves
+ *  WORD_TYPE_TRIELEAF		- Immutable Trie Leaves (<WORD_TRIELEAF_INIT>)
+ *  WORD_TYPE_MTRIELEAF		- Mutable Trie Leaves (<WORD_MTRIELEAF_INIT>)
+ *  WORD_TYPE_INTTRIELEAF	- Immutable Integer Trie Leaves
  *				  (<WORD_INTTRIELEAF_INIT>)
- *	WORD_TYPE_MINTTRIELEAF	- Mutable Integer Trie Leaves
+ *  WORD_TYPE_MINTTRIELEAF	- Mutable Integer Trie Leaves
  *				  (<WORD_MINTTRIELEAF_INIT>)
- *	WORD_TYPE_REDIRECT	- Redirects
- *	WORD_TYPE_UNKNOWN	- Used as a tag in the source code to mark 
+ *  WORD_TYPE_REDIRECT		- Redirects
+ *  WORD_TYPE_UNKNOWN		- Used as a tag in the source code to mark 
  *				  places where predefined type specific code is
  *				  needed. Search for this tag when adding new 
  *				  predefined word types.
@@ -707,7 +711,7 @@ void			UpdateParents(GroupData *data);
 #define WORD_TYPE_WRAP		2
 
 #define WORD_TYPE_UCSSTR	6
-#define WORD_TYPE_UTF8STR	10
+#define WORD_TYPE_UTFSTR	10
 #define WORD_TYPE_SUBROPE	14
 #define WORD_TYPE_CONCATROPE	18
 
@@ -813,16 +817,17 @@ static const int immediateWordTypes[32] = {
     :					WORD_TYPE_CUSTOM)
 
 /****************************************************************************
- * Internal Group: Immediate Words
+ * Internal Section: Immediate Words
  *
  * Files:
  *	<colWord.c>, <colWord.h>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Immediate Word Fields
+ * Internal Macros: WORD_( SMALLINT | SMALLFP | CHAR | SMALLSTR | CIRCLIST | VOIDLIST )_* Accessors
  *
- * Immediate Words:
+ *	Immediate word field accessor macros.
+ *
  *	Immediate words are immutable datatypes that store their value directly 
  *	in the word identifier, contrary to regular words whose identifier is a 
  *	pointer to a cell-based structure. As cells are aligned on a multiple of
@@ -982,7 +987,7 @@ static const int immediateWordTypes[32] = {
 #define WORD_VOIDLIST_LENGTH(word)	(((size_t)(intptr_t)(word))>>5)
 
 /*---------------------------------------------------------------------------
- * Internal Macros: SMALLFP_TYPE
+ * Internal Define: SMALLFP_TYPE
  *
  *	C Type used by immediate floating point words.
  *
@@ -1012,7 +1017,9 @@ typedef union {
 } FloatConvert;
 
 /*---------------------------------------------------------------------------
- * Internal Constants: Immediate Word Type Limits and Bitmasks
+ * Internal Constants: ( SMALLINT | SMALLSTR | VOIDLIST )_* Constants
+ *
+ *	Immediate word type limit and bitmask constants.
  *
  *  SMALLINT_MAX	- Maximum value of small integer words.
  *  SMALLINT_MIN	- Minimum value of small integer words.
@@ -1026,13 +1033,19 @@ typedef union {
 #define VOIDLIST_MAX_LENGTH	(SIZE_MAX>>5)
 
 /*---------------------------------------------------------------------------
- * Internal Constants: Word Singletons
+ * Internal Constant: WORD_SMALLSTR_EMPTY
  *
- *  WORD_SMALLSTR_EMPTY	- Empty string.
- *  WORD_LIST_EMPTY	- Empty list.
+ *	Empty string immediate singleton.
  *---------------------------------------------------------------------------*/
 
 #define WORD_SMALLSTR_EMPTY	((Col_Word) 12)
+
+/*---------------------------------------------------------------------------
+ * Internal Constant: WORD_LIST_EMPTY
+ *
+ *	Empty list immediate singleton.
+ *---------------------------------------------------------------------------*/
+
 #define WORD_LIST_EMPTY		WORD_VOIDLIST_NEW(0)
 
 /*---------------------------------------------------------------------------
@@ -1114,13 +1127,13 @@ typedef union {
 
 
 /****************************************************************************
- * Internal Group: Regular Words
+ * Internal Section: Regular Words
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Regular Word Fields
+ * Internal Macros: WORD_* Accessors
  *
- *	Accessors for cell-based word fields.
+ *	Cell-based word field accessor macros.
  *
  * Common Layout:
  *	Regular word store their data in cells whose 1st machine word is used 
@@ -1234,16 +1247,16 @@ typedef union {
 
 
 /****************************************************************************
- * Internal Group: Custom Words
+ * Internal Section: Custom Words
  *
  * Files:
  *	<colWord.c>, <colWord.h>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Custom Word Fields
+ * Internal Macros: WORD_CUSTOM_* Accessors
  *
- *	Accessors for custom word fields.
+ *	Custom word field accessor macros.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -1281,7 +1294,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_CUSTOM_INIT
  *
- *	Initializer for custom words.
+ *	Custom word initializer.
  *
  * Arguments:
  *	word		- Word to initialize. (Caution: evaluated several times
@@ -1313,16 +1326,16 @@ typedef union {
 
 
 /****************************************************************************
- * Internal Group: Predefined Words
+ * Internal Section: Predefined Words
  *
  * Files:
  *	<colWord.c>, <colWord.h>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Wrap Word Fields
+ * Internal Macros: WORD_WRAP_* Accessors
  *
- *	Accessors for wrap word fields.
+ *	Wrap word field accessor macros.
  *
  *	Words may have synonyms that can take any accepted word value: immediate 
  *	values (inc. nil), or cell-based words. Words can thus be part of chains
@@ -1370,7 +1383,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_WRAP_INIT
  *
- *	Initializer for wrap words.
+ *	Wrap word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -1386,9 +1399,9 @@ typedef union {
     WORD_WRAP_SOURCE(word) = (source);
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Integer Word Fields
+ * Internal Macros: WORD_INT_* Accessors
  *
- *	Accessors for integer word fields.
+ *	Integer word field accessor macros.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -1417,7 +1430,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_INT_INIT
  *
- *	Initializer for integer words.
+ *	Integer word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -1434,9 +1447,9 @@ typedef union {
     WORD_INT_VALUE(word) = (value);
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Floating Point Word Fields
+ * Internal Macros: WORD_FP_* Accessors
  *
- *	Accessors for floating point word fields.
+ *	Floating point word field accessor macros.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -1465,7 +1478,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_FP_INIT
  *
- *	Initializer for floating point words.
+ *	Floating point word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -1482,9 +1495,9 @@ typedef union {
     WORD_FP_VALUE(word) = (value);
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Redirect Word Fields
+ * Internal Macros: WORD_REDIRECT_* Accessors
  *
- *	Accessors for redirect word fields.
+ *	Redirect word field accessor macros.
  *
  *	Redirects replace existing words during compacting promotion. They only 
  *	exist during the GC.
@@ -1518,16 +1531,16 @@ typedef union {
 
 
 /****************************************************************************
- * Internal Group: Ropes
+ * Internal Section: Ropes
  *
  * See also:
  *	<colRope.c>, <colRope.h>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Fixed-Width UCS String Fields
+ * Internal Macros: WORD_UCSSTR_* Accessors
  *
- *	Accessors for fixed-width UCS string fields.
+ *	Fixed-width UCS string field accessor macros.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -1557,7 +1570,7 @@ typedef union {
  *	<WORD_UCSSTR_INIT>
  *---------------------------------------------------------------------------*/
 
-#define WORD_UCSSTR_FORMAT(word)	(((uint8_t *)(word))[1])
+#define WORD_UCSSTR_FORMAT(word)	(((int8_t *)(word))[1])
 #define WORD_UCSSTR_LENGTH(word)	(((uint16_t *)(word))[1])
 #define WORD_UCSSTR_DATA(word)		((const char *)(word)+WORD_UCSSTR_HEADER_SIZE)
 
@@ -1579,7 +1592,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_UCSSTR_INIT
  *
- *	Initializer for UCS string words.
+ *	UCS string word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -1597,9 +1610,9 @@ typedef union {
     WORD_UCSSTR_LENGTH(word) = (uint16_t) (length);
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Variable-Width UTF-8 String Fields
+ * Internal Macros: WORD_UTFSTR_* Accessors
  *
- *	Accessors for variable-width UTF-8 string fields.
+ *	Variable-width UTF-8/16 string field accessor macros.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -1607,7 +1620,7 @@ typedef union {
  * (start table)
  *      0             7 8            15 16                           31
  *     +---------------+---------------+-------------------------------+
- *     |      Type     |    Unused     |            Length             |
+ *     |      Type     |    Format     |            Length             |
  *     +---------------+---------------+-------------------------------+
  *     |          Byte length          |                               |
  *     +-------------------------------+                               +
@@ -1617,26 +1630,29 @@ typedef union {
  *     +---------------------------------------------------------------+
  * (end)
  *
- *	WORD_UTF8STR_LENGTH	- Character length.
- *	WORD_UTF8STR_BYTELENGTH	- Byte length.
- *	WORD_UTF8STR_DATA	- String data.
+ *	WORD_UTFSTR_FORMAT	- Character format. Negated value matches the
+ *				  character width.
+ *	WORD_UTFSTR_LENGTH	- Character length.
+ *	WORD_UTFSTR_BYTELENGTH	- Byte length.
+ *	WORD_UTFSTR_DATA	- String data.
  *
  * Note:
  *	Macros are L-values and side effect-free unless specified (i.e. 
  *	accessible for both read/write operations).
  *
  * See also:
- *	<WORD_UTF8STR_INIT>
+ *	<WORD_UTFSTR_INIT>
  *---------------------------------------------------------------------------*/
 
-#define WORD_UTF8STR_LENGTH(word)	(((uint16_t *)(word))[1])
-#define WORD_UTF8STR_BYTELENGTH(word)	(((uint16_t *)(word))[2])
-#define WORD_UTF8STR_DATA(word)		((const char *)(word)+WORD_UTF8STR_HEADER_SIZE)
+#define WORD_UTFSTR_FORMAT(word)	(((int8_t *)(word))[1])
+#define WORD_UTFSTR_LENGTH(word)	(((uint16_t *)(word))[1])
+#define WORD_UTFSTR_BYTELENGTH(word)	(((uint16_t *)(word))[2])
+#define WORD_UTFSTR_DATA(word)		((const char *)(word)+WORD_UTFSTR_HEADER_SIZE)
 
 /*---------------------------------------------------------------------------
- * Internal Macro: UTF8STR_SIZE
+ * Internal Macro: UTFSTR_SIZE
  *
- *	Get number of cells taken by the UTF-8 string.
+ *	Get number of cells taken by the UTF-8/16 string.
  *
  * Argument:
  *	byteLength	- Byte size of string.
@@ -1645,50 +1661,54 @@ typedef union {
  *	Number of cells taken by word.
  *---------------------------------------------------------------------------*/
 
-#define UTF8STR_SIZE(byteLength) \
-    (NB_CELLS(WORD_UTF8STR_HEADER_SIZE+(byteLength)))
+#define UTFSTR_SIZE(byteLength) \
+    (NB_CELLS(WORD_UTFSTR_HEADER_SIZE+(byteLength)))
 
 /*---------------------------------------------------------------------------
- * Internal Macro: WORD_UTF8STR_INIT
+ * Internal Macro: WORD_UTFSTR_INIT
  *
- *	Initializer for UTF-8 string words.
+ *	UTF-8/16 string word initializer.
  *
  * Arguments:
  *	word		- Word to initialize. (Caution: evaluated several times 
  *			  during macro expansion)
- *	length		- <WORD_UTF8STR_LENGTH>
- *	byteLength	- <WORD_UTF8STR_BYTELENGTH>
+ *	format		- <WORD_UTFSTR_FORMAT>
+ *	length		- <WORD_UTFSTR_LENGTH>
+ *	byteLength	- <WORD_UTFSTR_BYTELENGTH>
  *
  * See also:
- *	<WORD_TYPE_UTF8STR>, <Col_NewRope>
+ *	<WORD_TYPE_UTFSTR>, <Col_NewRope>
  *---------------------------------------------------------------------------*/
 
-#define WORD_UTF8STR_INIT(word, length, byteLength) \
-    WORD_SET_TYPEID((word), WORD_TYPE_UTF8STR); \
-    WORD_UTF8STR_LENGTH(word) = (uint16_t) (length); \
-    WORD_UTF8STR_BYTELENGTH(word) = (uint16_t) (byteLength); \
+#define WORD_UTFSTR_INIT(word, format, length, byteLength) \
+    WORD_SET_TYPEID((word), WORD_TYPE_UTFSTR); \
+    WORD_UTFSTR_FORMAT(word) = (uint8_t) (format); \
+    WORD_UTFSTR_LENGTH(word) = (uint16_t) (length); \
+    WORD_UTFSTR_BYTELENGTH(word) = (uint16_t) (byteLength); \
 
 /*---------------------------------------------------------------------------
- * Internal Constants: String Sizes and Limits
+ * Internal Constants: WORD_( UCSSTR | UTFSTR )_* Constants
+ *
+ *	String size and limit constants.
  *
  *  WORD_UCSSTR_HEADER_SIZE	- Byte size of UCS string header.
  *  UCSSTR_MAX_LENGTH		- Maximum char length of UCS strings.
- *  WORD_UTF8STR_HEADER_SIZE	- Byte size of UTF-8 string header.
- *  UTF8STR_MAX_BYTELENGTH	- Maximum byte length of UTF-8 strings. Contrary
- *				  to fixed-width versions, UTF-8 ropes are 
- *				  limited in size to one page, so that access 
- *				  performances are better.
+ *  WORD_UTFSTR_HEADER_SIZE	- Byte size of UTF-8/16 string header.
+ *  UTFSTR_MAX_BYTELENGTH	- Maximum byte length of UTF-8/16 strings. 
+ *				  Contrary to fixed-width versions, UTF-8/16 
+ *				  ropes are limited in size to one page, so 
+ *				  that access performances are better.
  *---------------------------------------------------------------------------*/
 
 #define WORD_UCSSTR_HEADER_SIZE		(sizeof(uint16_t)*2)
 #define UCSSTR_MAX_LENGTH		UINT16_MAX
-#define WORD_UTF8STR_HEADER_SIZE	(sizeof(uint16_t)*3)
-#define UTF8STR_MAX_BYTELENGTH		(AVAILABLE_CELLS*CELL_SIZE-WORD_UTF8STR_HEADER_SIZE)
+#define WORD_UTFSTR_HEADER_SIZE		(sizeof(uint16_t)*3)
+#define UTFSTR_MAX_BYTELENGTH		(AVAILABLE_CELLS*CELL_SIZE-WORD_UTFSTR_HEADER_SIZE)
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Subrope Fields
+ * Internal Macros: WORD_SUBROPE_* Accessors
  *
- *	Accessors for subrope fields.
+ *	Subrope field accessor macros.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -1729,7 +1749,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_SUBROPE_INIT
  *
- *	Initializer for subrope words.
+ *	Subrope word initializer.
  *
  * Arguments:
  *	word		- Word to initialize. (Caution: evaluated several times 
@@ -1751,9 +1771,9 @@ typedef union {
     WORD_SUBROPE_LAST(word) = (last);
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Concat Rope Fields
+ * Internal Macros: WORD_CONCATROPE_* Accessors
  *
- *	Accessors for concat rope fields.
+ *	Concat rope field accessor macros.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -1799,7 +1819,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_CONCATROPE_INIT
  *
- *	Initializer for concat rope words.
+ *	Concat rope word initializer.
  *
  * Arguments:
  *	word		- Word to initialize. (Caution: evaluated several times 
@@ -1825,16 +1845,16 @@ typedef union {
 
 
 /****************************************************************************
- * Internal Group: Vectors
+ * Internal Section: Vectors
  *
  * Files:
  *	<colVector.c>, <colVector.h>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Vector Word Fields
+ * Internal Macros: WORD_VECTOR_* Accessors
  *
- *	Accessors for vector word fields. Both immutable and mutable versions 
+ *	Vector word field accessor macros. Both immutable and mutable versions
  *	use these fields.
  *
  * Layout:
@@ -1868,9 +1888,9 @@ typedef union {
 #define WORD_VECTOR_ELEMENTS(word)	((Col_Word *)(word)+2)
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Mutable Vector Word Fields
+ * Internal Macros: WORD_MVECTOR_* Accessors
  *
- *	Accessors for Mutable vector word fields.
+ *	Mutable vector word field accessor macros.
  *
  *	Mutable vectors are like immutable ones except that their content and
  *	length may vary. To this purpose they use extra fields with respect to
@@ -1915,7 +1935,9 @@ typedef union {
 #endif
 
 /*---------------------------------------------------------------------------
- * Internal Constants: Vector Sizes and Limits
+ * Internal Constants: WORD_VECTOR_* Constants
+ *
+ *	Vector size and limit constants.
  *
  *  WORD_VECTOR_HEADER_SIZE	- Byte size of vector header.
  *  MVECTOR_MAX_SIZE		- Maximum cell size taken by mutable vectors.
@@ -1957,7 +1979,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_VECTOR_INIT
  *
- *	Initializer for immutable vector words.
+ *	Immutable vector word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -1975,7 +1997,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_MVECTOR_INIT
  *
- *	Initializer for mutable vector words.
+ *	Mutable vector word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -1994,16 +2016,16 @@ typedef union {
 
 
 /****************************************************************************
- * Internal Group: Lists
+ * Internal Section: Lists
  *
  * Files:
  *	<colList.c>, <colList.h>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Sublist Word Fields
+ * Internal Macros: WORD_SUBLIST_* Accessors
  *
- *	Accessors for sublist word fields.
+ *	Sublist word field accessors.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -2044,7 +2066,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_SUBLIST_INIT
  *
- *	Initializer for sublist words.
+ *	Sublist word initializer.
  *
  * Arguments:
  *	word		- Word to initialize. (Caution: evaluated several times 
@@ -2066,9 +2088,9 @@ typedef union {
     WORD_SUBLIST_LAST(word) = (last);
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Concat List Word Fields
+ * Internal Macros: WORD_CONCATLIST_* Accessors
  *
- *	Accessors for concat list word fields. Both immutable and mutable
+ *	Concat list word field accessor macros. Both immutable and mutable
  *	versions use these fields.
  *
  * Layout:
@@ -2115,7 +2137,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_CONCATLIST_INIT
  *
- *	Initializer for immutable concat list words.
+ *	Immutable concat list word initializer.
  *
  * Arguments:
  *	word		- Word to initialize. (Caution: evaluated several times 
@@ -2142,7 +2164,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_MCONCATLIST_INIT
  *
- *	Initializer for mutable concat list words.
+ *	Mutable concat list word initializer.
  *
  * Arguments:
  *	word		- Word to initialize. (Caution: evaluated several times 
@@ -2169,9 +2191,9 @@ typedef union {
 //FIXME: remove mutable lists and replace by generic mutable wrap.
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Mutable List Word Fields
+ * Internal Macros: WORD_MLIST_* Accessors
  *
- *	Accessors for mutable list word fields.
+ *	Mutable list word field accessor macros.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -2205,7 +2227,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_MLIST_INIT
  *
- *	Initializer for mutable list words.
+ *	Mutable list word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2223,16 +2245,16 @@ typedef union {
 
 
 /****************************************************************************
- * Internal Group: Maps
+ * Internal Section: Maps
  *
  * Files:
  *	<colMap.c>, <colMap.h>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Map Entry Fields
+ * Internal Macros: WORD_( MAPENTRY | INTMAPENTRY )_* Accessors
  *
- *	Accessors for generic map entry fields.
+ *	Map entry field accessor macros.
  *
  *	Maps associate a key to a word value. The key is usually a word 
  *	(including ropes) but specialized subtypes use integer values.
@@ -2273,16 +2295,16 @@ typedef union {
 
 
 /****************************************************************************
- * Internal Group: Hash Maps
+ * Internal Section: Hash Maps
  *
  * Files:
  *	<colHash.c>, <colHash.h>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Hash Map Fields
+ * Internal Macros: WORD_HASHMAP_* Accessors
  *
- *	Accessors for hash map fields.
+ *	Hash map field accessor macros.
  *
  *	For each map entry, an integer hash value is computed from the key, and 
  *	this hash value is used to select a "bucket", i.e. an insertion point in
@@ -2341,7 +2363,9 @@ typedef union {
 #define WORD_HASHMAP_STATICBUCKETS(word) ((Col_Word *)((char *)(word)+WORD_HASHMAP_HEADER_SIZE))
 
 /*---------------------------------------------------------------------------
- * Internal Constants: Hash Map Sizes
+ * Internal Constants: WORD_HASHMAP_* Constants
+ *
+ *	Hash map size related constants.
  *
  *  WORD_HASHMAP_HEADER_SIZE		- Byte size of hash map header.
  *  HASHMAP_STATICBUCKETS_NBCELLS	- Number of cells allocated for static 
@@ -2359,7 +2383,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_HASHMAP_INIT
  *
- *	Initializer for hash map words.
+ *	Hash map word initializer.
  *
  * Arguments:
  *	word		- Word to initialize. (Caution: evaluated several times 
@@ -2376,7 +2400,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_STRHASHMAP_INIT
  *
- *	Initializer for string hash map words.
+ *	String hash map word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2395,7 +2419,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_INTHASHMAP_INIT
  *
- *	Initializer for integer hash map words.
+ *	Integer hash map word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2412,9 +2436,9 @@ typedef union {
     WORD_HASHMAP_BUCKETS(word) = WORD_NIL;
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Hash Entry Fields
+ * Internal Macros: WORD_HASHENTRY_* Accessors
  *
- *	Accessors for hash entry fields. Both immutable and mutable versions
+ *	Hash entry field accessor macros. Both immutable and mutable versions
  *	use these fields.
  *
  *	Uses generic map entry fields.
@@ -2467,7 +2491,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_HASHENTRY_INIT
  *
- *	Initializer for immutable hash entry words.
+ *	Immutable hash entry word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2496,7 +2520,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_MHASHENTRY_INIT
  *
- *	Initializer for mutable hash entry words.
+ *	Mutable hash entry word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2525,7 +2549,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_INTHASHENTRY_INIT
  *
- *	Initializer for immutable integer hash entry words.
+ *	Immutable integer hash entry word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2547,7 +2571,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_MINTHASHENTRY_INIT
  *
- *	Initializer for mutable integer hash entry words.
+ *	Mutable integer hash entry word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2568,16 +2592,16 @@ typedef union {
 
 
 /****************************************************************************
- * Internal Group: Trie Maps
+ * Internal Section: Trie Maps
  *
  * Files:
  *	<colTrie.c>, <colTrie.h>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Trie Map Fields
+ * Internal Macros: WORD_TRIEMAP_* Accessors
  *
- *	Accessors for trie map fields.
+ *	Trie map field accessor macros.
  *
  *	Trie maps are trees that store map entries hierarchically, in such a way
  *	that all entries in a subtree share a common prefix. This implementation
@@ -2620,7 +2644,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_STRTRIEMAP_INIT
  *
- *	Initializer for string trie map words.
+ *	String trie map word initializer.
  *
  * Argument:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2639,7 +2663,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_INTTRIEMAP_INIT
  *
- *	Initializer for integer trie map words.
+ *	Integer trie map word initializer.
  *
  * Argument:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2656,9 +2680,9 @@ typedef union {
     WORD_TRIEMAP_ROOT(word) = WORD_NIL;
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Trie Node Fields
+ * Internal Macros: WORD_TRIENODE_* Accessors
  *
- *	Accessors for generic trie node fields.
+ *	Trie node field accessor macros.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -2693,9 +2717,9 @@ typedef union {
 #define WORD_TRIENODE_RIGHT(word)	(((Col_Word *)(word))[3])
 
 /*---------------------------------------------------------------------------
- * Internal Macros: String Trie Node Fields
+ * Internal Macros: WORD_STRTRIENODE_* Accessors
  *
- *	Accessors for string trie node fields.
+ *	String trie node field accessor macros.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -2743,7 +2767,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_STRTRIENODE_INIT
  *
- *	Initializer for immutable string trie nodes.
+ *	Immutable string trie node initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2767,7 +2791,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_MSTRTRIENODE_INIT
  *
- *	Initializer for mutable string trie nodes.
+ *	Mutable string trie node initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2789,9 +2813,9 @@ typedef union {
     WORD_TRIENODE_RIGHT(word) = (right);
 
 /*---------------------------------------------------------------------------
- * Internal Macros: Integer Trie Node Fields
+ * Internal Macros: WORD_INTTRIENODE_* Accessors
  *
- *	Accessors for integer trie node fields.
+ *	Integer trie node field accessor macros.
  *
  * Layout:
  *	On all architectures the cell layout is as follows:
@@ -2826,7 +2850,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_INTTRIENODE_INIT
  *
- *	Initializer for immutable integer trie nodes.
+ *	Immutable integer trie node initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2848,7 +2872,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_MINTTRIENODE_INIT
  *
- *	Initializer for mutable integer trie nodes.
+ *	Mutable integer trie node initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2870,7 +2894,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_TRIELEAF_INIT
  *
- *	Initializer for immutable trie leaf words.
+ *	Immutable trie leaf word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2894,7 +2918,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_MTRIELEAF_INIT
  *
- *	Initializer for mutable trie leaf words.
+ *	Mutable trie leaf word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2918,7 +2942,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_INTTRIELEAF_INIT
  *
- *	Initializer for immutable integer trie leaf words.
+ *	Immutable integer trie leaf word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -2938,7 +2962,7 @@ typedef union {
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_MINTTRIELEAF_INIT
  *
- *	Initializer for mutable integer trie leaf words.
+ *	Mutable integer trie leaf word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 

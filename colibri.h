@@ -1,5 +1,5 @@
 /*
- * File: colibri.h
+ * Header: colibri.h
  *
  *	This header file describes the public API of the Colibri library.
  */
@@ -154,7 +154,7 @@ extern "C" {
 
 
 /****************************************************************************
- * Group: Basic Types
+ * Section: Basic Types
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -166,10 +166,11 @@ extern "C" {
 typedef void * Col_ClientData;
 
 /****************************************************************************
- * Group: Strings
+ * Section: Strings
  *
  * Declarations:
- *	<Col_Utf8CharAddr>, <Col_Utf8CharAt>
+ *	<Col_Utf8CharAddr>, <Col_Utf8CharAt>, <Col_Utf16CharAddr>, 
+ *	<Col_Utf16CharAt>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -210,25 +211,31 @@ typedef uint32_t Col_Char4;
  *
  *	Strings can use various formats. 
  *
- *  COL_UTF8 - UTF-8 variable width encoding.
- *  COL_UCS1 - Fixed-width array of <Col_Char1>.
- *  COL_UCS2 - Fixed-width array of <Col_Char2>.
- *  COL_UCS4 - Fixed-width array of <Col_Char4>.
+ *  COL_UCS1	- Fixed-width array of <Col_Char1>.
+ *  COL_UCS2	- Fixed-width array of <Col_Char2>.
+ *  COL_UCS4	- Fixed-width array of <Col_Char4>.
+ *  COL_UTF8	- UTF-8 variable width encoding.
+ *  COL_UTF16	- UTF-16 variable width encoding.
  *
  * Note: 
- *	We assume that UTF-8 data is always well-formed. It is the caller 
- *	responsibility to validate and ensure well-formedness of UTF-8 data, 
+ *	We assume that UTF-8/16 data is always well-formed. It is the caller 
+ *	responsibility to validate and ensure well-formedness of UTF-8/16 data,
  *	notably for security reasons. 
+ *
+ *	The absolute value of constants match the respective character width.
+ *	Positive are fixed-width, negative are variable-width.
  *---------------------------------------------------------------------------*/
 
 typedef enum Col_StringFormat {
-    COL_UTF8=0, COL_UCS1=1, COL_UCS2=2, COL_UCS4=4
+    COL_UCS1=1, COL_UCS2=2, COL_UCS4=4,
+    COL_UTF8=-1, COL_UTF16=-2 
 } Col_StringFormat;
 
 /*---------------------------------------------------------------------------
  * Macro: COL_UTF8_NEXT
  *
- *	Move pointer to the next UTF-8 character.
+ *	Move pointer to the next UTF-8 character. This is done by skipping 
+ *	all continuation code units.
  *
  * Argument:
  *	data	- The pointer to move.
@@ -238,12 +245,13 @@ typedef enum Col_StringFormat {
  *---------------------------------------------------------------------------*/
 
 #define COL_UTF8_NEXT(data) \
-    while ((*++(data) & 0xC0) == 0x80);
+    while ((*++(*(Col_Char1 **) &data) & 0xC0) == 0x80);
 
 /*---------------------------------------------------------------------------
  * Macro: COL_UTF8_PREVIOUS
  *
- *	Move pointer to the previous UTF-8 character.
+ *	Move pointer to the previous UTF-8 character. This is done by skipping 
+ *	all continuation code units.
  *
  * Argument:
  *	data	- The pointer to move.
@@ -253,11 +261,46 @@ typedef enum Col_StringFormat {
  *---------------------------------------------------------------------------*/
 
 #define COL_UTF8_PREVIOUS(data) \
-    while ((*--(data) & 0xC0) == 0x80);
+    while ((*--(*(Col_Char1 **) &data) & 0xC0) == 0x80);
 
-EXTERN const char *	Col_Utf8CharAddr(const char * data, 
+/*---------------------------------------------------------------------------
+ * Macro: COL_UTF16_NEXT
+ *
+ *	Move pointer to the next UTF-16 character. This is done by skipping 
+ *	all low surrogate code units.
+ *
+ * Argument:
+ *	data	- The pointer to move.
+ *
+ * Side effects:
+ *	Update the pointer.
+ *---------------------------------------------------------------------------*/
+
+#define COL_UTF16_NEXT(data) \
+    while ((*++(*(Col_Char2 **) &data) & 0xFC00) == 0xDC00);
+
+/*---------------------------------------------------------------------------
+ * Macro: COL_UTF16_PREVIOUS
+ *
+ *	Move pointer to the previous UTF-16 character. This is done by skipping 
+ *	all low surrogate code units.
+ *
+ * Argument:
+ *	data	- The pointer to move.
+ *
+ * Side effects:
+ *	Update the pointer.
+ *---------------------------------------------------------------------------*/
+
+#define COL_UTF16_PREVIOUS(data) \
+    while ((*--(*(Col_Char2 **) &data) & 0xFC00) == 0xDC00);
+
+EXTERN const Col_Char1 * Col_Utf8CharAddr(const Col_Char1 * data, 
 			    size_t index, size_t length, size_t byteLength);
-EXTERN Col_Char		Col_Utf8CharAt(const char * data);
+EXTERN Col_Char		Col_Utf8CharAt(const Col_Char1 * data);
+EXTERN const Col_Char2 * Col_Utf16CharAddr(const Col_Char2 * data, 
+			    size_t index, size_t length, size_t byteLength);
+EXTERN Col_Char		Col_Utf16CharAt(const Col_Char2 * data);
 
 
 /*
@@ -279,14 +322,14 @@ EXTERN Col_Char		Col_Utf8CharAt(const char * data);
 
 
 /****************************************************************************
- * Group: Initialization/Cleanup
+ * Section: Initialization/Cleanup
  *
  * Declarations:
  *	<Col_Init>, <Col_Cleanup>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Constants: Threading Models
+ * Constants: Threading Model Constants
  *
  *	Threading models chosen at initialization time.
  *
@@ -318,7 +361,7 @@ EXTERN void		Col_Cleanup(void);
 
 
 /****************************************************************************
- * Group: Error Handling
+ * Section: Error Handling
  *
  * Declarations:
  *	<Col_Error>, <Col_SetErrorProc>
@@ -330,7 +373,6 @@ EXTERN void		Col_Cleanup(void);
  *	Error levels.
  *
  *  COL_FATAL	- Fatal error within Colibri, forces process termination.
- *
  *  COL_ERROR	- Error typically caused by the application (bad input...).
  *
  * See also: 
@@ -365,7 +407,7 @@ EXTERN void		Col_SetErrorProc(Col_ErrorProc *proc);
 
 
 /****************************************************************************
- * Group: GC Control
+ * Section: GC Control
  *
  * Declarations:
  *	<Col_PauseGC>, <Col_TryPauseGC>, <Col_ResumeGC>

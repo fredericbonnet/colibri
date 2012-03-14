@@ -1,5 +1,5 @@
 /*
- * Internal File: colConf.h
+ * Internal Header: colConf.h
  *
  *	This header file defines configuration macros.
  */
@@ -9,16 +9,16 @@
 
 
 /****************************************************************************
- * Internal Group: System and Architecture
+ * Internal Section: System and Architecture
  *
  *	Machine-specific stuff.
  *
  * Note:
- *	This code was take from Tcl.
+ *	This code was taken from Tcl.
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Macro: BIG_ENDIAN
+ * Internal Define: BIG_ENDIAN
  *
  *	Machine endianness. When defined, we are on a big-endian machine 
  *	(PowerPC, ...), else we are on a little-endian machine (Intel, ...).
@@ -45,7 +45,7 @@
 #endif
 
 /*---------------------------------------------------------------------------
- * Internal Macro: SIZE_BIT
+ * Internal Constant: SIZE_BIT
  *
  *	Machine word size. 
  *
@@ -63,7 +63,7 @@
 
 
 /****************************************************************************
- * Internal Group: Garbage Collection
+ * Internal Section: Garbage Collection
  *
  *	GC-related configuration settings.
  ****************************************************************************/
@@ -83,8 +83,7 @@
  *	<GC_GEN_FACTOR>
  *---------------------------------------------------------------------------*/
 
-#define GC_MAX_GENERATIONS \
-    6
+#define GC_MAX_GENERATIONS	6
 
 /*---------------------------------------------------------------------------
  * Internal Constant: GC_GEN_FACTOR
@@ -92,11 +91,10 @@
  *	Generational factor. I.e. number of GCs between generations. 
  *---------------------------------------------------------------------------*/
 
-#define GC_GEN_FACTOR \
-    10
+#define GC_GEN_FACTOR		10
 
 /*---------------------------------------------------------------------------
- * Internal Constants: Promotion/Compaction Control
+ * Internal Constants: PROMOTE_COMPACT
  *
  *	Control how cells are promoted to the next generation during GC.
  *	Promotion is generally done by moving whole pages across generations,
@@ -109,22 +107,29 @@
  *	it lowers overall memory consumption and may improve locality of 
  *	reference over time.
  *
- *  PROMOTE_COMPACT		- When defined, enables promotion/compaction
- *				  during GC. Else, whole pages are promoted 
- *				  across generations.
- *  PROMOTE_PAGE_FILL_RATIO	- Threshold value on a pool's fill ratio to 
- *				  decide whether to activate compaction.
+ *	When defined, enables promotion/compaction during GC. Else, whole pages
+ *	are promoted across generations.
  *
  * See also:
- *	<PerformGC>, <MarkWord>
+ *	<PerformGC>, <MarkWord>, <PROMOTE_PAGE_FILL_RATIO>
  *---------------------------------------------------------------------------*/
 
 #define PROMOTE_COMPACT
-#define PROMOTE_PAGE_FILL_RATIO \
-    0.90
 
 /*---------------------------------------------------------------------------
- * Internal Macros: GC Trigger Criteria
+ * Internal Constant: PROMOTE_PAGE_FILL_RATIO
+ *
+ *	Threshold value on a pool's fill ratio to decide whether to activate 
+ *	compaction.
+ *
+ * See also:
+ *	<PerformGC>, <MarkWord>, <PROMOTE_COMPACT>
+ *---------------------------------------------------------------------------*/
+
+#define PROMOTE_PAGE_FILL_RATIO	0.90
+
+/*---------------------------------------------------------------------------
+ * Internal Constants: GC_( MIN | MAX )_PAGE_ALLOC
  *
  *	Control when garbage collection are performed.
  *
@@ -132,16 +137,24 @@
  *			  last GC before triggering a new one.
  *  GC_MAX_PAGE_ALLOC	- Number of page allocations in a pool since last GC
  *			  above which to always trigger a new one.
- *  GC_THRESHOLD	- Utility macro that combines both criteria.
  *
  * See also:
- *	<Col_ResumeGC>, <PerformGC>
+ *	<Col_ResumeGC>, <PerformGC>, <GC_THRESHOLD>
  *---------------------------------------------------------------------------*/
 
-#define GC_MIN_PAGE_ALLOC \
-    64
-#define GC_MAX_PAGE_ALLOC \
-    1024
+#define GC_MIN_PAGE_ALLOC	64
+#define GC_MAX_PAGE_ALLOC	1024
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: GC_THRESHOLD
+ *
+ *	Utility macro that combines both min and max page allocation numbers
+ *	for GC trigger control.
+ *
+ * See also:
+ *	<Col_ResumeGC>, <PerformGC>, <GC_MIN_PAGE_ALLOC>, <GC_MAX_PAGE_ALLOC>
+ *---------------------------------------------------------------------------*/
+
 #define GC_THRESHOLD(threshold)	\
     ((threshold)<GC_MIN_PAGE_ALLOC ?	GC_MIN_PAGE_ALLOC \
     :(threshold)>GC_MAX_PAGE_ALLOC ?	GC_MAX_PAGE_ALLOC \
@@ -149,7 +162,7 @@
 
 
 /****************************************************************************
- * Internal Group: Memory Allocation
+ * Internal Section: Memory Allocation
  *
  *	Page and cell allocation-related configuration settings.
  ****************************************************************************/
@@ -168,11 +181,10 @@
  *	<PoolAllocPages>
  *---------------------------------------------------------------------------*/
 
-#define LARGE_PAGE_SIZE \
-    128 /* 512 KB */
+#define LARGE_PAGE_SIZE		128 /* 512 KB */
 
 /*---------------------------------------------------------------------------
- * Internal Constants: Page and Cell Sizes
+ * Internal Constants: Page and Cell Size Constants
  *
  *	Actual sizes of pages and cells depending on the system architecture.
  *

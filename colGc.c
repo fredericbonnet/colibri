@@ -46,7 +46,7 @@ static Col_CustomWordChildEnumProc MarkWordChild;
 
 
 /****************************************************************************
- * Internal Group: Process & Threads
+ * Internal Section: Process & Threads
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -147,7 +147,7 @@ GcCleanupGroup(
 
 
 /****************************************************************************
- * Group: Word Modification and Lifetime Management
+ * Section: Word Modification and Lifetime Management
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -176,8 +176,8 @@ GetNbCells(
 	    return UCSSTR_SIZE(WORD_UCSSTR_LENGTH(word)
 		    * WORD_UCSSTR_FORMAT(word));
 
-	case WORD_TYPE_UTF8STR:
-	    return UTF8STR_SIZE(WORD_UTF8STR_BYTELENGTH(word));
+	case WORD_TYPE_UTFSTR:
+	    return UTFSTR_SIZE(WORD_UTFSTR_BYTELENGTH(word));
 
 	case WORD_TYPE_VECTOR:
 	    return VECTOR_SIZE(WORD_VECTOR_LENGTH(word));
@@ -623,7 +623,7 @@ DeclareCustomWord(
 
 
 /****************************************************************************
- * Internal Group: Cell Allocation
+ * Internal Section: Cell Allocation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -667,7 +667,7 @@ AllocCells(
 
 
 /****************************************************************************
- * Group: GC-Protected sections
+ * Section: GC-Protected sections
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -770,7 +770,7 @@ Col_ResumeGC()
 
 
 /****************************************************************************
- * Internal Group: Garbage Collection
+ * Internal Section: Garbage Collection
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1345,7 +1345,7 @@ start:
 	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 
 	case WORD_TYPE_UCSSTR:
-	case WORD_TYPE_UTF8STR:
+	case WORD_TYPE_UTFSTR:
 	    return;
 
 	case WORD_TYPE_SUBROPE:

@@ -37,11 +37,12 @@ static void		GetChunk(struct RopeChunkTraverseInfo *info,
 			    Col_RopeChunk *chunk, int reverse);
 static void		NextChunk(struct RopeChunkTraverseInfo *info, 
 			    size_t nb, int reverse);
-static ColRopeIterLeafAtProc IterAtUcs1, IterAtUcs2, IterAtUcs4, IterAtUtf8;
+static ColRopeIterLeafAtProc IterAtUcs1, IterAtUcs2, IterAtUcs4, IterAtUtf8,
+    IterAtUtf16;
 
 
 /****************************************************************************
- * Internal Group: Internal Definitions
+ * Internal Section: Internal Definitions
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -56,7 +57,7 @@ static ColRopeIterLeafAtProc IterAtUcs1, IterAtUcs2, IterAtUcs4, IterAtUtf8;
 #define ROPE_CHAR_MAX		0xFFFFFF
 
 /*---------------------------------------------------------------------------
- * Internal Constants: Short Leaves
+ * Internal Constants: Short Leave Constants
  *
  *	Constants controlling the creation of short leaves during subrope/
  *	concatenation. Ropes built this way normally use subrope and concat 
@@ -80,7 +81,7 @@ static ColRopeIterLeafAtProc IterAtUcs1, IterAtUcs2, IterAtUcs4, IterAtUtf8;
 
 
 /****************************************************************************
- * Group: Rope Creation
+ * Section: Rope Creation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -206,32 +207,42 @@ Col_NewRope(
 	return WORD_SMALLSTR_EMPTY;
     }
 
-    if (format == COL_UTF8) {
-	const Col_Char1 *source = (const Col_Char1 *) data, *p;
-	if (byteLength <= UTF8STR_MAX_BYTELENGTH) {
+    if (format == COL_UTF8 || format == COL_UTF16) {
+	const char *source = (const char *) data, *p;
+	size_t codeUnits = byteLength/-format;
+	if (byteLength <= UTFSTR_MAX_BYTELENGTH) {
 	    /*
 	     * String fits into one multi-cell leaf rope. We know the byte 
-	     * length, now get the char length by counting the number of 
-	     * sequence starts (!= 10xxxxxx). 
+	     * length, now get the char length.
 	     */
 
 	    length = 0;
-	    for (p = source; p < source+byteLength; p++) {
-		if ((*p & 0xC0) != 0x80) {length++;}
+	    switch (format) {
+		case COL_UTF8:
+		    for (p = source; p < source+byteLength; length++) {
+			COL_UTF8_NEXT(p);
+		    }
+		    break;
+
+		case COL_UTF16:
+		    for (p = source; p < source+byteLength; length++) {
+			COL_UTF16_NEXT(p);
+		    }
+		    break;
 	    }
-	    if (length == byteLength) {
+	    if (length == codeUnits) {
 		/* 
-		 * This implies that the string data is 7-bit clean and 
-		 * contains no multibyte sequence. Use the faster UCS-1 format 
-		 * instead of UTF-8. 
+		 * This implies that the string data contains no variable-width
+		 * sequence. Use the faster fixed-width UCS format.
 		 */
 
-		return Col_NewRope(COL_UCS1, source, byteLength);
+		return Col_NewRope((Col_StringFormat) -format, data, 
+			byteLength);
 	    } 
     	    
-	    rope = (Col_Word) AllocCells(UTF8STR_SIZE(byteLength));
-	    WORD_UTF8STR_INIT(rope, length, byteLength);
-	    memcpy((void *) WORD_UTF8STR_DATA(rope), source, byteLength);
+	    rope = (Col_Word) AllocCells(UTFSTR_SIZE(byteLength));
+	    WORD_UTFSTR_INIT(rope, format, length, byteLength);
+	    memcpy((void *) WORD_UTFSTR_DATA(rope), data, byteLength);
 	    return rope;
 	}
 
@@ -239,7 +250,11 @@ Col_NewRope(
 	 * Split data in half at char boundary. 
 	 */
 
-	for (p = source+byteLength/2; (*p & 0xC0) == 0x80; p++);
+	p = source + (codeUnits/2)*-format;
+	switch (format) {
+	    case COL_UTF8:  COL_UTF8_NEXT(p);  break;
+	    case COL_UTF16: COL_UTF16_NEXT(p); break;
+	}
 	half = p-source;
     } else {
 	/* 
@@ -345,7 +360,7 @@ Col_NewRope(
 
 
 /****************************************************************************
- * Group: Rope Access and Comparison
+ * Section: Rope Access and Comparison
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -382,8 +397,8 @@ Col_RopeLength(
 	case WORD_TYPE_UCSSTR:
 	    return WORD_UCSSTR_LENGTH(rope);
 
-	case WORD_TYPE_UTF8STR:
-	    return WORD_UTF8STR_LENGTH(rope);
+	case WORD_TYPE_UTFSTR:
+	    return WORD_UTFSTR_LENGTH(rope);
 
 	/*
 	 * Rope nodes.
@@ -517,17 +532,18 @@ FindCharProc(
 	    (info->reverse ? i >= 0 : i < length); 
 	    (info->reverse ? i-- : i++)) {
 	if (info->reverse) {
-	    if (chunks[0].format == COL_UTF8) {
-		COL_UTF8_PREVIOUS(data); 
-	    } else {
-		data -= chunks[0].format;
+	    switch (chunks[0].format) {
+		case COL_UTF8: COL_UTF8_PREVIOUS(data); break;
+		case COL_UTF16: COL_UTF16_PREVIOUS(data); break;
+		default: data -= chunks[0].format;
 	    }
 	}
 	switch (chunks[0].format) {
 	    case COL_UCS1: c = *(Col_Char1 *) data; break;
 	    case COL_UCS2: c = *(Col_Char2 *) data; break;
 	    case COL_UCS4: c = *(Col_Char4 *) data; break;
-	    case COL_UTF8: c = Col_Utf8CharAt(data); break;
+	    case COL_UTF8: c = Col_Utf8CharAt((Col_Char1 *) data); break;
+	    case COL_UTF16: c = Col_Utf16CharAt((Col_Char2 *) data); break;
 	}
 	if (c == info->c) {
 	    /*
@@ -540,10 +556,10 @@ FindCharProc(
 	if (info->reverse) {
 	    if (i == 0) break; /* Avoids overflow. */
 	} else {
-	    if (chunks[0].format == COL_UTF8) {
-		COL_UTF8_NEXT(data); 
-	    } else {
-		data += chunks[0].format;
+	    switch (chunks[0].format) {
+		case COL_UTF8: COL_UTF8_NEXT(data); break;
+		case COL_UTF16: COL_UTF16_NEXT(data); break;
+		default: data += chunks[0].format;
 	    }
 	}
     }
@@ -660,17 +676,18 @@ SearchSubropeProc(
 	    (info->reverse ? i >= 0 : i < length); 
 	    (info->reverse ? i-- : i++)) {
 	if (info->reverse) {
-	    if (chunks[0].format == COL_UTF8) {
-		COL_UTF8_PREVIOUS(data); 
-	    } else {
-		data -= chunks[0].format;
+	    switch (chunks[0].format) {
+		case COL_UTF8: COL_UTF8_PREVIOUS(data); break;
+		case COL_UTF16: COL_UTF16_PREVIOUS(data); break;
+		default: data -= chunks[0].format;
 	    }
 	}
 	switch (chunks[0].format) {
 	    case COL_UCS1: c = *(Col_Char1 *) data; break;
 	    case COL_UCS2: c = *(Col_Char2 *) data; break;
 	    case COL_UCS4: c = *(Col_Char4 *) data; break;
-	    case COL_UTF8: c = Col_Utf8CharAt(data); break;
+	    case COL_UTF8: c = Col_Utf8CharAt((Col_Char1 *) data); break;
+	    case COL_UTF16: c = Col_Utf16CharAt((Col_Char2 *) data); break;
 	}
 	if (c == info->first) {
 	    /*
@@ -695,10 +712,10 @@ SearchSubropeProc(
 	if (info->reverse) {
 	    if (i == 0) break; /* Avoids overflow. */
 	} else {
-	    if (chunks[0].format == COL_UTF8) {
-		COL_UTF8_NEXT(data); 
-	    } else {
-		data += chunks[0].format;
+	    switch (chunks[0].format) {
+		case COL_UTF8: COL_UTF8_NEXT(data); break;
+		case COL_UTF16: COL_UTF16_NEXT(data); break;
+		default: data += chunks[0].format;
 	    }
 	}
     }
@@ -865,7 +882,8 @@ CompareChunksProc(
 		case COL_UCS1: *info->c1Ptr = *((Col_Char1 *) chunks[0].data); break;
 		case COL_UCS2: *info->c1Ptr = *((Col_Char2 *) chunks[0].data); break;
 		case COL_UCS4: *info->c1Ptr = *((Col_Char4 *) chunks[0].data); break;
-		case COL_UTF8: *info->c1Ptr = Col_Utf8CharAt(chunks[0].data); break;
+		case COL_UTF8: *info->c1Ptr = Col_Utf8CharAt((Col_Char1 *) chunks[0].data); break;
+		case COL_UTF16: *info->c1Ptr = Col_Utf16CharAt((Col_Char2 *) chunks[0].data); break;
 	    }
 	}
 	if (info->c2Ptr) *info->c2Ptr = COL_CHAR_INVALID;
@@ -883,7 +901,8 @@ CompareChunksProc(
 		case COL_UCS1: *info->c2Ptr = *((Col_Char1 *) chunks[1].data); break;
 		case COL_UCS2: *info->c2Ptr = *((Col_Char2 *) chunks[1].data); break;
 		case COL_UCS4: *info->c2Ptr = *((Col_Char4 *) chunks[1].data); break;
-		case COL_UTF8: *info->c2Ptr = Col_Utf8CharAt(chunks[1].data); break;
+		case COL_UTF8: *info->c2Ptr = Col_Utf8CharAt((Col_Char1 *) chunks[1].data); break;
+		case COL_UTF16: *info->c2Ptr = Col_Utf16CharAt((Col_Char2 *) chunks[1].data); break;
 	    }
 	}
 	return -1;
@@ -908,13 +927,15 @@ CompareChunksProc(
 	    case COL_UCS1: c1 = ((Col_Char1 *) c[0])[i]; break;
 	    case COL_UCS2: c1 = ((Col_Char2 *) c[0])[i]; break;
 	    case COL_UCS4: c1 = ((Col_Char4 *) c[0])[i]; break;
-	    case COL_UTF8: c1 = Col_Utf8CharAt(c[0]); COL_UTF8_NEXT(c[0]); break;
+	    case COL_UTF8: c1 = Col_Utf8CharAt((Col_Char1 *) c[0]); COL_UTF8_NEXT(c[0]); break;
+	    case COL_UTF16: c1 = Col_Utf16CharAt((Col_Char2 *) c[0]); COL_UTF16_NEXT(c[0]); break;
 	}
 	switch (chunks[1].format) {
 	    case COL_UCS1: c2 = ((Col_Char1 *) c[1])[i]; break;
 	    case COL_UCS2: c2 = ((Col_Char2 *) c[1])[i]; break;
 	    case COL_UCS4: c2 = ((Col_Char4 *) c[1])[i]; break;
-	    case COL_UTF8: c2 = Col_Utf8CharAt(c[1]); COL_UTF8_NEXT(c[1]); break;
+	    case COL_UTF8: c2 = Col_Utf8CharAt((Col_Char1 *) c[1]); COL_UTF8_NEXT(c[1]); break;
+	    case COL_UTF16: c2 = Col_Utf16CharAt((Col_Char2 *) c[1]); COL_UTF16_NEXT(c[1]); break;
 	}
 
 	if (c1 != c2) {
@@ -1010,7 +1031,7 @@ Col_CompareRopesL(
 
 
 /****************************************************************************
- * Group: Rope Operations
+ * Section: Rope Operations
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1074,16 +1095,16 @@ MergeChunksProc(
     if (info->length == 0) {
 	info->format = chunks->format;
     }
-    if (info->format == COL_UTF8) {
-	if (chunks->format != COL_UTF8) {
+    if (info->format == COL_UTF8 || info->format == COL_UTF16) {
+	if (chunks->format != info->format) {
 	    /* 
-	     * Don't merge UTF-8 with fixed-width formats. 
+	     * Don't merge UTF-8/16 with other formats. 
 	     */
 
 	    return -1;
 	}
 	if (info->byteLength + chunks->byteLength
-		> MAX_SHORT_LEAF_SIZE - WORD_UTF8STR_HEADER_SIZE) {
+		> MAX_SHORT_LEAF_SIZE - WORD_UTFSTR_HEADER_SIZE) {
 	    /* 
 	     * Data won't fit. 
 	     */
@@ -1102,9 +1123,9 @@ MergeChunksProc(
     } else {
 	size_t index;		/* For upconversions. */
 
-	if (chunks->format == COL_UTF8) {
+	if (chunks->format == COL_UTF8 || chunks->format == COL_UTF16) {
 	    /* 
-	     * Don't merge UTF-8 with fixed-width formats. 
+	     * Don't merge UTF-8/16 with fixed-width formats. 
 	     */
 
 	    return -1;
@@ -1480,7 +1501,8 @@ Col_Subrope(
 	 */
 
 	case WORD_TYPE_UCSSTR: {
-	    Col_StringFormat format = WORD_UCSSTR_FORMAT(rope);
+	    Col_StringFormat format 
+		    = (Col_StringFormat) WORD_UCSSTR_FORMAT(rope);
 	    if (length*format <= MAX_SHORT_LEAF_SIZE 
 		    - WORD_UCSSTR_HEADER_SIZE) {
 		return Col_NewRope(format, WORD_UCSSTR_DATA(rope)+first*format, 
@@ -2141,7 +2163,7 @@ Col_RopeReplace(
 
 
 /****************************************************************************
- * Group: Rope Traversal
+ * Section: Rope Traversal
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -2328,24 +2350,38 @@ GetChunk(
 	     * Note: the integer values of the format enums match the char size.
 	     */
 
-	    chunk->format = WORD_UCSSTR_FORMAT(info->rope);
+	    chunk->format = (Col_StringFormat) WORD_UCSSTR_FORMAT(info->rope);
 	    chunk->data = WORD_UCSSTR_DATA(info->rope)
 		    + (info->start - (reverse ? info->max-1 : 0))
 		    * chunk->format;
 	    break;
 	}
         	    
-	case WORD_TYPE_UTF8STR:
+	case WORD_TYPE_UTFSTR:
 	    /*
 	     * Variable-width flat string.
+	     *
+	     * Note: the negated values of the format enums match the char size.
 	     */
 
-	    chunk->format = COL_UTF8;
-	    chunk->data = Col_Utf8CharAddr(
-		    WORD_UTF8STR_DATA(info->rope), info->start 
-			    - (reverse ? info->max-1 : 0), 
-		    WORD_UTF8STR_LENGTH(info->rope), 
-		    WORD_UTF8STR_BYTELENGTH(info->rope));
+	    chunk->format = (Col_StringFormat) WORD_UTFSTR_FORMAT(info->rope);
+	    switch (chunk->format) {
+		case COL_UTF8:
+		    chunk->data = Col_Utf8CharAddr(
+			    (const Col_Char1 *) WORD_UTFSTR_DATA(info->rope), 
+			    info->start - (reverse ? info->max-1 : 0), 
+			    WORD_UTFSTR_LENGTH(info->rope), 
+			    WORD_UTFSTR_BYTELENGTH(info->rope));
+		    break;
+
+		case COL_UTF16:
+		    chunk->data = Col_Utf16CharAddr(
+			    (const Col_Char2 *) WORD_UTFSTR_DATA(info->rope), 
+			    info->start - (reverse ? info->max-1 : 0), 
+			    WORD_UTFSTR_LENGTH(info->rope), 
+			    WORD_UTFSTR_BYTELENGTH(info->rope));
+		    break;
+	    }
 	    break;
 
 	case WORD_TYPE_CUSTOM: {
@@ -2559,11 +2595,20 @@ Col_TraverseRopeChunksN(
 
 		case COL_UTF8:
 		    chunks[i].byteLength = Col_Utf8CharAddr(
-			    (const char *) chunks[i].data, max, info[i].max, 
-			    WORD_UTF8STR_BYTELENGTH(info[i].rope)
-			    - ((const char *) chunks[i].data
-			    - WORD_UTF8STR_DATA(info[i].rope)))
-			    - (const char *) chunks[i].data;
+			    (const Col_Char1 *) chunks[i].data, max, info[i].max, 
+			    WORD_UTFSTR_BYTELENGTH(info[i].rope)
+			    - ((const Col_Char1 *) chunks[i].data
+			    - (const Col_Char1 *) WORD_UTFSTR_DATA(info[i].rope)))
+			    - (const Col_Char1 *) chunks[i].data;
+		    break;
+
+		case COL_UTF16:
+		    chunks[i].byteLength = Col_Utf16CharAddr(
+			    (const Col_Char2 *) chunks[i].data, max, info[i].max, 
+			    WORD_UTFSTR_BYTELENGTH(info[i].rope)
+			    - ((const Col_Char2 *) chunks[i].data
+			    - (const Col_Char2 *) WORD_UTFSTR_DATA(info[i].rope)))
+			    - (const Col_Char2 *) chunks[i].data;
 		    break;
 	    }
 	}
@@ -2720,11 +2765,20 @@ Col_TraverseRopeChunks(
 
 	    case COL_UTF8:
 		chunk.byteLength = Col_Utf8CharAddr(
-			(const char *) chunk.data, max, info.max, 
-			WORD_UTF8STR_BYTELENGTH(info.rope)
-			- ((const char *) chunk.data
-			- WORD_UTF8STR_DATA(info.rope)))
-			- (const char *) chunk.data;
+			(const Col_Char1 *) chunk.data, max, info.max, 
+			WORD_UTFSTR_BYTELENGTH(info.rope)
+			- ((const Col_Char1 *) chunk.data
+			- (const Col_Char1 *) WORD_UTFSTR_DATA(info.rope)))
+			- (const Col_Char1 *) chunk.data;
+		break;
+
+	    case COL_UTF16:
+		chunk.byteLength = Col_Utf16CharAddr(
+			(const Col_Char2 *) chunk.data, max, info.max, 
+			WORD_UTFSTR_BYTELENGTH(info.rope)
+			- ((const Col_Char2 *) chunk.data
+			- (const Col_Char2 *) WORD_UTFSTR_DATA(info.rope)))
+			- (const Col_Char2 *) chunk.data;
 		break;
 	}
 
@@ -2765,7 +2819,7 @@ Col_TraverseRopeChunks(
 
 
 /****************************************************************************
- * Group: Rope Iterators
+ * Section: Rope Iterators
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -2922,7 +2976,33 @@ static Col_Char IterAtUtf8(
     size_t index
 )
 {
-    return Col_Utf8CharAt(WORD_UTF8STR_DATA(leaf) + index);
+    return Col_Utf8CharAt((const Col_Char1 *) WORD_UTFSTR_DATA(leaf) + index);
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: IterAtUtf16
+ *
+ *	Character access proc for UTF-16 string leaves from iterators. Follows
+ *	<ColRopeIterLeafAtProc> signature.
+ *
+ * Arguments:
+ *	leaf	- Leaf node.
+ *	index	- Leaf-relative index of character.
+ *
+ * Result:
+ *	Character at given index.
+ *
+ * See also:
+ *	<ColRopeIterLeafAtProc>, <ColRopeIterator>, 
+ *	<ColRopeIterUpdateTraversalInfo>
+ *---------------------------------------------------------------------------*/
+
+static Col_Char IterAtUtf16(
+    Col_Word leaf, 
+    size_t index
+)
+{
+    return Col_Utf16CharAt((const Col_Char2 *) WORD_UTFSTR_DATA(leaf) + index);
 }
 
 /*---------------------------------------------------------------------------
@@ -3012,14 +3092,31 @@ ColRopeIterUpdateTraversalInfo(
 		ASSERT(it->traversal.index < WORD_UCSSTR_LENGTH(rope));
 		break;
 
-	    case WORD_TYPE_UTF8STR: {
-		const char * data = WORD_UTF8STR_DATA(rope);
+	    case WORD_TYPE_UTFSTR: {
+		const char * data = WORD_UTFSTR_DATA(rope);
 		it->traversal.leaf = rope;
-		it->traversal.index = (unsigned short) (Col_Utf8CharAddr(data, 
-			it->index - offset, WORD_UTF8STR_LENGTH(rope), 
-			WORD_UTF8STR_BYTELENGTH(rope)) - data);
-		it->traversal.proc = IterAtUtf8;
-		ASSERT(it->traversal.index < WORD_UTF8STR_BYTELENGTH(rope));
+		switch (WORD_UTFSTR_FORMAT(rope)) {
+		    case COL_UTF8:
+			it->traversal.index = (unsigned short) 
+				(Col_Utf8CharAddr((const Col_Char1 *) data, 
+					it->index - offset, 
+					WORD_UTFSTR_LENGTH(rope), 
+					WORD_UTFSTR_BYTELENGTH(rope)) 
+					- (const Col_Char1 *) data);
+			it->traversal.proc = IterAtUtf8;
+			break;
+
+		    case COL_UTF16:
+			it->traversal.index = (unsigned short) 
+				(Col_Utf16CharAddr((const Col_Char2 *) data, 
+					it->index - offset, 
+					WORD_UTFSTR_LENGTH(rope), 
+					WORD_UTFSTR_BYTELENGTH(rope)) 
+					- (const Col_Char2 *) data);
+			it->traversal.proc = IterAtUtf16;	
+			break;
+		}
+		ASSERT(it->traversal.index < WORD_UTFSTR_BYTELENGTH(rope));
 		break;
 	    }
 
@@ -3395,22 +3492,40 @@ Col_RopeIterForward(
 	    }
 	    break;
 
-	case WORD_TYPE_UTF8STR: {
-	    size_t byteLength = WORD_UTF8STR_BYTELENGTH(it->traversal.leaf);
-	    const char * data = WORD_UTF8STR_DATA(it->traversal.leaf),
+	case WORD_TYPE_UTFSTR: {
+	    size_t byteLength = WORD_UTFSTR_BYTELENGTH(it->traversal.leaf);
+	    const char * data = WORD_UTFSTR_DATA(it->traversal.leaf),
 		    *p = data + it->traversal.index;
 	    size_t i;
-	    for (i = 0; i < nb; i++) {
-		COL_UTF8_NEXT(p);
-		if (p >= data + byteLength) {
-		    /*
-		     * Reached end of leaf.
-		     */
+	    switch (WORD_UTFSTR_FORMAT(it->traversal.leaf)) {
+		case COL_UTF8:
+		    for (i = 0; i < nb; i++) {
+			COL_UTF8_NEXT(p);
+			if (p >= data + byteLength) {
+			    /*
+			     * Reached end of leaf.
+			     */
 
-		    it->traversal.leaf = WORD_NIL;
+			    it->traversal.leaf = WORD_NIL;
+			    break;
+			}
+		    }
+		    break;
+
+		case COL_UTF16:
+		    for (i = 0; i < nb; i++) {
+			COL_UTF16_NEXT(p);
+			if (p >= data + byteLength) {
+			    /*
+			     * Reached end of leaf.
+			     */
+
+			    it->traversal.leaf = WORD_NIL;
+			    break;
+			}
+		    }
 		    break;
 		}
-	    }
 	    it->traversal.index = p - data;
 	    break;
 	}
@@ -3530,20 +3645,39 @@ Col_RopeIterBackward(
 	    }
 	    break;
 
-	case WORD_TYPE_UTF8STR: {
-	    const char * data = WORD_UTF8STR_DATA(it->traversal.leaf),
+	case WORD_TYPE_UTFSTR: {
+	    size_t byteLength = WORD_UTFSTR_BYTELENGTH(it->traversal.leaf);
+	    const char * data = WORD_UTFSTR_DATA(it->traversal.leaf),
 		    *p = data + it->traversal.index;
 	    size_t i;
-	    for (i = 0; i < nb; i++) {
-		COL_UTF8_PREVIOUS(p);
-		if (p < data) {
-		    /*
-		     * Reached beginning of leaf.
-		     */
+	    switch (WORD_UTFSTR_FORMAT(it->traversal.leaf)) {
+		case COL_UTF8:
+		    for (i = 0; i < nb; i++) {
+			COL_UTF8_PREVIOUS(p);
+			if (p < data) {
+			    /*
+			     * Reached beginning of leaf.
+			     */
 
-		    it->traversal.leaf = WORD_NIL;
+			    it->traversal.leaf = WORD_NIL;
+			    break;
+			}
+		    }
 		    break;
-		}
+
+		case COL_UTF16:
+		    for (i = 0; i < nb; i++) {
+			COL_UTF16_PREVIOUS(p);
+			if (p < data) {
+			    /*
+			     * Reached beginning of leaf.
+			     */
+
+			    it->traversal.leaf = WORD_NIL;
+			    break;
+			}
+		    }
+		    break;
 	    }
 	    it->traversal.index = p - data;
 	    break;

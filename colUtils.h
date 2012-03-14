@@ -1,5 +1,5 @@
 /*
- * File: colUtils.h
+ * Header: colUtils.h
  *
  *	This header file defines various utility macros used throughout Colibri.
  */

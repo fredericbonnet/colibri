@@ -1,5 +1,5 @@
 /*
- * File: colList.h
+ * Header: colList.h
  *
  *	This header file defines the list handling features of Colibri.
  *
@@ -8,7 +8,7 @@
  *	self-balanced binary trees, like ropes, except that they use vectors
  *	as basic containers instead of character arrays.
  *
- *	They come in both immutable and mutable forms: 
+ *	They come in both immutable and mutable forms :
  *	
  *	- Immutable lists can be composed of immutable vectors and lists. 
  *	Immutable vectors can themselves be used in place of immutable lists. 
@@ -28,7 +28,7 @@
 
 
 /****************************************************************************
- * Group: Immutable List Creation
+ * Section: Immutable List Creation
  *
  * Declarations:
  *	<Col_NewList>
@@ -39,7 +39,7 @@ EXTERN Col_Word		Col_NewList(size_t length,
 
 
 /****************************************************************************
- * Group: Immutable List Access
+ * Section: Immutable List Access
  *
  * Declarations:
  *	<Col_ListLength>, <Col_ListLoopLength>, <Col_ListAt>
@@ -51,7 +51,7 @@ EXTERN Col_Word		Col_ListAt(Col_Word list, size_t index);
 
 
 /****************************************************************************
- * Group: Immutable List Operations
+ * Section: Immutable List Operations
  *
  * Declarations:
  *	<Col_Sublist>, <Col_ConcatLists>, <Col_ConcatListsA>,
@@ -91,7 +91,7 @@ EXTERN Col_Word		Col_ListReplace(Col_Word list, size_t first,
 
 
 /****************************************************************************
- * Group: Mutable List Creation
+ * Section: Mutable List Creation
  *
  * Declarations:
  *	<Col_NewMList>, <Col_CopyMList>
@@ -102,7 +102,7 @@ EXTERN Col_Word		Col_CopyMList(Col_Word mlist);
 
 
 /****************************************************************************
- * Group: Mutable List Operations
+ * Section: Mutable List Operations
  *
  * Declarations:
  *	<Col_MListSetLength>, <Col_MListLoop>, <Col_MListSetAt>, 
@@ -123,7 +123,7 @@ EXTERN void		Col_MListReplace(Col_Word mlist, size_t first,
 
 
 /****************************************************************************
- * Group: List Traversal
+ * Section: List Traversal
  *
  * Declarations:
  *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>
@@ -156,7 +156,7 @@ typedef int (Col_ListChunksTraverseProc) (size_t index, size_t length,
 	size_t number, const Col_Word **chunks, Col_ClientData clientData);
 
 /*---------------------------------------------------------------------------
- * Macro: COL_LISTCHUNK_VOID
+ * Constant: COL_LISTCHUNK_VOID
  *
  *	Value passed as chunk pointer to list traversal procs when traversing
  *	void lists.
@@ -179,7 +179,7 @@ EXTERN int		Col_TraverseListChunks(Col_Word list, size_t start,
 
 
 /****************************************************************************
- * Group: List Iterators
+ * Section: List Iterators
  *
  * Declarations: 
  *	<Col_ListIterBegin>, <Col_ListIterFirst>, <Col_ListIterLast>, 

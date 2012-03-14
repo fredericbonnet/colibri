@@ -6,7 +6,7 @@
  *	Vectors are arrays of words that are directly accessible through a
  *	pointer value. 
  *
- *	They come in both immutable and mutable forms:
+ *	They come in both immutable and mutable forms :
  *
  *	- Immutable vectors are flat arrays of bounded length.
  *
@@ -27,7 +27,7 @@
 
 
 /****************************************************************************
- * Group: Immutable Vector Creation
+ * Section: Immutable Vector Creation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -184,7 +184,7 @@ Col_NewVectorNV(
 
 
 /****************************************************************************
- * Group: Mutable Vector Creation
+ * Section: Mutable Vector Creation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -290,7 +290,7 @@ Col_NewMVector(
 
 
 /****************************************************************************
- * Group: Mutable Vector Operations
+ * Section: Mutable Vector Operations
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------

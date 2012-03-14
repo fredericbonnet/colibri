@@ -81,6 +81,18 @@ Format: 1.51
 # topics [at] naturaldocs [dot] org.
 
 
+Alter Topic Type: Constant
+
+   Add Keywords:
+      internal constant, internal constants
+
+
+Alter Topic Type: Section
+
+   Add Keywords:
+      internal section, internal sections
+
+
 Alter Topic Type: Group
 
    Add Keywords:
@@ -91,18 +103,14 @@ Alter Topic Type: File
 
    Add Keywords:
       internal file, internal files
+      internal header, internal headers
 
 
 Alter Topic Type: Macro
 
    Add Keywords:
       internal macro, internal macros
-
-
-Alter Topic Type: Constant
-
-   Add Keywords:
-      internal constant, internal constants
+      internal define, internal defines
 
 
 Alter Topic Type: Function

@@ -25,7 +25,7 @@ static void		AddSynonymField(Col_Word *wordPtr);
 
 
 /****************************************************************************
- * Group: Word Creation
+ * Section: Word Creation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -148,7 +148,7 @@ Col_NewCustomWord(
 
 
 /****************************************************************************
- * Group: Word Access and Synonyms
+ * Section: Word Access and Synonyms
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -234,11 +234,11 @@ Col_GetWordInfo(
 	    }
 	    return COL_STRING;
 
-	case WORD_TYPE_UTF8STR:
+	case WORD_TYPE_UTFSTR:
 	    if (dataPtr) {
-		dataPtr->string.format = COL_UTF8;
-		dataPtr->string.data = WORD_UTF8STR_DATA(word);
-		dataPtr->string.byteLength = WORD_UTF8STR_BYTELENGTH(word);
+		dataPtr->string.format = -WORD_UCSSTR_FORMAT(word);
+		dataPtr->string.data = WORD_UTFSTR_DATA(word);
+		dataPtr->string.byteLength = WORD_UTFSTR_BYTELENGTH(word);
 	    }
 	    return COL_STRING;
 

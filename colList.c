@@ -8,7 +8,7 @@
  *	self-balanced binary trees, like ropes, except that they use vectors
  *	as basic containers instead of character arrays.
  *
- *	They come in both immutable and mutable forms: 
+ *	They come in both immutable and mutable forms : 
  *	
  *	- Immutable lists can be composed of immutable vectors and lists. 
  *	Immutable vectors can themselves be used in place of immutable lists. 
@@ -23,7 +23,7 @@
  *	The present code is largely adapted from the rope implementation.
  *
  * See also: 
- *	<colList.h>, <colRope.c>
+ *	<colList.h>, <colVector.h>, <colRope.c>
  */
 
 #include "colibri.h"
@@ -64,11 +64,11 @@ static ColListIterLeafAtProc IterAtVector, IterAtVoid;
 
 
 /****************************************************************************
- * Internal Group: Internal Definitions
+ * Internal Section: Internal Definitions
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Constants: Short Lists
+ * Internal Constants: Short List Constants
  *
  *	Constants controlling the creation of short lists during sublist/
  *	concatenation. Lists built this way normally use sublist and concat 
@@ -86,7 +86,7 @@ static ColListIterLeafAtProc IterAtVector, IterAtVoid;
     VECTOR_MAX_LENGTH(MAX_SHORT_LIST_SIZE*CELL_SIZE)
 
 /*---------------------------------------------------------------------------
- * Internal Constants: Short Mutable Vectors
+ * Internal Constants: Short Mutable Vector Constants
  *
  *	Constants controlling the creation of short mutable vectors during 
  *	immutable list conversions. When setting an element of a mutable list,
@@ -116,7 +116,7 @@ static ColListIterLeafAtProc IterAtVector, IterAtVoid;
 
 
 /****************************************************************************
- * Group: Immutable List Creation
+ * Section: Immutable List Creation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -177,7 +177,7 @@ Col_NewList(
 
 
 /****************************************************************************
- * Group: Immutable List Access
+ * Section: Immutable List Access
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -318,7 +318,7 @@ Col_ListAt(
 
 
 /****************************************************************************
- * Group: Immutable List Operations
+ * Section: Immutable List Operations
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1586,7 +1586,7 @@ Col_ListReplace(
 
 
 /****************************************************************************
- * Group: Mutable List Creation
+ * Section: Mutable List Creation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1759,7 +1759,7 @@ start:
 
 
 /****************************************************************************
- * Group: Mutable List Operations
+ * Section: Mutable List Operations
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -3437,7 +3437,7 @@ Col_MListReplace(
 
 
 /****************************************************************************
- * Group: List Traversal
+ * Section: List Traversal
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -3973,7 +3973,7 @@ Col_TraverseListChunks(
 
 
 /****************************************************************************
- * Group: List Iterators
+ * Section: List Iterators
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------

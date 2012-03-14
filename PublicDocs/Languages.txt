@@ -117,4 +117,7 @@ Alter Language: C/C++
 
    Ignore Prefixes in Index: Col_ COL_
    Type Prototype Ender: ;
-   Macro Prototype Ender: \
+   Constant Prototype Ender: \n
+   Enumeration Prototype Ender: ;
+   Macro Prototype Ender: \n
+   Line Extender: \

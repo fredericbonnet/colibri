@@ -1,5 +1,5 @@
 /*
- * File: colRope.h
+ * Header: colRope.h
  *
  *	This header file defines the rope handling features of Colibri.
  *
@@ -18,7 +18,7 @@
 
 
 /****************************************************************************
- * Group: Rope Creation
+ * Section: Rope Creation
  *
  * Declarations:
  *	<Col_EmptyRope>, <Col_NewRopeFromString>, <Col_NewChar>, <Col_NewRope>
@@ -31,7 +31,7 @@ EXTERN Col_Word		Col_NewRope(Col_StringFormat format, const void *data,
 			    size_t byteLength);
 
 /****************************************************************************
- * Group: Rope Access
+ * Section: Rope Access
  *
  * Declarations:
  *	<Col_RopeLength>, <Col_RopeAt>, <Col_RopeFind>, <Col_RopeSearch>,
@@ -49,7 +49,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 			    Col_Char *c1Ptr, Col_Char *c2Ptr);
 
 /*---------------------------------------------------------------------------
- * Function: Col_RopeFindFirst
+ * Macro: Col_RopeFindFirst
  *
  *	Simple version of <Col_RopeFind>, find first occurrence of a character 
  *	in whole rope from its beginning. This is the rope counterpart to C's
@@ -59,7 +59,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
  *	rope	- Rope to search character into.
  *	c	- Character to search for.
  *
- * Results:
+ * Result:
  *	If found, returns the position of the character in rope. Else returns
  *	SIZE_MAX (which is an invalid character index since this is the maximum
  *	rope length, and indices are zero-based).
@@ -72,7 +72,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 	Col_RopeFind((rope), (c), 0, SIZE_MAX, 0)
 
 /*---------------------------------------------------------------------------
- * Function: Col_RopeFindFirstN
+ * Macro: Col_RopeFindFirstN
  *
  *	Simple version of <Col_RopeFind>, find first occurrence of a character 
  *	in rope from its beginning up to a given number of characters. This is
@@ -83,7 +83,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
  *	c	- Character to search for.
  *	max	- Maximum number of characters to search.
  *
- * Results:
+ * Result:-
  *	If found, returns the position of the character in rope. Else returns
  *	SIZE_MAX (which is an invalid character index since this is the maximum
  *	rope length, and indices are zero-based).
@@ -96,7 +96,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 	Col_RopeFind((rope), (c), 0, (max), 0)
 
 /*---------------------------------------------------------------------------
- * Function: Col_RopeFindLast
+ * Macro: Col_RopeFindLast
  *
  *	Simple version of <Col_RopeFind>, find last occurrence of a character 
  *	in whole rope from its end. This is the rope counterpart to C's strrchr.
@@ -105,7 +105,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
  *	rope	- Rope to search character into.
  *	c	- Character to search for.
  *
- * Results:
+ * Result:
  *	If found, returns the position of the character in rope. Else returns
  *	SIZE_MAX (which is an invalid character index since this is the maximum
  *	rope length, and indices are zero-based).
@@ -118,7 +118,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 	Col_RopeFind((rope), (c), SIZE_MAX, SIZE_MAX, 1)
 
 /*---------------------------------------------------------------------------
- * Function: Col_RopeFindLastN
+ * Macro: Col_RopeFindLastN
  *
  *	Simple version of <Col_RopeFind>, find last occurrence of a character 
  *	in rope from its end up to a given number of characters. This function
@@ -129,7 +129,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
  *	c	- Character to search for.
  *	max	- Maximum number of characters to search.
  *
- * Results:
+ * Result:
  *	If found, returns the position of the character in rope. Else returns
  *	SIZE_MAX (which is an invalid character index since this is the maximum
  *	rope length, and indices are zero-based).
@@ -142,7 +142,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 	Col_RopeFind((rope), (c), SIZE_MAX, (max), 1)
 
 /*---------------------------------------------------------------------------
- * Function: Col_RopeSearchFirst
+ * Macro: Col_RopeSearchFirst
  *
  *	Simple version of <Col_RopeSearch>, find first occurrence of a subrope
  *	in whole rope from its beginning. This is the rope counterpart to C's
@@ -152,7 +152,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
  *	rope	- Rope to search character into.
  *	subrope	- Subrope to search for.
  *
- * Results:
+ * Result:
  *	If found, returns the position of the subrope in rope. Else returns
  *	SIZE_MAX (which is an invalid character index since this is the maximum
  *	rope length, and indices are zero-based).
@@ -165,7 +165,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 	Col_RopeSearch((rope), (subrope), 0, SIZE_MAX, 0)
 
 /*---------------------------------------------------------------------------
- * Function: Col_RopeSearchLast
+ * Macro: Col_RopeSearchLast
  *
  *	Simple version of <Col_RopeSearch>, find last occurrence of a subrope
  *	in whole rope from its end. This is the rope counterpart to C's
@@ -175,7 +175,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
  *	rope	- Rope to search character into.
  *	subrope	- Subrope to search for.
  *
- * Results:
+ * Result:
  *	If found, returns the position of the subrope in rope. Else returns
  *	SIZE_MAX (which is an invalid character index since this is the maximum
  *	rope length, and indices are zero-based).
@@ -196,7 +196,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
  * Arguments:
  *	rope1, rope2	- Ropes to compare.
  *
- * Results:
+ * Result:
  *	Returns an integral value indicating the relationship between the 
  *	ropes:
  *	    - A zero value indicates that both strings are equal;
@@ -222,7 +222,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
  *	rope1, rope2	- Ropes to compare.
  *	max		- Maximum number of characters to compare.
  *
- * Results:
+ * Result:
  *	Returns an integral value indicating the relationship between the 
  *	ropes:
  *	    - A zero value indicates that both strings are equal;
@@ -241,7 +241,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 
 
 /****************************************************************************
- * Group: Rope Operations
+ * Section: Rope Operations
  *
  * Declarations:
  *	<Col_Subrope>, <Col_ConcatRopes>, <Col_ConcatRopesA>,
@@ -279,7 +279,7 @@ EXTERN Col_Word		Col_RopeReplace(Col_Word rope, size_t first,
 
 
 /****************************************************************************
- * Group: Rope Traversal
+ * Section: Rope Traversal
  *
  * Declarations:
  *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
@@ -341,7 +341,7 @@ EXTERN int		Col_TraverseRopeChunks(Col_Word rope, size_t start,
 
 
 /****************************************************************************
- * Group: Rope Iterators
+ * Section: Rope Iterators
  *
  * Declarations: 
  *	<Col_RopeIterBegin>, <Col_RopeIterFirst>, <Col_RopeIterLast>, 
@@ -541,7 +541,7 @@ EXTERN void		ColRopeIterUpdateTraversalInfo(Col_RopeIterator *it);
 
 
 /****************************************************************************
- * Group: Custom Ropes
+ * Section: Custom Ropes
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------

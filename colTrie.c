@@ -3,13 +3,13 @@
  *
  *	This file implements the trie map handling features of Colibri.
  *
- *	Trie maps are an implementation of generic maps that uses crit-bit trees
+ *	Trie maps are an implementation of generic maps that use crit-bit trees
  *	for string and integer keys.
  *
  *	They are always mutable.
  *
  * See also:
- *	<colTrie.h>
+ *	<colTrie.h>, <colMap.h>
  */
 
 #include "colibri.h"
@@ -50,7 +50,7 @@ static Col_Word		IntTrieMapFindEntry(Col_Word map, intptr_t key,
 
 
 /****************************************************************************
- * Group: Trie Map Creation
+ * Section: Trie Map Creation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -235,7 +235,7 @@ start:
 
 
 /****************************************************************************
- * Group: Trie Map Entries
+ * Section: Trie Map Entries
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1148,7 +1148,7 @@ IntTrieMapFindEntry(
 
 
 /****************************************************************************
- * Group: Trie Map Access
+ * Section: Trie Map Access
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1477,7 +1477,7 @@ Col_IntTrieMapUnset(
 
 
 /****************************************************************************
- * Group: Trie Map Iterators
+ * Section: Trie Map Iterators
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------

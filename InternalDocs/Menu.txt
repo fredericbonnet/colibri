@@ -113,11 +113,11 @@ Group: Platform-Specific Files  {
 Group: Index  {
 
    Index: Everything
-   Constant Index: Constants
    File Index: Files
+   Type Index: Types
+   Constant Index: Constants
    Function Index: Functions
    Macro Index: Macros
-   Type Index: Types
    Variable Index: Variables
    }  # Group: Index
 

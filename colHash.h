@@ -1,9 +1,9 @@
 /*
- * File: colHash.h
+ * Header: colHash.h
  *
  *	This header file defines the hash map handling features of Colibri.
  *
- *	Hash maps are an implementation of generic maps that uses key hashing 
+ *	Hash maps are an implementation of generic maps that use key hashing 
  *	and flat bucket arrays for string and integer keys.
  *
  *	They are always mutable.
@@ -17,7 +17,7 @@
 
 
 /****************************************************************************
- * Group: Hash Map Creation
+ * Section: Hash Map Creation
  *
  * Declarations:
  *	<Col_NewStringHashMap>, <Col_NewIntHashMap>, <Col_CopyHashMap>
@@ -29,7 +29,7 @@ EXTERN Col_Word		Col_CopyHashMap(Col_Word map);
 
 
 /****************************************************************************
- * Group: Hash Map Access
+ * Section: Hash Map Access
  *
  * Declarations:
  *	<Col_StringHashMapGet>, <Col_IntHashMapGet>, <Col_StringHashMapSet>,
@@ -49,7 +49,7 @@ EXTERN int		Col_IntHashMapUnset(Col_Word map, intptr_t key);
 
 
 /****************************************************************************
- * Group: Hash Map Iterators
+ * Section: Hash Map Iterators
  *
  * Declarations:
  *	<Col_HashMapIterBegin>, <Col_StringHashMapIterFind>, 
@@ -69,7 +69,7 @@ EXTERN void		Col_HashMapIterNext(Col_MapIterator *it);
 
 
 /****************************************************************************
- * Group: Custom Hash Maps
+ * Section: Custom Hash Maps
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 /*
- * Internal File: colUnixPlatform.h
+ * Internal Header: colUnixPlatform.h
  *
  *	This header file defines Unix-specific facilities.
  */
@@ -11,7 +11,7 @@
 
 
 /****************************************************************************
- * Internal Group: Thread-Local Storage
+ * Internal Section: Thread-Local Storage
  *
  * Declarations:
  *	<tsdKey>
@@ -33,7 +33,7 @@ extern pthread_key_t tsdKey;
 
 
 /****************************************************************************
- * Internal Group: System Page Allocation
+ * Internal Section: System Page Allocation
  *
  * Declarations:
  *	<mutexRange>

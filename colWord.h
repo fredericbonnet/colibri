@@ -1,5 +1,5 @@
 /*
- * File: colWord.h
+ * Header: colWord.h
  *
  *	This header file defines the word handling features of Colibri.
  *
@@ -14,7 +14,7 @@
 
 
 /****************************************************************************
- * Group: Word Types
+ * Section: Word Types
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -31,7 +31,8 @@ typedef uintptr_t Col_Word;
  *	Nil is a valid word.
  *---------------------------------------------------------------------------*/
 
-#define WORD_NIL		((Col_Word) 0)
+#define WORD_NIL \
+    ((Col_Word) 0)
 
 /*---------------------------------------------------------------------------
  * Enum: Col_WordType
@@ -132,7 +133,7 @@ typedef union {
 
 
 /****************************************************************************
- * Group: Custom Word Types
+ * Section: Custom Word Types
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -237,7 +238,7 @@ typedef struct Col_CustomWordType {
 
 
 /****************************************************************************
- * Group: Word Creation
+ * Section: Word Creation
  *
  * Declarations:
  *	<Col_NewIntWord>, <Col_NewFloatWord>, <Col_NewCustomWord>
@@ -250,7 +251,7 @@ EXTERN Col_Word		Col_NewCustomWord(Col_CustomWordType *type, size_t size,
 
 
 /****************************************************************************
- * Group: Word Access and Synonyms
+ * Section: Word Access and Synonyms
  *
  * Declarations:
  *	<Col_GetWordInfo>, <Col_FindWordInfo>, <Col_GetWordSynonym>,
@@ -267,7 +268,7 @@ EXTERN void		Col_ClearWordSynonym(Col_Word word);
 
 
 /****************************************************************************
- * Group: Word Lifetime Management
+ * Section: Word Lifetime Management
  *
  * Declarations:
  *	<Col_PreserveWord>, <Col_ReleaseWord>

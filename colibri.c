@@ -3,6 +3,9 @@
  *
  *	This file implements the string, initialization/cleanup, and error
  *	handling functions.
+ *
+ * See also:
+ *	<colibri.h>
  */
 
 #include "colibri.h"
@@ -14,13 +17,13 @@
 
 
 /****************************************************************************
- * Group: Strings
+ * Section: Strings
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
  * Function: Col_Utf8CharAddr
  *
- *	Find the index-th char in a UTF-8 byte sequence. 
+ *	Find the index-th char in a UTF-8 sequence. 
  *
  *	Iterate over char boundaries from the beginning or end of the string, 
  *	whichever is closest, until the char is reached.
@@ -28,7 +31,7 @@
  *	Assume input is OK.
  *
  * Arguments:
- *	data		- UTF-8 byte sequence.
+ *	data		- UTF-8 code unit sequence.
  *	index		- Index of char to find.
  *	length		- Char length of sequence.
  *	bytelength	- Byte length of sequence.
@@ -37,9 +40,9 @@
  *	Pointer to the character.
  *---------------------------------------------------------------------------*/
 
-const char * 
+const Col_Char1 * 
 Col_Utf8CharAddr(
-    const char * data,
+    const Col_Char1 * data,
     size_t index,
     size_t length,
     size_t byteLength)
@@ -79,7 +82,7 @@ Col_Utf8CharAddr(
  *	Get the char codepoint of a UTF-8 sequence.
  *
  * Argument:
- *	data		- UTF-8 byte sequence.
+ *	data		- UTF-8 code unit sequence.
  *
  * Result:
  *	32-bit Unicode codepoint of the char.
@@ -87,7 +90,7 @@ Col_Utf8CharAddr(
 
 Col_Char 
 Col_Utf8CharAt(
-    const char * data)
+    const Col_Char1 * data)
 {
     if (*data < 0x80) {
 	/* 
@@ -149,9 +152,98 @@ Col_Utf8CharAt(
     return COL_CHAR_INVALID;
 }
 
+/*---------------------------------------------------------------------------
+ * Function: Col_Utf16CharAddr
+ *
+ *	Find the index-th char in a UTF-16 code unit sequence. 
+ *
+ *	Iterate over char boundaries from the beginning or end of the string, 
+ *	whichever is closest, until the char is reached.
+ *
+ *	Assume input is OK.
+ *
+ * Arguments:
+ *	data		- UTF-16 code unit sequence.
+ *	index		- Index of char to find.
+ *	length		- Char length of sequence.
+ *	bytelength	- Byte length of sequence.
+ *
+ * Result:
+ *	Pointer to the character.
+ *---------------------------------------------------------------------------*/
+
+const Col_Char2 * 
+Col_Utf16CharAddr(
+    const Col_Char2 * data,
+    size_t index,
+    size_t length,
+    size_t byteLength)
+{
+    /* 
+     * Don't check bounds; assume input values are OK. 
+     */
+
+    if (index <= length/2) {
+	/* 
+	 * First half; search from beginning. 
+	 */
+
+	size_t i = 0;
+	while (i != index) {
+	    i++;		/* Increment char index. */
+	    COL_UTF16_NEXT(data);
+	}
+	return data;
+    } else {
+	/* 
+	 * Second half; search backwards from end. 
+	 */
+
+	size_t i = length;
+	while (i != index) {
+	    i--;		/* Decrement char index. */
+	    COL_UTF16_PREVIOUS(data);
+	}
+	return data;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_Utf16CharAt
+ *
+ *	Get the char codepoint of a UTF-8 sequence.
+ *
+ * Argument:
+ *	data		- UTF-8 code unit sequence.
+ *
+ * Result:
+ *	32-bit Unicode codepoint of the char.
+ *---------------------------------------------------------------------------*/
+
+Col_Char 
+Col_Utf16CharAt(
+    const Col_Char2 * data)
+{
+    if ((data[0] & 0xFC00) == 0xD800 && (data[1] & 0xFC00) == 0xDC00) {
+	/*
+	 * Surrogate pair.
+	 */
+
+	return   (  ((data[0] & 0x3FF) << 10)
+	          |  (data[1] & 0x3FF))
+	       + 0x10000;
+    } else {
+	/*
+	 * Single codepoint.
+	 */
+
+	return *data;
+    }
+}
+
 
 /****************************************************************************
- * Group: Initialization/Cleanup
+ * Section: Initialization/Cleanup
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -193,7 +285,7 @@ Col_Cleanup()
 
 
 /****************************************************************************
- * Group: Error Handling
+ * Section: Error Handling
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 /*
- * File: colMap.h
+ * Header: colMap.h
  *
- *	This header file defines the map handling features of Colibri.
+ *	This header file defines the generic map handling features of Colibri.
  *
  *	Maps are a collection datatype that associates keys to values. Keys can
  *	be integers, strings or generic words.
@@ -16,7 +16,7 @@
 
 
 /****************************************************************************
- * Group: Map Access
+ * Section: Map Access
  *
  * Declarations:
  *	<Col_MapSize>, <Col_MapGet>, <Col_IntMapGet>, <Col_MapSet>,
@@ -35,7 +35,7 @@ EXTERN int		Col_IntMapUnset(Col_Word map, intptr_t key);
 
 
 /****************************************************************************
- * Group: Map Iterators
+ * Section: Map Iterators
  *
  * Declarations:
  *	<Col_MapIterBegin>, <Col_MapIterFind>, <Col_IntMapIterFind>, 

@@ -1,5 +1,5 @@
 /*
- * Internal File: colPlatform.h
+ * Internal Header: colPlatform.h
  *
  *	This header file defines the generic features needing platform-specific 
  *	implementations.
@@ -16,7 +16,7 @@
 
 
 /****************************************************************************
- * Internal Group: Process & Threads
+ * Internal Section: Process & Threads
  *
  * Declarations:
  *	<PlatEnter>, <PlatLeave>, <PlatEnterProtectRoots>, 
@@ -133,7 +133,7 @@ void			PlatSyncResumeGC(GroupData *data, int schedule);
 
 
 /****************************************************************************
- * Internal Group: System Page Allocation
+ * Internal Section: System Page Allocation
  *
  * Declarations:
  *	<systemPageSize>, <allocGranularity>, <shiftPage>, 

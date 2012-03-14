@@ -1,12 +1,12 @@
 /*
- * File: colVector.h
+ * Header: colVector.h
  *
  *	This header file defines the vector handling features of Colibri.
  *
  *	Vectors are arrays of words that are directly accessible through a
  *	pointer value. 
  *
- *	They come in both immutable and mutable forms:
+ *	They come in both immutable and mutable forms :
  *
  *	- Immutable vectors are flat arrays of bounded length.
  *
@@ -23,7 +23,7 @@
 
 
 /****************************************************************************
- * Group: Immutable Vector Creation
+ * Section: Immutable Vector Creation
  *
  * Declarations:
  *	<Col_GetMaxVectorLength>, <Col_NewVector>, <Col_NewVectorNV>
@@ -49,7 +49,7 @@ EXTERN Col_Word		Col_NewVectorNV(size_t length, ...);
 
 
 /****************************************************************************
- * Group: Mutable Vector Creation
+ * Section: Mutable Vector Creation
  *
  * Declarations:
  *	<Col_GetMaxMVectorLength>, <Col_NewMVector>
@@ -61,7 +61,7 @@ EXTERN Col_Word		Col_NewMVector(size_t maxLength, size_t length,
 
 
 /****************************************************************************
- * Group: Mutable Vector Operations
+ * Section: Mutable Vector Operations
  *
  * Declarations:
  *	<Col_MVectorSetLength>, <Col_MVectorFreeze>

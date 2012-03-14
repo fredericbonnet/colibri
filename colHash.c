@@ -3,13 +3,13 @@
  *
  *	This file implements the hash map handling features of Colibri.
  *
- *	Hash maps are an implementation of generic maps that uses key hashing 
+ *	Hash maps are an implementation of generic maps that use key hashing 
  *	and flat bucket arrays for string and integer keys.
  *
  *	They are always mutable.
  *
  * See also:
- *	<colHash.h>
+ *	<colHash.h>, <colMap.h>
  */
 
 #include "colibri.h"
@@ -39,7 +39,7 @@ static Col_Word		IntHashMapFindEntry(Col_Word map, intptr_t key,
 
 
 /****************************************************************************
- * Internal Group: Internal Definitions
+ * Internal Section: Internal Definitions
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -54,7 +54,7 @@ static Col_Word		IntHashMapFindEntry(Col_Word map, intptr_t key,
     (((uintptr_t) (i))*1610612741)
 
 /*---------------------------------------------------------------------------
- * Internal Constants: Bucket Array Growth Control
+ * Internal Constants: Bucket Array Growth Control Constants
  *
  *	Constants controlling the behavior of hash tables.
  *
@@ -150,10 +150,19 @@ HashChunkProc(
 	}
 
 	case COL_UTF8: {
-	    const char *p = (const char *) chunks->data;
+	    const Col_Char1 *p = (const Col_Char1 *) chunks->data;
 	    for (i = 0; i < length; i++) {
 		STRING_HASH(hash, Col_Utf8CharAt(p));
 		COL_UTF8_NEXT(p);
+	    }
+	    break;
+	}
+
+	case COL_UTF16: {
+	    const Col_Char2 *p = (const Col_Char2 *) chunks->data;
+	    for (i = 0; i < length; i++) {
+		STRING_HASH(hash, Col_Utf16CharAt(p));
+		COL_UTF16_NEXT(p);
 	    }
 	    break;
 	}
@@ -185,7 +194,7 @@ HashString(
 }
 
 /****************************************************************************
- * Group: Hash Map Creation
+ * Section: Hash Map Creation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -646,7 +655,7 @@ Col_CopyHashMap(
 
 
 /****************************************************************************
- * Internal Group: Hash Map Entries
+ * Internal Section: Hash Map Entries
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -937,7 +946,7 @@ IntHashMapFindEntry(
 
 
 /****************************************************************************
- * Group: Hash Map Access
+ * Section: Hash Map Access
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1271,7 +1280,7 @@ Col_IntHashMapUnset(
 
 
 /****************************************************************************
- * Group: Hash Map Iterators
+ * Section: Hash Map Iterators
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------

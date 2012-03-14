@@ -26,7 +26,7 @@ static size_t		FindFreeCells(void *page, size_t number, size_t index);
 
 
 /****************************************************************************
- * Internal Group: Bit Handling
+ * Internal Section: Bit Handling
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -222,7 +222,7 @@ const char nbBitsSet[256] = {
 
 
 /****************************************************************************
- * Internal Group: Memory Pools
+ * Internal Section: Memory Pools
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -277,7 +277,7 @@ PoolCleanup(
 
 
 /****************************************************************************
- * Internal Group: System Page Allocation
+ * Internal Section: System Page Allocation
  *
  *	Granularity-free system page allocation based on address range 
  *	reservation.
@@ -347,7 +347,7 @@ PoolCleanup(
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Variables: System Page Size and Granularity
+ * Internal Variables: System Page Size and Granularity Variables
  *
  *	System-dependent variables.
  *
@@ -400,10 +400,10 @@ static AddressRange *ranges = NULL;
 static AddressRange *dedicatedRanges = NULL;
 
 /*---------------------------------------------------------------------------
- * Internal Constant: Address Range Sizes
+ * Internal Constant: Address Range Size Constants
  *
  *  FIRST_RANGE_SIZE	- Size of first reserved range.
- *  MAX_RANGE_SIZE	- Maximul size of ranges.
+ *  MAX_RANGE_SIZE	- Maximum size of ranges.
  *---------------------------------------------------------------------------*/
 
 #define FIRST_RANGE_SIZE	256	/* 1 MB */
@@ -973,7 +973,7 @@ end:
 
 
 /****************************************************************************
- * Internal Group: Roots and Parents
+ * Internal Section: Roots and Parents
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1119,7 +1119,7 @@ UpdateParents(
 
 
 /****************************************************************************
- * Internal Group: Page Allocation
+ * Internal Section: Page Allocation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1334,7 +1334,7 @@ PoolFreeEmptyPages(
 
 
 /****************************************************************************
- * Internal Group: Cell Allocation
+ * Internal Section: Cell Allocation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------

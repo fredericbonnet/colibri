@@ -1,7 +1,7 @@
 /*
  * File: colMap.c
  *
- *	This file implements the map handling features of Colibri.
+ *	This file implements the generic map handling features of Colibri.
  *
  *	Maps are a collection datatype that associates keys to values. Keys can
  *	be integers, strings or generic words.
@@ -17,7 +17,7 @@
 
 
 /****************************************************************************
- * Group: Map Access
+ * Section: Map Access
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -291,7 +291,7 @@ Col_IntMapUnset(
 
 
 /****************************************************************************
- * Group: Map Iterators
+ * Section: Map Iterators
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
