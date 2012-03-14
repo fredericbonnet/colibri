@@ -1,0 +1,129 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Public Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Internal Header Files">
+      <UniqueIdentifier>{7646d76f-7299-4c29-bfef-3c37b91db9b8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Documentation">
+      <UniqueIdentifier>{f6cac3d8-e12e-4580-954f-b633984ca037}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Documentation\Internal">
+      <UniqueIdentifier>{92f02309-a313-4035-966b-f1b757408fbd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Documentation\Public">
+      <UniqueIdentifier>{07a69cda-ed2a-462a-a12e-0ce320102406}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="colAlloc.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="colGc.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="colHash.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="colibri.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="colList.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="colMap.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="colRope.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="colTrie.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="platform\unix\colUnixPlatform.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="colVector.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="platform\win32\colWin32Platform.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="colWord.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="colHash.h">
+      <Filter>Public Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colibri.h">
+      <Filter>Public Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colList.h">
+      <Filter>Public Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colMap.h">
+      <Filter>Public Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colRope.h">
+      <Filter>Public Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colTrie.h">
+      <Filter>Public Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colUtils.h">
+      <Filter>Public Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colVector.h">
+      <Filter>Public Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colWord.h">
+      <Filter>Public Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colConf.h">
+      <Filter>Internal Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colInternal.h">
+      <Filter>Internal Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colPlatform.h">
+      <Filter>Internal Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="platform\win32\colWin32Platform.h">
+      <Filter>Internal Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="InternalDocs\Languages.txt">
+      <Filter>Documentation\Internal</Filter>
+    </None>
+    <None Include="InternalDocs\Menu.txt">
+      <Filter>Documentation\Internal</Filter>
+    </None>
+    <None Include="InternalDocs\Topics.txt">
+      <Filter>Documentation\Internal</Filter>
+    </None>
+    <None Include="PublicDocs\Languages.txt">
+      <Filter>Documentation\Public</Filter>
+    </None>
+    <None Include="PublicDocs\Menu.txt">
+      <Filter>Documentation\Public</Filter>
+    </None>
+    <None Include="PublicDocs\Topics.txt">
+      <Filter>Documentation\Public</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuildStep Include="platform\unix\colUnixPlatform.h">
+      <Filter>Internal Header Files</Filter>
+    </CustomBuildStep>
+  </ItemGroup>
+</Project>
