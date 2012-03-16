@@ -2594,21 +2594,21 @@ Col_TraverseRopeChunksN(
 		    break;
 
 		case COL_UTF8:
-		    chunks[i].byteLength = Col_Utf8CharAddr(
-			    (const Col_Char1 *) chunks[i].data, max, info[i].max, 
-			    WORD_UTFSTR_BYTELENGTH(info[i].rope)
-			    - ((const Col_Char1 *) chunks[i].data
-			    - (const Col_Char1 *) WORD_UTFSTR_DATA(info[i].rope)))
-			    - (const Col_Char1 *) chunks[i].data;
+		    chunks[i].byteLength = (const char *) Col_Utf8CharAddr(
+			    (const Col_Char1 *) chunks[i].data, max, 
+			    info[i].max, WORD_UTFSTR_BYTELENGTH(info[i].rope)
+			    - ((const char *) chunks[i].data
+			    - WORD_UTFSTR_DATA(info[i].rope)))
+			    - (const char *) chunks[i].data;
 		    break;
 
 		case COL_UTF16:
-		    chunks[i].byteLength = Col_Utf16CharAddr(
-			    (const Col_Char2 *) chunks[i].data, max, info[i].max, 
-			    WORD_UTFSTR_BYTELENGTH(info[i].rope)
-			    - ((const Col_Char2 *) chunks[i].data
-			    - (const Col_Char2 *) WORD_UTFSTR_DATA(info[i].rope)))
-			    - (const Col_Char2 *) chunks[i].data;
+		    chunks[i].byteLength = (const char *) Col_Utf16CharAddr(
+			    (const Col_Char2 *) chunks[i].data, max, 
+			    info[i].max, WORD_UTFSTR_BYTELENGTH(info[i].rope)
+			    - ((const char *) chunks[i].data
+			    - WORD_UTFSTR_DATA(info[i].rope)))
+			    - (const char *) chunks[i].data;
 		    break;
 	    }
 	}
@@ -2764,21 +2764,21 @@ Col_TraverseRopeChunks(
 		break;
 
 	    case COL_UTF8:
-		chunk.byteLength = Col_Utf8CharAddr(
+		chunk.byteLength = (const char *) Col_Utf8CharAddr(
 			(const Col_Char1 *) chunk.data, max, info.max, 
 			WORD_UTFSTR_BYTELENGTH(info.rope)
-			- ((const Col_Char1 *) chunk.data
-			- (const Col_Char1 *) WORD_UTFSTR_DATA(info.rope)))
-			- (const Col_Char1 *) chunk.data;
+			- ((const char *) chunk.data
+			- WORD_UTFSTR_DATA(info.rope)))
+			- (const char *) chunk.data;
 		break;
 
 	    case COL_UTF16:
-		chunk.byteLength = Col_Utf16CharAddr(
+		chunk.byteLength = (const char *) Col_Utf16CharAddr(
 			(const Col_Char2 *) chunk.data, max, info.max, 
 			WORD_UTFSTR_BYTELENGTH(info.rope)
-			- ((const Col_Char2 *) chunk.data
-			- (const Col_Char2 *) WORD_UTFSTR_DATA(info.rope)))
-			- (const Col_Char2 *) chunk.data;
+			- ((const char *) chunk.data
+			- WORD_UTFSTR_DATA(info.rope)))
+			- (const char *) chunk.data;
 		break;
 	}
 
@@ -2976,7 +2976,7 @@ static Col_Char IterAtUtf8(
     size_t index
 )
 {
-    return Col_Utf8CharAt((const Col_Char1 *) WORD_UTFSTR_DATA(leaf) + index);
+    return Col_Utf8CharAt((const Col_Char1 *) (WORD_UTFSTR_DATA(leaf) + index));
 }
 
 /*---------------------------------------------------------------------------
@@ -3002,7 +3002,7 @@ static Col_Char IterAtUtf16(
     size_t index
 )
 {
-    return Col_Utf16CharAt((const Col_Char2 *) WORD_UTFSTR_DATA(leaf) + index);
+    return Col_Utf16CharAt((const Col_Char2 *) (WORD_UTFSTR_DATA(leaf) + index));
 }
 
 /*---------------------------------------------------------------------------
@@ -3097,22 +3097,22 @@ ColRopeIterUpdateTraversalInfo(
 		it->traversal.leaf = rope;
 		switch (WORD_UTFSTR_FORMAT(rope)) {
 		    case COL_UTF8:
-			it->traversal.index = (unsigned short) 
-				(Col_Utf8CharAddr((const Col_Char1 *) data, 
+			it->traversal.index = (unsigned short) ((const char *)
+				Col_Utf8CharAddr((const Col_Char1 *) data, 
 					it->index - offset, 
 					WORD_UTFSTR_LENGTH(rope), 
 					WORD_UTFSTR_BYTELENGTH(rope)) 
-					- (const Col_Char1 *) data);
+				- data);
 			it->traversal.proc = IterAtUtf8;
 			break;
 
 		    case COL_UTF16:
-			it->traversal.index = (unsigned short) 
-				(Col_Utf16CharAddr((const Col_Char2 *) data, 
+			it->traversal.index = (unsigned short) ((const char *)
+				Col_Utf16CharAddr((const Col_Char2 *) data, 
 					it->index - offset, 
 					WORD_UTFSTR_LENGTH(rope), 
 					WORD_UTFSTR_BYTELENGTH(rope)) 
-					- (const Col_Char2 *) data);
+				- data);
 			it->traversal.proc = IterAtUtf16;	
 			break;
 		}
@@ -3525,7 +3525,7 @@ Col_RopeIterForward(
 			}
 		    }
 		    break;
-		}
+	    }
 	    it->traversal.index = p - data;
 	    break;
 	}

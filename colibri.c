@@ -68,6 +68,7 @@ Col_Utf8CharAddr(
 	 */
 
 	size_t i = length;
+	data = (const Col_Char1 *) ((const char *) data + byteLength);
 	while (i != index) {
 	    i--;		/* Decrement char index. */
 	    COL_UTF8_PREVIOUS(data);
@@ -200,6 +201,7 @@ Col_Utf16CharAddr(
 	 */
 
 	size_t i = length;
+	data = (const Col_Char2 *) ((const char *) data + byteLength);
 	while (i != index) {
 	    i--;		/* Decrement char index. */
 	    COL_UTF16_PREVIOUS(data);
