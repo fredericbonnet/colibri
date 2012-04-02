@@ -175,6 +175,16 @@ Col_StringBufferValue(
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
+ * Internal Macro: MAX_SHORT_ROPE_LENGTH
+ *
+ *	Maximum length a rope must have to be appended character-wise into
+ *	the buffer, instead of being appended as a whole.
+ *---------------------------------------------------------------------------*/
+
+#define MAX_SHORT_ROPE_LENGTH(format) \
+	((size_t)(3*CELL_SIZE*CHAR_WIDTH(format)))
+
+/*---------------------------------------------------------------------------
  * Internal Function: CommitBuffer
  *
  *	Commit buffered characters into accumumulated rope and clear buffer.
@@ -341,9 +351,11 @@ Col_StringBufferAppendRope(
     Col_Word strbuf,
     Col_Word rope)
 {
+    int format = WORD_STRBUF_FORMAT(strbuf);
+    size_t ropeLength, length;
     Col_Word rope2;
 
-    if (Col_RopeLength(rope) == 0) {
+    if ((ropeLength = Col_RopeLength(rope)) == 0) {
 	/*
 	 * Nothing to do.
 	 */
@@ -351,23 +363,44 @@ Col_StringBufferAppendRope(
 	return 1;
     }
 
-    if (WORD_STRBUF_LENGTH(strbuf) > 0) {
+    if ((length = WORD_STRBUF_LENGTH(strbuf)) > 0) {
 	/*
-	 * Commit buffer first.
+	 * Buffer is not empty.
+	 */
+
+	if (ropeLength < MAX_SHORT_ROPE_LENGTH(format)
+		&& ropeLength <= STRBUF_MAX_LENGTH(WORD_STRBUF_SIZE(strbuf) 
+		* CELL_SIZE, format) - length) {
+	    /*
+	     * Rope is short and fits into buffer, append character-wise.
+	     */
+
+	    Col_RopeIterator it;
+	    int noLoss = 1;
+	    for (Col_RopeIterFirst(rope, &it); !Col_RopeIterEnd(&it);
+		    Col_RopeIterNext(&it)) {
+		noLoss &= Col_StringBufferAppendChar(strbuf, 
+			Col_RopeIterAt(&it));
+	    }
+	    return noLoss;
+	}
+
+	/*
+	 * Commit buffer before appending rope.
 	 */
 
 	CommitBuffer(strbuf);
-	ASSERT(WORD_STRBUF_LENGTH(strbuf) == 0);
     }
 
     /*
      * Normalize & append rope.
      */
 
+    ASSERT(WORD_STRBUF_LENGTH(strbuf) == 0);
     rope2 = Col_NormalizeRope(rope, 
 	    (Col_StringFormat) WORD_STRBUF_FORMAT(strbuf), COL_CHAR_INVALID, 0);
     WORD_STRBUF_ROPE(strbuf) = Col_ConcatRopes(WORD_STRBUF_ROPE(strbuf), rope2);
-    return (Col_RopeLength(rope) == Col_RopeLength(rope2));
+    return (Col_RopeLength(rope2) == ropeLength);
 }
 
 /*---------------------------------------------------------------------------
