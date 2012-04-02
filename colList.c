@@ -361,6 +361,7 @@ Col_ListAt(
  * Internal Constant: MAX_SHORT_LIST_LENGTH
  *
  *	Maximum number of elements a short list can take.
+ *
  * See also:
  *	<MAX_SHORT_LIST_SIZE>
  *---------------------------------------------------------------------------*/
