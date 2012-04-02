@@ -4,7 +4,7 @@
  *	This file implements the hash map handling features of Colibri.
  *
  *	Hash maps are an implementation of generic maps that use key hashing 
- *	and flat bucket arrays for string and integer keys.
+ *	and flat bucket arrays for string, integer and custom keys.
  *
  *	They are always mutable.
  *
@@ -12,8 +12,13 @@
  *	<colHash.h>, <colMap.h>
  */
 
-#include "colibri.h"
+#include "include/colibri.h"
 #include "colInternal.h"
+
+#include "colWordInt.h"
+#include "colVectorInt.h"
+#include "colMapInt.h"
+#include "colHashInt.h"
 
 #include <stdlib.h>
 #include <limits.h>
@@ -28,19 +33,53 @@ static Col_HashProc HashString;
 static void		AllocBuckets(Col_Word map, size_t capacity);
 static int		GrowHashMap(Col_Word map, Col_HashProc proc);
 static int		GrowIntHashMap(Col_Word map);
-static Col_Word		ConvertEntryToMutable(Col_Word entry, 
-			    Col_Word *prevPtr);
-static Col_Word		ConvertIntEntryToMutable(Col_Word entry, 
-			    Col_Word *prevPtr);
 static Col_Word		StringHashMapFindEntry(Col_Word map, Col_Word key,
 			    int mutable, int *createPtr, size_t *bucketPtr);
 static Col_Word		IntHashMapFindEntry(Col_Word map, intptr_t key,
 			    int mutable, int *createPtr, size_t *bucketPtr);
+static Col_Word		ConvertEntryToMutable(Col_Word entry, 
+			    Col_Word *prevPtr);
+static Col_Word		ConvertIntEntryToMutable(Col_Word entry, 
+			    Col_Word *prevPtr);
 
+
+/*
+================================================================================
+Internal Section: Hash Map Internals
+================================================================================
+*/
 
 /****************************************************************************
- * Internal Section: Internal Definitions
+ * Internal Group: Key Hashing
  ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Algorithm: Hashing Algorithms
+ *
+ *	Hash value computation.
+ *
+ *	For each entry in a hash map, an integer hash value is computed from 
+ *	the key, and this hash value is used to select a "bucket", i.e. an
+ *	insertion point in a dynamic array. As several entries with distinct 
+ *	keys can share a single bucket, their keys are compared against the
+ *	searched key until the correct entry is found or not.
+ *
+ *	The choice of a good hashing algorithm is crucial for hash table 
+ *	performances. This algorithm must minimize collisions. A collision 
+ *	occurs when two distinct keys give the same hash value or end up in the
+ *	same bucket.
+ *
+ *	Integer keys are hashed by multiplying to a large prime number to get
+ *	a pseudorandom distribution (see <RANDOMIZE_KEY>).
+ *
+ *	String keys are hashed using the same algorithm as Tcl, i.e. a 
+ *	cumulative shift+add of character codepoints (see <STRING_HASH>,
+ *	<HashChunkProc>, <HashString>).
+ *
+ *	Custom keys are hashed using a custom hash proc as well as a custom key 
+ *	comparison proc (see <Col_CustomHashMapType>, <Col_HashProc>, 
+ *	<Col_CompareProc>) 
+ */
 
 /*---------------------------------------------------------------------------
  * Internal Macro: RANDOMIZE_KEY
@@ -50,27 +89,7 @@ static Col_Word		IntHashMapFindEntry(Col_Word map, intptr_t key,
  *	integer representations, this guarantees no collision.
  *---------------------------------------------------------------------------*/
 
-#define RANDOMIZE_KEY(i) \
-    (((uintptr_t) (i))*1610612741)
-
-/*---------------------------------------------------------------------------
- * Internal Constants: Bucket Array Growth Control Constants
- *
- *	Constants controlling the behavior of hash tables.
- *
- *  LOAD_FACTOR	- Grow bucket container when size exceeds bucket size times
- *		  this load factor.
- *  GROW_FACTOR - When growing bucket container, multiply current size by this
- *		  grow factor.
- *
- * See also:
- *	<GrowHashMap>, <GrowIntHashMap>
- *---------------------------------------------------------------------------*/
-
-#define LOAD_FACTOR \
-    1
-#define GROW_FACTOR \
-    4
+#define RANDOMIZE_KEY(i)	(((uintptr_t) (i))*1610612741)
 
 /*---------------------------------------------------------------------------
  * Internal Macro: STRING_HASH
@@ -123,49 +142,12 @@ HashChunkProc(
 {
     size_t i;
     intptr_t hash = *(uintptr_t *) clientData;
+    const char *data = (const char *) chunks->data;
+    Col_Char c;
     ASSERT(number == 1);
-    switch (chunks->format) {
-	case COL_UCS1: {
-	    const Col_Char1 *p = (const Col_Char1 *) chunks->data;
-	    for (i = 0; i < length; i++) {
-		STRING_HASH(hash, p[i]);
-	    }
-	    break;
-	}
-
-	case COL_UCS2: {
-	    const Col_Char2 *p = (const Col_Char2 *) chunks->data;
-	    for (i = 0; i < length; i++) {
-		STRING_HASH(hash, p[i]);
-	    }
-	    break;
-	}
-
-	case COL_UCS4: {
-	    const Col_Char4 *p = (const Col_Char4 *) chunks->data;
-	    for (i = 0; i < length; i++) {
-		STRING_HASH(hash, p[i]);
-	    }
-	    break;
-	}
-
-	case COL_UTF8: {
-	    const Col_Char1 *p = (const Col_Char1 *) chunks->data;
-	    for (i = 0; i < length; i++) {
-		STRING_HASH(hash, Col_Utf8CharAt(p));
-		COL_UTF8_NEXT(p);
-	    }
-	    break;
-	}
-
-	case COL_UTF16: {
-	    const Col_Char2 *p = (const Col_Char2 *) chunks->data;
-	    for (i = 0; i < length; i++) {
-		STRING_HASH(hash, Col_Utf16CharAt(p));
-		COL_UTF16_NEXT(p);
-	    }
-	    break;
-	}
+    for (i = 0; i < length; i++) {
+	COL_CHAR_NEXT(chunks->format, data, c);
+	STRING_HASH(hash, c);
     }
     *(uintptr_t *) clientData = hash;
     return 0;
@@ -193,9 +175,54 @@ HashString(
     return hash;
 }
 
+
 /****************************************************************************
- * Section: Hash Map Creation
+ * Internal Group: Buckets
  ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Algorithm: Hash Map Bucket Storage
+ *
+ *	Hash map bucket mananagement.
+ *
+ * Bucket storage:
+ *	Buckets are stored as flat arrays. The bucket index is computed from the
+ *	hash value. Bucket size is always a power of 2, so we use the lower bits
+ *	of the hash value to select the bucket index.
+ *
+ * Growth and rehashing:
+ *	When two entries end up in the same bucket, there is a collision. When 
+ *	the map exceeds a certain size (see <LOAD_FACTOR>), the table is resized
+ *	(see <GROW_FACTOR>) and entries are rehashed (all entries are moved from 
+ *	the old bucket container to the new one according to their hash value, 
+ *	see <GrowHashMap> and <GrowIntHashMap>).
+ *
+ *	Given that hash entries store high order bits of the hash value (all but
+ *	the lower byte), this means that we can get back the full hash value by
+ *	combining these high bits with the bucket index when the bucket size is 
+ *	at least one byte wide (see <WORD_HASHENTRY_HASH>). This saves having to
+ *	recompute the hash value during rehashing.
+ *
+ * See also:
+ *	<Hash Map Word>, <Hash Entry Word>
+ *---------------------------------------------------------------------------*/
+
+/*---------------------------------------------------------------------------
+ * Internal Constants: Bucket Array Growth Control Constants
+ *
+ *	Constants controlling the behavior of hash tables.
+ *
+ *  LOAD_FACTOR	- Grow bucket container when size exceeds bucket size times
+ *		  this load factor.
+ *  GROW_FACTOR - When growing bucket container, multiply current size by this
+ *		  grow factor.
+ *
+ * See also:
+ *	<GrowHashMap>, <GrowIntHashMap>
+ *---------------------------------------------------------------------------*/
+
+#define LOAD_FACTOR		1
+#define GROW_FACTOR		4
 
 /*---------------------------------------------------------------------------
  * Internal Macro: GET_BUCKETS
@@ -231,55 +258,6 @@ HashString(
 	(nbBuckets) = HASHMAP_STATICBUCKETS_SIZE; \
 	(buckets) = WORD_HASHMAP_STATICBUCKETS(map); \
     }
-
-/*---------------------------------------------------------------------------
- * Internal Function: AllocBuckets
- *
- *	Allocate bucket container having the given minimum capacity, rounded
- *	up to a power of 2.
- *
- * Arguments:
- *	map		- Map to allocate buckets for.
- *	capacity	- Initial bucket size.
- *
- * Side effects:
- *	May allocate memory cells.
- *
- * See also:
- *	<Col_NewStringHashMap>, <Col_NewIntHashMap>
- *---------------------------------------------------------------------------*/
-
-static void
-AllocBuckets(
-    Col_Word map,
-    size_t capacity)
-{
-    if (capacity <= HASHMAP_STATICBUCKETS_SIZE) {
-	/*
-	 * Use static buckets.
-	 */
-
-	Col_Word *buckets = WORD_HASHMAP_STATICBUCKETS(map);
-	memset(buckets, 0, sizeof(*buckets) * HASHMAP_STATICBUCKETS_SIZE);
-    } else {
-	/*
-	 * Store buckets in mutable vector (round capacity to the next power of 
-	 * 2).
-	 * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 
-	 */
-
-	capacity--;
-	capacity |= capacity >> 1;
-	capacity |= capacity >> 2;
-	capacity |= capacity >> 4;
-	capacity |= capacity >> 8;
-	capacity |= capacity >> 16;
-	capacity++;
-
-	WORD_HASHMAP_BUCKETS(map) = Col_NewMVector(capacity, capacity, NULL);
-	ASSERT(WORD_TYPE(WORD_HASHMAP_BUCKETS(map)) == WORD_TYPE_MVECTOR);
-    }
-}
 
 /*---------------------------------------------------------------------------
  * Internal Function: GrowHashMap
@@ -503,244 +481,9 @@ GrowIntHashMap(
 }
 
 
-/*---------------------------------------------------------------------------
- * Function: Col_NewStringHashMap
- *
- *	Create a new string hash map word.
- *
- * Argument:
- *	capacity	- Initial bucket size. Rounded up to the next power of
- *			  2.
- *
- * Result:
- *	The new word.
- *
- * Side effects:
- *	Allocates memory cells.
- *---------------------------------------------------------------------------*/
-
-Col_Word
-Col_NewStringHashMap(
-    size_t capacity)
-{
-    Col_Word map;
-    
-    map = (Col_Word) AllocCells(HASHMAP_NBCELLS);
-    WORD_STRHASHMAP_INIT(map);
-    AllocBuckets(map, capacity);
-
-    return map;
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_NewIntHashMap
- *
- *	Create a new integer hash map word.
- *
- * Argument:
- *	capacity	- Initial bucket size. Rounded up to the next power of
- *			  2.
- *
- * Result:
- *	The new word.
- *
- * Side effects:
- *	Allocates memory cells.
- *---------------------------------------------------------------------------*/
-
-Col_Word
-Col_NewIntHashMap(
-    size_t capacity)
-{
-    Col_Word map;
-    
-    map = (Col_Word) AllocCells(HASHMAP_NBCELLS);
-    WORD_INTHASHMAP_INIT(map);
-    AllocBuckets(map, capacity);
-
-    return map;
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_CopyHashMap
- *
- *	Create a new hash map word from an existing one.
- *
- * Argument:
- *	map	- Hash map to copy.
- *
- * Result:
- *	The new word.
- *
- * Side effects:
- *	Source map content is frozen.
- *---------------------------------------------------------------------------*/
-
-Col_Word
-Col_CopyHashMap(
-    Col_Word map)
-{
-    Col_Word newMap;
-    Col_Word entry, *buckets;
-    size_t nbBuckets, i;
-    int entryType;
-
-    switch (WORD_TYPE(map)) {
-	case WORD_TYPE_STRHASHMAP:
-	    entryType = WORD_TYPE_HASHENTRY;
-	    break;
-
-	case WORD_TYPE_INTHASHMAP:
-	    entryType = WORD_TYPE_INTHASHENTRY;
-	    break;
-
-	default:
-	    Col_Error(COL_ERROR, "%x is not a hash map", map);
-	    return WORD_NIL;
-    }
-
-    /*
-     * Copy word first.
-     */
-
-    newMap = (Col_Word) AllocCells(HASHMAP_NBCELLS);
-    memcpy((void *) newMap, (void *) map, sizeof(Cell) * HASHMAP_NBCELLS);
-    WORD_SYNONYM(newMap) = WORD_NIL;
-    WORD_CLEAR_PINNED(newMap);
-
-    if (WORD_HASHMAP_BUCKETS(map)) {
-	if (WORD_TYPE(WORD_HASHMAP_BUCKETS(map)) == WORD_TYPE_VECTOR) {
-	    /*
-	     * Already frozen.
-	     */
-
-	    return newMap;
-	}
-
-	/*
-	 * Freeze bucket container.
-	 */
-
-	Col_MVectorFreeze(WORD_HASHMAP_BUCKETS(map));
-    }
-
-    /*
-     * Freeze entries: simply change their type ID.
-     */
-
-    GET_BUCKETS(map, 0, nbBuckets, buckets);
-    for (i=0; i < nbBuckets; i++) {
-	entry = buckets[i];
-	while (entry) {
-	    if (WORD_TYPE(entry) == entryType) {
-		/*
-		 * Already frozen, skip remaining entries.
-		 */
-
-		break;
-	    }
-
-	    ASSERT(!WORD_PINNED(entry));
-	    WORD_SET_TYPEID(entry, entryType);
-	    entry = WORD_HASHENTRY_NEXT(entry);
-	}
-    }
-
-    /*
-     * Both maps now share the same immutable structure.
-     */
-
-    return newMap;
-}
-
-
 /****************************************************************************
- * Internal Section: Hash Map Entries
+ * Internal Group: Entries
  ****************************************************************************/
-
-/*---------------------------------------------------------------------------
- * Internal Function: ConvertEntryToMutable
- *
- *	Convert immutable entry and all all its predecessors to mutable.
- *
- * Arguments:
- *	entry	- Entry to convert (inclusive).
- *	prevPtr	- Points to first entry in chain containing entry.
- *
- * Result:
- *	The converted mutable entry.
- *---------------------------------------------------------------------------*/
-
-static Col_Word
-ConvertEntryToMutable(
-    Col_Word entry,
-    Col_Word *prevPtr)
-{
-    Col_Word converted;
-
-    ASSERT(WORD_TYPE(entry) == WORD_TYPE_HASHENTRY);
-    for (;;) {
-	int last = (*prevPtr == entry);
-
-	ASSERT(WORD_TYPE(*prevPtr) == WORD_TYPE_HASHENTRY);
-
-	/*
-	 * Convert entry: copy then change type ID.
-	 */
-
-	converted = (Col_Word) AllocCells(1);
-	memcpy((void *) converted, (void *) *prevPtr, sizeof(Cell));
-	ASSERT(!WORD_PINNED(*prevPtr));
-	WORD_SET_TYPEID(converted, WORD_TYPE_MHASHENTRY);
-	*prevPtr = converted;
-
-	if (last) return converted;
-
-	prevPtr = &WORD_HASHENTRY_NEXT(*prevPtr);
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Internal Function: ConvertIntEntryToMutable
- *
- *	Convert immutable integer entry and all all its predecessors to mutable.
- *
- * Arguments:
- *	entry	- Entry to convert (inclusive).
- *	prevPtr	- Points to first entry in chain containing entry.
- *
- * Result:
- *	The converted mutable entry.
- *---------------------------------------------------------------------------*/
-
-static Col_Word
-ConvertIntEntryToMutable(
-    Col_Word entry,
-    Col_Word *prevPtr)
-{
-    Col_Word converted;
-
-    ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTHASHENTRY);
-    for (;;) {
-	int last = (*prevPtr == entry);
-
-	ASSERT(WORD_TYPE(*prevPtr) == WORD_TYPE_INTHASHENTRY);
-
-	/*
-	 * Convert entry: copy then change type ID.
-	 */
-
-	converted = (Col_Word) AllocCells(1);
-	memcpy((void *) converted, (void *) *prevPtr, sizeof(Cell));
-	ASSERT(!WORD_PINNED(*prevPtr));
-	WORD_SET_TYPEID(converted, WORD_TYPE_MINTHASHENTRY);
-	*prevPtr = converted;
-
-	if (last) return converted;
-
-	prevPtr = &WORD_HASHENTRY_NEXT(*prevPtr);
-    }
-}
 
 /*---------------------------------------------------------------------------
  * Internal Function: StringHashMapFindEntry
@@ -946,7 +689,335 @@ IntHashMapFindEntry(
 
 
 /****************************************************************************
- * Section: Hash Map Access
+ * Internal Group: Mutability
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Algorithm: Mutable and Immutable Hash Entries
+ *
+ *	Mutability and data sharing with hash maps.
+ *
+ *	From an external point of view, hash maps, like generic maps, are a 
+ *	naturally mutable data type. However, internal structures like bucket
+ *	container or entries are usually mutable but can become immutable 
+ *	through shared copying (see <Col_CopyHashMap>). This means that we have
+ *	to turn immutable data mutable on each mutable operation.
+ *
+ *	Small hash tables store their buckets inline and so don't share them. 
+ *	Larger hash tables store their buckets in a vector, which can be shared
+ *	when copied. Turning an immutable vector mutable only implies creating
+ *	a new mutable copy of this vector. This is done transparently by
+ *	<GET_BUCKETS> when passed a true *mutable* parameter.
+ *
+ *	As entries form linked lists in each bucket, turning an immutable
+ *	entry mutable implies that all its predecessors are turned mutable 
+ *	before. The trailing entries can remain immutable. This is the role
+ *	of <ConvertEntryToMutable> and <ConvertIntEntryToMutable>.
+ *
+ *	This ensures that modified data is always mutable and that unmodified
+ *	data remains shared as long as possible.
+ *
+ * See also:
+ *	<Hash Entry Word>
+ *---------------------------------------------------------------------------*/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: ConvertEntryToMutable
+ *
+ *	Convert immutable entry and all all its predecessors to mutable.
+ *
+ * Arguments:
+ *	entry	- Entry to convert (inclusive).
+ *	prevPtr	- Points to first entry in chain containing entry.
+ *
+ * Result:
+ *	The converted mutable entry.
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+ConvertEntryToMutable(
+    Col_Word entry,
+    Col_Word *prevPtr)
+{
+    Col_Word converted;
+
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_HASHENTRY);
+    for (;;) {
+	int last = (*prevPtr == entry);
+
+	ASSERT(WORD_TYPE(*prevPtr) == WORD_TYPE_HASHENTRY);
+
+	/*
+	 * Convert entry: copy then change type ID.
+	 */
+
+	converted = (Col_Word) AllocCells(1);
+	memcpy((void *) converted, (void *) *prevPtr, sizeof(Cell));
+	ASSERT(!WORD_PINNED(*prevPtr));
+	WORD_SET_TYPEID(converted, WORD_TYPE_MHASHENTRY);
+	*prevPtr = converted;
+
+	if (last) return converted;
+
+	prevPtr = &WORD_HASHENTRY_NEXT(*prevPtr);
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: ConvertIntEntryToMutable
+ *
+ *	Convert immutable integer entry and all all its predecessors to mutable.
+ *
+ * Arguments:
+ *	entry	- Entry to convert (inclusive).
+ *	prevPtr	- Points to first entry in chain containing entry.
+ *
+ * Result:
+ *	The converted mutable entry.
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+ConvertIntEntryToMutable(
+    Col_Word entry,
+    Col_Word *prevPtr)
+{
+    Col_Word converted;
+
+    ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTHASHENTRY);
+    for (;;) {
+	int last = (*prevPtr == entry);
+
+	ASSERT(WORD_TYPE(*prevPtr) == WORD_TYPE_INTHASHENTRY);
+
+	/*
+	 * Convert entry: copy then change type ID.
+	 */
+
+	converted = (Col_Word) AllocCells(1);
+	memcpy((void *) converted, (void *) *prevPtr, sizeof(Cell));
+	ASSERT(!WORD_PINNED(*prevPtr));
+	WORD_SET_TYPEID(converted, WORD_TYPE_MINTHASHENTRY);
+	*prevPtr = converted;
+
+	if (last) return converted;
+
+	prevPtr = &WORD_HASHENTRY_NEXT(*prevPtr);
+    }
+}
+
+
+/*
+================================================================================
+Section: Hash Maps
+================================================================================
+*/
+
+/****************************************************************************
+ * Group: Hash Map Creation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: AllocBuckets
+ *
+ *	Allocate bucket container having the given minimum capacity, rounded
+ *	up to a power of 2.
+ *
+ * Arguments:
+ *	map		- Map to allocate buckets for.
+ *	capacity	- Initial bucket size.
+ *
+ * Side effects:
+ *	May allocate memory cells.
+ *
+ * See also:
+ *	<Col_NewStringHashMap>, <Col_NewIntHashMap>
+ *---------------------------------------------------------------------------*/
+
+static void
+AllocBuckets(
+    Col_Word map,
+    size_t capacity)
+{
+    if (capacity <= HASHMAP_STATICBUCKETS_SIZE) {
+	/*
+	 * Use static buckets.
+	 */
+
+	Col_Word *buckets = WORD_HASHMAP_STATICBUCKETS(map);
+	memset(buckets, 0, sizeof(*buckets) * HASHMAP_STATICBUCKETS_SIZE);
+    } else {
+	/*
+	 * Store buckets in mutable vector (round capacity to the next power of 
+	 * 2).
+	 * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 
+	 */
+
+	capacity--;
+	capacity |= capacity >> 1;
+	capacity |= capacity >> 2;
+	capacity |= capacity >> 4;
+	capacity |= capacity >> 8;
+	capacity |= capacity >> 16;
+	capacity++;
+
+	WORD_HASHMAP_BUCKETS(map) = Col_NewMVector(capacity, capacity, NULL);
+	ASSERT(WORD_TYPE(WORD_HASHMAP_BUCKETS(map)) == WORD_TYPE_MVECTOR);
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_NewStringHashMap
+ *
+ *	Create a new string hash map word.
+ *
+ * Argument:
+ *	capacity	- Initial bucket size. Rounded up to the next power of
+ *			  2.
+ *
+ * Result:
+ *	The new word.
+ *
+ * Side effects:
+ *	Allocates memory cells.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_NewStringHashMap(
+    size_t capacity)
+{
+    Col_Word map;
+    
+    map = (Col_Word) AllocCells(HASHMAP_NBCELLS);
+    WORD_STRHASHMAP_INIT(map);
+    AllocBuckets(map, capacity);
+
+    return map;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_NewIntHashMap
+ *
+ *	Create a new integer hash map word.
+ *
+ * Argument:
+ *	capacity	- Initial bucket size. Rounded up to the next power of
+ *			  2.
+ *
+ * Result:
+ *	The new word.
+ *
+ * Side effects:
+ *	Allocates memory cells.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_NewIntHashMap(
+    size_t capacity)
+{
+    Col_Word map;
+    
+    map = (Col_Word) AllocCells(HASHMAP_NBCELLS);
+    WORD_INTHASHMAP_INIT(map);
+    AllocBuckets(map, capacity);
+
+    return map;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_CopyHashMap
+ *
+ *	Create a new hash map word from an existing one.
+ *
+ * Argument:
+ *	map	- Hash map to copy.
+ *
+ * Result:
+ *	The new word.
+ *
+ * Side effects:
+ *	Source map content is frozen.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_CopyHashMap(
+    Col_Word map)
+{
+    Col_Word newMap;
+    Col_Word entry, *buckets;
+    size_t nbBuckets, i;
+    int entryType;
+
+    switch (WORD_TYPE(map)) {
+	case WORD_TYPE_STRHASHMAP:
+	    entryType = WORD_TYPE_HASHENTRY;
+	    break;
+
+	case WORD_TYPE_INTHASHMAP:
+	    entryType = WORD_TYPE_INTHASHENTRY;
+	    break;
+
+	default:
+	    Col_Error(COL_ERROR, "%x is not a hash map", map);
+	    return WORD_NIL;
+    }
+
+    /*
+     * Copy word first.
+     */
+
+    newMap = (Col_Word) AllocCells(HASHMAP_NBCELLS);
+    memcpy((void *) newMap, (void *) map, sizeof(Cell) * HASHMAP_NBCELLS);
+    WORD_SYNONYM(newMap) = WORD_NIL;
+    WORD_CLEAR_PINNED(newMap);
+
+    if (WORD_HASHMAP_BUCKETS(map)) {
+	if (WORD_TYPE(WORD_HASHMAP_BUCKETS(map)) == WORD_TYPE_VECTOR) {
+	    /*
+	     * Already frozen.
+	     */
+
+	    return newMap;
+	}
+
+	/*
+	 * Freeze bucket container.
+	 */
+
+	Col_MVectorFreeze(WORD_HASHMAP_BUCKETS(map));
+    }
+
+    /*
+     * Freeze entries: simply change their type ID.
+     */
+
+    GET_BUCKETS(map, 0, nbBuckets, buckets);
+    for (i=0; i < nbBuckets; i++) {
+	entry = buckets[i];
+	while (entry) {
+	    if (WORD_TYPE(entry) == entryType) {
+		/*
+		 * Already frozen, skip remaining entries.
+		 */
+
+		break;
+	    }
+
+	    ASSERT(!WORD_PINNED(entry));
+	    WORD_SET_TYPEID(entry, entryType);
+	    entry = WORD_HASHENTRY_NEXT(entry);
+	}
+    }
+
+    /*
+     * Both maps now share the same immutable structure.
+     */
+
+    return newMap;
+}
+
+
+/****************************************************************************
+ * Group: Hash Map Access
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1280,7 +1351,7 @@ Col_IntHashMapUnset(
 
 
 /****************************************************************************
- * Section: Hash Map Iterators
+ * Group: Hash Map Iteration
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1331,7 +1402,7 @@ Col_HashMapIterBegin(
     for (i=0; i < nbBuckets; i++) {
 	if (buckets[i]) {
 	    it->entry = buckets[i];
-	    it->hash.bucket = i;
+	    it->traversal.hash.bucket = i;
 	    return;
 	}
     }
@@ -1371,7 +1442,7 @@ Col_StringHashMapIterFind(
     }
 
     it->entry = StringHashMapFindEntry(map, key, 0, createPtr, 
-	    &it->hash.bucket);
+	    &it->traversal.hash.bucket);
     if (!it->entry) {
 	/*
 	 * Not found.
@@ -1413,7 +1484,8 @@ Col_IntHashMapIterFind(
 	return;
     }
 
-    it->entry = IntHashMapFindEntry(map, key, 0, createPtr, &it->hash.bucket);
+    it->entry = IntHashMapFindEntry(map, key, 0, createPtr, 
+	    &it->traversal.hash.bucket);
     if (!it->entry) {
 	/*
 	 * Not found.
@@ -1461,7 +1533,7 @@ Col_HashMapIterSetValue(
 		ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_HASHENTRY);
 		GET_BUCKETS(it->map, 1, nbBuckets, buckets);
 		it->entry = ConvertEntryToMutable(it->entry, 
-			&buckets[it->hash.bucket]);
+			&buckets[it->traversal.hash.bucket]);
 	    }
 
 	    /*
@@ -1481,7 +1553,7 @@ Col_HashMapIterSetValue(
 		ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTHASHENTRY);
 		GET_BUCKETS(it->map, 1, nbBuckets, buckets);
 		it->entry = ConvertIntEntryToMutable(it->entry, 
-			&buckets[it->hash.bucket]);
+			&buckets[it->traversal.hash.bucket]);
 	    }
 
 	    /*
@@ -1541,10 +1613,10 @@ Col_HashMapIterNext(
      */
 
     GET_BUCKETS(it->map, 0, nbBuckets, buckets);
-    for (i=it->hash.bucket+1; i < nbBuckets; i++) {
+    for (i=it->traversal.hash.bucket+1; i < nbBuckets; i++) {
 	if (buckets[i]) {
 	    it->entry = buckets[i];
-	    it->hash.bucket = i;
+	    it->traversal.hash.bucket = i;
 	    return;
 	}
     }

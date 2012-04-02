@@ -9,15 +9,21 @@
  *	They are always mutable.
  *
  * See also:
- *	<colMap.h>
+ *	<colTrie.c>, <colMap.h>
  */
 
 #ifndef _COLIBRI_TRIE
 #define _COLIBRI_TRIE
 
 
+/*
+================================================================================
+Section: Trie Maps
+================================================================================
+*/
+
 /****************************************************************************
- * Section: Trie Map Creation
+ * Group: Trie Map Creation
  *
  * Declarations:
  *	<Col_NewStringTrieMap>, <Col_NewIntTrieMap>
@@ -29,16 +35,12 @@ EXTERN Col_Word		Col_CopyTrieMap(Col_Word map);
 
 
 /****************************************************************************
- * Section: Trie Map Access
+ * Group: Trie Map Access
  *
  * Declarations:
  *	<Col_StringTrieMapGet>, <Col_IntTrieMapGet>, <Col_StringTrieMapSet>,
  *	<Col_IntTrieMapSet>, <Col_StringTrieMapUnset>, <Col_IntTrieMapUnset>
  ****************************************************************************/
-
-/*
- * Crit-bit trie maps (string based).
- */
 
 EXTERN int		Col_StringTrieMapGet(Col_Word map, Col_Word key,
 			    Col_Word *valuePtr);
@@ -53,7 +55,7 @@ EXTERN int		Col_IntTrieMapUnset(Col_Word map, intptr_t key);
 
 
 /****************************************************************************
- * Section: Trie Map Iterators
+ * Group: Trie Map Iteration
  *
  * Declarations:
  *	<Col_TrieMapIterFirst>, <Col_TrieMapIterLast>, 

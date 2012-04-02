@@ -7,6 +7,9 @@
  *	be integers, strings or generic words.
  *
  *	They are always mutable.
+ *
+ * See also:
+ *	<colMap.c>
  */
 
 #ifndef _COLIBRI_MAP
@@ -15,8 +18,14 @@
 #include <stddef.h> /* For size_t */
 
 
+/*
+================================================================================
+Section: Maps
+================================================================================
+*/
+
 /****************************************************************************
- * Section: Map Access
+ * Group: Map Access
  *
  * Declarations:
  *	<Col_MapSize>, <Col_MapGet>, <Col_IntMapGet>, <Col_MapSet>,
@@ -35,7 +44,7 @@ EXTERN int		Col_IntMapUnset(Col_Word map, intptr_t key);
 
 
 /****************************************************************************
- * Section: Map Iterators
+ * Group: Map Iteration
  *
  * Declarations:
  *	<Col_MapIterBegin>, <Col_MapIterFind>, <Col_IntMapIterFind>, 
@@ -75,7 +84,7 @@ typedef struct ColMapIterator {
 	    Col_Word prev;
 	    Col_Word next;
 	} trie;
-    };
+    } traversal;
 } ColMapIterator;
 
 /*---------------------------------------------------------------------------

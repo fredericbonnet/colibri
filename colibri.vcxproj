@@ -125,6 +125,7 @@ if exist $(OutDir) rmdir /S /Q $(OutDir)</NMakeCleanCommandLine>
     <ClCompile Include="colList.c" />
     <ClCompile Include="colMap.c" />
     <ClCompile Include="colRope.c" />
+    <ClCompile Include="colStrBuf.c" />
     <ClCompile Include="colTrie.c" />
     <ClCompile Include="platform\unix\colUnixPlatform.c">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
@@ -135,15 +136,24 @@ if exist $(OutDir) rmdir /S /Q $(OutDir)</NMakeCleanCommandLine>
     <ClCompile Include="colWord.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="colHash.h" />
-    <ClInclude Include="colibri.h" />
-    <ClInclude Include="colList.h" />
-    <ClInclude Include="colMap.h" />
-    <ClInclude Include="colRope.h" />
-    <ClInclude Include="colTrie.h" />
-    <ClInclude Include="colUtils.h" />
-    <ClInclude Include="colVector.h" />
-    <ClInclude Include="colWord.h" />
+    <ClInclude Include="colHashInt.h" />
+    <ClInclude Include="colListInt.h" />
+    <ClInclude Include="colMapInt.h" />
+    <ClInclude Include="colRopeInt.h" />
+    <ClInclude Include="colStrBufInt.h" />
+    <ClInclude Include="colTrieInt.h" />
+    <ClInclude Include="colVectorInt.h" />
+    <ClInclude Include="colWordInt.h" />
+    <ClInclude Include="include\colHash.h" />
+    <ClInclude Include="include\colibri.h" />
+    <ClInclude Include="include\colList.h" />
+    <ClInclude Include="include\colMap.h" />
+    <ClInclude Include="include\colRope.h" />
+    <ClInclude Include="include\colStrBuf.h" />
+    <ClInclude Include="include\colTrie.h" />
+    <ClInclude Include="include\colUtils.h" />
+    <ClInclude Include="include\colVector.h" />
+    <ClInclude Include="include\colWord.h" />
     <ClInclude Include="colConf.h" />
     <ClInclude Include="colInternal.h" />
     <ClInclude Include="colPlatform.h" />

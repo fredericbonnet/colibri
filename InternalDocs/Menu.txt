@@ -45,40 +45,16 @@ Footer: Copyright (C) 2010 Frédéric Bonnet
 
 Group: Public Headers  {
 
-   Group: General  {
-
-      Text: Including <colibri.h> will include all other files.
-      File: colibri.h  (colibri.h)
-      File: colUtils.h  (colUtils.h)
-      }  # Group: General
-
-   Group: Words  {
-
-      File: colWord.h  (colWord.h)
-      }  # Group: Words
-
-   Group: Strings and Ropes  {
-
-      File: colRope.h  (colRope.h)
-      }  # Group: Strings and Ropes
-
-   Group: Containers  {
-
-      Group: Vectors and Lists  {
-
-         File: colVector.h  (colVector.h)
-         File: colList.h  (colList.h)
-         }  # Group: Vectors and Lists
-
-      Group: Maps  {
-
-         File: colMap.h  (colMap.h)
-         File: colHash.h  (colHash.h)
-         File: colTrie.h  (colTrie.h)
-         }  # Group: Maps
-
-      }  # Group: Containers
-
+   File: colibri.h  (include\colibri.h)
+   File: colUtils.h  (include\colUtils.h)
+   File: colHash.h  (include\colHash.h)
+   File: colList.h  (include\colList.h)
+   File: colMap.h  (include\colMap.h)
+   File: colRope.h  (include\colRope.h)
+   File: colStrBuf.h  (include\colStrBuf.h)
+   File: colTrie.h  (include\colTrie.h)
+   File: colVector.h  (include\colVector.h)
+   File: colWord.h  (include\colWord.h)
    }  # Group: Public Headers
 
 Group: Internal Headers  {
@@ -86,6 +62,14 @@ Group: Internal Headers  {
    File: colConf.h  (colConf.h)
    File: colInternal.h  (colInternal.h)
    File: colPlatform.h  (colPlatform.h)
+   File: colHashInt.h  (colHashInt.h)
+   File: colListInt.h  (colListInt.h)
+   File: colMapInt.h  (colMapInt.h)
+   File: colRopeInt.h  (colRopeInt.h)
+   File: colStrBufInt.h  (colStrBufInt.h)
+   File: colTrieInt.h  (colTrieInt.h)
+   File: colVectorInt.h  (colVectorInt.h)
+   File: colWordInt.h  (no auto-title, colWordInt.h)
    }  # Group: Internal Headers
 
 Group: Source Files  {
@@ -96,6 +80,7 @@ Group: Source Files  {
    File: colList.c  (colList.c)
    File: colMap.c  (colMap.c)
    File: colRope.c  (colRope.c)
+   File: colStrBuf.c  (colStrBuf.c)
    File: colTrie.c  (colTrie.c)
    File: colVector.c  (colVector.c)
    File: colWord.c  (colWord.c)
@@ -119,6 +104,8 @@ Group: Index  {
    Function Index: Functions
    Macro Index: Macros
    Variable Index: Variables
+   Algorithm Index: Algorithms
+   Data Structure Index: Data Structures
    }  # Group: Index
 
 Link: Built with Natural Docs  (http://www.naturaldocs.org)

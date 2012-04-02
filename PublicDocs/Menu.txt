@@ -48,41 +48,43 @@ Group: API Reference  {
    Group: General  {
 
       Text: Including <colibri.h> will include all other files.
-      File: colibri.h  (colibri.h)
+      File: colibri.h  (include\colibri.h)
       File: colibri.c  (colibri.c)
       File: colGc.c  (colGc.c)
-      File: colUtils.h  (colUtils.h)
+      File: colUtils.h  (include\colUtils.h)
       }  # Group: General
 
    Group: Words  {
 
-      File: colWord.h  (colWord.h)
+      File: colWord.h  (include\colWord.h)
       File: colWord.c  (colWord.c)
       }  # Group: Words
 
    Group: Strings and Ropes  {
 
-      File: colRope.h  (colRope.h)
+      File: colRope.h  (include\colRope.h)
       File: colRope.c  (colRope.c)
+      File: colStrBuf.h  (include\colStrBuf.h)
+      File: colStrBuf.c  (colStrBuf.c)
       }  # Group: Strings and Ropes
 
    Group: Containers  {
 
       Group: Vectors and Lists  {
 
-         File: colVector.h  (colVector.h)
+         File: colVector.h  (include\colVector.h)
          File: colVector.c  (colVector.c)
-         File: colList.h  (colList.h)
+         File: colList.h  (include\colList.h)
          File: colList.c  (colList.c)
          }  # Group: Vectors and Lists
 
       Group: Maps  {
 
-         File: colMap.h  (colMap.h)
+         File: colMap.h  (include\colMap.h)
          File: colMap.c  (colMap.c)
-         File: colHash.h  (colHash.h)
+         File: colHash.h  (include\colHash.h)
          File: colHash.c  (colHash.c)
-         File: colTrie.h  (colTrie.h)
+         File: colTrie.h  (include\colTrie.h)
          File: colTrie.c  (colTrie.c)
          }  # Group: Maps
 

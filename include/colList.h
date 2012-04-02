@@ -18,6 +18,9 @@
  *	Mutable vectors *cannot* be used in place of mutable lists, as the 
  *	latter can grow indefinitely whereas the former have a maximum length 
  *	set at creation time.
+ *
+ * See also:
+ *	<colList.c>, <colVector.h>
  */
 
 #ifndef _COLIBRI_LIST
@@ -27,8 +30,14 @@
 #include <stdarg.h> /* For variadic procs */
 
 
+/*
+================================================================================
+Section: Immutable Lists
+================================================================================
+*/
+
 /****************************************************************************
- * Section: Immutable List Creation
+ * Group: Immutable List Creation
  *
  * Declarations:
  *	<Col_NewList>
@@ -39,7 +48,7 @@ EXTERN Col_Word		Col_NewList(size_t length,
 
 
 /****************************************************************************
- * Section: Immutable List Access
+ * Group: Immutable List Access
  *
  * Declarations:
  *	<Col_ListLength>, <Col_ListLoopLength>, <Col_ListAt>
@@ -51,7 +60,7 @@ EXTERN Col_Word		Col_ListAt(Col_Word list, size_t index);
 
 
 /****************************************************************************
- * Section: Immutable List Operations
+ * Group: Immutable List Operations
  *
  * Declarations:
  *	<Col_Sublist>, <Col_ConcatLists>, <Col_ConcatListsA>,
@@ -91,39 +100,7 @@ EXTERN Col_Word		Col_ListReplace(Col_Word list, size_t first,
 
 
 /****************************************************************************
- * Section: Mutable List Creation
- *
- * Declarations:
- *	<Col_NewMList>, <Col_CopyMList>
- ****************************************************************************/
-
-EXTERN Col_Word		Col_NewMList();
-EXTERN Col_Word		Col_CopyMList(Col_Word mlist);
-
-
-/****************************************************************************
- * Section: Mutable List Operations
- *
- * Declarations:
- *	<Col_MListSetLength>, <Col_MListLoop>, <Col_MListSetAt>, 
- *	<Col_MListInsert>, <Col_MListRemove>, <Col_MListReplace>
- *	
- ****************************************************************************/
-
-EXTERN void		Col_MListSetLength(Col_Word mlist, size_t length);
-EXTERN void		Col_MListLoop(Col_Word mlist);
-EXTERN void		Col_MListSetAt(Col_Word mlist, size_t index, 
-			    Col_Word element);
-EXTERN void		Col_MListInsert(Col_Word into, size_t index, 
-			    Col_Word list);
-EXTERN void		Col_MListRemove(Col_Word mlist, size_t first, 
-			    size_t last);
-EXTERN void		Col_MListReplace(Col_Word mlist, size_t first, 
-			    size_t last, Col_Word with);
-
-
-/****************************************************************************
- * Section: List Traversal
+ * Group: Immutable List Traversal
  *
  * Declarations:
  *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>
@@ -179,7 +156,7 @@ EXTERN int		Col_TraverseListChunks(Col_Word list, size_t start,
 
 
 /****************************************************************************
- * Section: List Iterators
+ * Group: Immutable List Iteration
  *
  * Declarations: 
  *	<Col_ListIterBegin>, <Col_ListIterFirst>, <Col_ListIterLast>, 
@@ -371,6 +348,10 @@ typedef ColListIterator Col_ListIterator;
 #define Col_ListIterPrevious(it) \
     Col_ListIterBackward((it), 1)
 
+/*
+ * Remaining declarations.
+ */
+
 EXTERN int		Col_ListIterBegin(Col_Word list, size_t index, 
 			    Col_ListIterator *it);
 EXTERN void		Col_ListIterFirst(Col_Word list, Col_ListIterator *it);
@@ -382,5 +363,43 @@ EXTERN int		Col_ListIterForward(Col_ListIterator *it, size_t nb);
 EXTERN void		Col_ListIterBackward(Col_ListIterator *it, size_t nb);
 
 EXTERN void		ColListIterUpdateTraversalInfo(Col_ListIterator *it);
+
+
+/*
+================================================================================
+Section: Mutable Lists
+================================================================================
+*/
+
+/****************************************************************************
+ * Group: Mutable List Creation
+ *
+ * Declarations:
+ *	<Col_NewMList>, <Col_CopyMList>
+ ****************************************************************************/
+
+EXTERN Col_Word		Col_NewMList();
+EXTERN Col_Word		Col_CopyMList(Col_Word mlist);
+
+
+/****************************************************************************
+ * Group: Mutable List Operations
+ *
+ * Declarations:
+ *	<Col_MListSetLength>, <Col_MListLoop>, <Col_MListSetAt>, 
+ *	<Col_MListInsert>, <Col_MListRemove>, <Col_MListReplace>
+ *	
+ ****************************************************************************/
+
+EXTERN void		Col_MListSetLength(Col_Word mlist, size_t length);
+EXTERN void		Col_MListLoop(Col_Word mlist);
+EXTERN void		Col_MListSetAt(Col_Word mlist, size_t index, 
+			    Col_Word element);
+EXTERN void		Col_MListInsert(Col_Word into, size_t index, 
+			    Col_Word list);
+EXTERN void		Col_MListRemove(Col_Word mlist, size_t first, 
+			    size_t last);
+EXTERN void		Col_MListReplace(Col_Word mlist, size_t first, 
+			    size_t last, Col_Word with);
 
 #endif /* _COLIBRI_LIST */

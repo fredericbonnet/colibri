@@ -72,7 +72,8 @@ typedef enum {
     COL_MVECTOR	= 960,		/* = 512 | COL_VECTOR | COL_MLIST */
     COL_STRMAP	= 1024,
     COL_INTMAP	= 2048,
-    COL_HASHMAP	= 4096
+    COL_HASHMAP	= 4096,
+    COL_STRBUF = 8192
 } Col_WordType;
 
 /*---------------------------------------------------------------------------
@@ -114,7 +115,12 @@ typedef union {
 	Col_StringFormat format;
 	const void *data;
 	size_t byteLength;
-	uintptr_t _smallData;
+	union {
+	    Col_Char1 c1;
+	    Col_Char2 c2;
+	    Col_Char4 c4;
+	    Col_Word s;
+	} _smallData;
     } string;
     struct {
 	size_t length;

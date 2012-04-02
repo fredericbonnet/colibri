@@ -8,11 +8,14 @@
  *
  *	They come in both immutable and mutable forms :
  *
- *	- Immutable vectors are flat arrays of bounded length.
+ *	- Immutable vectors are flat arrays of fixed length.
  *
  *	- Mutable vectors are flat arrays that can grow up to a maximum length, 
  *	whose content is directly modifiable through a C pointer. They can be
  *	"frozen" and turned into immutable versions.
+ *
+ * See also:
+ *	<colVector.c>
  */
 
 #ifndef _COLIBRI_VECTOR
@@ -22,8 +25,14 @@
 #include <stdarg.h> /* For variadic procs */
 
 
+/*
+================================================================================
+Section: Immutable Vectors
+================================================================================
+*/
+
 /****************************************************************************
- * Section: Immutable Vector Creation
+ * Group: Immutable Vector Creation
  *
  * Declarations:
  *	<Col_GetMaxVectorLength>, <Col_NewVector>, <Col_NewVectorNV>
@@ -48,8 +57,14 @@ EXTERN Col_Word		Col_NewVectorNV(size_t length, ...);
     Col_NewVectorNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
 
 
+/*
+================================================================================
+Section: Mutable Vectors
+================================================================================
+*/
+
 /****************************************************************************
- * Section: Mutable Vector Creation
+ * Group: Mutable Vector Creation
  *
  * Declarations:
  *	<Col_GetMaxMVectorLength>, <Col_NewMVector>
@@ -61,7 +76,7 @@ EXTERN Col_Word		Col_NewMVector(size_t maxLength, size_t length,
 
 
 /****************************************************************************
- * Section: Mutable Vector Operations
+ * Group: Mutable Vector Operations
  *
  * Declarations:
  *	<Col_MVectorSetLength>, <Col_MVectorFreeze>

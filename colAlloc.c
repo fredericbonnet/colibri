@@ -4,7 +4,7 @@
  *	This file implements the memory allocation features of Colibri.
  */
 
-#include "colibri.h"
+#include "include/colibri.h"
 #include "colInternal.h"
 #include "colPlatform.h"
 
@@ -38,7 +38,7 @@ static size_t		FindFreeCells(void *page, size_t number, size_t index);
  *	bit in matching zero-bit sequence, or -1 if none.
  *---------------------------------------------------------------------------*/
 
-const char firstZeroBitSequence[7][256] = {
+static const char firstZeroBitSequence[7][256] = {
     { /* single bit */
 	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4, 
 	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  5, 
@@ -175,7 +175,7 @@ const char firstZeroBitSequence[7][256] = {
  *	Result is number of consecutive cleared bytes starting at MSB.
  *---------------------------------------------------------------------------*/
 
-const char longestLeadingZeroBitSequence[256] = {
+static const char longestLeadingZeroBitSequence[256] = {
     8, 7, 6, 6, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4, 
     3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 
     2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
@@ -201,7 +201,7 @@ const char longestLeadingZeroBitSequence[256] = {
  *	set bits.
  *---------------------------------------------------------------------------*/
 
-const char nbBitsSet[256] = {
+static const char nbBitsSet[256] = {
     0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 
     1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 
     1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 
@@ -278,9 +278,13 @@ PoolCleanup(
 
 /****************************************************************************
  * Internal Section: System Page Allocation
- *
+ * 
  *	Granularity-free system page allocation based on address range 
  *	reservation.
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Algorithm: Address Reservation And Allocation
  *
  *	Some systems allow single system page allocations (e.g. POSIX mmap), 
  *	while others require coarser grained schemes (e.g. Windows 
@@ -344,7 +348,7 @@ PoolCleanup(
  *	pages will end up in their own dedicated range with no group management.
  *	Moreover stress tests have shown that this scheme yielded similar or 
  *	better performances than the previous schemes.
- ****************************************************************************/
+ *---------------------------------------------------------------------------*/
 
 /*---------------------------------------------------------------------------
  * Internal Variables: System Page Size and Granularity Variables

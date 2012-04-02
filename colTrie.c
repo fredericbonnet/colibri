@@ -12,8 +12,12 @@
  *	<colTrie.h>, <colMap.h>
  */
 
-#include "colibri.h"
+#include "include/colibri.h"
 #include "colInternal.h"
+
+#include "colWordInt.h"
+#include "colMapInt.h"
+#include "colTrieInt.h"
 
 #include <stdlib.h>
 #include <limits.h>
@@ -24,13 +28,8 @@
  * Prototypes for functions used only in this file.
  */
 
-static void		FreezeSubtrie(Col_Word node);
 static Col_Word		LeftmostLeaf(Col_Word node, Col_Word *rightPtr);
 static Col_Word		RightmostLeaf(Col_Word node, Col_Word *leftPtr);
-static Col_Word		ConvertStringNodeToMutable(Col_Word node, Col_Word map, 
-				Col_Word prefix);
-static Col_Word		ConvertIntNodeToMutable(Col_Word node, Col_Word map, 
-				intptr_t prefix);
 static Col_Word		StringTrieMapFindNode(Col_Word map, Col_Word key,
 			    int closest, int *comparePtr, 
 			    Col_Word *grandParentPtr, Col_Word *parentPtr,
@@ -47,195 +46,23 @@ static Col_Word		StringTrieMapFindEntry(Col_Word map, Col_Word key,
 static Col_Word		IntTrieMapFindEntry(Col_Word map, intptr_t key,
 			    int mutable, int *createPtr, Col_Word *leftPtr, 
 			    Col_Word *rightPtr);
+static void		FreezeSubtrie(Col_Word node);
+static Col_Word		ConvertStringNodeToMutable(Col_Word node, Col_Word map, 
+				Col_Word prefix);
+static Col_Word		ConvertIntNodeToMutable(Col_Word node, Col_Word map, 
+				intptr_t prefix);
 
 
-/****************************************************************************
- * Section: Trie Map Creation
- ****************************************************************************/
+/*
+================================================================================
+Internal Section: Trie Map Internals
+================================================================================
+*/
 
-/*---------------------------------------------------------------------------
- * Function: Col_NewStringTrieMap
- *
- *	Create a new string trie map word.
- *
- * Result:
- *	The new word.
- *
- * Side effects:
- *	Allocates memory cells.
- *---------------------------------------------------------------------------*/
-
-Col_Word
-Col_NewStringTrieMap()
-{
-    Col_Word map;
-    
-    map = (Col_Word) AllocCells(1);
-    WORD_STRTRIEMAP_INIT(map);
-
-    return map;
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_NewIntTrieMap
- *
- *	Create a new integer trie map word.
- *
- * Result:
- *	The new word.
- *
- * Side effects:
- *	Allocates memory cells.
- *---------------------------------------------------------------------------*/
-
-Col_Word
-Col_NewIntTrieMap()
-{
-    Col_Word map;
-    
-    map = (Col_Word) AllocCells(1);
-    WORD_INTTRIEMAP_INIT(map);
-
-    return map;
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_CopyTrieMap
- *
- *	Create a new trie map word from an existing one.
- *
- * Argument:
- *	map	- Trie map to copy.
- *
- * Result:
- *	The new word.
- *
- * Side effects:
- *	Source map content is frozen.
- *---------------------------------------------------------------------------*/
-
-Col_Word
-Col_CopyTrieMap(
-    Col_Word map)
-{
-    Col_Word newMap;
-
-    switch (WORD_TYPE(map)) {
-	case WORD_TYPE_STRTRIEMAP:
-	case WORD_TYPE_INTTRIEMAP:
-	    break;
-
-	default:
-	    Col_Error(COL_ERROR, "%x is not a trie map", map);
-	    return WORD_NIL;
-    }
-
-    /*
-     * Copy word first.
-     */
-
-    newMap = (Col_Word) AllocCells(1);
-    memcpy((void *) newMap, (void *) map, sizeof(Cell));
-    WORD_SYNONYM(newMap) = WORD_NIL;
-    WORD_CLEAR_PINNED(newMap);
-
-    /*
-     * Freeze nodes recursively.
-     */
-
-    FreezeSubtrie(WORD_TRIEMAP_ROOT(map));
-
-    /*
-     * Both maps now share the same immutable structure.
-     */
-
-    return newMap;
-}
-
-/*---------------------------------------------------------------------------
- * Internal Function: FreezeSubtrie
- *
- *	Turn trie nodes into immutable
- *
- * Argument:
- *	node	- Root node of subtrie.
- *
- * Side effects:
- *	Subtrie content is frozen.
- *---------------------------------------------------------------------------*/
-
-static void
-    FreezeSubtrie(
-    Col_Word node)
-{
-    /*
-     * Entry point for tail recursive calls.
-     */
-
-start:
-    switch (WORD_TYPE(node)) {
-	case WORD_TYPE_MSTRTRIENODE:
-	    /*
-	     * Freeze node: simply change type ID.
-	     */
-
-	    ASSERT(!WORD_PINNED(node));
-	    WORD_SET_TYPEID(node, WORD_TYPE_STRTRIENODE);
-
-	    /*
-	     * Recurse on left and tail recurse on right.
-	     */
-
-	    FreezeSubtrie(WORD_TRIENODE_LEFT(node));
-	    node = WORD_TRIENODE_RIGHT(node);
-	    goto start;
-
-	case WORD_TYPE_MINTTRIENODE:
-	    /*
-	     * Freeze node: simply change type ID.
-	     */
-
-	    ASSERT(!WORD_PINNED(node));
-	    WORD_SET_TYPEID(node, WORD_TYPE_STRTRIENODE);
-
-	    /*
-	     * Recurse on left and tail recurse on right.
-	     */
-
-	    FreezeSubtrie(WORD_TRIENODE_LEFT(node));
-	    node = WORD_TRIENODE_RIGHT(node);
-	    goto start;
-
-	case WORD_TYPE_MTRIELEAF:
-	    /*
-	     * Freeze node: simply change type ID.
-	     */
-
-	    ASSERT(!WORD_PINNED(node));
-	    WORD_SET_TYPEID(node, WORD_TYPE_TRIELEAF);
-	    break;
-
-	case WORD_TYPE_MINTTRIELEAF:
-	    /*
-	     * Freeze node: simply change type ID.
-	     */
-
-	    ASSERT(!WORD_PINNED(node));
-	    WORD_SET_TYPEID(node, WORD_TYPE_INTTRIELEAF);
-	    break;
-
-	default:
-	    /*
-	     * Already immutable.
-	     */
-
-	    return;
-    }
-}
-
+//TODO algorithms
 
 /****************************************************************************
- * Section: Trie Map Entries
+ * Internal Group: Nodes And Leaves
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -309,164 +136,6 @@ RightmostLeaf(
 	    default:
 		if (leftPtr) *leftPtr = left;
 		return node;
-	}
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Internal Function: ConvertStringNodeToMutable
- *
- *	Convert immutable string node and all all its ancestors to mutable.
- *
- * Arguments:
- *	node	- Node to convert.
- *	map	- Trie map the node belongs to.
- *	prefix	- String prefix.
- *
- * Result:
- *	The converted mutable entry.
- *---------------------------------------------------------------------------*/
-
-static Col_Word
-ConvertStringNodeToMutable(
-    Col_Word node, 
-    Col_Word map, 
-    Col_Word prefix)
-{
-    Col_Word *nodePtr, existing, converted;
-    Col_RopeIterator itKey;
-    Col_Char mask;
-    Col_Char cKey;
-
-    ASSERT(WORD_TYPE(node) == WORD_TYPE_INTTRIENODE || WORD_TYPE(node) == WORD_TYPE_INTTRIELEAF);
-    nodePtr = &WORD_TRIEMAP_ROOT(map);
-    Col_RopeIterBegin(prefix, 0, &itKey);
-    for (;;) {
-	existing = *nodePtr;
-	switch (WORD_TYPE(existing)) {
-	    case WORD_TYPE_STRTRIENODE:
-		/*
-		 * Convert to mutable.
-		 */
-
-		converted = (Col_Word) AllocCells(1);
-		memcpy((void *) converted, (void *) existing, sizeof(Cell));
-		ASSERT(!WORD_PINNED(existing));
-		WORD_SET_TYPEID(converted, WORD_TYPE_MSTRTRIENODE);
-		*nodePtr = converted;
-		if (existing == node) {
-		    return converted;
-		}
-		existing = converted;
-		/* continued */
-	    case WORD_TYPE_MSTRTRIENODE:
-		ASSERT(existing != node);
-		mask = WORD_STRTRIENODE_MASK(existing);
-		cKey = COL_CHAR_INVALID;
-		if (!Col_RopeIterEnd(&itKey)) {
-		    Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(existing));
-		    if (!Col_RopeIterEnd(&itKey)) {
-			cKey = Col_RopeIterAt(&itKey);
-		    }
-		}
-
-		/*
-		 * Descend.
-		 */
-
-		if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
-		    existing = WORD_TRIENODE_RIGHT(existing);
-		} else {
-		    existing = WORD_TRIENODE_LEFT(existing);
-		}
-		continue;
-
-	    case WORD_TYPE_TRIELEAF:
-		ASSERT(existing == node);
-		/*
-		 * Convert to mutable.
-		 */
-
-		converted = (Col_Word) AllocCells(1);
-		memcpy((void *) converted, (void *) existing, sizeof(Cell));
-		ASSERT(!WORD_PINNED(existing));
-		WORD_SET_TYPEID(converted, WORD_TYPE_MTRIELEAF);
-		*nodePtr = converted;
-		return converted;
-	}
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Internal Function: ConvertIntNodeToMutable
- *
- *	Convert immutable intege node and all all its ancestors to mutable.
- *
- * Arguments:
- *	node	- Node to convert.
- *	map	- Trie map the node belongs to.
- *	prefix	- Integer prefix.
- *
- * Result:
- *	The converted mutable entry.
- *---------------------------------------------------------------------------*/
-
-static Col_Word
-ConvertIntNodeToMutable(
-    Col_Word node, 
-    Col_Word map, 
-    intptr_t prefix)
-{
-    Col_Word *nodePtr, existing, converted;
-    intptr_t mask;
-
-    ASSERT(WORD_TYPE(node) == WORD_TYPE_INTTRIENODE || WORD_TYPE(node) == WORD_TYPE_INTTRIELEAF);
-    nodePtr = &WORD_TRIEMAP_ROOT(map);
-    for (;;) {
-	existing = *nodePtr;
-	switch (WORD_TYPE(existing)) {
-	    case WORD_TYPE_INTTRIENODE:
-		/*
-		 * Convert to mutable.
-		 */
-
-		converted = (Col_Word) AllocCells(1);
-		memcpy((void *) converted, (void *) existing, sizeof(Cell));
-		ASSERT(!WORD_PINNED(existing));
-		WORD_SET_TYPEID(converted, WORD_TYPE_MINTTRIENODE);
-		*nodePtr = converted;
-		if (existing == node) {
-		    return converted;
-		}
-		existing = converted;
-		/* continued */
-	    case WORD_TYPE_MINTTRIENODE:
-		ASSERT(existing != node);
-		mask = WORD_INTTRIENODE_MASK(existing);
-
-		/*
-		 * Descend.
-		 */
-
-		if (mask ? (prefix & mask) : (prefix >= 0)) {
-		    existing = WORD_TRIENODE_RIGHT(existing);
-		} else {
-		    existing = WORD_TRIENODE_LEFT(existing);
-		}
-		continue;
-
-	    case WORD_TYPE_INTTRIELEAF:
-		ASSERT(existing == node);
-		/*
-		 * Convert to mutable.
-		 */
-
-		converted = (Col_Word) AllocCells(1);
-		memcpy((void *) converted, (void *) existing, sizeof(Cell));
-		ASSERT(!WORD_PINNED(existing));
-		WORD_SET_TYPEID(converted, WORD_TYPE_MINTTRIELEAF);
-		*nodePtr = converted;
-		return converted;
 	}
     }
 }
@@ -1148,7 +817,361 @@ IntTrieMapFindEntry(
 
 
 /****************************************************************************
- * Section: Trie Map Access
+ * Internal Group: Mutability
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Function: FreezeSubtrie
+ *
+ *	Turn trie nodes into immutable
+ *
+ * Argument:
+ *	node	- Root node of subtrie.
+ *
+ * Side effects:
+ *	Subtrie content is frozen.
+ *---------------------------------------------------------------------------*/
+
+static void
+    FreezeSubtrie(
+    Col_Word node)
+{
+    /*
+     * Entry point for tail recursive calls.
+     */
+
+start:
+    switch (WORD_TYPE(node)) {
+	case WORD_TYPE_MSTRTRIENODE:
+	    /*
+	     * Freeze node: simply change type ID.
+	     */
+
+	    ASSERT(!WORD_PINNED(node));
+	    WORD_SET_TYPEID(node, WORD_TYPE_STRTRIENODE);
+
+	    /*
+	     * Recurse on left and tail recurse on right.
+	     */
+
+	    FreezeSubtrie(WORD_TRIENODE_LEFT(node));
+	    node = WORD_TRIENODE_RIGHT(node);
+	    goto start;
+
+	case WORD_TYPE_MINTTRIENODE:
+	    /*
+	     * Freeze node: simply change type ID.
+	     */
+
+	    ASSERT(!WORD_PINNED(node));
+	    WORD_SET_TYPEID(node, WORD_TYPE_STRTRIENODE);
+
+	    /*
+	     * Recurse on left and tail recurse on right.
+	     */
+
+	    FreezeSubtrie(WORD_TRIENODE_LEFT(node));
+	    node = WORD_TRIENODE_RIGHT(node);
+	    goto start;
+
+	case WORD_TYPE_MTRIELEAF:
+	    /*
+	     * Freeze node: simply change type ID.
+	     */
+
+	    ASSERT(!WORD_PINNED(node));
+	    WORD_SET_TYPEID(node, WORD_TYPE_TRIELEAF);
+	    break;
+
+	case WORD_TYPE_MINTTRIELEAF:
+	    /*
+	     * Freeze node: simply change type ID.
+	     */
+
+	    ASSERT(!WORD_PINNED(node));
+	    WORD_SET_TYPEID(node, WORD_TYPE_INTTRIELEAF);
+	    break;
+
+	default:
+	    /*
+	     * Already immutable.
+	     */
+
+	    return;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: ConvertStringNodeToMutable
+ *
+ *	Convert immutable string node and all all its ancestors to mutable.
+ *
+ * Arguments:
+ *	node	- Node to convert.
+ *	map	- Trie map the node belongs to.
+ *	prefix	- String prefix.
+ *
+ * Result:
+ *	The converted mutable entry.
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+ConvertStringNodeToMutable(
+    Col_Word node, 
+    Col_Word map, 
+    Col_Word prefix)
+{
+    Col_Word *nodePtr, existing, converted;
+    Col_RopeIterator itKey;
+    Col_Char mask;
+    Col_Char cKey;
+
+    ASSERT(WORD_TYPE(node) == WORD_TYPE_INTTRIENODE || WORD_TYPE(node) == WORD_TYPE_INTTRIELEAF);
+    nodePtr = &WORD_TRIEMAP_ROOT(map);
+    Col_RopeIterBegin(prefix, 0, &itKey);
+    for (;;) {
+	existing = *nodePtr;
+	switch (WORD_TYPE(existing)) {
+	    case WORD_TYPE_STRTRIENODE:
+		/*
+		 * Convert to mutable.
+		 */
+
+		converted = (Col_Word) AllocCells(1);
+		memcpy((void *) converted, (void *) existing, sizeof(Cell));
+		ASSERT(!WORD_PINNED(existing));
+		WORD_SET_TYPEID(converted, WORD_TYPE_MSTRTRIENODE);
+		*nodePtr = converted;
+		if (existing == node) {
+		    return converted;
+		}
+		existing = converted;
+		/* continued */
+	    case WORD_TYPE_MSTRTRIENODE:
+		ASSERT(existing != node);
+		mask = WORD_STRTRIENODE_MASK(existing);
+		cKey = COL_CHAR_INVALID;
+		if (!Col_RopeIterEnd(&itKey)) {
+		    Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(existing));
+		    if (!Col_RopeIterEnd(&itKey)) {
+			cKey = Col_RopeIterAt(&itKey);
+		    }
+		}
+
+		/*
+		 * Descend.
+		 */
+
+		if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
+		    existing = WORD_TRIENODE_RIGHT(existing);
+		} else {
+		    existing = WORD_TRIENODE_LEFT(existing);
+		}
+		continue;
+
+	    case WORD_TYPE_TRIELEAF:
+		ASSERT(existing == node);
+		/*
+		 * Convert to mutable.
+		 */
+
+		converted = (Col_Word) AllocCells(1);
+		memcpy((void *) converted, (void *) existing, sizeof(Cell));
+		ASSERT(!WORD_PINNED(existing));
+		WORD_SET_TYPEID(converted, WORD_TYPE_MTRIELEAF);
+		*nodePtr = converted;
+		return converted;
+	}
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: ConvertIntNodeToMutable
+ *
+ *	Convert immutable intege node and all all its ancestors to mutable.
+ *
+ * Arguments:
+ *	node	- Node to convert.
+ *	map	- Trie map the node belongs to.
+ *	prefix	- Integer prefix.
+ *
+ * Result:
+ *	The converted mutable entry.
+ *---------------------------------------------------------------------------*/
+
+static Col_Word
+ConvertIntNodeToMutable(
+    Col_Word node, 
+    Col_Word map, 
+    intptr_t prefix)
+{
+    Col_Word *nodePtr, existing, converted;
+    intptr_t mask;
+
+    ASSERT(WORD_TYPE(node) == WORD_TYPE_INTTRIENODE || WORD_TYPE(node) == WORD_TYPE_INTTRIELEAF);
+    nodePtr = &WORD_TRIEMAP_ROOT(map);
+    for (;;) {
+	existing = *nodePtr;
+	switch (WORD_TYPE(existing)) {
+	    case WORD_TYPE_INTTRIENODE:
+		/*
+		 * Convert to mutable.
+		 */
+
+		converted = (Col_Word) AllocCells(1);
+		memcpy((void *) converted, (void *) existing, sizeof(Cell));
+		ASSERT(!WORD_PINNED(existing));
+		WORD_SET_TYPEID(converted, WORD_TYPE_MINTTRIENODE);
+		*nodePtr = converted;
+		if (existing == node) {
+		    return converted;
+		}
+		existing = converted;
+		/* continued */
+	    case WORD_TYPE_MINTTRIENODE:
+		ASSERT(existing != node);
+		mask = WORD_INTTRIENODE_MASK(existing);
+
+		/*
+		 * Descend.
+		 */
+
+		if (mask ? (prefix & mask) : (prefix >= 0)) {
+		    existing = WORD_TRIENODE_RIGHT(existing);
+		} else {
+		    existing = WORD_TRIENODE_LEFT(existing);
+		}
+		continue;
+
+	    case WORD_TYPE_INTTRIELEAF:
+		ASSERT(existing == node);
+		/*
+		 * Convert to mutable.
+		 */
+
+		converted = (Col_Word) AllocCells(1);
+		memcpy((void *) converted, (void *) existing, sizeof(Cell));
+		ASSERT(!WORD_PINNED(existing));
+		WORD_SET_TYPEID(converted, WORD_TYPE_MINTTRIELEAF);
+		*nodePtr = converted;
+		return converted;
+	}
+    }
+}
+
+
+/*
+================================================================================
+Section: Trie Maps
+================================================================================
+*/
+
+/****************************************************************************
+ * Group: Trie Map Creation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_NewStringTrieMap
+ *
+ *	Create a new string trie map word.
+ *
+ * Result:
+ *	The new word.
+ *
+ * Side effects:
+ *	Allocates memory cells.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_NewStringTrieMap()
+{
+    Col_Word map;
+    
+    map = (Col_Word) AllocCells(1);
+    WORD_STRTRIEMAP_INIT(map);
+
+    return map;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_NewIntTrieMap
+ *
+ *	Create a new integer trie map word.
+ *
+ * Result:
+ *	The new word.
+ *
+ * Side effects:
+ *	Allocates memory cells.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_NewIntTrieMap()
+{
+    Col_Word map;
+    
+    map = (Col_Word) AllocCells(1);
+    WORD_INTTRIEMAP_INIT(map);
+
+    return map;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_CopyTrieMap
+ *
+ *	Create a new trie map word from an existing one.
+ *
+ * Argument:
+ *	map	- Trie map to copy.
+ *
+ * Result:
+ *	The new word.
+ *
+ * Side effects:
+ *	Source map content is frozen.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_CopyTrieMap(
+    Col_Word map)
+{
+    Col_Word newMap;
+
+    switch (WORD_TYPE(map)) {
+	case WORD_TYPE_STRTRIEMAP:
+	case WORD_TYPE_INTTRIEMAP:
+	    break;
+
+	default:
+	    Col_Error(COL_ERROR, "%x is not a trie map", map);
+	    return WORD_NIL;
+    }
+
+    /*
+     * Copy word first.
+     */
+
+    newMap = (Col_Word) AllocCells(1);
+    memcpy((void *) newMap, (void *) map, sizeof(Cell));
+    WORD_SYNONYM(newMap) = WORD_NIL;
+    WORD_CLEAR_PINNED(newMap);
+
+    /*
+     * Freeze nodes recursively.
+     */
+
+    FreezeSubtrie(WORD_TRIEMAP_ROOT(map));
+
+    /*
+     * Both maps now share the same immutable structure.
+     */
+
+    return newMap;
+}
+
+
+/****************************************************************************
+ * Group: Trie Map Access
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1477,7 +1500,7 @@ Col_IntTrieMapUnset(
 
 
 /****************************************************************************
- * Section: Trie Map Iterators
+ * Group: Trie Map Iteration
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1517,8 +1540,8 @@ Col_TrieMapIterFirst(
 
     ASSERT(WORD_TRIEMAP_ROOT(map));
     it->map = map;
-    it->entry = LeftmostLeaf(WORD_TRIEMAP_ROOT(map), &it->trie.next);
-    it->trie.prev = WORD_NIL;
+    it->entry = LeftmostLeaf(WORD_TRIEMAP_ROOT(map), &it->traversal.trie.next);
+    it->traversal.trie.prev = WORD_NIL;
     ASSERT(it->entry);
 }
 
@@ -1559,8 +1582,8 @@ Col_TrieMapIterLast(
 
     ASSERT(WORD_TRIEMAP_ROOT(map));
     it->map = map;
-    it->entry = RightmostLeaf(WORD_TRIEMAP_ROOT(map), &it->trie.prev);
-    it->trie.next = WORD_NIL;
+    it->entry = RightmostLeaf(WORD_TRIEMAP_ROOT(map), &it->traversal.trie.prev);
+    it->traversal.trie.next = WORD_NIL;
     ASSERT(it->entry);
 }
 
@@ -1593,8 +1616,8 @@ Col_StringTrieMapIterFind(
 	return;
     }
 
-    it->entry = StringTrieMapFindEntry(map, key, 0, createPtr, &it->trie.prev,
-	    &it->trie.next);
+    it->entry = StringTrieMapFindEntry(map, key, 0, createPtr, 
+	    &it->traversal.trie.prev, &it->traversal.trie.next);
     if (!it->entry) {
 	/*
 	 * Not found.
@@ -1638,8 +1661,8 @@ Col_IntTrieMapIterFind(
 	return;
     }
 
-    it->entry = IntTrieMapFindEntry(map, key, 0, createPtr, &it->trie.prev,
-	    &it->trie.next);
+    it->entry = IntTrieMapFindEntry(map, key, 0, createPtr, 
+	    &it->traversal.trie.prev, &it->traversal.trie.next);
     if (!it->entry) {
 	/*
 	 * Not found.
@@ -1742,7 +1765,7 @@ Col_TrieMapIterNext(
 
     ASSERT(it->entry);
 
-    if (!it->trie.next) {
+    if (!it->traversal.trie.next) {
 	/*
 	 * Refresh shortcuts.
 	 */
@@ -1750,23 +1773,25 @@ Col_TrieMapIterNext(
 	switch (WORD_TYPE(it->map)) {
 	    case WORD_TYPE_STRTRIEMAP:
 		StringTrieMapFindNode(it->map, WORD_MAPENTRY_KEY(it->entry), 0,
-			NULL, NULL, NULL, NULL, &it->trie.next, NULL, NULL);
+			NULL, NULL, NULL, NULL, &it->traversal.trie.next, NULL,
+			NULL);
 		break;
 
 	    case WORD_TYPE_INTTRIEMAP:
 		IntTrieMapFindNode(it->map, WORD_INTMAPENTRY_KEY(it->entry), 0,
-			NULL, NULL, NULL, NULL, &it->trie.next, NULL);
+			NULL, NULL, NULL, NULL, &it->traversal.trie.next, NULL);
 		break;
 	}
     }
 
-    if (it->trie.next) {
+    if (it->traversal.trie.next) {
 	/*
 	 * Next is leftmost leaf of adjacent right branch.
 	 */
 
-	it->trie.prev = it->entry;
-	it->entry = LeftmostLeaf(it->trie.next, &it->trie.next);
+	it->traversal.trie.prev = it->entry;
+	it->entry = LeftmostLeaf(it->traversal.trie.next, 
+		&it->traversal.trie.next);
     } else {
 	/*
 	 * End of map.
@@ -1796,7 +1821,7 @@ Col_TrieMapIterPrevious(
 
     ASSERT(it->entry);
 
-    if (!it->trie.prev) {
+    if (!it->traversal.trie.prev) {
 	/*
 	 * Refresh shortcuts.
 	 */
@@ -1804,23 +1829,25 @@ Col_TrieMapIterPrevious(
 	switch (WORD_TYPE(it->map)) {
 	    case WORD_TYPE_STRTRIEMAP:
 		StringTrieMapFindNode(it->map, WORD_MAPENTRY_KEY(it->entry), 0,
-			NULL, NULL, NULL, &it->trie.prev, NULL, NULL, NULL);
+			NULL, NULL, NULL, &it->traversal.trie.prev, NULL, NULL,
+			NULL);
 		break;
 
 	    case WORD_TYPE_INTTRIEMAP:
 		IntTrieMapFindNode(it->map, WORD_INTMAPENTRY_KEY(it->entry), 0,
-			NULL, NULL, NULL, &it->trie.prev, NULL, NULL);
+			NULL, NULL, NULL, &it->traversal.trie.prev, NULL, NULL);
 		break;
 	}
     }
 
-    if (it->trie.prev) {
+    if (it->traversal.trie.prev) {
 	/*
 	 * Previous is rightmost leaf of adjacent left branch.
 	 */
 
-	it->trie.next  = it->entry;
-	it->entry = RightmostLeaf(it->trie.prev, &it->trie.prev);
+	it->traversal.trie.next  = it->entry;
+	it->entry = RightmostLeaf(it->traversal.trie.prev, 
+		&it->traversal.trie.prev);
     } else {
 	/*
 	 * End of map.

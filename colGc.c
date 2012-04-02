@@ -19,9 +19,18 @@
  *	every 10^x gen-0 collection. 
  */
 
-#include "colibri.h"
+#include "include/colibri.h"
 #include "colInternal.h"
 #include "colPlatform.h"
+
+#include "colWordInt.h"
+#include "colRopeInt.h"
+#include "colVectorInt.h"
+#include "colListInt.h"
+#include "colMapInt.h"
+#include "colHashInt.h"
+#include "colTrieInt.h"
+#include "colStrBufInt.h"
 
 #include <memory.h>
 #include <limits.h>
@@ -174,7 +183,7 @@ GetNbCells(
     switch (WORD_TYPE(word)) {
 	case WORD_TYPE_UCSSTR:
 	    return UCSSTR_SIZE(WORD_UCSSTR_LENGTH(word)
-		    * WORD_UCSSTR_FORMAT(word));
+		    * CHAR_WIDTH(WORD_UCSSTR_FORMAT(word)));
 
 	case WORD_TYPE_UTFSTR:
 	    return UTFSTR_SIZE(WORD_UTFSTR_BYTELENGTH(word));
@@ -193,6 +202,9 @@ GetNbCells(
 	case WORD_TYPE_STRHASHMAP:
 	case WORD_TYPE_INTHASHMAP:
 	    return HASHMAP_NBCELLS;
+
+	case WORD_TYPE_STRBUF:
+	    return WORD_STRBUF_SIZE(word);
 
 	/* WORD_TYPE_UNKNOWN */
 
@@ -1487,6 +1499,13 @@ start:
 	     */
 
 	    TAIL_RECURSE(&WORD_MAPENTRY_VALUE(*wordPtr), page);
+
+	case WORD_TYPE_STRBUF:
+	    /*
+	     * Tail recurse on rope.
+	     */
+
+	    TAIL_RECURSE(&WORD_STRBUF_ROPE(*wordPtr), page);
 
 	case WORD_TYPE_CUSTOM: {
 	    Col_CustomWordType *typeInfo = WORD_TYPEINFO(*wordPtr);

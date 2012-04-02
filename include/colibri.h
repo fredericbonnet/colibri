@@ -169,8 +169,8 @@ typedef void * Col_ClientData;
  * Section: Strings
  *
  * Declarations:
- *	<Col_Utf8CharAddr>, <Col_Utf8CharAt>, <Col_Utf16CharAddr>, 
- *	<Col_Utf16CharAt>
+ *	<Col_Utf8CharAddr>, <Col_Utf8GetChar>, <Col_Utf8SetChar>, 
+ *	<Col_Utf16CharAddr>, <Col_Utf16GetChar>, <Col_Utf16SetChar>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -179,7 +179,7 @@ typedef void * Col_ClientData;
  *	String characters use the 32-bit Unicode encoding.
  *---------------------------------------------------------------------------*/
 
-typedef unsigned int Col_Char;
+typedef uint32_t Col_Char;
 
 /*---------------------------------------------------------------------------
  * Constant: COL_CHAR_INVALID
@@ -194,9 +194,10 @@ typedef unsigned int Col_Char;
  *
  *	Characters use the Universal Character Set (UCS) encoding.
  *
- *  Col_Char1	- 1-byte UCS codepoint truncated to the lower 8 bits.
+ *  Col_Char1	- 1-byte UCS codepoint truncated to the lower 8 bits, i.e.
+ *		  Latin-1.
  *  Col_Char2	- 2-byte UCS-2 codepoint.
- *  Col_Char4	- 4-byte UCS-4 codepoint.
+ *  Col_Char4	- 4-byte UCS-4/UTF-32 codepoint, same as <Col_Char>.
  *
  * See also:
  *	<Col_Char>
@@ -204,7 +205,23 @@ typedef unsigned int Col_Char;
 
 typedef uint8_t Col_Char1;
 typedef uint16_t Col_Char2;
-typedef uint32_t Col_Char4;
+typedef Col_Char Col_Char4;
+
+/*---------------------------------------------------------------------------
+ * Constants: COL_CHAR( * )_MAX
+ *
+ *	Maximum character codepoints.
+ *
+ *  COL_CHAR_MAX	- Maximum Universal Character Set (UCS) codepoint.
+ *  COL_CHAR1_MAX	- Maximum UCS-1 codepoint.
+ *  COL_CHAR2_MAX	- Maximum UCS-2 codepoint.
+ *  COL_CHAR4_MAX	- Maximum UCS-4 codepoint, same as <COL_CHAR_MAX>.
+ *---------------------------------------------------------------------------*/
+
+#define COL_CHAR_MAX		((Col_Char) 0x10FFFF)
+#define COL_CHAR1_MAX		0xFF
+#define COL_CHAR2_MAX		0xFFFF
+#define COL_CHAR4_MAX		COL_CHAR_MAX
 
 /*---------------------------------------------------------------------------
  * Enum: Col_StringFormat
@@ -222,13 +239,16 @@ typedef uint32_t Col_Char4;
  *	responsibility to validate and ensure well-formedness of UTF-8/16 data,
  *	notably for security reasons. 
  *
- *	The absolute value of constants match the respective character width.
- *	Positive are fixed-width, negative are variable-width.
+ *	Numeric values are chosen so that the lower 3 bits give the character
+ *	width in the data chunk. 
  *---------------------------------------------------------------------------*/
 
 typedef enum Col_StringFormat {
-    COL_UCS1=1, COL_UCS2=2, COL_UCS4=4,
-    COL_UTF8=-1, COL_UTF16=-2 
+    COL_UCS1=0x01,
+    COL_UCS2=0x02,
+    COL_UCS4=0x04,
+    COL_UTF8=0x11,
+    COL_UTF16=0x12
 } Col_StringFormat;
 
 /*---------------------------------------------------------------------------
@@ -264,6 +284,35 @@ typedef enum Col_StringFormat {
     while ((*--(*(Col_Char1 **) &data) & 0xC0) == 0x80);
 
 /*---------------------------------------------------------------------------
+ * Constant: COL_UTF8_MAX_WIDTH
+ *
+ *	Maximum width of character in UTF-8 code units.
+ *---------------------------------------------------------------------------*/
+
+#define COL_UTF8_MAX_WIDTH	4
+
+/*---------------------------------------------------------------------------
+ * Macro: COL_UTF8_WIDTH
+ *
+ *	Get width of character in UTF-8 code units.
+ *
+ * Argument:
+ *	c	- The character.
+ *
+ * Result:
+ *	Number of UTF-8 codepoints needed for the character (0 if invalid).
+ *---------------------------------------------------------------------------*/
+
+#define COL_UTF8_WIDTH(c) \
+    (  (c) <= 0x7F	 ? 1 \
+     : (c) <= 0x7FF	 ? 2 \
+     : (c) <= 0xD7FF	 ? 3 \
+     : (c) <= 0xDFFF	 ? 0 \
+     : (c) <= 0xFFFF	 ? 3 \
+     : (c) <= 0x10FFFF	 ? 4 \
+     : 			   0 )
+
+/*---------------------------------------------------------------------------
  * Macro: COL_UTF16_NEXT
  *
  *	Move pointer to the next UTF-16 character. This is done by skipping 
@@ -295,12 +344,91 @@ typedef enum Col_StringFormat {
 #define COL_UTF16_PREVIOUS(data) \
     while ((*--(*(Col_Char2 **) &data) & 0xFC00) == 0xDC00);
 
+/*---------------------------------------------------------------------------
+ * Constant: COL_UTF16_MAX_WIDTH
+ *
+ *	Maximum width of character in UTF-16 code units.
+ *---------------------------------------------------------------------------*/
+
+#define COL_UTF16_MAX_WIDTH	2
+
+/*---------------------------------------------------------------------------
+ * Macro: COL_UTF16_WIDTH
+ *
+ *	Get width of character in UTF-16 code units.
+ *
+ * Argument:
+ *	c	- The character.
+ *
+ * Result:
+ *	Number of UTF-16 codepoints needed for the character (0 if invalid).
+ *---------------------------------------------------------------------------*/
+
+#define COL_UTF16_WIDTH(c) \
+    (  (c) <= 0xD7FF	 ? 1 \
+     : (c) <= 0xDFFF	 ? 0 \
+     : (c) <= 0xFFFF	 ? 1 \
+     : (c) <= 0x10FFFF	 ? 2 \
+     : 			   0 )
+
+/*---------------------------------------------------------------------------
+ * Macro: COL_CHAR_NEXT
+ *
+ *	Get next character in data chunk.
+ *
+ * Arguments:
+ *	format	- Data format.
+ *	data	- Pointer to next character.
+ *
+ * Result:
+ *	c	- Character codepoint.
+ *
+ * Side effects:
+ *	The data pointer is moved just past the character.
+ *---------------------------------------------------------------------------*/
+
+#define COL_CHAR_NEXT(format, data, c) \
+    switch (format) { \
+	case COL_UCS1:  (c) = *((const Col_Char1 *) (data));              (data) = (const char *) (data) + 1; break; \
+	case COL_UCS2:  (c) = *((const Col_Char2 *) (data));              (data) = (const char *) (data) + 2; break; \
+	case COL_UCS4:  (c) = *((const Col_Char4 *) (data));              (data) = (const char *) (data) + 4; break; \
+	case COL_UTF8:  (c) = Col_Utf8GetChar ((const Col_Char1 *) data); COL_UTF8_NEXT(data);                break; \
+	case COL_UTF16: (c) = Col_Utf16GetChar((const Col_Char2 *) data); COL_UTF16_NEXT(data);               break; \
+    }
+
+/*---------------------------------------------------------------------------
+ * Macro: COL_CHAR_PREVIOUS
+ *
+ *	Get previous character in data chunk.
+ *
+ * Arguments:
+ *	format	- Data format.
+ *	data	- Pointer just past the next character.
+ *
+ * Result:
+ *	c	- Character codepoint.
+ *
+ * Side effects:
+ *	The data pointer is moved to the character.
+ *---------------------------------------------------------------------------*/
+
+#define COL_CHAR_PREVIOUS(format, data, c) \
+    switch (format) { \
+	case COL_UCS1:  (data) = (const char *) (data) - 1; (c) = *((const Col_Char1 *) (data));              break; \
+	case COL_UCS2:  (data) = (const char *) (data) - 2; (c) = *((const Col_Char2 *) (data));              break; \
+	case COL_UCS4:  (data) = (const char *) (data) - 4; (c) = *((const Col_Char4 *) (data));              break; \
+	case COL_UTF8:  COL_UTF8_PREVIOUS(data);            (c) = Col_Utf8GetChar ((const Col_Char1 *) data); break; \
+	case COL_UTF16: COL_UTF16_PREVIOUS(data);           (c) = Col_Utf16GetChar((const Col_Char2 *) data); break; \
+    }
+
 EXTERN const Col_Char1 * Col_Utf8CharAddr(const Col_Char1 * data, 
 			    size_t index, size_t length, size_t byteLength);
-EXTERN Col_Char		Col_Utf8CharAt(const Col_Char1 * data);
+EXTERN Col_Char		Col_Utf8GetChar(const Col_Char1 * data);
+EXTERN Col_Char1 * 	Col_Utf8SetChar(Col_Char1 * data, Col_Char c);
 EXTERN const Col_Char2 * Col_Utf16CharAddr(const Col_Char2 * data, 
 			    size_t index, size_t length, size_t byteLength);
-EXTERN Col_Char		Col_Utf16CharAt(const Col_Char2 * data);
+EXTERN Col_Char		Col_Utf16GetChar(const Col_Char2 * data);
+EXTERN Col_Char2 * 	Col_Utf16SetChar(Col_Char2 * data, Col_Char c);
 
 
 /*
@@ -312,6 +440,7 @@ EXTERN Col_Char		Col_Utf16CharAt(const Col_Char2 * data);
 #include "colWord.h"
 
 #include "colRope.h"
+#include "colStrBuf.h"
 
 #include "colVector.h"
 #include "colList.h"

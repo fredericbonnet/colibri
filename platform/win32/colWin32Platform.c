@@ -9,7 +9,7 @@
  *	<colPlatform.h>, <colWin32Platform.h>
  */
 
-#include "../../colibri.h"
+#include "../../include/colibri.h"
 #include "../../colInternal.h"
 #include "../../colPlatform.h"
 
@@ -127,7 +127,7 @@ static CRITICAL_SECTION csSharedGroups;
  *	Memory allocated and system objects created.
  *
  * See also:
- *	<Threading Models>, <PlatGroupData>, <FreeGroupData>
+ *	<Threading Model Constants>, <PlatGroupData>, <FreeGroupData>
  *---------------------------------------------------------------------------*/
 
 static PlatGroupData *
@@ -225,7 +225,7 @@ FreeGroupData(
  *	Non-zero if this is the first nested call, else 0.
  *
  * See also:
- *	<Threading Models>, <ThreadData>, <PlatGroupData>, <PlatLeave>, 
+ *	<Threading Model Constants>, <ThreadData>, <PlatGroupData>, <PlatLeave>,
  *	<Col_Init>
  *---------------------------------------------------------------------------*/
 

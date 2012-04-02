@@ -9,7 +9,7 @@
  *	<colPlatform.h>, <colUnixPlatform.h>
  */
 
-#include "../../colibri.h"
+#include "../../include/colibri.h"
 #include "../../colInternal.h"
 #include "../../colPlatform.h"
 
@@ -130,7 +130,7 @@ static pthread_mutex_t mutexSharedGroups = PTHREAD_MUTEX_INITIALIZER;
  *	Memory allocated and system objects created.
  *
  * See also:
- *	<Threading Models>, <PlatGroupData>, <FreeGroupData>
+ *	<Threading Model Constants>, <PlatGroupData>, <FreeGroupData>
  *---------------------------------------------------------------------------*/
 
 static PlatGroupData *
@@ -242,7 +242,7 @@ static pthread_once_t once = PTHREAD_ONCE_INIT;
  *	Non-zero if this is the first nested call, else 0.
  *
  * See also:
- *	<Threading Models>, <ThreadData>, <PlatGroupData>, <PlatLeave>, 
+ *	<Threading Model Constants>, <ThreadData>, <PlatGroupData>, <PlatLeave>,
  *	<Col_Init>
  *---------------------------------------------------------------------------*/
 

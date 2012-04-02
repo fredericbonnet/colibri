@@ -4,20 +4,28 @@
  *	This header file defines the hash map handling features of Colibri.
  *
  *	Hash maps are an implementation of generic maps that use key hashing 
- *	and flat bucket arrays for string and integer keys.
+ *	and flat bucket arrays for string, integer and custom keys.
  *
  *	They are always mutable.
  *
  * See also:
- *	<colMap.h>
+ *	<colHash.c>, <colMap.h>
  */
 
 #ifndef _COLIBRI_HASH
 #define _COLIBRI_HASH
 
+#include <stddef.h> /* For size_t */
+
+
+/*
+================================================================================
+Section: Hash Maps
+================================================================================
+*/
 
 /****************************************************************************
- * Section: Hash Map Creation
+ * Group: Hash Map Creation
  *
  * Declarations:
  *	<Col_NewStringHashMap>, <Col_NewIntHashMap>, <Col_CopyHashMap>
@@ -29,7 +37,7 @@ EXTERN Col_Word		Col_CopyHashMap(Col_Word map);
 
 
 /****************************************************************************
- * Section: Hash Map Access
+ * Group: Hash Map Access
  *
  * Declarations:
  *	<Col_StringHashMapGet>, <Col_IntHashMapGet>, <Col_StringHashMapSet>,
@@ -49,7 +57,7 @@ EXTERN int		Col_IntHashMapUnset(Col_Word map, intptr_t key);
 
 
 /****************************************************************************
- * Section: Hash Map Iterators
+ * Group: Hash Map Iteration
  *
  * Declarations:
  *	<Col_HashMapIterBegin>, <Col_StringHashMapIterFind>, 
@@ -68,9 +76,11 @@ EXTERN void		Col_HashMapIterSetValue(Col_MapIterator *it,
 EXTERN void		Col_HashMapIterNext(Col_MapIterator *it);
 
 
-/****************************************************************************
- * Section: Custom Hash Maps
- ****************************************************************************/
+/*
+================================================================================
+Section: Custom Hash Maps
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Typedef: Col_HashProc

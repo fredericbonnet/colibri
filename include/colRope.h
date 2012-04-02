@@ -17,21 +17,45 @@
 #include <stdarg.h> /* For variadic procs */
 
 
+/*
+================================================================================
+Section: Ropes
+================================================================================
+*/
+
 /****************************************************************************
- * Section: Rope Creation
+ * Group: Rope Creation
  *
  * Declarations:
- *	<Col_EmptyRope>, <Col_NewRopeFromString>, <Col_NewChar>, <Col_NewRope>
+ *	<Col_EmptyRope>, <Col_NewRopeFromString>, <Col_NewChar>, <Col_NewRope>,
+ *	<Col_NormalizeRope>
  ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Constant: COL_UCS
+ *
+ *	When passed to <Col_NewRope> or <Col_NormalizeRope>, use the shortest 
+ *	possible fixed-width format.
+ *
+ * Note:
+ *	Numeric value is chosen so that the lower 3 bits give the character
+ *	width in the data chunk. 
+ *---------------------------------------------------------------------------*/
+
+#define COL_UCS			(Col_StringFormat) 0x24
 
 EXTERN Col_Word		Col_EmptyRope();
 EXTERN Col_Word		Col_NewRopeFromString(const char *string);
 EXTERN Col_Word		Col_NewChar(Col_Char c);
 EXTERN Col_Word		Col_NewRope(Col_StringFormat format, const void *data, 
 			    size_t byteLength);
+EXTERN Col_Word		Col_NormalizeRope(Col_Word rope, 
+			    Col_StringFormat format, Col_Char replace,
+			    int flatten);
+
 
 /****************************************************************************
- * Section: Rope Access
+ * Group: Rope Access and Comparison
  *
  * Declarations:
  *	<Col_RopeLength>, <Col_RopeAt>, <Col_RopeFind>, <Col_RopeSearch>,
@@ -241,7 +265,7 @@ EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
 
 
 /****************************************************************************
- * Section: Rope Operations
+ * Group: Rope Operations
  *
  * Declarations:
  *	<Col_Subrope>, <Col_ConcatRopes>, <Col_ConcatRopesA>,
@@ -279,7 +303,7 @@ EXTERN Col_Word		Col_RopeReplace(Col_Word rope, size_t first,
 
 
 /****************************************************************************
- * Section: Rope Traversal
+ * Group: Rope Traversal
  *
  * Declarations:
  *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
@@ -341,7 +365,7 @@ EXTERN int		Col_TraverseRopeChunks(Col_Word rope, size_t start,
 
 
 /****************************************************************************
- * Section: Rope Iterators
+ * Group: Rope Iteration
  *
  * Declarations: 
  *	<Col_RopeIterBegin>, <Col_RopeIterFirst>, <Col_RopeIterLast>, 
@@ -541,7 +565,7 @@ EXTERN void		ColRopeIterUpdateTraversalInfo(Col_RopeIterator *it);
 
 
 /****************************************************************************
- * Section: Custom Ropes
+ * Group: Custom Ropes
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -591,15 +615,15 @@ typedef Col_Char (Col_RopeCharAtProc) (Col_Word rope, size_t index);
  *	rope		- Custom rope to get chunk from.
  *	start		- Start index of chunk.
  *	max		- Maximum length of chunk.
- *	lengthPtr	- Holds actual length upon return.
- *	chunkPtr	- Holds chunk information upon return. See 
- *			  <Col_RopeChunk>.
  *
  * Note:
  *	By construction, indices are guaranteed to be within valid range.
  *
- * Result:
- *	The Unicode codepoint of the character at the given index.
+ * Results:
+ *	The Unicode codepoint of the character at the given index. Additionally:
+ *
+ *	lengthPtr	- Actual length.
+ *	chunkPtr	- Chunk information. See <Col_RopeChunk>.
  *
  * See also: 
  *	<Col_CustomRopeType>

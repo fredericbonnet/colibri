@@ -115,7 +115,8 @@ Format: 1.51
 
 Alter Language: C/C++
 
-   Ignore Prefixes in Index: Col_ COL_
+   Ignore Prefixes in Index: Col Col_ COL_
+   Ignore File Prefixes in Index: col colibri
    Type Prototype Ender: ;
    Constant Prototype Ender: \n
    Enumeration Prototype Ender: ;

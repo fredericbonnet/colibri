@@ -8,7 +8,7 @@
  *
  *	They come in both immutable and mutable forms :
  *
- *	- Immutable vectors are flat arrays of bounded length.
+ *	- Immutable vectors are flat arrays of fixed length.
  *
  *	- Mutable vectors are flat arrays that can grow up to a maximum length, 
  *	whose content is directly modifiable through a C pointer. They can be
@@ -18,16 +18,25 @@
  *	<colVector.h>
  */
 
-#include "colibri.h"
+#include "include/colibri.h"
 #include "colInternal.h"
+
+#include "colWordInt.h"
+#include "colVectorInt.h"
 
 #include <stdlib.h>
 #include <limits.h>
 #include <string.h>
 
 
+/*
+================================================================================
+Section: Immutable Vectors
+================================================================================
+*/
+
 /****************************************************************************
- * Section: Immutable Vector Creation
+ * Group: Immutable Vector Creation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -183,8 +192,14 @@ Col_NewVectorNV(
 }
 
 
+/*
+================================================================================
+Section: Mutable Vectors
+================================================================================
+*/
+
 /****************************************************************************
- * Section: Mutable Vector Creation
+ * Group: Mutable Vector Creation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -290,7 +305,7 @@ Col_NewMVector(
 
 
 /****************************************************************************
- * Section: Mutable Vector Operations
+ * Group: Mutable Vector Operations
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------

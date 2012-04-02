@@ -135,3 +135,21 @@ Alter Topic Type: Enumeration
 
    Add Keywords:
       internal enum, internal enums
+
+
+Topic Type: Algorithm
+
+   Plural: Algorithms
+   Can Group With: Data Structures
+
+   Keywords:
+      algorithm, algorithms
+
+
+Topic Type: Data Structure
+
+   Plural: Data Structures
+   Can Group With: Algorithms
+
+   Keywords:
+      data structure, data structures

@@ -10,8 +10,13 @@
  *	<colWord.h>
  */
 
-#include "colibri.h"
+#include "include/colibri.h"
 #include "colInternal.h"
+
+#include "colWordInt.h"
+#include "colRopeInt.h"
+#include "colVectorInt.h"
+#include "colListInt.h"
 
 #include <string.h>
 #include <limits.h>
@@ -191,17 +196,35 @@ Col_GetWordInfo(
 
 	case WORD_TYPE_CHAR:
 	    if (dataPtr) {
-		dataPtr->string._smallData = (Col_Word) WORD_CHAR_GET(word);
-		dataPtr->string.format = COL_UCS4;
-		dataPtr->string.data = &dataPtr->string._smallData;
-		dataPtr->string.byteLength = 4;
+		dataPtr->string.format 
+			= (Col_StringFormat) WORD_CHAR_WIDTH(word);
+		dataPtr->string.byteLength = CHAR_WIDTH(dataPtr->string.format);
+		switch (dataPtr->string.format) {
+		    case 1:
+			dataPtr->string._smallData.c1
+				= (Col_Word) WORD_CHAR_GET(word);
+			dataPtr->string.data = &dataPtr->string._smallData.c1;
+			break;
+
+		    case 2:
+			dataPtr->string._smallData.c2
+				= (Col_Word) WORD_CHAR_GET(word);
+			dataPtr->string.data = &dataPtr->string._smallData.c2;
+			break;
+
+		    case 4:
+			dataPtr->string._smallData.c4
+				= (Col_Word) WORD_CHAR_GET(word);
+			dataPtr->string.data = &dataPtr->string._smallData.c4;
+			break;
+		}
 	    }
 	    return COL_STRING;
 
 	case WORD_TYPE_SMALLSTR:
 	    if (dataPtr) {
-		dataPtr->string._smallData = (uintptr_t) word;
 		dataPtr->string.format = COL_UCS1;
+		dataPtr->string._smallData.s = word;
 		dataPtr->string.data 
 			= WORD_SMALLSTR_DATA(dataPtr->string._smallData);
 		dataPtr->string.byteLength = WORD_SMALLSTR_LENGTH(word);
@@ -227,16 +250,18 @@ Col_GetWordInfo(
 
 	case WORD_TYPE_UCSSTR:
 	    if (dataPtr) {
-		dataPtr->string.format = WORD_UCSSTR_FORMAT(word);
+		dataPtr->string.format 
+			= (Col_StringFormat) WORD_UCSSTR_FORMAT(word);
 		dataPtr->string.data = WORD_UCSSTR_DATA(word);
 		dataPtr->string.byteLength = WORD_UCSSTR_LENGTH(word)
-			* WORD_UCSSTR_FORMAT(word);
+			* CHAR_WIDTH(WORD_UCSSTR_FORMAT(word));
 	    }
 	    return COL_STRING;
 
 	case WORD_TYPE_UTFSTR:
 	    if (dataPtr) {
-		dataPtr->string.format = -WORD_UCSSTR_FORMAT(word);
+		dataPtr->string.format 
+			= (Col_StringFormat) WORD_UTFSTR_FORMAT(word);
 		dataPtr->string.data = WORD_UTFSTR_DATA(word);
 		dataPtr->string.byteLength = WORD_UTFSTR_BYTELENGTH(word);
 	    }
@@ -286,6 +311,9 @@ Col_GetWordInfo(
 	case WORD_TYPE_INTHASHMAP:
 	case WORD_TYPE_INTTRIEMAP:
 	    return COL_INTMAP;
+
+	case WORD_TYPE_STRBUF:
+	    return COL_STRBUF;
 
 	/*
 	 * Custom word.

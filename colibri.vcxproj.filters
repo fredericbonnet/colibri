@@ -59,33 +59,39 @@
     <ClCompile Include="colWord.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="colStrBuf.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="colHash.h">
+    <ClInclude Include="include\colHash.h">
       <Filter>Public Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="colibri.h">
+    <ClInclude Include="include\colibri.h">
       <Filter>Public Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="colList.h">
+    <ClInclude Include="include\colList.h">
       <Filter>Public Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="colMap.h">
+    <ClInclude Include="include\colMap.h">
       <Filter>Public Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="colRope.h">
+    <ClInclude Include="include\colRope.h">
       <Filter>Public Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="colTrie.h">
+    <ClInclude Include="include\colStrBuf.h">
       <Filter>Public Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="colUtils.h">
+    <ClInclude Include="include\colTrie.h">
       <Filter>Public Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="colVector.h">
+    <ClInclude Include="include\colUtils.h">
       <Filter>Public Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="colWord.h">
+    <ClInclude Include="include\colVector.h">
+      <Filter>Public Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\colWord.h">
       <Filter>Public Header Files</Filter>
     </ClInclude>
     <ClInclude Include="colConf.h">
@@ -98,6 +104,30 @@
       <Filter>Internal Header Files</Filter>
     </ClInclude>
     <ClInclude Include="platform\win32\colWin32Platform.h">
+      <Filter>Internal Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colStrBufInt.h">
+      <Filter>Internal Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colTrieInt.h">
+      <Filter>Internal Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colHashInt.h">
+      <Filter>Internal Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colMapInt.h">
+      <Filter>Internal Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colListInt.h">
+      <Filter>Internal Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colVectorInt.h">
+      <Filter>Internal Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colRopeInt.h">
+      <Filter>Internal Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="colWordInt.h">
       <Filter>Internal Header Files</Filter>
     </ClInclude>
   </ItemGroup>

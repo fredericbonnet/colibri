@@ -26,8 +26,12 @@
  *	<colList.h>, <colVector.h>, <colRope.c>
  */
 
-#include "colibri.h"
+#include "include/colibri.h"
 #include "colInternal.h"
+
+#include "colWordInt.h"
+#include "colVectorInt.h"
+#include "colListInt.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -63,60 +67,81 @@ static void		NextChunk(struct ListChunkTraverseInfo *info,
 static ColListIterLeafAtProc IterAtVector, IterAtVoid;
 
 
+/*
+================================================================================
+Internal Section: List Internals
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Algorithm: List Tree Balancing
+ *
+ *	Large lists are built by concatenating several sublists, forming a
+ *	balanced binary tree. A balanced tree is one where the depth of the
+ *	left and right arms do not differ by more than one level.
+ *
+ *	List trees are self-balanced by construction: when two lists are 
+ *	concatenated, if their respective depths differ by more than 1, then 
+ *	the tree is recursively rebalanced by splitting and merging subarms. 
+ *	There are four major cases, two if we consider symmetry:
+ *
+ *	- Deepest subtree is an outer branch (i.e. the left resp. right child of
+ *	  the left resp. right arm). In this case the tree is rotated: the
+ *	  opposite child is moved and concatenated with the opposite arm.
+ *	  For example, with left being deepest:
+ *
+ * (start diagram)
+ *  Before:
+ *            concat = (left1 + left2) + right
+ *           /      \
+ *         left    right
+ *        /    \
+ *     left1  left2
+ *    /     \
+ *   ?       ?
+ *
+ *
+ * After:
+ *           concat = left1 + (left2 + right)
+ *          /      \
+ *     left1        concat
+ *    /     \      /      \
+ *   ?       ?   left2   right
+ * (end)
+ *
+ *	- Deepest subtree is an inner branch (i.e. the right resp. left child of
+ *	  the left resp. right arm). In this case the subtree is split 
+ *	  between both arms. For example, with left being deepest:
+ *
+ * (start diagram)
+ *  Before:
+ *          concat = (left1 + (left21+left22)) + right
+ *         /      \
+ *       left    right
+ *      /    \
+ *   left1  left2
+ *         /     \
+ *      left21  left22
+ *
+ *
+ * After:
+ *              concat = (left1 + left21) + (left22 + right)
+ *             /      \
+ *       concat        concat
+ *      /      \      /      \
+ *   left1  left21  left22  right
+ * (end)
+ *---------------------------------------------------------------------------*/
+
+
+/*
+================================================================================
+Section: Immutable Lists
+================================================================================
+*/
+
 /****************************************************************************
- * Internal Section: Internal Definitions
- ****************************************************************************/
-
-/*---------------------------------------------------------------------------
- * Internal Constants: Short List Constants
- *
- *	Constants controlling the creation of short lists during sublist/
- *	concatenation. Lists built this way normally use sublist and concat 
- *	nodes, but to avoid fragmentation, multiple short lists are flattened 
- *	into a single vector.
- *
- *  MAX_SHORT_LIST_SIZE		- Maximum number of cells a short list can take.
- *  MAX_SHORT_LIST_LENGTH	- Maximum number of elements a short list can 
- *				  take.
- *---------------------------------------------------------------------------*/
-
-#define MAX_SHORT_LIST_SIZE \
-    3
-#define MAX_SHORT_LIST_LENGTH \
-    VECTOR_MAX_LENGTH(MAX_SHORT_LIST_SIZE*CELL_SIZE)
-
-/*---------------------------------------------------------------------------
- * Internal Constants: Short Mutable Vector Constants
- *
- *	Constants controlling the creation of short mutable vectors during 
- *	immutable list conversions. When setting an element of a mutable list,
- *	if the leaf node containing this element is immutable we convert it to
- *	a mutable node of this size in case nearby elements get modified later.
- *	This amortizes the conversion overhead over time.
- *
- *  MAX_SHORT_MVECTOR_SIZE	- Maximum number of cells a short mutable vector
- *				  can take.
- *  MAX_SHORT_MVECTOR_LENGTH	- Maximum number of elements a short mutable
- *				  vector can take.
- *---------------------------------------------------------------------------*/
-
-#define MAX_SHORT_MVECTOR_SIZE \
-    10
-#define MAX_SHORT_MVECTOR_LENGTH \
-    VECTOR_MAX_LENGTH(MAX_SHORT_MVECTOR_SIZE*CELL_SIZE)
-
-/*---------------------------------------------------------------------------
- * Internal Constant: MAX_ITERATOR_SUBNODE_DEPTH
- *
- *	Max depth of subnodes in iterators.
- *---------------------------------------------------------------------------*/
-
-#define MAX_ITERATOR_SUBNODE_DEPTH \
-    3
-
-
-/****************************************************************************
- * Section: Immutable List Creation
+ * Group: Immutable List Creation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -177,7 +202,7 @@ Col_NewList(
 
 
 /****************************************************************************
- * Section: Immutable List Access
+ * Group: Immutable List Access
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -318,13 +343,62 @@ Col_ListAt(
 
 
 /****************************************************************************
- * Section: Immutable List Operations
+ * Group: Immutable List Operations
  ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Constant: MAX_SHORT_LIST_SIZE
+ *
+ *	Maximum number of cells a short list can take. This constant controls
+ *	the creation of short leaves during sublist/concatenation. Lists built
+ *	this way normally use sublist and concat nodes, but to avoid 
+ *	fragmentation, multiple short lists are flattened into a single vector.
+ *---------------------------------------------------------------------------*/
+
+#define MAX_SHORT_LIST_SIZE	3
+
+/*---------------------------------------------------------------------------
+ * Internal Constant: MAX_SHORT_LIST_LENGTH
+ *
+ *	Maximum number of elements a short list can take.
+ * See also:
+ *	<MAX_SHORT_LIST_SIZE>
+ *---------------------------------------------------------------------------*/
+
+#define MAX_SHORT_LIST_LENGTH	VECTOR_MAX_LENGTH(MAX_SHORT_LIST_SIZE*CELL_SIZE)
+
+/*---------------------------------------------------------------------------
+ * Internal Constant: MAX_SHORT_MVECTOR_SIZE
+ *
+ *	Maximum number of cells a short mutable vector can take. This constant
+ *	controls the creation of short mutable vectors during immutable list 
+ *	conversions. When setting an element of a mutable list, if the leaf node
+ *	containing this element is immutable we convert it to a mutable node of
+ *	this size in case nearby elements get modified later. This amortizes the
+ *	conversion overhead over time.
+ *
+ *  MAX_SHORT_MVECTOR_SIZE	- 
+ *  MAX_SHORT_MVECTOR_LENGTH	- Maximum number of elements a short mutable
+ *				  vector can take.
+ *---------------------------------------------------------------------------*/
+
+#define MAX_SHORT_MVECTOR_SIZE		10
+
+/*---------------------------------------------------------------------------
+ * Internal Constant: MAX_SHORT_MVECTOR_LENGTH
+ *
+ *	Maximum number of elements a short mutable vector can take.
+ *
+ * See also:
+ *	<MAX_SHORT_MVECTOR_SIZE>
+ *---------------------------------------------------------------------------*/
+
+#define MAX_SHORT_MVECTOR_LENGTH	VECTOR_MAX_LENGTH(MAX_SHORT_MVECTOR_SIZE*CELL_SIZE)
 
 /*---------------------------------------------------------------------------
  * Internal Typedef: MergeChunksInfo
  *
- *	Structure used to collect data during the traversal of lists to merge
+ *	Structure used to collect data during the traversal of lists when merged
  *	into one vector.
  *
  * Fields:
@@ -771,58 +845,8 @@ Col_Sublist(
  * Side effects:
  *	May allocate memory cells.
  *
- * Rebalancing:
- *	The resulting concat will have a depth equal to the largest of both 
- *	left and right arms' depth plus 1. If they differ by more than 1 and the
- *	right arm isn't circular, then the tree is recursively rebalanced. There
- *	are four major cases, two if we consider symmetry:
- *
- *	- Deepest subtree is an outer branch (i.e. the left resp. right child of
- *	  the left resp. right arm). In this case the tree is rotated: the
- *	  opposite child is moved and concatenated with the opposite arm.
- *	  For example, with left being deepest:
- *
- * (start diagram)
- * Before:
- *            concat = (left1 + left2) + right
- *           /      \
- *         left    right
- *        /    \
- *     left1  left2
- *    /     \
- *   ?       ?
- *
- *
- * After:
- *           concat = left1 + (left2 + right)
- *          /      \
- *     left1        concat
- *    /     \      /      \
- *   ?       ?   left2   right
- * (end)
- *
- *	- Deepest subtree is an inner branch (i.e. the right resp. left child of
- *	  the left resp. right arm). In this case the subtree is split 
- *	  between both arms. For example, with left being deepest:
- *
- * (start diagram)
- *  Before:
- *          concat = (left1 + (left21+left22)) + right
- *         /      \
- *       left    right
- *      /    \
- *   left1  left2
- *         /     \
- *      left21  left22
- *
- *
- * After:
- *              concat = (left1 + left21) + (left22 + right)
- *             /      \
- *       concat        concat
- *      /      \      /      \
- *   left1  left21  left22  right
- * (end)
+ * See also:
+ *	<List Tree Balancing>
  *---------------------------------------------------------------------------*/
 
 Col_Word
@@ -1585,8 +1609,1207 @@ Col_ListReplace(
 }
 
 
+
+
 /****************************************************************************
- * Section: Mutable List Creation
+ * Group: Immutable List Traversal
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Typedef: ListChunkTraverseInfo
+ *
+ *	Structure used during recursive list chunk traversal. This avoids
+ *	recursive procedure calls thanks to a pre-allocated backtracking 
+ *	structure: since the algorithms only recurse on concat nodes and since
+ *	we know their depth, we can allocate the needed space once for all.
+ *
+ * Fields:
+ *	backtracks	- Pre-allocated backtracking structure.
+ *	list		- Currently traversed list.
+ *	start		- Index of first element traversed in list.
+ *	max		- Max number of elements traversed in list.
+ *	maxDepth	- Depth of toplevel concat node.
+ *	prevDepth	- Depth of next concat node for backtracking.
+ *
+ * Backtrack stack element fields:
+ *	backtracks.prevDepth	- Depth of next concat node for backtracking.
+ *	backtracks.list		- List.
+ *	backtracks.max		- Max number of elements traversed in list.
+ *
+ * See also:
+ *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>
+ *---------------------------------------------------------------------------*/
+
+typedef struct ListChunkTraverseInfo {
+    struct {
+	int prevDepth;
+	Col_Word list;
+	size_t max;
+    } *backtracks;
+    Col_Word list;
+    size_t start, max;
+    int maxDepth, prevDepth;
+} ListChunkTraverseInfo;
+
+/*---------------------------------------------------------------------------
+ * Internal Function: GetChunk
+ *
+ *	Get chunk from given traversal info.
+ *
+ * Arguments:
+ *	info		- Traversal info.
+ *	elements	- Chunk info for leaf.
+ *	reverse		- Whether to traverse in reverse order.
+ *
+ * See also:
+ *	<ListChunkTraverseInfo>, <Col_TraverseListChunksN>, 
+ *	<Col_TraverseListChunks>
+ *---------------------------------------------------------------------------*/
+
+static void
+GetChunk(
+    ListChunkTraverseInfo *info,
+    const Col_Word **elements,
+    int reverse)
+{
+    int type;
+
+    for (;;) {
+	/*
+	 * Descend into structure until we find a suitable leaf.
+	 */
+
+	type = WORD_TYPE(info->list);
+	switch (type) {
+	    case WORD_TYPE_CIRCLIST:
+		/* 
+		 * Recurse on core.
+		 */
+
+		info->list = WORD_CIRCLIST_CORE(info->list);
+		continue;
+
+	    case WORD_TYPE_WRAP:
+		/* 
+		 * Recurse on source.
+		 */
+
+		info->list = WORD_WRAP_SOURCE(info->list);
+		continue;
+
+	    case WORD_TYPE_SUBLIST:
+		/* 
+		 * Sublist: recurse on source list.
+		 */
+
+		info->start += WORD_SUBLIST_FIRST(info->list);
+		info->list = WORD_SUBLIST_SOURCE(info->list);
+		continue;
+        	    
+	    case WORD_TYPE_CONCATLIST:
+	    case WORD_TYPE_MCONCATLIST: {
+		/* 
+		 * Concat: descend into covered arms.
+		 */
+
+		int depth;
+		size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(info->list);
+		if (leftLength == 0) {
+		    leftLength = Col_ListLength(
+			    WORD_CONCATLIST_LEFT(info->list));
+		}
+		if (info->start + (reverse ? 0 : info->max-1) < leftLength) {
+		    /* 
+		     * Recurse on left arm only. 
+		     */
+
+		    info->list = WORD_CONCATLIST_LEFT(info->list);
+		    continue;
+		}
+		if (info->start - (reverse ? info->max-1 : 0) >= leftLength) {
+		    /* 
+		     * Recurse on right arm only. 
+		     */
+
+		    info->start -= leftLength;
+		    info->list = WORD_CONCATLIST_RIGHT(info->list);
+		    continue;
+		} 
+
+		/*
+		 * Push right (resp. left for reverse) onto stack and recurse on
+		 * left (resp. right).
+		 */
+
+		ASSERT(info->backtracks);
+		depth = WORD_CONCATLIST_DEPTH(info->list);
+		ASSERT(depth <= info->maxDepth);
+		info->backtracks[depth-1].prevDepth = info->prevDepth;
+		info->prevDepth = depth;
+		if (reverse) {
+		    ASSERT(info->start >= leftLength);
+		    info->backtracks[depth-1].list 
+			    = WORD_CONCATLIST_LEFT(info->list);
+		    info->backtracks[depth-1].max = info->max
+			    - (info->start-leftLength+1);
+		    info->start -= leftLength;
+		    info->max = info->start+1;
+		    info->list = WORD_CONCATLIST_RIGHT(info->list);
+		} else {
+		    ASSERT(info->start < leftLength);
+		    info->backtracks[depth-1].list 
+			    = WORD_CONCATLIST_RIGHT(info->list);
+		    info->backtracks[depth-1].max = info->max
+			    - (leftLength-info->start);
+		    info->max = leftLength-info->start;
+		    info->list = WORD_CONCATLIST_LEFT(info->list);
+		}
+		continue;
+	    }
+
+	    case WORD_TYPE_MLIST:
+		/* 
+		 * Recurse on list root.
+		 */
+
+		info->list = WORD_MLIST_ROOT(info->list);
+		continue;
+
+	    /* WORD_TYPE_UNKNOWN */
+	}
+	break;
+    }
+
+    /*
+     * Get leaf data.
+     */
+
+    ASSERT(info->start + (reverse ? info->max-1 : 0) >= 0);
+    ASSERT(info->start + (reverse ? 0 : info->max-1) < Col_ListLength(info->list));
+    switch (type) {
+	case WORD_TYPE_VECTOR:
+	case WORD_TYPE_MVECTOR:
+	    *elements = WORD_VECTOR_ELEMENTS(info->list) + info->start
+		    - (reverse ? info->max-1 : 0);
+	    break;
+
+	case WORD_TYPE_VOIDLIST:
+	    *elements = COL_LISTCHUNK_VOID;
+	    break;
+
+	/* WORD_TYPE_UNKNOWN */
+
+	default:
+	    /* CANTHAPPEN */
+	    ASSERT(0);
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: NextChunk
+ *
+ *	Get next chunk in traversal order.
+ *
+ * Arguments:
+ *	info	- Traversal info.
+ *	nb	- Number of elements to skip, must be < info->max.
+ *	reverse	- Whether to traverse in reverse order.
+ *
+ * See also:
+ *	<ListChunkTraverseInfo>, <Col_TraverseListChunksN>, 
+ *	<Col_TraverseListChunks>
+ *---------------------------------------------------------------------------*/
+
+static void 
+NextChunk(
+    ListChunkTraverseInfo *info,
+    size_t nb,
+    int reverse)
+{
+    ASSERT(info->max >= nb);
+    info->max -= nb;
+    if (info->max > 0) {
+	/*
+	 * Still in leaf, advance.
+	 */
+
+	if (reverse) {
+	    info->start -= nb;
+	} else {
+	    info->start += nb;
+	}
+    } else if (info->prevDepth == INT_MAX) {
+	/*
+	 * Already at toplevel => end of list.
+	 */
+
+	info->list = WORD_NIL;
+    } else {
+	/*
+	 * Reached leaf bound, backtracks.
+	 */
+
+	ASSERT(info->backtracks);
+	info->list = info->backtracks[info->prevDepth-1].list;
+	info->max = info->backtracks[info->prevDepth-1].max;
+	info->start = (reverse ? Col_ListLength(info->list)-1 : 0);
+	info->prevDepth = info->backtracks[info->prevDepth-1].prevDepth;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_TraverseListChunksN
+ *
+ *	Iterate over the chunks of a number of lists.
+ *
+ *	For each traversed chunk, proc is called back with the opaque data as
+ *	well as the position within the lists. If it returns a non-zero result 
+ *	then the iteration ends. 
+ *
+ * Note:
+ *	The algorithm is naturally recursive but this implementation avoids
+ *	recursive calls thanks to a stack-allocated backtracking structure.
+ *
+ * Arguments:
+ *	number		- Number of lists to traverse.
+ *	lists		- Lists to traverse.
+ *	start		- Index of first element.
+ *	max		- Max number of elements.
+ *	proc		- Callback proc called on each chunk.
+ *	clientData	- Opaque data passed as is to above proc.
+ *
+ * Results:
+ *	The return value of the last called proc, or -1 if no traversal was
+ *	performed. Additionally:
+ *
+ *	lengthPtr	- If non-NULL, incremented by the total number of 
+ *			  elements traversed upon completion.
+ *---------------------------------------------------------------------------*/
+
+int 
+Col_TraverseListChunksN(
+    size_t number,
+    Col_Word *lists,
+    size_t start,
+    size_t max,
+    Col_ListChunksTraverseProc *proc,
+    Col_ClientData clientData,
+    size_t *lengthPtr)
+{
+    size_t i;
+    ListChunkTraverseInfo *info;
+    const Col_Word **elements;
+    int result;
+
+    info = alloca(sizeof(*info) * number);
+    elements = alloca(sizeof(*elements) * number);
+
+    for (i=0; i < number; i++) {
+	size_t listLength = Col_ListLength(lists[i]);
+	if (start > listLength) {
+	    /* 
+	     * Start is past the end of the list.
+	     */
+
+	    info[i].max = 0;
+	} else if (max > listLength-start) {
+	    /* 
+	     * Adjust max to the remaining length. 
+	     */
+
+	    info[i].max = listLength-start;
+	} else {
+	    info[i].max = max;
+	}
+    }
+
+    max = 0;
+    for (i=0; i < number; i++) {
+	if (max < info[i].max) {
+	    max = info[i].max;
+	}
+    }
+    if (max == 0) {
+	/*
+	 * Nothing to traverse.
+	 */
+
+	return -1;
+    }
+
+    for (i=0; i < number; i++) {
+	ASSERT(info[i].max <= max);
+	info[i].list = (info[i].max ? lists[i] : WORD_NIL);
+	info[i].start = start;
+	info[i].maxDepth = GetDepth(lists[i]);
+	info[i].backtracks = (info[i].maxDepth ? 
+	    alloca(sizeof(*info[i].backtracks) * info[i].maxDepth) : NULL);
+	info[i].prevDepth = INT_MAX;
+    }
+
+    for (;;) {
+	for (i=0; i < number; i++) {
+	    if (!info[i].list) {
+		/*
+		 * Past end of list.
+		 */
+
+		elements[i] = NULL;
+		continue;
+	    }
+
+	    GetChunk(info+i, elements+i, 0);
+	}
+
+	/*
+	 * Limit chunk lengths to the shortest one.
+	 */
+
+	max = SIZE_MAX;
+	for (i=0; i < number; i++) {
+	    if (info[i].list && max > info[i].max) {
+		max = info[i].max;
+	    }
+	}
+
+	/*
+	 * Call proc on leaves data.
+	 */
+
+	if (lengthPtr) *lengthPtr += max;
+	result = proc(start, max, number, elements, clientData);
+	start += max;
+	if (result != 0) {
+	    /*
+	     * Stop there.
+	     */
+
+	    return result;
+	} else {
+	    /*
+	     * Continue iteration.
+	     */
+
+	    int next = 0;
+	    for (i=0; i < number; i++) {
+		if (info[i].list) NextChunk(info+i, max, 0);
+		if (info[i].list) next = 1;
+	    }
+	    if (!next) {
+		/*
+		 * Reached end of all lists, stop there.
+		 */
+
+		return 0;
+	    }
+	}
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_TraverseListChunks
+ *
+ *	Iterate over the chunks of a list.
+ *
+ *	For each traversed chunk, proc is called back with the opaque data as
+ *	well as the position within the list. If it returns a non-zero result 
+ *	then the iteration ends. 
+ *
+ * Note:
+ *	The algorithm is naturally recursive but this implementation avoids
+ *	recursive calls thanks to a stack-allocated backtracking structure. 
+ *	This procedure is an optimized version of <Col_TraverseListChunksN>.
+ *
+ * Arguments:
+ *	list		- List to traverse.
+ *	start		- Index of first element.
+ *	max		- Max number of elements.
+ *	reverse		- Whether to traverse in reverse order.
+ *	proc		- Callback proc called on each chunk.
+ *	clientData	- Opaque data passed as is to above proc.
+ *
+ * Results:
+ *	The return value of the last called proc, or -1 if no traversal was
+ *	performed. Additionally:
+ *
+ *	lengthPtr	- If non-NULL, incremented by the total number of 
+ *			  elements traversed upon completion.
+ *---------------------------------------------------------------------------*/
+
+int 
+Col_TraverseListChunks(
+    Col_Word list,
+    size_t start,
+    size_t max,
+    int reverse,
+    Col_ListChunksTraverseProc *proc,
+    Col_ClientData clientData,
+    size_t *lengthPtr)
+{
+    ListChunkTraverseInfo info;
+    const Col_Word *elements;
+    int result;
+    size_t listLength = Col_ListLength(list);
+
+    if (listLength == 0) {
+	/*
+	 * Nothing to traverse.
+	 */
+
+	return -1;
+    }
+
+    if (reverse) {
+	if (start > listLength) {
+	    /* 
+	     * Start is past the end of the list.
+	     */
+
+	    start = listLength-1;
+	}
+	if (max > start+1) {
+	    /* 
+	     * Adjust max to the remaining length. 
+	     */
+
+	    max = start+1;
+	}
+    } else {
+	if (start > listLength) {
+	    /* 
+	     * Start is past the end of the list.
+	     */
+
+	    return -1;
+	}
+	if (max > listLength-start) {
+	    /* 
+	     * Adjust max to the remaining length. 
+	     */
+
+	    max = listLength-start;
+	}
+    }
+
+    if (max == 0) {
+	/*
+	 * Nothing to traverse.
+	 */
+
+	return -1;
+    }
+
+    info.list = list;
+    info.start = start;
+    info.max = max;
+    info.maxDepth = GetDepth(list);
+    info.backtracks = (info.maxDepth ? 
+	    alloca(sizeof(*info.backtracks) * info.maxDepth) : NULL);
+    info.prevDepth = INT_MAX;
+
+    for (;;) {
+	GetChunk(&info, &elements, reverse);
+	max = info.max;
+
+	/*
+	 * Call proc on leaf data.
+	 */
+
+	if (lengthPtr) *lengthPtr += max;
+	if (reverse) {
+	    result = proc(start-max+1, max, 1, &elements, clientData);
+	    start -= max;
+	} else {
+	    result = proc(start, max, 1, &elements, clientData);
+	    start += max;
+	}
+	if (result != 0) {
+	    /*
+	     * Stop there.
+	     */
+
+	    return result;
+	} else {
+	    /*
+	     * Continue iteration.
+	     */
+
+	    NextChunk(&info, max, reverse);
+	    if (!info.list) {
+		/*
+		 * Reached end of list, stop there.
+		 */
+
+		return 0;
+	    }
+	}
+    }
+}
+
+
+/****************************************************************************
+ * Group: Immutable List Iteration
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Internal Constant: MAX_ITERATOR_SUBNODE_DEPTH
+ *
+ *	Max depth of subnodes in iterators.
+ *---------------------------------------------------------------------------*/
+
+#define MAX_ITERATOR_SUBNODE_DEPTH	3
+
+/*---------------------------------------------------------------------------
+ * Internal Function: IterAtVector
+ *
+ *	Element access proc for vector leaves from iterators. Follows
+ *	<ColListIterLeafAtProc> signature.
+ *
+ * Arguments:
+ *	leaf	- Leaf node.
+ *	index	- Leaf-relative index of element.
+ *
+ * Result:
+ *	Element at given index.
+ *
+ * See also:
+ *	<ColListIterLeafAtProc>, <ColListIterator>, 
+ *	<ColListIterUpdateTraversalInfo>
+ *---------------------------------------------------------------------------*/
+
+static Col_Word 
+IterAtVector(
+    Col_Word leaf, 
+    size_t index)
+{
+    return WORD_VECTOR_ELEMENTS(leaf)[index];
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: IterAtVoid
+ *
+ *	Element access proc for void list leaves from iterators. Follows
+ *	<ColListIterLeafAtProc> signature.
+ *
+ * Arguments:
+ *	leaf	- Leaf node.
+ *	index	- Leaf-relative index of element.
+ *
+ * Result:
+ *	Always nil.
+ *
+ * See also:
+ *	<ColListIterLeafAtProc>, <ColListIterator>, 
+ *	<ColListIterUpdateTraversalInfo>
+ *---------------------------------------------------------------------------*/
+
+static Col_Word 
+IterAtVoid(
+    Col_Word leaf, 
+    size_t index)
+{
+    return WORD_NIL;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: ColListIterUpdateTraversalInfo
+ *
+ *	Get the deepest subnodes needed to access the current element 
+ *	designated by the iterator.
+ *
+ *	Iterators point to the leaf containing the current element. To avoid 
+ *	rescanning the whole tree when leaving this leaf, it also stores a
+ *	higher level subnode containing this leaf, so that traversing all this
+ *	subnode's children is fast. The subnode is the leaf's highest ancestor
+ *	with a maximum depth of MAX_ITERATOR_SUBNODE_DEPTH. Some indices are
+ *	stored along with this sublist in a way that traversal can be resumed
+ *	quickly: If the current index is withing the sublist's range of 
+ *	validity, then traversal starts at the sublist, else it restarts from
+ *	the root.
+ *
+ *	Traversal info is updated lazily, each time element data needs to
+ *	be retrieved. This means that a blind iteration over an arbitrarily 
+ *	complex list is no more computationally intensive than over a flat 
+ *	array.
+ *
+ * Argument:
+ *	it	- The iterator to update.
+ *---------------------------------------------------------------------------*/
+
+void
+ColListIterUpdateTraversalInfo(
+    Col_ListIterator *it)
+{
+    Col_Word node;
+    size_t first, last, offset;
+
+    if (it->traversal.subnode && (it->index < it->traversal.first 
+		    || it->index > it->traversal.last)) {
+	/*
+	 * Out of range.
+	 */
+
+	it->traversal.subnode = WORD_NIL;
+    }
+
+    /*
+     * Search for leaf node, remember containing subnode in the process.
+     */
+
+    if (it->traversal.subnode) {
+	node = it->traversal.subnode;
+    } else {
+	node = it->list;
+	it->traversal.first = 0;
+	it->traversal.last = SIZE_MAX;
+	it->traversal.offset = 0;
+    }
+    first = it->traversal.first;
+    last = it->traversal.last;
+    offset = it->traversal.offset;
+
+    it->traversal.leaf = WORD_NIL;
+    while (!it->traversal.leaf) {
+	size_t subFirst=first, subLast=last;
+
+	switch (WORD_TYPE(node)) {
+	    case WORD_TYPE_CIRCLIST:
+		/*
+		 * Recurse into core.
+		 */
+
+		node = WORD_CIRCLIST_CORE(node);
+		break;
+
+	    case WORD_TYPE_VOIDLIST:
+		it->traversal.leaf = node;
+		it->traversal.index = it->index - offset;
+		it->traversal.proc = IterAtVoid;
+		ASSERT(it->traversal.index < WORD_VOIDLIST_LENGTH(node));
+		break;
+
+	    case WORD_TYPE_VECTOR:
+	    case WORD_TYPE_MVECTOR:
+		it->traversal.leaf = node;
+		it->traversal.index = it->index - offset;
+		it->traversal.proc = IterAtVector;
+		ASSERT(it->traversal.index < WORD_VECTOR_LENGTH(node));
+		break;
+
+	    case WORD_TYPE_SUBLIST: 
+		/*
+		 * Always remember as subnode.
+		 */
+
+		it->traversal.subnode = node;
+		it->traversal.first = first;
+		it->traversal.last = last;
+		it->traversal.offset = offset;
+
+		/*
+		 * Recurse into source.
+		 * Note: offset may become negative (in 2's complement) but it 
+		 * doesn't matter.
+		 */
+
+		offset -= WORD_SUBLIST_FIRST(node);
+		subLast = first - WORD_SUBLIST_FIRST(node) 
+			+ WORD_SUBLIST_LAST(node);
+		node = WORD_SUBLIST_SOURCE(node);
+		break;
+
+	    case WORD_TYPE_CONCATLIST:
+	    case WORD_TYPE_MCONCATLIST: {
+		size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(node);
+		if (leftLength == 0) {
+		    leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(node));
+		}
+		if (WORD_CONCATLIST_DEPTH(node) == MAX_ITERATOR_SUBNODE_DEPTH
+			|| !it->traversal.subnode) {
+		    /*
+		     * Remember as subnode.
+		     */
+
+		    it->traversal.subnode = node;
+		    it->traversal.first = first;
+		    it->traversal.last = last;
+		    it->traversal.offset = offset;
+		}
+
+		if (it->index - offset < leftLength) {
+		    /*
+		     * Recurse into left arm.
+		     */
+
+		    subLast = offset + leftLength-1;
+		    node = WORD_CONCATLIST_LEFT(node);
+		} else {
+		    /*
+		     * Recurse into right arm.
+		     */
+
+		    subFirst = offset + leftLength;
+		    offset += leftLength;
+		    node = WORD_CONCATLIST_RIGHT(node);
+		}
+		break;
+	    }
+
+	    case WORD_TYPE_MLIST:
+		/*
+		 * Recurse into root.
+		 */
+
+		node = WORD_MLIST_ROOT(node);
+		break;
+
+	    /* WORD_TYPE_UNKNOWN */
+
+	    default:
+		/* CANTHAPPEN */
+		ASSERT(0);
+		return;
+	}
+
+	/*
+	 * Shorten validity range.
+	 */
+
+	if (subFirst > first) first = subFirst;
+	if (subLast < last) last = subLast;
+    }
+    if (!it->traversal.subnode) {
+	it->traversal.subnode = it->traversal.leaf;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterBegin
+ *
+ *	Initialize the list iterator so that it points to the index-th
+ *	element within the list. If index points past the end of the list, the
+ *	iterator is initialized to the end iterator (i.e. whose list field is 
+ *	nil).
+ *
+ * Arguments:
+ *	list	- List to iterate over.
+ *	index	- Index of element.
+ *	it	- Iterator to initialize.
+ *
+ * Result:
+ *	Whether the iterator looped or not.
+ *---------------------------------------------------------------------------*/
+
+int
+Col_ListIterBegin(
+    Col_Word list,
+    size_t index,
+    Col_ListIterator *it)
+{
+    size_t length;
+    int looped=0;
+
+    length = Col_ListLength(list);
+    if (index >= length) {
+	size_t loop = Col_ListLoopLength(list);
+	if (!loop) {
+	    /*
+	     * End of list.
+	     */
+
+	    it->list = WORD_NIL;
+	    return looped;
+	}
+
+	/*
+	 * Cyclic list. Normalize index.
+	 */
+
+	looped = 1;
+	index = (index - (length-loop)) % loop + (length-loop);
+    }
+
+    it->list = list;
+    it->index = index;
+
+    /*
+     * Traversal info will be lazily computed.
+     */
+
+    it->traversal.subnode = WORD_NIL;
+    it->traversal.leaf = WORD_NIL;
+
+    return looped;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterFirst
+ *
+ *	Initialize the list iterator so that it points to the first
+ *	character within the list. If list is empty, the iterator is initialized
+ *	to the end iterator (i.e. whose list field is nil).
+ *
+ * Arguments:
+ *	list	- List to iterate over.
+ *	it	- Iterator to initialize.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_ListIterFirst(
+    Col_Word list,
+    Col_ListIterator *it)
+{
+    if (Col_ListLength(list) == 0) {
+	/*
+	 * End of list.
+	 */
+
+	it->list = WORD_NIL;
+
+	return;
+    }
+
+    it->list = list;
+    it->index = 0;
+
+    /*
+     * Traversal info will be lazily computed.
+     */
+
+    it->traversal.subnode = WORD_NIL;
+    it->traversal.leaf = WORD_NIL;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterLast
+ *
+ *	Initialize the list iterator so that it points to the last
+ *	character within the list. If list is empty, the iterator is initialized
+ *	to the end iterator (i.e. whose list field is nil).
+ *
+ * Arguments:
+ *	list	- List to iterate over.
+ *	it	- Iterator to initialize.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_ListIterLast(
+    Col_Word list,
+    Col_ListIterator *it)
+{
+    size_t length = Col_ListLength(list);
+    if (length == 0) {
+	/*
+	 * End of list.
+	 */
+
+	it->list = WORD_NIL;
+
+	return;
+    }
+
+    it->list = list;
+    it->index = length-1;
+
+    /*
+     * Traversal info will be lazily computed.
+     */
+
+    it->traversal.subnode = WORD_NIL;
+    it->traversal.leaf = WORD_NIL;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterCompare
+ *
+ *	Compare two iterators by their respective positions.
+ *
+ * Arguments:
+ *	it1	- First iterator.
+ *	it2	- Second iterator.
+ *
+ * Result:
+ *	-  < 0 if it1 is before it2
+ *	-  > 0 if it1 is after it2
+ *	-  0 if they are equal
+ *---------------------------------------------------------------------------*/
+
+int
+Col_ListIterCompare(
+    Col_ListIterator *it1,
+    Col_ListIterator *it2)
+{
+    if (Col_ListIterEnd(it1)) {
+	if (Col_ListIterEnd(it2)) {
+	    return 0;
+	} else {
+	    return 1;
+	}
+    } else if (Col_ListIterEnd(it2)) {
+	return -1;
+    } else if (it1->index < it2->index) {
+	return -1;
+    } else if (it1->index > it2->index) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterMoveTo
+ *
+ *	Move the iterator to the given absolute position.
+ *
+ * Arguments:
+ *	it	- The iterator to move.
+ *	index	- Position.
+ *
+ * Result:
+ *	Whether the iterator looped or not.
+ *---------------------------------------------------------------------------*/
+
+int
+Col_ListIterMoveTo(
+    Col_ListIterator *it,
+    size_t index)
+{
+    if (index > it->index) {
+	return Col_ListIterForward(it, index - it->index);
+    } else if (index < it->index) {
+	Col_ListIterBackward(it, it->index - index);
+	return 0;
+    } else {
+	return 0;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterForward
+ *
+ *	Move the iterator to the nb-th next element.
+ *
+ * Arguments:
+ *	it	- The iterator to move.
+ *	nb	- Offset.
+ *
+ * Result:
+ *	Whether the iterator looped or not.
+ *---------------------------------------------------------------------------*/
+
+int
+Col_ListIterForward(
+    Col_ListIterator *it,
+    size_t nb)
+{
+    size_t length;
+    int looped=0;
+
+    if (Col_ListIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid list iterator");
+	return looped;
+    }
+
+    if (nb == 0) {
+	/*
+	 * No-op.
+	 */
+
+	return looped;
+    }
+
+    /*
+     * Check for end of list.
+     */
+    
+    length = Col_ListLength(it->list);
+    if (nb >= length - it->index) {
+	size_t loop = Col_ListLoopLength(it->list);
+	if (!loop) {
+	    /*
+	     * End of list.
+	     */
+
+	    it->list = WORD_NIL;
+	    return looped;
+	}
+
+	/*
+	 * Cyclic list.
+	 */
+
+	looped = 1;
+	if (it->index < length-loop) {
+	    /*
+	     * Currently before loop, forward into loop.
+	     */
+
+	    size_t nb1 = (length-loop) - it->index;
+	    ASSERT(nb >= nb1);
+	    nb = nb1 + (nb-nb1) % loop;
+	    it->index += nb;
+	} else {
+	    /*
+	     * Currently within loop.
+	     */
+
+	    nb %= loop;
+	    if (it->index >= length-nb) {
+		/*
+		 * Loop backward.
+		 */
+
+		Col_ListIterBackward(it, loop-nb);
+		return looped;
+	    } else {
+		/* 
+		 * Forward.
+		 */
+
+		it->index += nb;
+	    }
+	}
+    } else {
+	it->index += nb;
+    }
+
+    if (!it->traversal.subnode || !it->traversal.leaf) {
+	/*
+	 * No traversal info.
+	 */
+
+	return looped;
+    }
+    if (it->index > it->traversal.last) {
+	/*
+	 * Traversal info out of range. Discard leaf node info, but not 
+	 * subnode, as it may be used again should the iteration go back.
+	 */
+
+	it->traversal.leaf = WORD_NIL;
+	return looped;
+    }
+
+    /*
+     * Update traversal info.
+     */
+
+    switch (WORD_TYPE(it->traversal.leaf)) {
+	case WORD_TYPE_VECTOR:
+	case WORD_TYPE_MVECTOR:
+	    if (nb >= WORD_VECTOR_LENGTH(it->traversal.leaf) 
+		    - it->traversal.index) {
+		/*
+		 * Reached end of leaf.
+		 */
+
+		it->traversal.leaf = WORD_NIL;
+	    } else {
+		it->traversal.index += nb;
+	    }
+	    break;
+
+	case WORD_TYPE_VOIDLIST:
+	    if (nb >= WORD_VOIDLIST_LENGTH(it->traversal.leaf) 
+		    - it->traversal.index) {
+		/*
+		 * Reached end of leaf.
+		 */
+
+		it->traversal.leaf = WORD_NIL;
+	    } else {
+		it->traversal.index += nb;
+	    }
+	    break;
+    }
+    return looped;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterBackward
+ *
+ *	Move the iterator to the nb-th previous element.
+ *
+ * Arguments:
+ *	it	- The iterator to move.
+ *	nb	- Offset.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_ListIterBackward(
+    Col_ListIterator *it,
+    size_t nb)
+{
+    if (Col_ListIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid list iterator");
+	return;
+    }
+
+    if (nb == 0) {
+	/*
+	 * No-op.
+	 */
+
+	return;
+    }
+
+    /*
+     * Check for beginning of list.
+     */
+    
+    if (it->index < nb) {
+	it->list = WORD_NIL;
+	return;
+    }
+
+    it->index -= nb;
+
+    if (!it->traversal.subnode || !it->traversal.leaf) {
+	/*
+	 * No traversal info.
+	 */
+
+	return;
+    }
+    if (it->index < it->traversal.first) {
+	/*
+	 * Traversal info out of range. Discard leaf node info, but not 
+	 * subnode, as it may be used again should the iteration go back.
+	 */
+
+	it->traversal.leaf = WORD_NIL;
+	return;
+    }
+
+    /*
+     * Update traversal info.
+     */
+
+    if (it->traversal.index < nb) {
+	/*
+	 * Reached beginning of leaf. 
+	 */
+
+	it->traversal.leaf = WORD_NIL;
+	return;
+    }
+
+    /*
+     * Go backward.
+     */
+
+    it->traversal.index -= nb;
+}
+
+
+/*
+================================================================================
+Section: Mutable Lists
+================================================================================
+*/
+
+/****************************************************************************
+ * Group: Mutable List Creation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1759,7 +2982,7 @@ start:
 
 
 /****************************************************************************
- * Section: Mutable List Operations
+ * Group: Mutable List Operations
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -3433,1187 +4656,4 @@ Col_MListReplace(
      */
 
     Col_MListInsert(mlist, first, with);
-}
-
-
-/****************************************************************************
- * Section: List Traversal
- ****************************************************************************/
-
-/*---------------------------------------------------------------------------
- * Internal Typedef: ListChunkTraverseInfo
- *
- *	Structure used during recursive list chunk traversal. This avoids
- *	recursive procedure calls thanks to a pre-allocated backtracking 
- *	structure: since the algorithms only recurse on concat nodes and since
- *	we know their depth, we can allocate the needed space once for all.
- *
- * Fields:
- *	backtracks	- Pre-allocated backtracking structure.
- *	list		- Currently traversed list.
- *	start		- Index of first element traversed in list.
- *	max		- Max number of elements traversed in list.
- *	maxDepth	- Depth of toplevel concat node.
- *	prevDepth	- Depth of next concat node for backtracking.
- *
- * Backtrack stack element fields:
- *	backtracks.prevDepth	- Depth of next concat node for backtracking.
- *	backtracks.list		- List.
- *	backtracks.max		- Max number of elements traversed in list.
- *
- * See also:
- *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>
- *---------------------------------------------------------------------------*/
-
-typedef struct ListChunkTraverseInfo {
-    struct {
-	int prevDepth;
-	Col_Word list;
-	size_t max;
-    } *backtracks;
-    Col_Word list;
-    size_t start, max;
-    int maxDepth, prevDepth;
-} ListChunkTraverseInfo;
-
-/*---------------------------------------------------------------------------
- * Internal Function: GetChunk
- *
- *	Get chunk from given traversal info.
- *
- * Arguments:
- *	info		- Traversal info.
- *	elements	- Chunk info for leaf.
- *	reverse		- Whether to traverse in reverse order.
- *
- * See also:
- *	<ListChunkTraverseInfo>, <Col_TraverseListChunksN>, 
- *	<Col_TraverseListChunks>
- *---------------------------------------------------------------------------*/
-
-static void
-GetChunk(
-    ListChunkTraverseInfo *info,
-    const Col_Word **elements,
-    int reverse)
-{
-    int type;
-
-    for (;;) {
-	/*
-	 * Descend into structure until we find a suitable leaf.
-	 */
-
-	type = WORD_TYPE(info->list);
-	switch (type) {
-	    case WORD_TYPE_CIRCLIST:
-		/* 
-		 * Recurse on core.
-		 */
-
-		info->list = WORD_CIRCLIST_CORE(info->list);
-		continue;
-
-	    case WORD_TYPE_WRAP:
-		/* 
-		 * Recurse on source.
-		 */
-
-		info->list = WORD_WRAP_SOURCE(info->list);
-		continue;
-
-	    case WORD_TYPE_SUBLIST:
-		/* 
-		 * Sublist: recurse on source list.
-		 */
-
-		info->start += WORD_SUBLIST_FIRST(info->list);
-		info->list = WORD_SUBLIST_SOURCE(info->list);
-		continue;
-        	    
-	    case WORD_TYPE_CONCATLIST:
-	    case WORD_TYPE_MCONCATLIST: {
-		/* 
-		 * Concat: descend into covered arms.
-		 */
-
-		int depth;
-		size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(info->list);
-		if (leftLength == 0) {
-		    leftLength = Col_ListLength(
-			    WORD_CONCATLIST_LEFT(info->list));
-		}
-		if (info->start + (reverse ? 0 : info->max-1) < leftLength) {
-		    /* 
-		     * Recurse on left arm only. 
-		     */
-
-		    info->list = WORD_CONCATLIST_LEFT(info->list);
-		    continue;
-		}
-		if (info->start - (reverse ? info->max-1 : 0) >= leftLength) {
-		    /* 
-		     * Recurse on right arm only. 
-		     */
-
-		    info->start -= leftLength;
-		    info->list = WORD_CONCATLIST_RIGHT(info->list);
-		    continue;
-		} 
-
-		/*
-		 * Push right (resp. left for reverse) onto stack and recurse on
-		 * left (resp. right).
-		 */
-
-		ASSERT(info->backtracks);
-		depth = WORD_CONCATLIST_DEPTH(info->list);
-		ASSERT(depth <= info->maxDepth);
-		info->backtracks[depth-1].prevDepth = info->prevDepth;
-		info->prevDepth = depth;
-		if (reverse) {
-		    ASSERT(info->start >= leftLength);
-		    info->backtracks[depth-1].list 
-			    = WORD_CONCATLIST_LEFT(info->list);
-		    info->backtracks[depth-1].max = info->max
-			    - (info->start-leftLength+1);
-		    info->start -= leftLength;
-		    info->max = info->start+1;
-		    info->list = WORD_CONCATLIST_RIGHT(info->list);
-		} else {
-		    ASSERT(info->start < leftLength);
-		    info->backtracks[depth-1].list 
-			    = WORD_CONCATLIST_RIGHT(info->list);
-		    info->backtracks[depth-1].max = info->max
-			    - (leftLength-info->start);
-		    info->max = leftLength-info->start;
-		    info->list = WORD_CONCATLIST_LEFT(info->list);
-		}
-		continue;
-	    }
-
-	    case WORD_TYPE_MLIST:
-		/* 
-		 * Recurse on list root.
-		 */
-
-		info->list = WORD_MLIST_ROOT(info->list);
-		continue;
-
-	    /* WORD_TYPE_UNKNOWN */
-	}
-	break;
-    }
-
-    /*
-     * Get leaf data.
-     */
-
-    ASSERT(info->start + (reverse ? info->max-1 : 0) >= 0);
-    ASSERT(info->start + (reverse ? 0 : info->max-1) < Col_ListLength(info->list));
-    switch (type) {
-	case WORD_TYPE_VECTOR:
-	case WORD_TYPE_MVECTOR:
-	    *elements = WORD_VECTOR_ELEMENTS(info->list) + info->start
-		    - (reverse ? info->max-1 : 0);
-	    break;
-
-	case WORD_TYPE_VOIDLIST:
-	    *elements = COL_LISTCHUNK_VOID;
-	    break;
-
-	/* WORD_TYPE_UNKNOWN */
-
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Internal Function: NextChunk
- *
- *	Get next chunk in traversal order.
- *
- * Arguments:
- *	info	- Traversal info.
- *	nb	- Number of elements to skip, must be < info->max.
- *	reverse	- Whether to traverse in reverse order.
- *
- * See also:
- *	<ListChunkTraverseInfo>, <Col_TraverseListChunksN>, 
- *	<Col_TraverseListChunks>
- *---------------------------------------------------------------------------*/
-
-static void 
-NextChunk(
-    ListChunkTraverseInfo *info,
-    size_t nb,
-    int reverse)
-{
-    ASSERT(info->max >= nb);
-    info->max -= nb;
-    if (info->max > 0) {
-	/*
-	 * Still in leaf, advance.
-	 */
-
-	if (reverse) {
-	    info->start -= nb;
-	} else {
-	    info->start += nb;
-	}
-    } else if (info->prevDepth == INT_MAX) {
-	/*
-	 * Already at toplevel => end of list.
-	 */
-
-	info->list = WORD_NIL;
-    } else {
-	/*
-	 * Reached leaf bound, backtracks.
-	 */
-
-	ASSERT(info->backtracks);
-	info->list = info->backtracks[info->prevDepth-1].list;
-	info->max = info->backtracks[info->prevDepth-1].max;
-	info->start = (reverse ? Col_ListLength(info->list)-1 : 0);
-	info->prevDepth = info->backtracks[info->prevDepth-1].prevDepth;
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_TraverseListChunksN
- *
- *	Iterate over the chunks of a number of lists.
- *
- *	For each traversed chunk, proc is called back with the opaque data as
- *	well as the position within the lists. If it returns a non-zero result 
- *	then the iteration ends. 
- *
- * Note:
- *	The algorithm is naturally recursive but this implementation avoids
- *	recursive calls thanks to a stack-allocated backtracking structure.
- *
- * Arguments:
- *	number		- Number of lists to traverse.
- *	lists		- Lists to traverse.
- *	start		- Index of first element.
- *	max		- Max number of elements.
- *	proc		- Callback proc called on each chunk.
- *	clientData	- Opaque data passed as is to above proc.
- *
- * Results:
- *	The return value of the last called proc, or -1 if no traversal was
- *	performed. Additionally:
- *
- *	lengthPtr	- If non-NULL, incremented by the total number of 
- *			  elements traversed upon completion.
- *---------------------------------------------------------------------------*/
-
-int 
-Col_TraverseListChunksN(
-    size_t number,
-    Col_Word *lists,
-    size_t start,
-    size_t max,
-    Col_ListChunksTraverseProc *proc,
-    Col_ClientData clientData,
-    size_t *lengthPtr)
-{
-    size_t i;
-    ListChunkTraverseInfo *info;
-    const Col_Word **elements;
-    int result;
-
-    info = alloca(sizeof(*info) * number);
-    elements = alloca(sizeof(*elements) * number);
-
-    for (i=0; i < number; i++) {
-	size_t listLength = Col_ListLength(lists[i]);
-	if (start > listLength) {
-	    /* 
-	     * Start is past the end of the list.
-	     */
-
-	    info[i].max = 0;
-	} else if (max > listLength-start) {
-	    /* 
-	     * Adjust max to the remaining length. 
-	     */
-
-	    info[i].max = listLength-start;
-	} else {
-	    info[i].max = max;
-	}
-    }
-
-    max = 0;
-    for (i=0; i < number; i++) {
-	if (max < info[i].max) {
-	    max = info[i].max;
-	}
-    }
-    if (max == 0) {
-	/*
-	 * Nothing to traverse.
-	 */
-
-	return -1;
-    }
-
-    for (i=0; i < number; i++) {
-	ASSERT(info[i].max <= max);
-	info[i].list = (info[i].max ? lists[i] : WORD_NIL);
-	info[i].start = start;
-	info[i].maxDepth = GetDepth(lists[i]);
-	info[i].backtracks = (info[i].maxDepth ? 
-	    alloca(sizeof(*info[i].backtracks) * info[i].maxDepth) : NULL);
-	info[i].prevDepth = INT_MAX;
-    }
-
-    for (;;) {
-	for (i=0; i < number; i++) {
-	    if (!info[i].list) {
-		/*
-		 * Past end of list.
-		 */
-
-		elements[i] = NULL;
-		continue;
-	    }
-
-	    GetChunk(info+i, elements+i, 0);
-	}
-
-	/*
-	 * Limit chunk lengths to the shortest one.
-	 */
-
-	max = SIZE_MAX;
-	for (i=0; i < number; i++) {
-	    if (info[i].list && max > info[i].max) {
-		max = info[i].max;
-	    }
-	}
-
-	/*
-	 * Call proc on leaves data.
-	 */
-
-	if (lengthPtr) *lengthPtr += max;
-	result = proc(start, max, number, elements, clientData);
-	start += max;
-	if (result != 0) {
-	    /*
-	     * Stop there.
-	     */
-
-	    return result;
-	} else {
-	    /*
-	     * Continue iteration.
-	     */
-
-	    int next = 0;
-	    for (i=0; i < number; i++) {
-		if (info[i].list) NextChunk(info+i, max, 0);
-		if (info[i].list) next = 1;
-	    }
-	    if (!next) {
-		/*
-		 * Reached end of all lists, stop there.
-		 */
-
-		return 0;
-	    }
-	}
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_TraverseListChunks
- *
- *	Iterate over the chunks of a list.
- *
- *	For each traversed chunk, proc is called back with the opaque data as
- *	well as the position within the list. If it returns a non-zero result 
- *	then the iteration ends. 
- *
- * Note:
- *	The algorithm is naturally recursive but this implementation avoids
- *	recursive calls thanks to a stack-allocated backtracking structure. 
- *	This procedure is an optimized version of <Col_TraverseListChunksN>.
- *
- * Arguments:
- *	list		- List to traverse.
- *	start		- Index of first element.
- *	max		- Max number of elements.
- *	reverse		- Whether to traverse in reverse order.
- *	proc		- Callback proc called on each chunk.
- *	clientData	- Opaque data passed as is to above proc.
- *
- * Results:
- *	The return value of the last called proc, or -1 if no traversal was
- *	performed. Additionally:
- *
- *	lengthPtr	- If non-NULL, incremented by the total number of 
- *			  elements traversed upon completion.
- *---------------------------------------------------------------------------*/
-
-int 
-Col_TraverseListChunks(
-    Col_Word list,
-    size_t start,
-    size_t max,
-    int reverse,
-    Col_ListChunksTraverseProc *proc,
-    Col_ClientData clientData,
-    size_t *lengthPtr)
-{
-    ListChunkTraverseInfo info;
-    const Col_Word *elements;
-    int result;
-    size_t listLength = Col_ListLength(list);
-
-    if (listLength == 0) {
-	/*
-	 * Nothing to traverse.
-	 */
-
-	return -1;
-    }
-
-    if (reverse) {
-	if (start > listLength) {
-	    /* 
-	     * Start is past the end of the list.
-	     */
-
-	    start = listLength-1;
-	}
-	if (max > start+1) {
-	    /* 
-	     * Adjust max to the remaining length. 
-	     */
-
-	    max = start+1;
-	}
-    } else {
-	if (start > listLength) {
-	    /* 
-	     * Start is past the end of the list.
-	     */
-
-	    return -1;
-	}
-	if (max > listLength-start) {
-	    /* 
-	     * Adjust max to the remaining length. 
-	     */
-
-	    max = listLength-start;
-	}
-    }
-
-    if (max == 0) {
-	/*
-	 * Nothing to traverse.
-	 */
-
-	return -1;
-    }
-
-    info.list = list;
-    info.start = start;
-    info.max = max;
-    info.maxDepth = GetDepth(list);
-    info.backtracks = (info.maxDepth ? 
-	    alloca(sizeof(*info.backtracks) * info.maxDepth) : NULL);
-    info.prevDepth = INT_MAX;
-
-    for (;;) {
-	GetChunk(&info, &elements, reverse);
-	max = info.max;
-
-	/*
-	 * Call proc on leaf data.
-	 */
-
-	if (lengthPtr) *lengthPtr += max;
-	if (reverse) {
-	    result = proc(start-max+1, max, 1, &elements, clientData);
-	    start -= max;
-	} else {
-	    result = proc(start, max, 1, &elements, clientData);
-	    start += max;
-	}
-	if (result != 0) {
-	    /*
-	     * Stop there.
-	     */
-
-	    return result;
-	} else {
-	    /*
-	     * Continue iteration.
-	     */
-
-	    NextChunk(&info, max, reverse);
-	    if (!info.list) {
-		/*
-		 * Reached end of list, stop there.
-		 */
-
-		return 0;
-	    }
-	}
-    }
-}
-
-
-/****************************************************************************
- * Section: List Iterators
- ****************************************************************************/
-
-/*---------------------------------------------------------------------------
- * Internal Function: IterAtVector
- *
- *	Element access proc for vector leaves from iterators. Follows
- *	<ColListIterLeafAtProc> signature.
- *
- * Arguments:
- *	leaf	- Leaf node.
- *	index	- Leaf-relative index of element.
- *
- * Result:
- *	Element at given index.
- *
- * See also:
- *	<ColListIterLeafAtProc>, <ColListIterator>, 
- *	<ColListIterUpdateTraversalInfo>
- *---------------------------------------------------------------------------*/
-
-static Col_Word 
-IterAtVector(
-    Col_Word leaf, 
-    size_t index)
-{
-    return WORD_VECTOR_ELEMENTS(leaf)[index];
-}
-
-/*---------------------------------------------------------------------------
- * Internal Function: IterAtVoid
- *
- *	Element access proc for void list leaves from iterators. Follows
- *	<ColListIterLeafAtProc> signature.
- *
- * Arguments:
- *	leaf	- Leaf node.
- *	index	- Leaf-relative index of element.
- *
- * Result:
- *	Always nil.
- *
- * See also:
- *	<ColListIterLeafAtProc>, <ColListIterator>, 
- *	<ColListIterUpdateTraversalInfo>
- *---------------------------------------------------------------------------*/
-
-static Col_Word 
-IterAtVoid(
-    Col_Word leaf, 
-    size_t index)
-{
-    return WORD_NIL;
-}
-
-/*---------------------------------------------------------------------------
- * Internal Function: ColListIterUpdateTraversalInfo
- *
- *	Get the deepest subnodes needed to access the current element 
- *	designated by the iterator.
- *
- *	Iterators point to the leaf containing the current element. To avoid 
- *	rescanning the whole tree when leaving this leaf, it also stores a
- *	higher level subnode containing this leaf, so that traversing all this
- *	subnode's children is fast. The subnode is the leaf's highest ancestor
- *	with a maximum depth of MAX_ITERATOR_SUBNODE_DEPTH. Some indices are
- *	stored along with this sublist in a way that traversal can be resumed
- *	quickly: If the current index is withing the sublist's range of 
- *	validity, then traversal starts at the sublist, else it restarts from
- *	the root.
- *
- *	Traversal info is updated lazily, each time element data needs to
- *	be retrieved. This means that a blind iteration over an arbitrarily 
- *	complex list is no more computationally intensive than over a flat 
- *	array.
- *
- * Argument:
- *	it	- The iterator to update.
- *---------------------------------------------------------------------------*/
-
-void
-ColListIterUpdateTraversalInfo(
-    Col_ListIterator *it)
-{
-    Col_Word node;
-    size_t first, last, offset;
-
-    if (it->traversal.subnode && (it->index < it->traversal.first 
-		    || it->index > it->traversal.last)) {
-	/*
-	 * Out of range.
-	 */
-
-	it->traversal.subnode = WORD_NIL;
-    }
-
-    /*
-     * Search for leaf node, remember containing subnode in the process.
-     */
-
-    if (it->traversal.subnode) {
-	node = it->traversal.subnode;
-    } else {
-	node = it->list;
-	it->traversal.first = 0;
-	it->traversal.last = SIZE_MAX;
-	it->traversal.offset = 0;
-    }
-    first = it->traversal.first;
-    last = it->traversal.last;
-    offset = it->traversal.offset;
-
-    it->traversal.leaf = WORD_NIL;
-    while (!it->traversal.leaf) {
-	size_t subFirst=first, subLast=last;
-
-	switch (WORD_TYPE(node)) {
-	    case WORD_TYPE_CIRCLIST:
-		/*
-		 * Recurse into core.
-		 */
-
-		node = WORD_CIRCLIST_CORE(node);
-		break;
-
-	    case WORD_TYPE_VOIDLIST:
-		it->traversal.leaf = node;
-		it->traversal.index = it->index - offset;
-		it->traversal.proc = IterAtVoid;
-		ASSERT(it->traversal.index < WORD_VOIDLIST_LENGTH(node));
-		break;
-
-	    case WORD_TYPE_VECTOR:
-	    case WORD_TYPE_MVECTOR:
-		it->traversal.leaf = node;
-		it->traversal.index = it->index - offset;
-		it->traversal.proc = IterAtVector;
-		ASSERT(it->traversal.index < WORD_VECTOR_LENGTH(node));
-		break;
-
-	    case WORD_TYPE_SUBLIST: 
-		/*
-		 * Always remember as subnode.
-		 */
-
-		it->traversal.subnode = node;
-		it->traversal.first = first;
-		it->traversal.last = last;
-		it->traversal.offset = offset;
-
-		/*
-		 * Recurse into source.
-		 * Note: offset may become negative (in 2's complement) but it 
-		 * doesn't matter.
-		 */
-
-		offset -= WORD_SUBLIST_FIRST(node);
-		subLast = first - WORD_SUBLIST_FIRST(node) 
-			+ WORD_SUBLIST_LAST(node);
-		node = WORD_SUBLIST_SOURCE(node);
-		break;
-
-	    case WORD_TYPE_CONCATLIST:
-	    case WORD_TYPE_MCONCATLIST: {
-		size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(node);
-		if (leftLength == 0) {
-		    leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(node));
-		}
-		if (WORD_CONCATLIST_DEPTH(node) == MAX_ITERATOR_SUBNODE_DEPTH
-			|| !it->traversal.subnode) {
-		    /*
-		     * Remember as subnode.
-		     */
-
-		    it->traversal.subnode = node;
-		    it->traversal.first = first;
-		    it->traversal.last = last;
-		    it->traversal.offset = offset;
-		}
-
-		if (it->index - offset < leftLength) {
-		    /*
-		     * Recurse into left arm.
-		     */
-
-		    subLast = offset + leftLength-1;
-		    node = WORD_CONCATLIST_LEFT(node);
-		} else {
-		    /*
-		     * Recurse into right arm.
-		     */
-
-		    subFirst = offset + leftLength;
-		    offset += leftLength;
-		    node = WORD_CONCATLIST_RIGHT(node);
-		}
-		break;
-	    }
-
-	    case WORD_TYPE_MLIST:
-		/*
-		 * Recurse into root.
-		 */
-
-		node = WORD_MLIST_ROOT(node);
-		break;
-
-	    /* WORD_TYPE_UNKNOWN */
-
-	    default:
-		/* CANTHAPPEN */
-		ASSERT(0);
-		return;
-	}
-
-	/*
-	 * Shorten validity range.
-	 */
-
-	if (subFirst > first) first = subFirst;
-	if (subLast < last) last = subLast;
-    }
-    if (!it->traversal.subnode) {
-	it->traversal.subnode = it->traversal.leaf;
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_ListIterBegin
- *
- *	Initialize the list iterator so that it points to the index-th
- *	element within the list. If index points past the end of the list, the
- *	iterator is initialized to the end iterator (i.e. whose list field is 
- *	nil).
- *
- * Arguments:
- *	list	- List to iterate over.
- *	index	- Index of element.
- *	it	- Iterator to initialize.
- *
- * Result:
- *	Whether the iterator looped or not.
- *---------------------------------------------------------------------------*/
-
-int
-Col_ListIterBegin(
-    Col_Word list,
-    size_t index,
-    Col_ListIterator *it)
-{
-    size_t length;
-    int looped=0;
-
-    length = Col_ListLength(list);
-    if (index >= length) {
-	size_t loop = Col_ListLoopLength(list);
-	if (!loop) {
-	    /*
-	     * End of list.
-	     */
-
-	    it->list = WORD_NIL;
-	    return looped;
-	}
-
-	/*
-	 * Cyclic list. Normalize index.
-	 */
-
-	looped = 1;
-	index = (index - (length-loop)) % loop + (length-loop);
-    }
-
-    it->list = list;
-    it->index = index;
-
-    /*
-     * Traversal info will be lazily computed.
-     */
-
-    it->traversal.subnode = WORD_NIL;
-    it->traversal.leaf = WORD_NIL;
-
-    return looped;
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_ListIterFirst
- *
- *	Initialize the list iterator so that it points to the first
- *	character within the list. If list is empty, the iterator is initialized
- *	to the end iterator (i.e. whose list field is nil).
- *
- * Arguments:
- *	list	- List to iterate over.
- *	it	- Iterator to initialize.
- *---------------------------------------------------------------------------*/
-
-void
-Col_ListIterFirst(
-    Col_Word list,
-    Col_ListIterator *it)
-{
-    if (Col_ListLength(list) == 0) {
-	/*
-	 * End of list.
-	 */
-
-	it->list = WORD_NIL;
-
-	return;
-    }
-
-    it->list = list;
-    it->index = 0;
-
-    /*
-     * Traversal info will be lazily computed.
-     */
-
-    it->traversal.subnode = WORD_NIL;
-    it->traversal.leaf = WORD_NIL;
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_ListIterLast
- *
- *	Initialize the list iterator so that it points to the last
- *	character within the list. If list is empty, the iterator is initialized
- *	to the end iterator (i.e. whose list field is nil).
- *
- * Arguments:
- *	list	- List to iterate over.
- *	it	- Iterator to initialize.
- *---------------------------------------------------------------------------*/
-
-void
-Col_ListIterLast(
-    Col_Word list,
-    Col_ListIterator *it)
-{
-    size_t length = Col_ListLength(list);
-    if (length == 0) {
-	/*
-	 * End of list.
-	 */
-
-	it->list = WORD_NIL;
-
-	return;
-    }
-
-    it->list = list;
-    it->index = length-1;
-
-    /*
-     * Traversal info will be lazily computed.
-     */
-
-    it->traversal.subnode = WORD_NIL;
-    it->traversal.leaf = WORD_NIL;
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_ListIterCompare
- *
- *	Compare two iterators by their respective positions.
- *
- * Arguments:
- *	it1	- First iterator.
- *	it2	- Second iterator.
- *
- * Result:
- *	-  < 0 if it1 is before it2
- *	-  > 0 if it1 is after it2
- *	-  0 if they are equal
- *---------------------------------------------------------------------------*/
-
-int
-Col_ListIterCompare(
-    Col_ListIterator *it1,
-    Col_ListIterator *it2)
-{
-    if (Col_ListIterEnd(it1)) {
-	if (Col_ListIterEnd(it2)) {
-	    return 0;
-	} else {
-	    return 1;
-	}
-    } else if (Col_ListIterEnd(it2)) {
-	return -1;
-    } else if (it1->index < it2->index) {
-	return -1;
-    } else if (it1->index > it2->index) {
-	return 1;
-    } else {
-	return 0;
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_ListIterMoveTo
- *
- *	Move the iterator to the given absolute position.
- *
- * Arguments:
- *	it	- The iterator to move.
- *	index	- Position.
- *
- * Result:
- *	Whether the iterator looped or not.
- *---------------------------------------------------------------------------*/
-
-int
-Col_ListIterMoveTo(
-    Col_ListIterator *it,
-    size_t index)
-{
-    if (index > it->index) {
-	return Col_ListIterForward(it, index - it->index);
-    } else if (index < it->index) {
-	Col_ListIterBackward(it, it->index - index);
-	return 0;
-    } else {
-	return 0;
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_ListIterForward
- *
- *	Move the iterator to the nb-th next element.
- *
- * Arguments:
- *	it	- The iterator to move.
- *	nb	- Offset.
- *
- * Result:
- *	Whether the iterator looped or not.
- *---------------------------------------------------------------------------*/
-
-int
-Col_ListIterForward(
-    Col_ListIterator *it,
-    size_t nb)
-{
-    size_t length;
-    int looped=0;
-
-    if (Col_ListIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid list iterator");
-	return looped;
-    }
-
-    if (nb == 0) {
-	/*
-	 * No-op.
-	 */
-
-	return looped;
-    }
-
-    /*
-     * Check for end of list.
-     */
-    
-    length = Col_ListLength(it->list);
-    if (nb >= length - it->index) {
-	size_t loop = Col_ListLoopLength(it->list);
-	if (!loop) {
-	    /*
-	     * End of list.
-	     */
-
-	    it->list = WORD_NIL;
-	    return looped;
-	}
-
-	/*
-	 * Cyclic list.
-	 */
-
-	looped = 1;
-	if (it->index < length-loop) {
-	    /*
-	     * Currently before loop, forward into loop.
-	     */
-
-	    size_t nb1 = (length-loop) - it->index;
-	    ASSERT(nb >= nb1);
-	    nb = nb1 + (nb-nb1) % loop;
-	    it->index += nb;
-	} else {
-	    /*
-	     * Currently within loop.
-	     */
-
-	    nb %= loop;
-	    if (it->index >= length-nb) {
-		/*
-		 * Loop backward.
-		 */
-
-		Col_ListIterBackward(it, loop-nb);
-		return looped;
-	    } else {
-		/* 
-		 * Forward.
-		 */
-
-		it->index += nb;
-	    }
-	}
-    } else {
-	it->index += nb;
-    }
-
-    if (!it->traversal.subnode || !it->traversal.leaf) {
-	/*
-	 * No traversal info.
-	 */
-
-	return looped;
-    }
-    if (it->index > it->traversal.last) {
-	/*
-	 * Traversal info out of range. Discard leaf node info, but not 
-	 * subnode, as it may be used again should the iteration go back.
-	 */
-
-	it->traversal.leaf = WORD_NIL;
-	return looped;
-    }
-
-    /*
-     * Update traversal info.
-     */
-
-    switch (WORD_TYPE(it->traversal.leaf)) {
-	case WORD_TYPE_VECTOR:
-	case WORD_TYPE_MVECTOR:
-	    if (nb >= WORD_VECTOR_LENGTH(it->traversal.leaf) 
-		    - it->traversal.index) {
-		/*
-		 * Reached end of leaf.
-		 */
-
-		it->traversal.leaf = WORD_NIL;
-	    } else {
-		it->traversal.index += nb;
-	    }
-	    break;
-
-	case WORD_TYPE_VOIDLIST:
-	    if (nb >= WORD_VOIDLIST_LENGTH(it->traversal.leaf) 
-		    - it->traversal.index) {
-		/*
-		 * Reached end of leaf.
-		 */
-
-		it->traversal.leaf = WORD_NIL;
-	    } else {
-		it->traversal.index += nb;
-	    }
-	    break;
-    }
-    return looped;
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_ListIterBackward
- *
- *	Move the iterator to the nb-th previous element.
- *
- * Arguments:
- *	it	- The iterator to move.
- *	nb	- Offset.
- *---------------------------------------------------------------------------*/
-
-void
-Col_ListIterBackward(
-    Col_ListIterator *it,
-    size_t nb)
-{
-    if (Col_ListIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid list iterator");
-	return;
-    }
-
-    if (nb == 0) {
-	/*
-	 * No-op.
-	 */
-
-	return;
-    }
-
-    /*
-     * Check for beginning of list.
-     */
-    
-    if (it->index < nb) {
-	it->list = WORD_NIL;
-	return;
-    }
-
-    it->index -= nb;
-
-    if (!it->traversal.subnode || !it->traversal.leaf) {
-	/*
-	 * No traversal info.
-	 */
-
-	return;
-    }
-    if (it->index < it->traversal.first) {
-	/*
-	 * Traversal info out of range. Discard leaf node info, but not 
-	 * subnode, as it may be used again should the iteration go back.
-	 */
-
-	it->traversal.leaf = WORD_NIL;
-	return;
-    }
-
-    /*
-     * Update traversal info.
-     */
-
-    if (it->traversal.index < nb) {
-	/*
-	 * Reached beginning of leaf. 
-	 */
-
-	it->traversal.leaf = WORD_NIL;
-	return;
-    }
-
-    /*
-     * Go backward.
-     */
-
-    it->traversal.index -= nb;
 }

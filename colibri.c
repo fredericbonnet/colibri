@@ -8,7 +8,7 @@
  *	<colibri.h>
  */
 
-#include "colibri.h"
+#include "include/colibri.h"
 #include "colInternal.h"
 #include "colPlatform.h"
 
@@ -51,6 +51,14 @@ Col_Utf8CharAddr(
      * Don't check bounds; assume input values are OK. 
      */
 
+    if (byteLength == length * sizeof(*data)) {
+	/*
+	 * No variable-width sequence, use simple arithmetics instead
+	 * of character iteration.
+	 */
+
+	return data + index;
+    }
     if (index <= length/2) {
 	/* 
 	 * First half; search from beginning. 
@@ -78,35 +86,35 @@ Col_Utf8CharAddr(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_Utf8CharAt
+ * Function: Col_Utf8GetChar
  *
- *	Get the char codepoint of a UTF-8 sequence.
+ *	Get the first character codepoint of a UTF-8 sequence.
  *
  * Argument:
- *	data		- UTF-8 code unit sequence.
+ *	data	- UTF-8 code unit sequence.
  *
  * Result:
  *	32-bit Unicode codepoint of the char.
  *---------------------------------------------------------------------------*/
 
 Col_Char 
-Col_Utf8CharAt(
+Col_Utf8GetChar(
     const Col_Char1 * data)
 {
-    if (*data < 0x80) {
+    if (*data <= 0x7F) {
 	/* 
 	 * Single byte, 0-7F codepoints. 
 	 */
 
 	return *data;
-    } else if (*data < 0xE0) {
+    } else if (*data <= 0xDF) {
 	/* 
 	 * 2-byte sequence, 80-7FF codepoints. 
 	 */
 
 	return   ((data[0] & 0x1F) << 6)
 	       |  (data[1] & 0x3F);
-    } else if (*data < 0xF0) {
+    } else if (*data <= 0xEF) {
 	/* 
 	 * 3-byte sequence, 800-FFFF codepoints. 
 	 */
@@ -114,7 +122,7 @@ Col_Utf8CharAt(
 	return   ((data[0] & 0x0F) << 12)
 	       | ((data[1] & 0x3F) << 6)
 	       |  (data[2] & 0x3F);
-    } else if (*data < 0xF8) {
+    } else if (*data <= 0xF7) {
 	/* 
 	 * 4-byte sequence, 10000-1FFFFF codepoints. 
 	 */
@@ -123,27 +131,6 @@ Col_Utf8CharAt(
 	       | ((data[1] & 0x3F) << 12)
 	       | ((data[2] & 0x3F) << 6)
 	       |  (data[3] & 0x3F);
-    } else if (*data < 0xFC) {
-	/* 
-	 * 5-byte sequence, 200000-3FFFFFF codepoints. 
-	 */
-
-	return   ((data[0] & 0x03) << 24)
-	       | ((data[1] & 0x3F) << 18)
-	       | ((data[2] & 0x3F) << 12)
-	       | ((data[3] & 0x3F) << 6)
-	       |  (data[4] & 0x3F);
-    } else if (*data < 0xFE) {
-	/* 
-	 * 6-byte sequence, 4000000-7FFFFFFF codepoints. 
-	 */
-
-	return   ((data[0] & 0x03) << 30)
-	       | ((data[1] & 0x3F) << 24)
-	       | ((data[2] & 0x3F) << 18)
-	       | ((data[3] & 0x3F) << 12)
-	       | ((data[4] & 0x3F) << 6)
-	       |  (data[5] & 0x3F);
     }
 
     /* 
@@ -151,6 +138,43 @@ Col_Utf8CharAt(
      */
 
     return COL_CHAR_INVALID;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_Utf8SetChar
+ *
+ *	Append character in a UTF-8 sequence.
+ *
+ * Arguments:
+ *	data	- UTF-8 code unit sequence.
+ *	c	- Character to write.
+ *
+ * Result:
+ *	Position just past the newly added character in sequence.
+ *---------------------------------------------------------------------------*/
+
+Col_Char1 *
+Col_Utf8SetChar(
+    Col_Char1 * data,
+    Col_Char c)
+{
+    if (c <= 0x7F) {
+	*data++ = (Col_Char1) c;
+    } else if (c <= 0x7FF) {
+	*data++ = (Col_Char1) (((c>>6)&0x1F)|0xC0);
+	*data++ = (Col_Char1) (( c    &0x3F)|0x80);
+    } else if (c <= 0xD7FF || (c >= 0xE000 && c <= 0xFFFF)) {
+	*data++ = (Col_Char1) (((c>>12)&0x1F)|0xE0);
+	*data++ = (Col_Char1) (((c>> 6)&0x3F)|0x80);
+	*data++ = (Col_Char1) (( c     &0x3F)|0x80);
+    } else if (c >= 0x10000 && c <= 0x10FFFF) {
+	*data++ = (Col_Char1) (((c>>18)&0x1F)|0xF0);
+	*data++ = (Col_Char1) (((c>>12)&0x3F)|0x80);
+	*data++ = (Col_Char1) (((c>> 6)&0x3F)|0x80);
+	*data++ = (Col_Char1) (( c     &0x3F)|0x80);
+    }
+
+    return data;
 }
 
 /*---------------------------------------------------------------------------
@@ -184,6 +208,14 @@ Col_Utf16CharAddr(
      * Don't check bounds; assume input values are OK. 
      */
 
+    if (byteLength == length * sizeof(*data)) {
+	/*
+	 * No variable-width sequence, use simple arithmetics instead
+	 * of character iteration.
+	 */
+
+	return data + index;
+    }
     if (index <= length/2) {
 	/* 
 	 * First half; search from beginning. 
@@ -211,19 +243,19 @@ Col_Utf16CharAddr(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_Utf16CharAt
+ * Function: Col_Utf16GetChar
  *
- *	Get the char codepoint of a UTF-8 sequence.
+ *	Get the first character codepoint of a UTF-16 sequence.
  *
  * Argument:
- *	data		- UTF-8 code unit sequence.
+ *	data	- UTF-16 code unit sequence.
  *
  * Result:
- *	32-bit Unicode codepoint of the char.
+ *	Unicode codepoint of the char.
  *---------------------------------------------------------------------------*/
 
 Col_Char 
-Col_Utf16CharAt(
+Col_Utf16GetChar(
     const Col_Char2 * data)
 {
     if ((data[0] & 0xFC00) == 0xD800 && (data[1] & 0xFC00) == 0xDC00) {
@@ -243,6 +275,34 @@ Col_Utf16CharAt(
     }
 }
 
+/*---------------------------------------------------------------------------
+ * Function: Col_Utf16SetChar
+ *
+ *	Append character in a UTF-16 sequence.
+ *
+ * Arguments:
+ *	data	- UTF-16 code unit sequence.
+ *	c	- Character to write.
+ *
+ * Result:
+ *	Position just past the newly added character in sequence.
+ *---------------------------------------------------------------------------*/
+
+Col_Char2 *
+Col_Utf16SetChar(
+    Col_Char2 * data,
+    Col_Char c)
+{
+    if (c <= 0xD7FF || (c >= 0xE000 && c <= 0xFFFF)) {
+	*data++ = (Col_Char2) c;
+    } else if (c >= 0x10000 && c <= 0x10FFFF) {
+ 	*data++ = (Col_Char2) ((((c-0x10000)>>10)&0x3FF)+0xD800);
+	*data++ = (Col_Char2) (( (c-0x10000)     &0x3FF)+0xDC00);
+    }
+
+    return data;
+}
+
 
 /****************************************************************************
  * Section: Initialization/Cleanup
@@ -260,7 +320,7 @@ Col_Utf16CharAt(
  *	Initialize the memory allocator & garbage collector.
  *
  * See also:
- *	<Threading Models>
+ *	<Threading Model Constants>
  *---------------------------------------------------------------------------*/
 
 void 
