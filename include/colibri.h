@@ -254,8 +254,7 @@ typedef enum Col_StringFormat {
 /*---------------------------------------------------------------------------
  * Macro: COL_UTF8_NEXT
  *
- *	Move pointer to the next UTF-8 character. This is done by skipping 
- *	all continuation code units.
+ *	Move pointer to the next UTF-8 character.
  *
  * Argument:
  *	data	- The pointer to move.
@@ -265,7 +264,11 @@ typedef enum Col_StringFormat {
  *---------------------------------------------------------------------------*/
 
 #define COL_UTF8_NEXT(data) \
-    while ((*++(*(Col_Char1 **) &data) & 0xC0) == 0x80);
+    *((Col_Char1 **) &data) += ( \
+	  (((*(Col_Char1 *) (data)) & 0xE0) == 0xC0)	? 2 \
+	: (((*(Col_Char1 *) (data)) & 0xF0) == 0xE0)	? 3 \
+	: (((*(Col_Char1 *) (data)) & 0xF8) == 0xF0)	? 4 \
+	: 						  1 )
 
 /*---------------------------------------------------------------------------
  * Macro: COL_UTF8_PREVIOUS
@@ -304,19 +307,18 @@ typedef enum Col_StringFormat {
  *---------------------------------------------------------------------------*/
 
 #define COL_UTF8_WIDTH(c) \
-    (  (c) <= 0x7F	 ? 1 \
-     : (c) <= 0x7FF	 ? 2 \
-     : (c) <= 0xD7FF	 ? 3 \
-     : (c) <= 0xDFFF	 ? 0 \
-     : (c) <= 0xFFFF	 ? 3 \
-     : (c) <= 0x10FFFF	 ? 4 \
-     : 			   0 )
+    (  (c) <= 0x7F	? 1 \
+     : (c) <= 0x7FF	? 2 \
+     : (c) <= 0xD7FF	? 3 \
+     : (c) <= 0xDFFF	? 0 \
+     : (c) <= 0xFFFF	? 3 \
+     : (c) <= 0x10FFFF	? 4 \
+     : 			  0 )
 
 /*---------------------------------------------------------------------------
  * Macro: COL_UTF16_NEXT
  *
- *	Move pointer to the next UTF-16 character. This is done by skipping 
- *	all low surrogate code units.
+ *	Move pointer to the next UTF-16 character.
  *
  * Argument:
  *	data	- The pointer to move.
@@ -326,7 +328,9 @@ typedef enum Col_StringFormat {
  *---------------------------------------------------------------------------*/
 
 #define COL_UTF16_NEXT(data) \
-    while ((*++(*(Col_Char2 **) &data) & 0xFC00) == 0xDC00);
+    *((Col_Char2 **) &data) += ( \
+	  (((*(Col_Char2 *) (data)) & 0xFC00) == 0xD800) ?  2 \
+	: 						    1 )
 
 /*---------------------------------------------------------------------------
  * Macro: COL_UTF16_PREVIOUS
@@ -365,11 +369,11 @@ typedef enum Col_StringFormat {
  *---------------------------------------------------------------------------*/
 
 #define COL_UTF16_WIDTH(c) \
-    (  (c) <= 0xD7FF	 ? 1 \
-     : (c) <= 0xDFFF	 ? 0 \
-     : (c) <= 0xFFFF	 ? 1 \
-     : (c) <= 0x10FFFF	 ? 2 \
-     : 			   0 )
+    (  (c) <= 0xD7FF	? 1 \
+     : (c) <= 0xDFFF	? 0 \
+     : (c) <= 0xFFFF	? 1 \
+     : (c) <= 0x10FFFF	? 2 \
+     : 			  0 )
 
 /*---------------------------------------------------------------------------
  * Macro: COL_CHAR_NEXT

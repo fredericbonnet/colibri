@@ -219,10 +219,10 @@ Col_NewRope(
 	 * Split data in half at char boundary. 
 	 */
 
-	p = source + (codeUnits/2) * CHAR_WIDTH(format);
+	p = source + (codeUnits/2 + 1) * CHAR_WIDTH(format);
 	switch (format) {
-	    case COL_UTF8:  COL_UTF8_NEXT(p);  break;
-	    case COL_UTF16: COL_UTF16_NEXT(p); break;
+	    case COL_UTF8:  COL_UTF8_PREVIOUS(p);  break;
+	    case COL_UTF16: COL_UTF16_PREVIOUS(p); break;
 	}
 	half = p-source;
     } else {
