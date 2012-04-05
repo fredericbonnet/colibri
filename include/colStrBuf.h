@@ -40,9 +40,12 @@ EXTERN Col_Word		Col_NewStringBuffer(size_t maxLength,
  * Group: String Buffer Access
  *
  * Declarations:
+ *	<Col_StringBufferFormat>, <Col_StringBufferMaxLength>,
  *	<Col_StringBufferLength>, <Col_StringBufferValue>
  ****************************************************************************/
 
+EXTERN Col_StringFormat	Col_StringBufferFormat(Col_Word strbuf);
+EXTERN size_t		Col_StringBufferMaxLength(Col_Word strbuf);
 EXTERN size_t		Col_StringBufferLength(Col_Word strbuf);
 EXTERN Col_Word		Col_StringBufferValue(Col_Word strbuf);
 
@@ -52,13 +55,19 @@ EXTERN Col_Word		Col_StringBufferValue(Col_Word strbuf);
  *
  * Declarations:
  *	<Col_StringBufferAppendChar>, <Col_StringBufferAppendRope>,
- *	<Col_StringBufferAppendSequence>
+ *	<Col_StringBufferAppendSequence>, <Col_StringBufferReserve>, 
+ *	<Col_StringBufferRelease>, <Col_StringBufferReset>, 
+ *	<Col_StringBufferFreeze>
  ****************************************************************************/
 
 EXTERN int		Col_StringBufferAppendChar(Col_Word strbuf,
 			    Col_Char c);
 EXTERN int		Col_StringBufferAppendRope(Col_Word strbuf,
 			    Col_Word rope);
+EXTERN int		Col_StringBufferAppendSequence(Col_Word strbuf,
+			    Col_RopeIterator *begin, Col_RopeIterator *end);//TODO
+EXTERN void *		Col_StringBufferReserve(Col_Word strbuf, size_t length);
+EXTERN void		Col_StringBufferRelease(Col_Word strbuf, size_t length);
 EXTERN void		Col_StringBufferReset(Col_Word strbuf);
 EXTERN Col_Word		Col_StringBufferFreeze(Col_Word strbuf);
 
