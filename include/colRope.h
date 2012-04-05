@@ -35,7 +35,7 @@ Section: Ropes
  * Constant: COL_UCS
  *
  *	When passed to <Col_NewRope> or <Col_NormalizeRope>, use the shortest 
- *	possible fixed-width format.
+ *	possible fixed-width format. Input format is always <COL_UCS4>.
  *
  * Note:
  *	Numeric value is chosen so that the lower 3 bits give the character
