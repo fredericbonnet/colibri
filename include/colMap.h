@@ -137,6 +137,28 @@ typedef ColMapIterator Col_MapIterator;
 #define Col_MapIterMap(it) \
     ((it)->map)
 
+/*---------------------------------------------------------------------------
+ * Macro: Col_MapIterSetEnd
+ *
+ *	Move iterator past end of (any) map.
+ *
+ * Argument:
+ *	it	- The iterator to move.
+ *
+ * Result:
+ *	Non-zero if iterator is at end.
+ *
+ * See also: 
+ *	<Col_MapIterator>, <Col_MapIterEnd>
+ *---------------------------------------------------------------------------*/
+
+#define Col_MapIterSetEnd(it)	\
+    ((it)->map = WORD_NIL)
+
+/*
+ * Remaining declarations.
+ */
+
 EXTERN void		Col_MapIterBegin(Col_Word map, Col_MapIterator *it);
 EXTERN void		Col_MapIterFind(Col_Word map, Col_Word key, 
 			    int *createPtr, Col_MapIterator *it);
