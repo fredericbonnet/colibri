@@ -44,6 +44,10 @@ Section: Ropes
 
 #define COL_UCS			(Col_StringFormat) 0x24
 
+/*
+ * Remaining declarations.
+ */
+
 EXTERN Col_Word		Col_EmptyRope();
 EXTERN Col_Word		Col_NewRopeFromString(const char *string);
 EXTERN Col_Word		Col_NewChar(Col_Char c);
@@ -550,6 +554,28 @@ typedef ColRopeIterator Col_RopeIterator;
 
 #define Col_RopeIterPrevious(it) \
     Col_RopeIterBackward((it), 1)
+
+/*---------------------------------------------------------------------------
+ * Macro: Col_RopeIterSetEnd
+ *
+ *	Move iterator past end of (any) rope.
+ *
+ * Argument:
+ *	it	- The iterator to move.
+ *
+ * Result:
+ *	Non-zero if iterator is at end.
+ *
+ * See also: 
+ *	<Col_RopeIterator>, <Col_RopeIterEnd>
+ *---------------------------------------------------------------------------*/
+
+#define Col_RopeIterSetEnd(it)	\
+    ((it)->rope = WORD_NIL)
+
+/*
+ * Remaining declarations.
+ */
 
 EXTERN void		Col_RopeIterBegin(Col_Word rope, size_t index, 
 			    Col_RopeIterator *it);
