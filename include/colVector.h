@@ -38,11 +38,6 @@ Section: Immutable Vectors
  *	<Col_GetMaxVectorLength>, <Col_NewVector>, <Col_NewVectorNV>
  ****************************************************************************/
 
-EXTERN size_t		Col_GetMaxVectorLength(void);
-EXTERN Col_Word		Col_NewVector(size_t length, 
-			    const Col_Word * elements);
-EXTERN Col_Word		Col_NewVectorNV(size_t length, ...);
-
 /*---------------------------------------------------------------------------
  * Macro: Col_NewVectorV
  *
@@ -55,6 +50,15 @@ EXTERN Col_Word		Col_NewVectorNV(size_t length, ...);
 
 #define Col_NewVectorV(...) \
     Col_NewVectorNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
+
+/*
+ * Remaining declarations.
+ */
+
+EXTERN size_t		Col_GetMaxVectorLength(void);
+EXTERN Col_Word		Col_NewVector(size_t length, 
+			    const Col_Word * elements);
+EXTERN Col_Word		Col_NewVectorNV(size_t length, ...);
 
 
 /*
