@@ -246,15 +246,14 @@ Col_StringBufferValue(
  * Argument:
  *	strbuf	- String buffer to commit.
  *
- * Result:
- *	A rope that fullfills the format requirement.
- *
  * Side effects:
  *	Data buffer may be cleared, accumulated rope may be modified, memory
  *	cells can be allocated.
  *
  * See also:
- *	<Col_StringBufferFormat>, <Col_StringBufferAppendRope>
+ *	<Col_StringBufferFormat>, <Col_StringBufferAppendChar>,
+ *	<Col_StringBufferAppendRope>, <Col_StringBufferAppendSequence>,
+ *	<Col_StringBufferAppendReserve>
  *---------------------------------------------------------------------------*/
 
 static void
@@ -419,7 +418,7 @@ Col_StringBufferAppendRope(
     Col_Word rope)
 {
     Col_StringFormat format;
-    size_t ropeLength, length;
+    size_t length, ropeLength;
     Col_Word rope2;
 
     if (WORD_TYPE(strbuf) != WORD_TYPE_STRBUF) {
@@ -473,6 +472,86 @@ Col_StringBufferAppendRope(
     rope2 = Col_NormalizeRope(rope, format, COL_CHAR_INVALID, 0);
     WORD_STRBUF_ROPE(strbuf) = Col_ConcatRopes(WORD_STRBUF_ROPE(strbuf), rope2);
     return (Col_RopeLength(rope2) == ropeLength);
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_StringBufferAppendSequence
+ *
+ *	Append the given rope sequence to the string buffer.
+ *
+ * Arguments:
+ *	strbuf	- String buffer to append character to.
+ *	begin	- First character in sequence.
+ *	end	- First character past sequence end.
+ *
+ * Result:
+ *	Whether all characters were appended or not, the latter may occur when
+ *	some character codepoints are unrepresentable in the target format.
+ *
+ * Side effects:
+ *	String buffer value may change.
+ *
+ * See also:
+ *	<Col_StringBufferAppendChar>, <Col_StringBufferAppendRope>
+ *---------------------------------------------------------------------------*/
+
+int
+Col_StringBufferAppendSequence(
+    Col_Word strbuf,
+    Col_RopeIterator *begin, 
+    Col_RopeIterator *end)
+{
+    Col_StringFormat format;
+    size_t sequenceLength, endIndex;
+    Col_Word rope;
+
+    if (WORD_TYPE(strbuf) != WORD_TYPE_STRBUF) {
+	Col_Error(COL_ERROR, "%x is not a string buffer", strbuf);
+	return 0;
+    }
+
+    if (Col_RopeIterCompare(begin, end) >= 0) {
+	/*
+	 * Nothing to do.
+	 */
+
+	return 1;
+    }
+
+    rope = Col_RopeIterRope(begin);
+    if (Col_RopeIterEnd(end)) {
+	endIndex = Col_RopeLength(rope);
+    } else if (Col_RopeIterRope(end) != rope) {
+	Col_Error(COL_ERROR, "Iterator ropes differ: begin=%x, end=%x", rope, Col_RopeIterRope(end));
+	return 0;
+    } else {
+	endIndex = Col_RopeIterIndex(end);
+    }
+    sequenceLength = endIndex - Col_RopeIterIndex(begin);
+
+    format = (Col_StringFormat) WORD_STRBUF_FORMAT(strbuf);
+    if (sequenceLength <= STRBUF_MAX_LENGTH(WORD_STRBUF_SIZE(strbuf) 
+	    * CELL_SIZE, format) - WORD_STRBUF_LENGTH(strbuf)) {
+	/*
+	 * Sequence fits into buffer, append character-wise.
+	 */
+
+	Col_RopeIterator it;
+	int noLoss = 1;
+	for (it = *begin; Col_RopeIterCompare(&it, end) < 0;
+		Col_RopeIterNext(&it)) {
+	    noLoss &= Col_StringBufferAppendChar(strbuf, 
+		    Col_RopeIterAt(&it));
+	}
+	return noLoss;
+    }
+
+    /*
+     * Append subrope.
+     */
+
+    return Col_StringBufferAppendRope(strbuf, Col_Subrope(rope, 
+	    Col_RopeIterIndex(begin), endIndex-1));
 }
 
 /*---------------------------------------------------------------------------
