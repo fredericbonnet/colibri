@@ -348,6 +348,25 @@ typedef ColListIterator Col_ListIterator;
 #define Col_ListIterPrevious(it) \
     Col_ListIterBackward((it), 1)
 
+
+/*---------------------------------------------------------------------------
+ * Macro: Col_ListIterSetEnd
+ *
+ *	Move iterator past end of (any) list.
+ *
+ * Argument:
+ *	it	- The iterator to move.
+ *
+ * Result:
+ *	Non-zero if iterator is at end.
+ *
+ * See also: 
+ *	<Col_ListIterator>, <Col_ListIterEnd>
+ *---------------------------------------------------------------------------*/
+
+#define Col_ListIterSetEnd(it)	\
+    ((it)->list = WORD_NIL)
+
 /*
  * Remaining declarations.
  */
