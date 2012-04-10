@@ -581,8 +581,8 @@ EXTERN void		Col_RopeIterBegin(Col_Word rope, size_t index,
 			    Col_RopeIterator *it);
 EXTERN void		Col_RopeIterFirst(Col_Word rope, Col_RopeIterator *it);
 EXTERN void		Col_RopeIterLast(Col_Word rope, Col_RopeIterator *it);
-EXTERN int		Col_RopeIterCompare(Col_RopeIterator *it1, 
-			    Col_RopeIterator *it2);
+EXTERN int		Col_RopeIterCompare(const Col_RopeIterator *it1, 
+			    const Col_RopeIterator *it2);
 EXTERN void		Col_RopeIterMoveTo(Col_RopeIterator *it, size_t index);
 EXTERN void		Col_RopeIterForward(Col_RopeIterator *it, size_t nb);
 EXTERN void		Col_RopeIterBackward(Col_RopeIterator *it, size_t nb);

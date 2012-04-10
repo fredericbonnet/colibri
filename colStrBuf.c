@@ -498,8 +498,8 @@ Col_StringBufferAppendRope(
 int
 Col_StringBufferAppendSequence(
     Col_Word strbuf,
-    Col_RopeIterator *begin, 
-    Col_RopeIterator *end)
+    const Col_RopeIterator *begin, 
+    const Col_RopeIterator *end)
 {
     Col_StringFormat format;
     size_t sequenceLength, endIndex;

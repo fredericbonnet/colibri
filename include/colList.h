@@ -375,8 +375,8 @@ EXTERN int		Col_ListIterBegin(Col_Word list, size_t index,
 			    Col_ListIterator *it);
 EXTERN void		Col_ListIterFirst(Col_Word list, Col_ListIterator *it);
 EXTERN void		Col_ListIterLast(Col_Word list, Col_ListIterator *it);
-EXTERN int		Col_ListIterCompare(Col_ListIterator *it1, 
-			    Col_ListIterator *it2);
+EXTERN int		Col_ListIterCompare(const Col_ListIterator *it1, 
+			    const Col_ListIterator *it2);
 EXTERN int		Col_ListIterMoveTo(Col_ListIterator *it, size_t index);
 EXTERN int		Col_ListIterForward(Col_ListIterator *it, size_t nb);
 EXTERN void		Col_ListIterBackward(Col_ListIterator *it, size_t nb);

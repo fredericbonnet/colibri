@@ -2537,8 +2537,8 @@ Col_ListIterLast(
 
 int
 Col_ListIterCompare(
-    Col_ListIterator *it1,
-    Col_ListIterator *it2)
+    const Col_ListIterator *it1,
+    const Col_ListIterator *it2)
 {
     if (Col_ListIterEnd(it1)) {
 	if (Col_ListIterEnd(it2)) {

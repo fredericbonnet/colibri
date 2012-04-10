@@ -4200,8 +4200,8 @@ Col_RopeIterLast(
 
 int
 Col_RopeIterCompare(
-    Col_RopeIterator *it1,
-    Col_RopeIterator *it2)
+    const Col_RopeIterator *it1,
+    const Col_RopeIterator *it2)
 {
     if (Col_RopeIterEnd(it1)) {
 	if (Col_RopeIterEnd(it2)) {

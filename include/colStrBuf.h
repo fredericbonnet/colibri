@@ -65,7 +65,8 @@ EXTERN int		Col_StringBufferAppendChar(Col_Word strbuf,
 EXTERN int		Col_StringBufferAppendRope(Col_Word strbuf,
 			    Col_Word rope);
 EXTERN int		Col_StringBufferAppendSequence(Col_Word strbuf,
-			    Col_RopeIterator *begin, Col_RopeIterator *end);
+			    const Col_RopeIterator *begin, 
+			    const Col_RopeIterator *end);
 EXTERN void *		Col_StringBufferReserve(Col_Word strbuf, size_t length);
 EXTERN void		Col_StringBufferRelease(Col_Word strbuf, size_t length);
 EXTERN void		Col_StringBufferReset(Col_Word strbuf);
