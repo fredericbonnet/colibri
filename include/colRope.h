@@ -373,8 +373,9 @@ EXTERN int		Col_TraverseRopeChunks(Col_Word rope, size_t start,
  *
  * Declarations: 
  *	<Col_RopeIterBegin>, <Col_RopeIterFirst>, <Col_RopeIterLast>, 
- *	<Col_RopeIterCompare>, <Col_RopeIterMoveTo>, <Col_RopeIterForward>, 
- *	<Col_RopeIterBackward>, <ColRopeIterUpdateTraversalInfo>
+ *	<Col_RopeIterChunk>, <Col_RopeIterCompare>, <Col_RopeIterMoveTo>,
+ *	<Col_RopeIterForward>, <Col_RopeIterBackward>, 
+ *	<ColRopeIterUpdateTraversalInfo>, <ColRopeChunkCharAt>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -401,16 +402,25 @@ typedef Col_Char (ColRopeIterLeafAtProc) (Col_Word leaf, size_t index);
  *	Internal implementation of rope iterators.
  *
  * Fields:
- *	rope			- Rope being iterated.
- *	index			- Current position.
- *	traversal		- Traversal info:
- *	traversal.subrope	- Traversed subrope.
- *	traversal.(first, last)	- Range of validity.
- *	traversal.offset	- Index offset wrt. root.
- *	traversal.leaf		- Leaf (deepest) rope.
- *	traversal.index		- Index within leaf (byte index for variable 
- *				  width format).
- *	traversal.proc		- Access proc within leaf.
+ *	rope		- Rope being iterated. If nil, use chunk iterator mode.
+ *	index		- Current position.
+ *	traversal	- Traversal info:
+ *	traversal.rope	- Traversal info in rope mode.
+ *	traversal.chunk	- Traversal info in chunk mode.
+ *
+ * Rope mode fields:
+ *	subrope		- Traversed subrope.
+ *	(first, last)	- Range of validity.
+ *	offset		- Index offset wrt. root.
+ *	leaf		- Leaf (deepest) rope.
+ *	index		- Index within leaf (byte index for variable width 
+ *			  formats).
+ *	proc		- Access proc within leaf.
+ *
+ * Chunk mode fields:
+ *	begin	- Beginning of data chunk.
+ *	end	- End of data chunk.
+ *	current	- Current position.
  *
  * See also:
  *	<Col_RopeIterator>
@@ -419,13 +429,19 @@ typedef Col_Char (ColRopeIterLeafAtProc) (Col_Word leaf, size_t index);
 typedef struct ColRopeIterator {
     Col_Word rope;
     size_t index;
-    struct {
-	Col_Word subrope;
-	size_t first, last;
-	size_t offset;
-	Col_Word leaf;
-	size_t index;
-	ColRopeIterLeafAtProc *proc;
+    union {
+	struct {
+	    Col_Word subrope;
+	    size_t first, last;
+	    size_t offset;
+	    Col_Word leaf;
+	    size_t index;
+	    ColRopeIterLeafAtProc *proc;
+	} rope;
+	struct {
+	    Col_StringFormat format;
+	    const char *begin, *end, *current;
+	} chunk;
     } traversal;
 } ColRopeIterator;
 
@@ -470,7 +486,8 @@ typedef ColRopeIterator Col_RopeIterator;
  *	it	- The iterator to get rope for.
  *
  * Result:
- *	The rope, or <WORD_NIL> if at end.
+ *	The rope, or <WORD_NIL> if iterator was initialized with
+ *	<Col_RopeIterChunk>. Undefined if at end.
  *
  * See also: 
  *	<Col_RopeIterator>, <Col_RopeIterEnd>
@@ -517,7 +534,9 @@ typedef ColRopeIterator Col_RopeIterator;
  *---------------------------------------------------------------------------*/
 
 #define Col_RopeIterAt(it) \
-    (!(it)->traversal.leaf?ColRopeIterUpdateTraversalInfo(it),0:0,(it)->traversal.proc((it)->traversal.leaf, (it)->traversal.index))
+    ((it)->rope \
+	? (!(it)->traversal.rope.leaf?ColRopeIterUpdateTraversalInfo(it),0:0,(it)->traversal.rope.proc((it)->traversal.rope.leaf, (it)->traversal.rope.index)) \
+	: ColRopeChunkCharAt(it))
 
 /*---------------------------------------------------------------------------
  * Macro: Col_RopeIterNext
@@ -581,6 +600,9 @@ EXTERN void		Col_RopeIterBegin(Col_Word rope, size_t index,
 			    Col_RopeIterator *it);
 EXTERN void		Col_RopeIterFirst(Col_Word rope, Col_RopeIterator *it);
 EXTERN void		Col_RopeIterLast(Col_Word rope, Col_RopeIterator *it);
+EXTERN void		Col_RopeIterChunk(Col_StringFormat format, 
+			    const void *data, size_t byteLength, 
+			    Col_RopeIterator *it);
 EXTERN int		Col_RopeIterCompare(const Col_RopeIterator *it1, 
 			    const Col_RopeIterator *it2);
 EXTERN void		Col_RopeIterMoveTo(Col_RopeIterator *it, size_t index);
@@ -588,6 +610,7 @@ EXTERN void		Col_RopeIterForward(Col_RopeIterator *it, size_t nb);
 EXTERN void		Col_RopeIterBackward(Col_RopeIterator *it, size_t nb);
 
 EXTERN void		ColRopeIterUpdateTraversalInfo(Col_RopeIterator *it);
+EXTERN Col_Char		ColRopeChunkCharAt(const Col_RopeIterator *it);
 
 
 /****************************************************************************

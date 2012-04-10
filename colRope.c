@@ -205,7 +205,7 @@ Col_NewRope(
 	    length = 0;
 	    for (p = source; p < source+byteLength; length++) {
 		switch (format) {
-		    case COL_UTF8:  COL_UTF8_NEXT(p); break;
+		    case COL_UTF8:  COL_UTF8_NEXT (p); break;
 		    case COL_UTF16: COL_UTF16_NEXT(p); break;
 		}
 	    }
@@ -221,7 +221,7 @@ Col_NewRope(
 
 	p = source + (codeUnits/2 + 1) * CHAR_WIDTH(format);
 	switch (format) {
-	    case COL_UTF8:  COL_UTF8_PREVIOUS(p);  break;
+	    case COL_UTF8:  COL_UTF8_PREVIOUS (p);  break;
 	    case COL_UTF16: COL_UTF16_PREVIOUS(p); break;
 	}
 	half = p-source;
@@ -3854,6 +3854,7 @@ static Col_Char IterAtUtf16(
  *---------------------------------------------------------------------------*/
 
 #define MAX_ITERATOR_SUBROPE_DEPTH	3
+
 /*---------------------------------------------------------------------------
  * Internal Function: ColRopeIterUpdateTraversalInfo
  *
@@ -3886,96 +3887,100 @@ ColRopeIterUpdateTraversalInfo(
     Col_Word rope;
     size_t first, last, offset;
 
-    if (it->traversal.subrope && (it->index < it->traversal.first 
-		    || it->index > it->traversal.last)) {
+    ASSERT(it->rope);
+    if (it->traversal.rope.subrope 
+	    && (it->index < it->traversal.rope.first 
+	    || it->index > it->traversal.rope.last)) {
 	/*
 	 * Out of range.
 	 */
 
-	it->traversal.subrope = WORD_NIL;
+	it->traversal.rope.subrope = WORD_NIL;
     }
 
     /*
      * Search for leaf rope, remember containing subrope in the process.
      */
 
-    if (it->traversal.subrope) {
-	rope = it->traversal.subrope;
+    if (it->traversal.rope.subrope) {
+	rope = it->traversal.rope.subrope;
     } else {
 	rope = it->rope;
-	it->traversal.first = 0;
-	it->traversal.last = SIZE_MAX;
-	it->traversal.offset = 0;
+	it->traversal.rope.first = 0;
+	it->traversal.rope.last = SIZE_MAX;
+	it->traversal.rope.offset = 0;
     }
-    first = it->traversal.first;
-    last = it->traversal.last;
-    offset = it->traversal.offset;
+    first = it->traversal.rope.first;
+    last = it->traversal.rope.last;
+    offset = it->traversal.rope.offset;
 
-    it->traversal.leaf = WORD_NIL;
-    while (!it->traversal.leaf) {
+    it->traversal.rope.leaf = WORD_NIL;
+    while (!it->traversal.rope.leaf) {
 	size_t subFirst=first, subLast=last;
 
 	switch (WORD_TYPE(rope)) {
 	    case WORD_TYPE_CHAR:
-		it->traversal.leaf = rope;
-		it->traversal.index = it->index - offset;
-		it->traversal.proc = IterAtChar;
-		ASSERT(it->traversal.index == 0);
+		it->traversal.rope.leaf = rope;
+		it->traversal.rope.index = it->index - offset;
+		it->traversal.rope.proc = IterAtChar;
+		ASSERT(it->traversal.rope.index == 0);
 		break;
 
 	    case WORD_TYPE_SMALLSTR:
-		it->traversal.leaf = rope;
-		it->traversal.index = it->index - offset;
-		it->traversal.proc = IterAtSmallStr;
-		ASSERT(it->traversal.index < WORD_SMALLSTR_LENGTH(rope));
+		it->traversal.rope.leaf = rope;
+		it->traversal.rope.index = it->index - offset;
+		it->traversal.rope.proc = IterAtSmallStr;
+		ASSERT(it->traversal.rope.index < WORD_SMALLSTR_LENGTH(rope));
 		break;
 
 	    case WORD_TYPE_UCSSTR:
-		it->traversal.leaf = rope;
-		it->traversal.index = it->index - offset;
+		it->traversal.rope.leaf = rope;
+		it->traversal.rope.index = it->index - offset;
 		switch (WORD_UCSSTR_FORMAT(rope)) {
-		    case COL_UCS1: it->traversal.proc = IterAtUcs1; break;
-		    case COL_UCS2: it->traversal.proc = IterAtUcs2; break;
-		    case COL_UCS4: it->traversal.proc = IterAtUcs4; break;
+		    case COL_UCS1: it->traversal.rope.proc = IterAtUcs1; break;
+		    case COL_UCS2: it->traversal.rope.proc = IterAtUcs2; break;
+		    case COL_UCS4: it->traversal.rope.proc = IterAtUcs4; break;
 		}
-		ASSERT(it->traversal.index < WORD_UCSSTR_LENGTH(rope));
+		ASSERT(it->traversal.rope.index < WORD_UCSSTR_LENGTH(rope));
 		break;
 
 	    case WORD_TYPE_UTFSTR: {
 		const char * data = WORD_UTFSTR_DATA(rope);
-		it->traversal.leaf = rope;
+		it->traversal.rope.leaf = rope;
 		switch (WORD_UTFSTR_FORMAT(rope)) {
 		    case COL_UTF8:
-			it->traversal.index = (unsigned short) ((const char *)
+			it->traversal.rope.index 
+				= (unsigned short) ((const char *)
 				Col_Utf8CharAddr((const Col_Char1 *) data, 
 					it->index - offset, 
 					WORD_UTFSTR_LENGTH(rope), 
 					WORD_UTFSTR_BYTELENGTH(rope)) 
 				- data);
-			it->traversal.proc = IterAtUtf8;
+			it->traversal.rope.proc = IterAtUtf8;
 			break;
 
 		    case COL_UTF16:
-			it->traversal.index = (unsigned short) ((const char *)
+			it->traversal.rope.index 
+				= (unsigned short) ((const char *)
 				Col_Utf16CharAddr((const Col_Char2 *) data, 
 					it->index - offset, 
 					WORD_UTFSTR_LENGTH(rope), 
 					WORD_UTFSTR_BYTELENGTH(rope)) 
 				- data);
-			it->traversal.proc = IterAtUtf16;	
+			it->traversal.rope.proc = IterAtUtf16;	
 			break;
 		}
-		ASSERT(it->traversal.index < WORD_UTFSTR_BYTELENGTH(rope));
+		ASSERT(it->traversal.rope.index < WORD_UTFSTR_BYTELENGTH(rope));
 		break;
 	    }
 
 	    case WORD_TYPE_CUSTOM: {
 		Col_CustomRopeType *typeInfo 
 			= (Col_CustomRopeType *) WORD_TYPEINFO(rope);
-		it->traversal.leaf = rope;
-		it->traversal.index = it->index - offset;
-		it->traversal.proc = typeInfo->charAtProc;
-		ASSERT(it->traversal.index < typeInfo->lengthProc(rope));
+		it->traversal.rope.leaf = rope;
+		it->traversal.rope.index = it->index - offset;
+		it->traversal.rope.proc = typeInfo->charAtProc;
+		ASSERT(it->traversal.rope.index < typeInfo->lengthProc(rope));
 		break;
 	    }
 
@@ -3984,10 +3989,10 @@ ColRopeIterUpdateTraversalInfo(
 		 * Always remember as subrope.
 		 */
 
-		it->traversal.subrope = rope;
-		it->traversal.first = first;
-		it->traversal.last = last;
-		it->traversal.offset = offset;
+		it->traversal.rope.subrope = rope;
+		it->traversal.rope.first = first;
+		it->traversal.rope.last = last;
+		it->traversal.rope.offset = offset;
 
 		/*
 		 * Recurse into source.
@@ -4007,15 +4012,15 @@ ColRopeIterUpdateTraversalInfo(
 		    leftLength = Col_RopeLength(WORD_CONCATROPE_LEFT(rope));
 		}
 		if (WORD_CONCATROPE_DEPTH(rope) == MAX_ITERATOR_SUBROPE_DEPTH
-			|| !it->traversal.subrope) {
+			|| !it->traversal.rope.subrope) {
 		    /*
 		     * Remember as subrope.
 		     */
 
-		    it->traversal.subrope = rope;
-		    it->traversal.first = first;
-		    it->traversal.last = last;
-		    it->traversal.offset = offset;
+		    it->traversal.rope.subrope = rope;
+		    it->traversal.rope.first = first;
+		    it->traversal.rope.last = last;
+		    it->traversal.rope.offset = offset;
 		}
 
 		if (it->index - offset < leftLength) {
@@ -4060,9 +4065,40 @@ ColRopeIterUpdateTraversalInfo(
 	if (subFirst > first) first = subFirst;
 	if (subLast < last) last = subLast;
     }
-    if (!it->traversal.subrope) {
-	it->traversal.subrope = it->traversal.leaf;
+    if (!it->traversal.rope.subrope) {
+	it->traversal.rope.subrope = it->traversal.rope.leaf;
     }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: ColRopeChunkCharAt
+ *
+ *	Get the character at the position designated by the iterator. The latter
+ *	must have been initialized by <Col_RopeIterChunk>.
+ *
+ * Argument:
+ *	it	- The iterator.
+ *
+ * Result:
+ *	The character at the current position.
+ *---------------------------------------------------------------------------*/
+
+Col_Char
+ColRopeChunkCharAt(
+    const Col_RopeIterator *it)
+{
+    ASSERT(!it->rope);
+    switch (it->traversal.chunk.format) {
+	case COL_UCS1:  return                 *(const Col_Char1 *) it->traversal.chunk.current;
+	case COL_UCS2:  return                 *(const Col_Char2 *) it->traversal.chunk.current;
+	case COL_UCS4:  return                 *(const Col_Char4 *) it->traversal.chunk.current;
+	case COL_UTF8:  return Col_Utf8GetChar ((const Col_Char1 *) it->traversal.chunk.current);
+	case COL_UTF16: return Col_Utf16GetChar((const Col_Char2 *) it->traversal.chunk.current);
+    }
+
+    /* CANTHAPPEN */
+    ASSERT(0);
+    return COL_CHAR_INVALID;
 }
 
 /*---------------------------------------------------------------------------
@@ -4101,8 +4137,8 @@ Col_RopeIterBegin(
      * Traversal info will be lazily computed.
      */
 
-    it->traversal.subrope = WORD_NIL;
-    it->traversal.leaf = WORD_NIL;
+    it->traversal.rope.subrope = WORD_NIL;
+    it->traversal.rope.leaf = WORD_NIL;
 }
 
 /*---------------------------------------------------------------------------
@@ -4138,8 +4174,8 @@ Col_RopeIterFirst(
      * Traversal info will be lazily computed.
      */
 
-    it->traversal.subrope = WORD_NIL;
-    it->traversal.leaf = WORD_NIL;
+    it->traversal.rope.subrope = WORD_NIL;
+    it->traversal.rope.leaf = WORD_NIL;
 }
 
 /*---------------------------------------------------------------------------
@@ -4176,8 +4212,36 @@ Col_RopeIterLast(
      * Traversal info will be lazily computed.
      */
 
-    it->traversal.subrope = WORD_NIL;
-    it->traversal.leaf = WORD_NIL;
+    it->traversal.rope.subrope = WORD_NIL;
+    it->traversal.rope.leaf = WORD_NIL;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_RopeIterChunk
+ *
+ *	Initialize the rope iterator so that it points to the first character
+ *	in a chunk.
+ *
+ * Arguments:
+ *	format		- Format of data in chunk (see <Col_StringFormat>).
+ *	data		- Buffer containing flat data.
+ *	byteLength	- Length of data in bytes.
+ *	it		- Iterator to initialize.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_RopeIterChunk(
+    Col_StringFormat format, 
+    const void *data, 
+    size_t byteLength,
+    Col_RopeIterator *it)
+{
+    it->rope = WORD_NIL;
+    it->index = 0;
+    it->traversal.chunk.format = format;
+    it->traversal.chunk.begin = (const char *) data;
+    it->traversal.chunk.end = (const char *) data + byteLength;
+    it->traversal.chunk.current = (const char *) data;
 }
 
 /*---------------------------------------------------------------------------
@@ -4263,10 +4327,61 @@ Col_RopeIterForward(
 	return;
     }
 
-    /*
-     * Check for end of rope.
-     */
-    
+    if (!it->rope) {
+	/*
+	 * Chunk iterator.
+	 */
+
+	Col_StringFormat format = it->traversal.chunk.format;
+	switch (format) {
+	    case COL_UCS1:
+	    case COL_UCS2:
+	    case COL_UCS4:
+		if (nb >= (size_t) (it->traversal.chunk.end 
+			- it->traversal.chunk.current) / CHAR_WIDTH(format)) {
+		    /*
+		     * End of rope.
+		     */
+
+		    Col_RopeIterSetEnd(it);
+		    return;
+		}
+		it->index += nb;
+		it->traversal.chunk.current += nb * CHAR_WIDTH(format);
+		break;
+
+	    case COL_UTF8:
+	    case COL_UTF16: {
+		size_t i;
+		for (i = 0; i < nb; i++) {
+		    switch (format) {
+			case COL_UTF8:  COL_UTF8_NEXT (it->traversal.chunk.current); break;
+			case COL_UTF16: COL_UTF16_NEXT(it->traversal.chunk.current); break;
+		    }
+		    if (it->traversal.chunk.current 
+			    >= it->traversal.chunk.end) {
+			/*
+			 * End of rope.
+			 */
+
+			Col_RopeIterSetEnd(it);
+			return;
+		    }
+		}
+		it->index += nb;
+		break;
+	    }
+
+	    default:
+		/* CANTHAPPEN */
+		ASSERT(0);
+		Col_RopeIterSetEnd(it);
+	}
+	
+	return;
+    }
+
+    ASSERT(it->rope);
     if (nb >= Col_RopeLength(it->rope) - it->index) {
 	/*
 	 * End of rope.
@@ -4277,20 +4392,20 @@ Col_RopeIterForward(
     }
     it->index += nb;
 
-    if (!it->traversal.subrope || !it->traversal.leaf) {
+    if (!it->traversal.rope.subrope || !it->traversal.rope.leaf) {
 	/*
 	 * No traversal info.
 	 */
 
 	return;
     }
-    if (it->index > it->traversal.last) {
+    if (it->index > it->traversal.rope.last) {
 	/*
 	 * Traversal info out of range. Discard leaf node info, but not 
 	 * subrope, as it may be used again should the iteration go back.
 	 */
 
-	it->traversal.leaf = WORD_NIL;
+	it->traversal.rope.leaf = WORD_NIL;
 	return;
     }
 
@@ -4298,48 +4413,48 @@ Col_RopeIterForward(
      * Update traversal info.
      */
 
-    switch (WORD_TYPE(it->traversal.leaf)) {
+    switch (WORD_TYPE(it->traversal.rope.leaf)) {
 	case WORD_TYPE_CHAR:
 	    /*
 	     * Reached end of leaf.
 	     */
 
-	    ASSERT(it->traversal.index == 0);
+	    ASSERT(it->traversal.rope.index == 0);
 	    ASSERT(nb > 0);
-	    it->traversal.leaf = WORD_NIL;
+	    it->traversal.rope.leaf = WORD_NIL;
 
 	case WORD_TYPE_SMALLSTR:
-	    if (nb >= WORD_SMALLSTR_LENGTH(it->traversal.leaf) 
-		    - it->traversal.index) {
+	    if (nb >= WORD_SMALLSTR_LENGTH(it->traversal.rope.leaf) 
+		    - it->traversal.rope.index) {
 		/*
 		 * Reached end of leaf.
 		 */
 
-		it->traversal.leaf = WORD_NIL;
+		it->traversal.rope.leaf = WORD_NIL;
 	    } else {
-		it->traversal.index += nb;
+		it->traversal.rope.index += nb;
 	    }
 	    break;
 
 	case WORD_TYPE_UCSSTR:
-	    if (nb >= WORD_UCSSTR_LENGTH(it->traversal.leaf) 
-		    - it->traversal.index) {
+	    if (nb >= WORD_UCSSTR_LENGTH(it->traversal.rope.leaf) 
+		    - it->traversal.rope.index) {
 		/*
 		 * Reached end of leaf.
 		 */
 
-		it->traversal.leaf = WORD_NIL;
+		it->traversal.rope.leaf = WORD_NIL;
 	    } else {
-		it->traversal.index += nb;
+		it->traversal.rope.index += nb;
 	    }
 	    break;
 
 	case WORD_TYPE_UTFSTR: {
-	    size_t byteLength = WORD_UTFSTR_BYTELENGTH(it->traversal.leaf),
-		    length = WORD_UTFSTR_LENGTH(it->traversal.leaf);
-	    const char * data = WORD_UTFSTR_DATA(it->traversal.leaf),
-		    *p = data + it->traversal.index;
-	    int format = WORD_UTFSTR_FORMAT(it->traversal.leaf);
+	    size_t byteLength = WORD_UTFSTR_BYTELENGTH(it->traversal.rope.leaf),
+		    length = WORD_UTFSTR_LENGTH(it->traversal.rope.leaf);
+	    const char * data = WORD_UTFSTR_DATA(it->traversal.rope.leaf),
+		    *p = data + it->traversal.rope.index;
+	    int format = WORD_UTFSTR_FORMAT(it->traversal.rope.leaf);
 	    size_t i;
 	    if (length == byteLength) {
 		/*
@@ -4348,20 +4463,20 @@ Col_RopeIterForward(
 		 */
 
 		if (nb * CHAR_WIDTH(format) >= byteLength 
-			- it->traversal.index) {
+			- it->traversal.rope.index) {
 		    /*
 		     * Reached end of leaf.
 		     */
 
-		    it->traversal.leaf = WORD_NIL;
+		    it->traversal.rope.leaf = WORD_NIL;
 		} else {
-		    it->traversal.index += nb * CHAR_WIDTH(format);
+		    it->traversal.rope.index += nb * CHAR_WIDTH(format);
 		}
 		break;
 	    }
 	    for (i = 0; i < nb; i++) {
 		switch (format) {
-		    case COL_UTF8:  COL_UTF8_NEXT(p); break;
+		    case COL_UTF8:  COL_UTF8_NEXT (p); break;
 		    case COL_UTF16: COL_UTF16_NEXT(p); break;
 		}
 		if (p >= data + byteLength) {
@@ -4369,27 +4484,28 @@ Col_RopeIterForward(
 		     * Reached end of leaf.
 		     */
 
-		    it->traversal.leaf = WORD_NIL;
+		    it->traversal.rope.leaf = WORD_NIL;
 		    break;
 		}
 	    }
-	    it->traversal.index = p - data;
+	    it->traversal.rope.index = p - data;
 	    break;
 	}
 
 	case WORD_TYPE_CUSTOM: {
 	    Col_CustomRopeType *typeInfo 
-		    = (Col_CustomRopeType *) WORD_TYPEINFO(it->traversal.leaf);
+		    = (Col_CustomRopeType *) 
+		    WORD_TYPEINFO(it->traversal.rope.leaf);
 	    ASSERT(typeInfo->type.type == COL_ROPE);
-	    if (nb >= typeInfo->lengthProc(it->traversal.leaf) 
-		    - it->traversal.index) {
+	    if (nb >= typeInfo->lengthProc(it->traversal.rope.leaf) 
+		    - it->traversal.rope.index) {
 		/*
 		 * Reached end of leaf.
 		 */
 
-		it->traversal.leaf = WORD_NIL;
+		it->traversal.rope.leaf = WORD_NIL;
 	    } else {
-		it->traversal.index += nb;
+		it->traversal.rope.index += nb;
 	    }
 	    break;
 	}
@@ -4426,31 +4542,85 @@ Col_RopeIterBackward(
 	return;
     }
 
-    /*
-     * Check for beginning of rope.
-     */
-    
+    if (!it->rope) {
+	/*
+	 * Chunk iterator.
+	 */
+
+	Col_StringFormat format = it->traversal.chunk.format;
+	switch (format) {
+	    case COL_UCS1:
+	    case COL_UCS2:
+	    case COL_UCS4:
+		if (nb > (size_t) (it->traversal.chunk.current 
+			- it->traversal.chunk.begin) / CHAR_WIDTH(format)) {
+		    /*
+		     * Beginning of rope.
+		     */
+
+		    Col_RopeIterSetEnd(it);
+		    return;
+		}
+		it->traversal.chunk.current -= nb * CHAR_WIDTH(format);
+		it->index -= nb;
+		break;
+
+	    case COL_UTF8:
+	    case COL_UTF16: {
+		size_t i;
+		for (i = 0; i < nb; i++) {
+		    if (it->traversal.chunk.current 
+			    == it->traversal.chunk.begin) {
+			/*
+			 * Beginning of rope.
+			 */
+
+			Col_RopeIterSetEnd(it);
+			break;
+		    }
+		    switch (format) {
+			case COL_UTF8:  COL_UTF8_PREVIOUS (it->traversal.chunk.current); break;
+			case COL_UTF16: COL_UTF16_PREVIOUS(it->traversal.chunk.current); break;
+		    }
+		}
+		it->index -= nb;
+		break;
+	    }
+
+	    default:
+		/* CANTHAPPEN */
+		ASSERT(0);
+		Col_RopeIterSetEnd(it);
+	}
+	
+	return;
+    }
+
     if (it->index < nb) {
+	/*
+	 * Beginning of rope.
+	 */
+    
 	Col_RopeIterSetEnd(it);
 	return;
     }
 
     it->index -= nb;
 
-    if (!it->traversal.subrope || !it->traversal.leaf) {
+    if (!it->traversal.rope.subrope || !it->traversal.rope.leaf) {
 	/*
 	 * No traversal info.
 	 */
 
 	return;
     }
-    if (it->index < it->traversal.first) {
+    if (it->index < it->traversal.rope.first) {
 	/*
 	 * Traversal info out of range. Discard leaf node info, but not 
 	 * subrope, as it may be used again should the iteration go back.
 	 */
 
-	it->traversal.leaf = WORD_NIL;
+	it->traversal.rope.leaf = WORD_NIL;
 	return;
     }
 
@@ -4458,46 +4628,46 @@ Col_RopeIterBackward(
      * Update traversal info.
      */
 
-    switch (WORD_TYPE(it->traversal.leaf)) {
+    switch (WORD_TYPE(it->traversal.rope.leaf)) {
 	case WORD_TYPE_CHAR:
 	    /*
 	     * Reached beginning of leaf. 
 	     */
 
-	    ASSERT(it->traversal.index == 0);
+	    ASSERT(it->traversal.rope.index == 0);
 	    ASSERT(nb > 0);
-	    it->traversal.leaf = WORD_NIL;
+	    it->traversal.rope.leaf = WORD_NIL;
 
 	case WORD_TYPE_SMALLSTR:
-	    if (it->traversal.index < nb) {
+	    if (it->traversal.rope.index < nb) {
 		/*
 		 * Reached beginning of leaf.
 		 */
 
-		it->traversal.leaf = WORD_NIL;
+		it->traversal.rope.leaf = WORD_NIL;
 	    } else {
-		it->traversal.index -= nb;
+		it->traversal.rope.index -= nb;
 	    }
 	    break;
 
 	case WORD_TYPE_UCSSTR:
-	    if (it->traversal.index < nb) {
+	    if (it->traversal.rope.index < nb) {
 		/*
 		 * Reached beginning of leaf. 
 		 */
 
-		it->traversal.leaf = WORD_NIL;
+		it->traversal.rope.leaf = WORD_NIL;
 	    } else {
-		it->traversal.index -= nb;
+		it->traversal.rope.index -= nb;
 	    }
 	    break;
 
 	case WORD_TYPE_UTFSTR: {
-	    size_t byteLength = WORD_UTFSTR_BYTELENGTH(it->traversal.leaf),
-		    length = WORD_UTFSTR_LENGTH(it->traversal.leaf);
-	    const char * data = WORD_UTFSTR_DATA(it->traversal.leaf),
-		    *p = data + it->traversal.index;
-	    int format = WORD_UTFSTR_FORMAT(it->traversal.leaf);
+	    size_t byteLength = WORD_UTFSTR_BYTELENGTH(it->traversal.rope.leaf),
+		    length = WORD_UTFSTR_LENGTH(it->traversal.rope.leaf);
+	    const char * data = WORD_UTFSTR_DATA(it->traversal.rope.leaf),
+		    *p = data + it->traversal.rope.index;
+	    int format = WORD_UTFSTR_FORMAT(it->traversal.rope.leaf);
 	    size_t i;
 	    if (length == byteLength) {
 		/*
@@ -4505,44 +4675,44 @@ Col_RopeIterBackward(
 		 * of character iteration.
 		 */
 
-		if (it->traversal.index < nb * CHAR_WIDTH(format)) {
+		if (it->traversal.rope.index < nb * CHAR_WIDTH(format)) {
 		    /*
 		     * Reached beginning of leaf. 
 		     */
 
-		    it->traversal.leaf = WORD_NIL;
+		    it->traversal.rope.leaf = WORD_NIL;
 		} else {
-		    it->traversal.index -= nb * CHAR_WIDTH(format);
+		    it->traversal.rope.index -= nb * CHAR_WIDTH(format);
 		}
 		break;
 	    }
 	    for (i = 0; i < nb; i++) {
-		switch (format) {
-		    case COL_UTF8:  COL_UTF8_PREVIOUS(p); break;
-		    case COL_UTF16: COL_UTF16_PREVIOUS(p); break;
-		}
-		if (p < data) {
+		if (p == data) {
 		    /*
 		     * Reached beginning of leaf.
 		     */
 
-		    it->traversal.leaf = WORD_NIL;
+		    it->traversal.rope.leaf = WORD_NIL;
 		    break;
 		}
+		switch (format) {
+		    case COL_UTF8:  COL_UTF8_PREVIOUS (p); break;
+		    case COL_UTF16: COL_UTF16_PREVIOUS(p); break;
+		}
 	    }
-	    it->traversal.index = p - data;
+	    it->traversal.rope.index = p - data;
 	    break;
 	}
 
 	case WORD_TYPE_CUSTOM:
-	    if (it->traversal.index < nb) {
+	    if (it->traversal.rope.index < nb) {
 		/*
 		 * Reached beginning of leaf.
 		 */
 
-		it->traversal.leaf = WORD_NIL;
+		it->traversal.rope.leaf = WORD_NIL;
 	    } else {
-		it->traversal.index -= nb;
+		it->traversal.rope.index -= nb;
 	    }
 	    break;
 

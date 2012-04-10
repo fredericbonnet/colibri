@@ -521,20 +521,17 @@ Col_StringBufferAppendSequence(
     rope = Col_RopeIterRope(begin);
     if (Col_RopeIterEnd(end)) {
 	endIndex = Col_RopeLength(rope);
-    } else if (Col_RopeIterRope(end) != rope) {
-	Col_Error(COL_ERROR, "Iterator ropes differ: begin=%x, end=%x", rope, 
-		Col_RopeIterRope(end));
-	return 0;
     } else {
 	endIndex = Col_RopeIterIndex(end);
     }
     sequenceLength = endIndex - Col_RopeIterIndex(begin);
 
     format = (Col_StringFormat) WORD_STRBUF_FORMAT(strbuf);
-    if (sequenceLength <= STRBUF_MAX_LENGTH(WORD_STRBUF_SIZE(strbuf) 
+    if (!rope || sequenceLength <= STRBUF_MAX_LENGTH(WORD_STRBUF_SIZE(strbuf) 
 	    * CELL_SIZE, format) - WORD_STRBUF_LENGTH(strbuf)) {
 	/*
-	 * Sequence fits into buffer, append character-wise.
+	 * Sequence fits into buffer or iterates over chunk, append 
+	 * character-wise.
 	 */
 
 	Col_RopeIterator it;
