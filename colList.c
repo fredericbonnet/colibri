@@ -2418,7 +2418,7 @@ Col_ListIterBegin(
 	     * End of list.
 	     */
 
-	    it->list = WORD_NIL;
+	    Col_ListIterSetEnd(it);
 	    return looped;
 	}
 
@@ -2465,8 +2465,7 @@ Col_ListIterFirst(
 	 * End of list.
 	 */
 
-	it->list = WORD_NIL;
-
+	Col_ListIterSetEnd(it);
 	return;
     }
 
@@ -2504,8 +2503,7 @@ Col_ListIterLast(
 	 * End of list.
 	 */
 
-	it->list = WORD_NIL;
-
+	Col_ListIterSetEnd(it);
 	return;
     }
 
@@ -2540,15 +2538,11 @@ Col_ListIterCompare(
     const Col_ListIterator *it1,
     const Col_ListIterator *it2)
 {
-    if (Col_ListIterEnd(it1)) {
-	if (Col_ListIterEnd(it2)) {
-	    return 0;
-	} else {
-	    return 1;
-	}
-    } else if (Col_ListIterEnd(it2)) {
-	return -1;
-    } else if (it1->index < it2->index) {
+    /*
+     * Note: iterators at end have their index set to SIZE_MAX.
+     */
+
+    if (it1->index < it2->index) {
 	return -1;
     } else if (it1->index > it2->index) {
 	return 1;
@@ -2631,7 +2625,7 @@ Col_ListIterForward(
 	     * End of list.
 	     */
 
-	    it->list = WORD_NIL;
+	    Col_ListIterSetEnd(it);
 	    return looped;
 	}
 
@@ -2759,7 +2753,7 @@ Col_ListIterBackward(
      */
     
     if (it->index < nb) {
-	it->list = WORD_NIL;
+	Col_ListIterSetEnd(it);
 	return;
     }
 

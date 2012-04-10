@@ -455,11 +455,11 @@ typedef ColRopeIterator Col_RopeIterator;
  *	Non-zero if iterator is at end.
  *
  * See also: 
- *	<Col_RopeIterator>, <Col_RopeIterBegin>
+ *	<Col_RopeIterator>, <Col_RopeIterBegin>, <Col_RopeIterSetEnd>
  *---------------------------------------------------------------------------*/
 
 #define Col_RopeIterEnd(it)	\
-    (!(it)->rope)
+    ((it)->index == SIZE_MAX)
 
 /*---------------------------------------------------------------------------
  * Macro: Col_RopeIterRope
@@ -571,7 +571,7 @@ typedef ColRopeIterator Col_RopeIterator;
  *---------------------------------------------------------------------------*/
 
 #define Col_RopeIterSetEnd(it)	\
-    ((it)->rope = WORD_NIL)
+    ((it)->index = SIZE_MAX)
 
 /*
  * Remaining declarations.

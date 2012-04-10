@@ -4090,8 +4090,7 @@ Col_RopeIterBegin(
 	 * End of rope.
 	 */
 
-	it->rope = WORD_NIL;
-
+	Col_RopeIterSetEnd(it);
 	return;
     }
 
@@ -4128,8 +4127,7 @@ Col_RopeIterFirst(
 	 * End of rope.
 	 */
 
-	it->rope = WORD_NIL;
-
+	Col_RopeIterSetEnd(it);
 	return;
     }
 
@@ -4167,8 +4165,7 @@ Col_RopeIterLast(
 	 * End of rope.
 	 */
 
-	it->rope = WORD_NIL;
-
+	Col_RopeIterSetEnd(it);
 	return;
     }
 
@@ -4203,15 +4200,11 @@ Col_RopeIterCompare(
     const Col_RopeIterator *it1,
     const Col_RopeIterator *it2)
 {
-    if (Col_RopeIterEnd(it1)) {
-	if (Col_RopeIterEnd(it2)) {
-	    return 0;
-	} else {
-	    return 1;
-	}
-    } else if (Col_RopeIterEnd(it2)) {
-	return -1;
-    } else if (it1->index < it2->index) {
+    /*
+     * Note: iterators at end have their index set to SIZE_MAX.
+     */
+
+    if (it1->index < it2->index) {
 	return -1;
     } else if (it1->index > it2->index) {
 	return 1;
@@ -4279,7 +4272,7 @@ Col_RopeIterForward(
 	 * End of rope.
 	 */
 
-	it->rope = WORD_NIL;
+	Col_RopeIterSetEnd(it);
 	return;
     }
     it->index += nb;
@@ -4438,7 +4431,7 @@ Col_RopeIterBackward(
      */
     
     if (it->index < nb) {
-	it->rope = WORD_NIL;
+	Col_RopeIterSetEnd(it);
 	return;
     }
 

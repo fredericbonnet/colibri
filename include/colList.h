@@ -244,11 +244,11 @@ typedef ColListIterator Col_ListIterator;
  *	Non-zero if iterator is at end.
  *
  * See also: 
- *	<Col_ListIterator>, <Col_ListIterBegin>
+ *	<Col_ListIterator>, <Col_ListIterBegin>, <Col_ListIterSetEnd>
  *---------------------------------------------------------------------------*/
 
 #define Col_ListIterEnd(it) \
-    (!(it)->list)
+    ((it)->index == SIZE_MAX)
 
 
 /*---------------------------------------------------------------------------
@@ -365,7 +365,7 @@ typedef ColListIterator Col_ListIterator;
  *---------------------------------------------------------------------------*/
 
 #define Col_ListIterSetEnd(it)	\
-    ((it)->list = WORD_NIL)
+    ((it)->index = SIZE_MAX)
 
 /*
  * Remaining declarations.

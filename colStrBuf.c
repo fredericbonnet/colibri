@@ -522,7 +522,8 @@ Col_StringBufferAppendSequence(
     if (Col_RopeIterEnd(end)) {
 	endIndex = Col_RopeLength(rope);
     } else if (Col_RopeIterRope(end) != rope) {
-	Col_Error(COL_ERROR, "Iterator ropes differ: begin=%x, end=%x", rope, Col_RopeIterRope(end));
+	Col_Error(COL_ERROR, "Iterator ropes differ: begin=%x, end=%x", rope, 
+		Col_RopeIterRope(end));
 	return 0;
     } else {
 	endIndex = Col_RopeIterIndex(end);
