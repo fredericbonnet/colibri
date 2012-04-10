@@ -2613,10 +2613,6 @@ Col_ListIterForward(
 	return looped;
     }
 
-    /*
-     * Check for end of list.
-     */
-    
     length = Col_ListLength(it->list);
     if (nb >= length - it->index) {
 	size_t loop = Col_ListLoopLength(it->list);
@@ -2748,11 +2744,11 @@ Col_ListIterBackward(
 	return;
     }
 
-    /*
-     * Check for beginning of list.
-     */
-    
     if (it->index < nb) {
+	/*
+	 * Beginning of list.
+	 */
+    
 	Col_ListIterSetEnd(it);
 	return;
     }

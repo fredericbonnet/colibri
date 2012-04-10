@@ -260,7 +260,7 @@ typedef ColListIterator Col_ListIterator;
  *	it	- The iterator to get list for.
  *
  * Result:
- *	The list, or <WORD_NIL> if at end.
+ *	The list. Undefined if at end.
  *
  * See also: 
  *	<Col_ListIterator>, <Col_ListIterEnd>

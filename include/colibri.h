@@ -393,11 +393,11 @@ typedef enum Col_StringFormat {
 
 #define COL_CHAR_NEXT(format, data, c) \
     switch (format) { \
-	case COL_UCS1:  (c) = *((const Col_Char1 *) (data));              (data) = (const char *) (data) + 1; break; \
-	case COL_UCS2:  (c) = *((const Col_Char2 *) (data));              (data) = (const char *) (data) + 2; break; \
-	case COL_UCS4:  (c) = *((const Col_Char4 *) (data));              (data) = (const char *) (data) + 4; break; \
-	case COL_UTF8:  (c) = Col_Utf8GetChar ((const Col_Char1 *) data); COL_UTF8_NEXT(data);                break; \
-	case COL_UTF16: (c) = Col_Utf16GetChar((const Col_Char2 *) data); COL_UTF16_NEXT(data);               break; \
+	case COL_UCS1:  (c) =                *((const Col_Char1 *) (data)); (data) = (const char *) (data) + 1; break; \
+	case COL_UCS2:  (c) =                *((const Col_Char2 *) (data)); (data) = (const char *) (data) + 2; break; \
+	case COL_UCS4:  (c) =                *((const Col_Char4 *) (data)); (data) = (const char *) (data) + 4; break; \
+	case COL_UTF8:  (c) = Col_Utf8GetChar ((const Col_Char1 *) data);   COL_UTF8_NEXT(data);                break; \
+	case COL_UTF16: (c) = Col_Utf16GetChar((const Col_Char2 *) data);   COL_UTF16_NEXT(data);               break; \
     }
 
 /*---------------------------------------------------------------------------
@@ -418,11 +418,11 @@ typedef enum Col_StringFormat {
 
 #define COL_CHAR_PREVIOUS(format, data, c) \
     switch (format) { \
-	case COL_UCS1:  (data) = (const char *) (data) - 1; (c) = *((const Col_Char1 *) (data));              break; \
-	case COL_UCS2:  (data) = (const char *) (data) - 2; (c) = *((const Col_Char2 *) (data));              break; \
-	case COL_UCS4:  (data) = (const char *) (data) - 4; (c) = *((const Col_Char4 *) (data));              break; \
-	case COL_UTF8:  COL_UTF8_PREVIOUS(data);            (c) = Col_Utf8GetChar ((const Col_Char1 *) data); break; \
-	case COL_UTF16: COL_UTF16_PREVIOUS(data);           (c) = Col_Utf16GetChar((const Col_Char2 *) data); break; \
+	case COL_UCS1:  (data) = (const char *) (data) - 1; (c) =                *((const Col_Char1 *) (data)); break; \
+	case COL_UCS2:  (data) = (const char *) (data) - 2; (c) =                *((const Col_Char2 *) (data)); break; \
+	case COL_UCS4:  (data) = (const char *) (data) - 4; (c) =                *((const Col_Char4 *) (data)); break; \
+	case COL_UTF8:  COL_UTF8_PREVIOUS(data);            (c) = Col_Utf8GetChar ((const Col_Char1 *) data);   break; \
+	case COL_UTF16: COL_UTF16_PREVIOUS(data);           (c) = Col_Utf16GetChar((const Col_Char2 *) data);   break; \
     }
 
 EXTERN const Col_Char1 * Col_Utf8CharAddr(const Col_Char1 * data, 
