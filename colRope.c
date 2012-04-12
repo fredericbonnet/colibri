@@ -4071,10 +4071,10 @@ ColRopeIterUpdateTraversalInfo(
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: ColRopeChunkCharAt
+ * Internal Function: ColStringIterCharAt
  *
  *	Get the character at the position designated by the iterator. The latter
- *	must have been initialized by <Col_RopeIterChunk>.
+ *	must have been initialized by <Col_RopeIterString>.
  *
  * Argument:
  *	it	- The iterator.
@@ -4084,16 +4084,16 @@ ColRopeIterUpdateTraversalInfo(
  *---------------------------------------------------------------------------*/
 
 Col_Char
-ColRopeChunkCharAt(
+ColStringIterCharAt(
     const Col_RopeIterator *it)
 {
     ASSERT(!it->rope);
-    switch (it->traversal.chunk.format) {
-	case COL_UCS1:  return                 *(const Col_Char1 *) it->traversal.chunk.current;
-	case COL_UCS2:  return                 *(const Col_Char2 *) it->traversal.chunk.current;
-	case COL_UCS4:  return                 *(const Col_Char4 *) it->traversal.chunk.current;
-	case COL_UTF8:  return Col_Utf8GetChar ((const Col_Char1 *) it->traversal.chunk.current);
-	case COL_UTF16: return Col_Utf16GetChar((const Col_Char2 *) it->traversal.chunk.current);
+    switch (it->traversal.str.format) {
+	case COL_UCS1:  return                 *(const Col_Char1 *) it->traversal.str.current;
+	case COL_UCS2:  return                 *(const Col_Char2 *) it->traversal.str.current;
+	case COL_UCS4:  return                 *(const Col_Char4 *) it->traversal.str.current;
+	case COL_UTF8:  return Col_Utf8GetChar ((const Col_Char1 *) it->traversal.str.current);
+	case COL_UTF16: return Col_Utf16GetChar((const Col_Char2 *) it->traversal.str.current);
     }
 
     /* CANTHAPPEN */
@@ -4106,8 +4106,7 @@ ColRopeChunkCharAt(
  *
  *	Initialize the rope iterator so that it points to the index-th
  *	character within the rope. If index points past the end of the rope, the
- *	iterator is initialized to the end iterator (i.e. whose rope field is 
- *	nil).
+ *	iterator is initialized to the end iterator.
  *
  * Arguments:
  *	rope	- Rope to iterate over.
@@ -4121,16 +4120,15 @@ Col_RopeIterBegin(
     size_t index,
     Col_RopeIterator *it)
 {
-    if (index >= Col_RopeLength(rope)) {
+    it->rope = rope;
+    it->length = Col_RopeLength(rope);;
+    if (index >= it->length) {
 	/*
-	 * End of rope.
+	 * End of list.
 	 */
 
-	Col_RopeIterSetEnd(it);
-	return;
+	index = it->length;
     }
-
-    it->rope = rope;
     it->index = index;
 
     /*
@@ -4146,7 +4144,7 @@ Col_RopeIterBegin(
  *
  *	Initialize the rope iterator so that it points to the first
  *	character within the rope. If rope is empty, the iterator is initialized
- *	to the end iterator (i.e. whose rope field is nil).
+ *	to the end iterator.
  *
  * Arguments:
  *	rope	- Rope to iterate over.
@@ -4158,16 +4156,8 @@ Col_RopeIterFirst(
     Col_Word rope,
     Col_RopeIterator *it)
 {
-    if (Col_RopeLength(rope) == 0) {
-	/*
-	 * End of rope.
-	 */
-
-	Col_RopeIterSetEnd(it);
-	return;
-    }
-
     it->rope = rope;
+    it->length = Col_RopeLength(rope);
     it->index = 0;
 
     /*
@@ -4183,7 +4173,7 @@ Col_RopeIterFirst(
  *
  *	Initialize the rope iterator so that it points to the last
  *	character within the rope. If rope is empty, the iterator is initialized
- *	to the end iterator (i.e. whose rope field is nil).
+ *	to the end iterator.
  *
  * Arguments:
  *	rope	- Rope to iterate over.
@@ -4195,18 +4185,17 @@ Col_RopeIterLast(
     Col_Word rope,
     Col_RopeIterator *it)
 {
-    size_t length = Col_RopeLength(rope);
-    if (length == 0) {
+    it->rope = rope;
+    it->length = Col_RopeLength(rope);
+    if (it->length == 0) {
 	/*
-	 * End of rope.
+	 * End of list.
 	 */
 
-	Col_RopeIterSetEnd(it);
-	return;
+	it->index = 0;
+    } else {
+	it->index = it->length-1;
     }
-
-    it->rope = rope;
-    it->index = length-1;
 
     /*
      * Traversal info will be lazily computed.
@@ -4217,31 +4206,31 @@ Col_RopeIterLast(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_RopeIterChunk
+ * Function: Col_RopeIterString
  *
  *	Initialize the rope iterator so that it points to the first character
- *	in a chunk.
+ *	in a string.
  *
  * Arguments:
- *	format		- Format of data in chunk (see <Col_StringFormat>).
- *	data		- Buffer containing flat data.
- *	byteLength	- Length of data in bytes.
- *	it		- Iterator to initialize.
+ *	format	- Format of data in string (see <Col_StringFormat>).
+ *	data	- Buffer containing flat data.
+ *	length	- Character length of string.
+ *	it	- Iterator to initialize.
  *---------------------------------------------------------------------------*/
 
 void
-Col_RopeIterChunk(
+Col_RopeIterString(
     Col_StringFormat format, 
     const void *data, 
-    size_t byteLength,
+    size_t length,
     Col_RopeIterator *it)
 {
     it->rope = WORD_NIL;
+    it->length = length;
     it->index = 0;
-    it->traversal.chunk.format = format;
-    it->traversal.chunk.begin = (const char *) data;
-    it->traversal.chunk.end = (const char *) data + byteLength;
-    it->traversal.chunk.current = (const char *) data;
+    it->traversal.str.format = format;
+    it->traversal.str.begin = (const char *) data;
+    it->traversal.str.current = (const char *) data;
 }
 
 /*---------------------------------------------------------------------------
@@ -4314,11 +4303,6 @@ Col_RopeIterForward(
     Col_RopeIterator *it,
     size_t nb)
 {
-    if (Col_RopeIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid rope iterator");
-	return;
-    }
-
     if (nb == 0) {
 	/*
 	 * No-op.
@@ -4327,71 +4311,46 @@ Col_RopeIterForward(
 	return;
     }
 
+    if (Col_RopeIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid rope iterator");
+	return;
+    }
+
+    if (nb >= it->length - it->index) {
+	/*
+	 * End of rope.
+	 */
+
+	it->index = it->length;
+	return;
+    }
+    it->index += nb;
+
     if (!it->rope) {
 	/*
 	 * Chunk iterator.
 	 */
 
-	Col_StringFormat format = it->traversal.chunk.format;
+	Col_StringFormat format = it->traversal.str.format;
 	switch (format) {
 	    case COL_UCS1:
 	    case COL_UCS2:
 	    case COL_UCS4:
-		if (nb >= (size_t) (it->traversal.chunk.end 
-			- it->traversal.chunk.current) / CHAR_WIDTH(format)) {
-		    /*
-		     * End of rope.
-		     */
-
-		    Col_RopeIterSetEnd(it);
-		    return;
-		}
-		it->index += nb;
-		it->traversal.chunk.current += nb * CHAR_WIDTH(format);
+		it->traversal.str.current += nb * CHAR_WIDTH(format);
 		break;
 
 	    case COL_UTF8:
-	    case COL_UTF16: {
-		size_t i;
-		for (i = 0; i < nb; i++) {
-		    switch (format) {
-			case COL_UTF8:  COL_UTF8_NEXT (it->traversal.chunk.current); break;
-			case COL_UTF16: COL_UTF16_NEXT(it->traversal.chunk.current); break;
-		    }
-		    if (it->traversal.chunk.current 
-			    >= it->traversal.chunk.end) {
-			/*
-			 * End of rope.
-			 */
-
-			Col_RopeIterSetEnd(it);
-			return;
-		    }
-		}
-		it->index += nb;
+		while (nb--) COL_UTF8_NEXT(it->traversal.str.current);
 		break;
-	    }
 
-	    default:
-		/* CANTHAPPEN */
-		ASSERT(0);
-		Col_RopeIterSetEnd(it);
+	    case COL_UTF16:
+		while (nb--) COL_UTF16_NEXT(it->traversal.str.current);
+		break;
 	}
-	
 	return;
     }
 
     ASSERT(it->rope);
-    if (nb >= Col_RopeLength(it->rope) - it->index) {
-	/*
-	 * End of rope.
-	 */
-
-	Col_RopeIterSetEnd(it);
-	return;
-    }
-    it->index += nb;
-
     if (!it->traversal.rope.subrope || !it->traversal.rope.leaf) {
 	/*
 	 * No traversal info.
@@ -4529,11 +4488,6 @@ Col_RopeIterBackward(
     Col_RopeIterator *it,
     size_t nb)
 {
-    if (Col_RopeIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid rope iterator");
-	return;
-    }
-
     if (nb == 0) {
 	/*
 	 * No-op.
@@ -4542,57 +4496,47 @@ Col_RopeIterBackward(
 	return;
     }
 
-    if (!it->rope) {
-	/*
-	 * Chunk iterator.
-	 */
+    if (Col_RopeIterEnd(it)) {
+	if (nb <= it->length) {
+	    /*
+	     * Allow iterators at end to go back.
+	     */
 
-	Col_StringFormat format = it->traversal.chunk.format;
-	switch (format) {
-	    case COL_UCS1:
-	    case COL_UCS2:
-	    case COL_UCS4:
-		if (nb > (size_t) (it->traversal.chunk.current 
-			- it->traversal.chunk.begin) / CHAR_WIDTH(format)) {
-		    /*
-		     * Beginning of rope.
-		     */
+	    it->index = it->length-nb;
+	    if (!it->rope) {
+		/*
+		 * Chunk iterator.
+		 */
 
-		    Col_RopeIterSetEnd(it);
-		    return;
-		}
-		it->traversal.chunk.current -= nb * CHAR_WIDTH(format);
-		it->index -= nb;
-		break;
-
-	    case COL_UTF8:
-	    case COL_UTF16: {
-		size_t i;
-		for (i = 0; i < nb; i++) {
-		    if (it->traversal.chunk.current 
-			    == it->traversal.chunk.begin) {
-			/*
-			 * Beginning of rope.
-			 */
-
-			Col_RopeIterSetEnd(it);
+		Col_StringFormat format = it->traversal.str.format;
+		switch (format) {
+		    case COL_UCS1:
+		    case COL_UCS2:
+		    case COL_UCS4:
+			it->traversal.str.current = it->traversal.str.begin
+				+ it->index * CHAR_WIDTH(format);
 			break;
-		    }
-		    switch (format) {
-			case COL_UTF8:  COL_UTF8_PREVIOUS (it->traversal.chunk.current); break;
-			case COL_UTF16: COL_UTF16_PREVIOUS(it->traversal.chunk.current); break;
-		    }
+
+		    case COL_UTF8:
+			it->traversal.str.current = it->traversal.str.begin;
+			nb = it->index;
+			while (nb--) COL_UTF8_NEXT(it->traversal.str.current);
+			break;
+
+		    case COL_UTF16:
+			it->traversal.str.current = it->traversal.str.begin;
+			nb = it->index;
+			while (nb--) COL_UTF16_NEXT(it->traversal.str.current);
+			break;
 		}
-		it->index -= nb;
-		break;
+		return;
 	    }
 
-	    default:
-		/* CANTHAPPEN */
-		ASSERT(0);
-		Col_RopeIterSetEnd(it);
+	    ASSERT(it->rope);
+	    it->traversal.rope.leaf = WORD_NIL;
+	    return;
 	}
-	
+	Col_Error(COL_ERROR, "Invalid rope iterator");
 	return;
     }
 
@@ -4601,12 +4545,36 @@ Col_RopeIterBackward(
 	 * Beginning of rope.
 	 */
     
-	Col_RopeIterSetEnd(it);
+	it->index = it->length;
+	return;
+    }
+    it->index -= nb;
+
+    if (!it->rope) {
+	/*
+	 * Chunk iterator.
+	 */
+
+	Col_StringFormat format = it->traversal.str.format;
+	switch (format) {
+	    case COL_UCS1:
+	    case COL_UCS2:
+	    case COL_UCS4:
+		it->traversal.str.current -= nb * CHAR_WIDTH(format);
+		break;
+
+	    case COL_UTF8:
+		while (nb--) COL_UTF8_PREVIOUS(it->traversal.str.current);
+		break;
+
+	    case COL_UTF16:
+		while (nb--) COL_UTF16_PREVIOUS(it->traversal.str.current);
+		break;
+	}
 	return;
     }
 
-    it->index -= nb;
-
+    ASSERT(it->rope);
     if (!it->traversal.rope.subrope || !it->traversal.rope.leaf) {
 	/*
 	 * No traversal info.

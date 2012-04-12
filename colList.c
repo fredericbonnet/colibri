@@ -2389,8 +2389,7 @@ ColListIterUpdateTraversalInfo(
  *
  *	Initialize the list iterator so that it points to the index-th
  *	element within the list. If index points past the end of the list, the
- *	iterator is initialized to the end iterator (i.e. whose list field is 
- *	nil).
+ *	iterator is initialized to the end iterator.
  *
  * Arguments:
  *	list	- List to iterate over.
@@ -2407,30 +2406,27 @@ Col_ListIterBegin(
     size_t index,
     Col_ListIterator *it)
 {
-    size_t length;
     int looped=0;
 
-    length = Col_ListLength(list);
-    if (index >= length) {
+    it->list = list;
+    it->length = Col_ListLength(list);
+    if (index >= it->length) {
 	size_t loop = Col_ListLoopLength(list);
 	if (!loop) {
 	    /*
 	     * End of list.
 	     */
 
-	    Col_ListIterSetEnd(it);
-	    return looped;
+	    index = it->length;
+	} else {
+	    /*
+	     * Cyclic list. Normalize index.
+	     */
+
+	    looped = 1;
+	    index = (index - (it->length-loop)) % loop + (it->length-loop);
 	}
-
-	/*
-	 * Cyclic list. Normalize index.
-	 */
-
-	looped = 1;
-	index = (index - (length-loop)) % loop + (length-loop);
     }
-
-    it->list = list;
     it->index = index;
 
     /*
@@ -2448,7 +2444,7 @@ Col_ListIterBegin(
  *
  *	Initialize the list iterator so that it points to the first
  *	character within the list. If list is empty, the iterator is initialized
- *	to the end iterator (i.e. whose list field is nil).
+ *	to the end iterator.
  *
  * Arguments:
  *	list	- List to iterate over.
@@ -2460,16 +2456,8 @@ Col_ListIterFirst(
     Col_Word list,
     Col_ListIterator *it)
 {
-    if (Col_ListLength(list) == 0) {
-	/*
-	 * End of list.
-	 */
-
-	Col_ListIterSetEnd(it);
-	return;
-    }
-
     it->list = list;
+    it->length = Col_ListLength(list);
     it->index = 0;
 
     /*
@@ -2485,7 +2473,7 @@ Col_ListIterFirst(
  *
  *	Initialize the list iterator so that it points to the last
  *	character within the list. If list is empty, the iterator is initialized
- *	to the end iterator (i.e. whose list field is nil).
+ *	to the end iterator.
  *
  * Arguments:
  *	list	- List to iterate over.
@@ -2497,18 +2485,17 @@ Col_ListIterLast(
     Col_Word list,
     Col_ListIterator *it)
 {
-    size_t length = Col_ListLength(list);
-    if (length == 0) {
+    it->list = list;
+    it->length = Col_ListLength(list);
+    if (it->length == 0) {
 	/*
 	 * End of list.
 	 */
 
-	Col_ListIterSetEnd(it);
-	return;
+	it->index = 0;
+    } else {
+	it->index = it->length-1;
     }
-
-    it->list = list;
-    it->index = length-1;
 
     /*
      * Traversal info will be lazily computed.
@@ -2597,13 +2584,7 @@ Col_ListIterForward(
     Col_ListIterator *it,
     size_t nb)
 {
-    size_t length;
     int looped=0;
-
-    if (Col_ListIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid list iterator");
-	return looped;
-    }
 
     if (nb == 0) {
 	/*
@@ -2613,15 +2594,19 @@ Col_ListIterForward(
 	return looped;
     }
 
-    length = Col_ListLength(it->list);
-    if (nb >= length - it->index) {
+    if (Col_ListIterEnd(it)) {
+	Col_Error(COL_ERROR, "Invalid list iterator");
+	return looped;
+    }
+
+    if (nb >= it->length - it->index) {
 	size_t loop = Col_ListLoopLength(it->list);
 	if (!loop) {
 	    /*
 	     * End of list.
 	     */
 
-	    Col_ListIterSetEnd(it);
+	    it->index = it->length;
 	    return looped;
 	}
 
@@ -2630,12 +2615,12 @@ Col_ListIterForward(
 	 */
 
 	looped = 1;
-	if (it->index < length-loop) {
+	if (it->index < it->length-loop) {
 	    /*
 	     * Currently before loop, forward into loop.
 	     */
 
-	    size_t nb1 = (length-loop) - it->index;
+	    size_t nb1 = (it->length-loop) - it->index;
 	    ASSERT(nb >= nb1);
 	    nb = nb1 + (nb-nb1) % loop;
 	    it->index += nb;
@@ -2645,7 +2630,7 @@ Col_ListIterForward(
 	     */
 
 	    nb %= loop;
-	    if (it->index >= length-nb) {
+	    if (it->index >= it->length-nb) {
 		/*
 		 * Loop backward.
 		 */
@@ -2731,11 +2716,6 @@ Col_ListIterBackward(
     Col_ListIterator *it,
     size_t nb)
 {
-    if (Col_ListIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid list iterator");
-	return;
-    }
-
     if (nb == 0) {
 	/*
 	 * No-op.
@@ -2744,15 +2724,28 @@ Col_ListIterBackward(
 	return;
     }
 
+    if (Col_ListIterEnd(it)) {
+	if (nb <= it->length) {
+	    /*
+	     * Allow iterators at end to go back.
+	     */
+
+	    it->index = it->length-nb;
+	    it->traversal.leaf = WORD_NIL;
+	    return;
+	}
+	Col_Error(COL_ERROR, "Invalid list iterator");
+	return;
+    }
+
     if (it->index < nb) {
 	/*
 	 * Beginning of list.
 	 */
     
-	Col_ListIterSetEnd(it);
+	it->index = it->length;
 	return;
     }
-
     it->index -= nb;
 
     if (!it->traversal.subnode || !it->traversal.leaf) {

@@ -373,9 +373,9 @@ EXTERN int		Col_TraverseRopeChunks(Col_Word rope, size_t start,
  *
  * Declarations: 
  *	<Col_RopeIterBegin>, <Col_RopeIterFirst>, <Col_RopeIterLast>, 
- *	<Col_RopeIterChunk>, <Col_RopeIterCompare>, <Col_RopeIterMoveTo>,
+ *	<Col_RopeIterString>, <Col_RopeIterCompare>, <Col_RopeIterMoveTo>,
  *	<Col_RopeIterForward>, <Col_RopeIterBackward>, 
- *	<ColRopeIterUpdateTraversalInfo>, <ColRopeChunkCharAt>
+ *	<ColRopeIterUpdateTraversalInfo>, <ColStringIterCharAt>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -403,10 +403,15 @@ typedef Col_Char (ColRopeIterLeafAtProc) (Col_Word leaf, size_t index);
  *
  * Fields:
  *	rope		- Rope being iterated. If nil, use chunk iterator mode.
+ *	length		- Rope length.
  *	index		- Current position.
  *	traversal	- Traversal info:
+ *	traversal.str	- Traversal info in string mode.
  *	traversal.rope	- Traversal info in rope mode.
- *	traversal.chunk	- Traversal info in chunk mode.
+ *
+ * String mode fields:
+ *	begin	- Beginning of data chunk.
+ *	current	- Current position.
  *
  * Rope mode fields:
  *	subrope		- Traversed subrope.
@@ -417,19 +422,19 @@ typedef Col_Char (ColRopeIterLeafAtProc) (Col_Word leaf, size_t index);
  *			  formats).
  *	proc		- Access proc within leaf.
  *
- * Chunk mode fields:
- *	begin	- Beginning of data chunk.
- *	end	- End of data chunk.
- *	current	- Current position.
- *
  * See also:
  *	<Col_RopeIterator>
  *---------------------------------------------------------------------------*/
 
 typedef struct ColRopeIterator {
     Col_Word rope;
+    size_t length;
     size_t index;
     union {
+	struct {
+	    const char *begin, *current;
+	    Col_StringFormat format;
+	} str;
 	struct {
 	    Col_Word subrope;
 	    size_t first, last;
@@ -438,10 +443,6 @@ typedef struct ColRopeIterator {
 	    size_t index;
 	    ColRopeIterLeafAtProc *proc;
 	} rope;
-	struct {
-	    Col_StringFormat format;
-	    const char *begin, *end, *current;
-	} chunk;
     } traversal;
 } ColRopeIterator;
 
@@ -454,28 +455,54 @@ typedef struct ColRopeIterator {
  * Note:
  *	Datatype is opaque. Fields should not be accessed by client code.
  *
- *	Each iterator takes 9 words on the stack.
+ *	Each iterator takes 10 words on the stack.
  *---------------------------------------------------------------------------*/
 
 typedef ColRopeIterator Col_RopeIterator;
 
 /*---------------------------------------------------------------------------
- * Macro: Col_RopeIterEnd
+ * Internal Variable: colRopeIterNull
  *
- *	Test whether iterator reached end of rope.
+ *	Static rope variable for iterator initialization. The C compiler
+ *	initializes static variables to zero by default.
  *
- * Argument:
- *	it	- The iterator to test.
- *
- * Result:
- *	Non-zero if iterator is at end.
- *
- * See also: 
- *	<Col_RopeIterator>, <Col_RopeIterBegin>, <Col_RopeIterSetEnd>
+ * See also:
+ *	<COL_ROPEITER_NULL>
  *---------------------------------------------------------------------------*/
 
-#define Col_RopeIterEnd(it)	\
-    ((it)->index == SIZE_MAX)
+static const Col_RopeIterator colRopeIterNull = {0,0,{0}};
+
+/*---------------------------------------------------------------------------
+ * Constant: COL_ROPEITER_NULL
+ *
+ *	Static initializer for null iterators.
+ *
+ * See also: 
+ *	<Col_RopeIterator>, <Col_RopeIterNull>
+ *---------------------------------------------------------------------------*/
+
+#define COL_ROPEITER_NULL	colRopeIterNull
+
+/*---------------------------------------------------------------------------
+ * Macro: Col_RopeIterNull
+ *
+ *	Test whether iterator is null (e.g. it has been set to 
+ *	<COL_ROPEITER_NULL>). This uninitialized states renders it unusable for
+ *	any call. Use with caution.
+ *
+ * Argument:
+ *	it	- The iterator to test. (Caution: evaluated several times during
+ *		  macro expansion)
+ *
+ * Result:
+ *	Non-zero if iterator is null.
+ *
+ * See also: 
+ *	<Col_RopeIterator>, <COL_ROPEITER_NULL>
+ *---------------------------------------------------------------------------*/
+
+#define Col_RopeIterNull(it) \
+    ((it)->rope == WORD_NIL && (it)->traversal.str.begin == NULL)
 
 /*---------------------------------------------------------------------------
  * Macro: Col_RopeIterRope
@@ -487,7 +514,7 @@ typedef ColRopeIterator Col_RopeIterator;
  *
  * Result:
  *	The rope, or <WORD_NIL> if iterator was initialized with
- *	<Col_RopeIterChunk>. Undefined if at end.
+ *	<Col_RopeIterString>. Undefined if at end.
  *
  * See also: 
  *	<Col_RopeIterator>, <Col_RopeIterEnd>
@@ -517,10 +544,11 @@ typedef ColRopeIterator Col_RopeIterator;
 /*---------------------------------------------------------------------------
  * Macro: Col_RopeIterAt
  *
- *	Get current rope character for iterator.
+ *	Get current rope character for iterator. Undefined if at end.
  *
  * Argument:
- *	it	- The iterator to get character for.
+ *	it	- The iterator to get character for. (Caution: evaluated several
+ *		  times during macro expansion)
  *
  * Result:
  *	Current character. Undefined if at end.
@@ -536,7 +564,7 @@ typedef ColRopeIterator Col_RopeIterator;
 #define Col_RopeIterAt(it) \
     ((it)->rope \
 	? (!(it)->traversal.rope.leaf?ColRopeIterUpdateTraversalInfo(it),0:0,(it)->traversal.rope.proc((it)->traversal.rope.leaf, (it)->traversal.rope.index)) \
-	: ColRopeChunkCharAt(it))
+	: ColStringIterCharAt(it))
 
 /*---------------------------------------------------------------------------
  * Macro: Col_RopeIterNext
@@ -575,22 +603,23 @@ typedef ColRopeIterator Col_RopeIterator;
     Col_RopeIterBackward((it), 1)
 
 /*---------------------------------------------------------------------------
- * Macro: Col_RopeIterSetEnd
+ * Macro: Col_RopeIterEnd
  *
- *	Move iterator past end of (any) rope.
+ *	Test whether iterator reached end of rope.
  *
  * Argument:
- *	it	- The iterator to move.
+ *	it	- The iterator to test. (Caution: evaluated several times 
+ *		  during macro expansion)
  *
  * Result:
  *	Non-zero if iterator is at end.
  *
  * See also: 
- *	<Col_RopeIterator>, <Col_RopeIterEnd>
+ *	<Col_RopeIterator>, <Col_RopeIterBegin>
  *---------------------------------------------------------------------------*/
 
-#define Col_RopeIterSetEnd(it)	\
-    ((it)->index = SIZE_MAX)
+#define Col_RopeIterEnd(it)	\
+    ((it)->index >= (it)->length)
 
 /*
  * Remaining declarations.
@@ -600,8 +629,8 @@ EXTERN void		Col_RopeIterBegin(Col_Word rope, size_t index,
 			    Col_RopeIterator *it);
 EXTERN void		Col_RopeIterFirst(Col_Word rope, Col_RopeIterator *it);
 EXTERN void		Col_RopeIterLast(Col_Word rope, Col_RopeIterator *it);
-EXTERN void		Col_RopeIterChunk(Col_StringFormat format, 
-			    const void *data, size_t byteLength, 
+EXTERN void		Col_RopeIterString(Col_StringFormat format, 
+			    const void *data, size_t length, 
 			    Col_RopeIterator *it);
 EXTERN int		Col_RopeIterCompare(const Col_RopeIterator *it1, 
 			    const Col_RopeIterator *it2);
@@ -610,7 +639,7 @@ EXTERN void		Col_RopeIterForward(Col_RopeIterator *it, size_t nb);
 EXTERN void		Col_RopeIterBackward(Col_RopeIterator *it, size_t nb);
 
 EXTERN void		ColRopeIterUpdateTraversalInfo(Col_RopeIterator *it);
-EXTERN Col_Char		ColRopeChunkCharAt(const Col_RopeIterator *it);
+EXTERN Col_Char		ColStringIterCharAt(const Col_RopeIterator *it);
 
 
 /****************************************************************************

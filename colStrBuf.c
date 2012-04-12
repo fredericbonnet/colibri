@@ -530,7 +530,7 @@ Col_StringBufferAppendSequence(
     if (!rope || sequenceLength <= STRBUF_MAX_LENGTH(WORD_STRBUF_SIZE(strbuf) 
 	    * CELL_SIZE, format) - WORD_STRBUF_LENGTH(strbuf)) {
 	/*
-	 * Sequence fits into buffer or iterates over chunk, append 
+	 * Sequence is in string mode or fits into buffer, append 
 	 * character-wise.
 	 */
 

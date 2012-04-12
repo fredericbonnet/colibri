@@ -170,6 +170,7 @@ EXTERN int		Col_TraverseListChunks(Col_Word list, size_t start,
 
 /*---------------------------------------------------------------------------
  * Internal Typedef: ColListIterLeafAtProc
+ *
  *	Helper for list iterators to access characters in leaves.
  *
  * Arguments:
@@ -192,6 +193,7 @@ typedef Col_Word (ColListIterLeafAtProc) (Col_Word leaf, size_t index);
  *
  * Fields:
  *	list			- List being iterated.
+ *	length			- List length.
  *	index			- Current position.
  *	traversal		- Traversal info:
  *	traversal.subnode	- Traversed subnode.
@@ -207,6 +209,7 @@ typedef Col_Word (ColListIterLeafAtProc) (Col_Word leaf, size_t index);
 
 typedef struct ColListIterator {
     Col_Word list;
+    size_t length;
     size_t index;
     struct {
 	Col_Word subnode;
@@ -227,29 +230,53 @@ typedef struct ColListIterator {
  * Note:
  *	Datatype is opaque. Fields should not be accessed by client code.
  *
- *	Each iterator takes 9 words on the stack.
+ *	Each iterator takes 10 words on the stack.
  *---------------------------------------------------------------------------*/
 
 typedef ColListIterator Col_ListIterator;
 
 /*---------------------------------------------------------------------------
- * Macro: Col_ListIterEnd
+ * Internal Variable: colListIterNull
  *
- *	Test whether iterator reached end of list.
+ *	Static list variable for iterator initialization. The C compiler
+ *	initializes static variables to zero by default.
+ *
+ * See also:
+ *	<COL_LISTITER_NULL>
+ *---------------------------------------------------------------------------*/
+
+static const Col_ListIterator colListIterNull = {0};
+
+/*---------------------------------------------------------------------------
+ * Constant: COL_LISTITER_NULL
+ *
+ *	Static initializer for null iterators.
+ *
+ * See also: 
+ *	<Col_ListIterator>, <Col_ListIterNull>
+ *---------------------------------------------------------------------------*/
+
+#define COL_LISTITER_NULL	colListIterNull
+
+/*---------------------------------------------------------------------------
+ * Macro: Col_ListIterNull
+ *
+ *	Test whether iterator is null (e.g. it has been set to 
+ *	<COL_LISTITER_NULL>). This uninitialized states renders it unusable for 
+ *	any call. Use with caution.
  *
  * Argument:
  *	it	- The iterator to test.
  *
  * Result:
- *	Non-zero if iterator is at end.
+ *	Non-zero if iterator is null.
  *
  * See also: 
- *	<Col_ListIterator>, <Col_ListIterBegin>, <Col_ListIterSetEnd>
+ *	<Col_ListIterator>, <COL_LISTITER_NULL>
  *---------------------------------------------------------------------------*/
 
-#define Col_ListIterEnd(it) \
-    ((it)->index == SIZE_MAX)
-
+#define Col_ListIterNull(it) \
+    ((it)->list == WORD_NIL)
 
 /*---------------------------------------------------------------------------
  * Macro: Col_ListIterList
@@ -293,7 +320,8 @@ typedef ColListIterator Col_ListIterator;
  *	Get current list element for iterator.
  *
  * Argument:
- *	it	- The iterator to get element for.
+ *	it	- The iterator to get element for. (Caution: evaluated several
+ *		  times during macro expansion)
  *
  * Result:
  *	Current element. Undefined if at end.
@@ -348,24 +376,24 @@ typedef ColListIterator Col_ListIterator;
 #define Col_ListIterPrevious(it) \
     Col_ListIterBackward((it), 1)
 
-
 /*---------------------------------------------------------------------------
- * Macro: Col_ListIterSetEnd
+ * Macro: Col_ListIterEnd
  *
- *	Move iterator past end of (any) list.
+ *	Test whether iterator reached end of list.
  *
  * Argument:
- *	it	- The iterator to move.
+ *	it	- The iterator to test. (Caution: evaluated several times 
+ *		  during macro expansion)
  *
  * Result:
  *	Non-zero if iterator is at end.
  *
  * See also: 
- *	<Col_ListIterator>, <Col_ListIterEnd>
+ *	<Col_ListIterator>, <Col_ListIterBegin>
  *---------------------------------------------------------------------------*/
 
-#define Col_ListIterSetEnd(it)	\
-    ((it)->index = SIZE_MAX)
+#define Col_ListIterEnd(it) \
+    ((it)->index >= (it)->length)
 
 /*
  * Remaining declarations.
