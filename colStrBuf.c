@@ -253,7 +253,7 @@ Col_StringBufferValue(
  * See also:
  *	<Col_StringBufferFormat>, <Col_StringBufferAppendChar>,
  *	<Col_StringBufferAppendRope>, <Col_StringBufferAppendSequence>,
- *	<Col_StringBufferAppendReserve>
+ *	<Col_StringBufferReserve>
  *---------------------------------------------------------------------------*/
 
 static void
@@ -643,6 +643,26 @@ Col_StringBufferRelease(
     } else {
 	WORD_STRBUF_LENGTH(strbuf) -= length;
     }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_StringBufferReset
+ *
+ *	Empty the string buffer.
+ *
+ * Argument:
+ *	strbuf	- String buffer to reset.
+ *
+ * Side effects:
+ *	Reset buffer length & accumulated rope.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_StringBufferReset(
+    Col_Word strbuf)
+{
+    WORD_STRBUF_ROPE(strbuf) = WORD_SMALLSTR_EMPTY;
+    WORD_STRBUF_LENGTH(strbuf) = 0;
 }
 
 /*---------------------------------------------------------------------------
