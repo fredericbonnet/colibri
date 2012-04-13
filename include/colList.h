@@ -297,6 +297,24 @@ static const Col_ListIterator colListIterNull = {0};
     ((it)->list)
 
 /*---------------------------------------------------------------------------
+ * Macro: Col_ListIterLength
+ *
+ *	Get length of the iterated sequence.
+ *
+ * Argument:
+ *	it	- The iterator to get length for.
+ *
+ * Result:
+ *	Length of iterated sequence.
+ *
+ * See also: 
+ *	<Col_ListIterator>
+ *---------------------------------------------------------------------------*/
+
+#define Col_ListIterLength(it) \
+    ((it)->length)
+
+/*---------------------------------------------------------------------------
  * Macro: Col_ListIterIndex
  *
  *	Get current index within list for iterator.

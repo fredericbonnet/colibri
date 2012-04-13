@@ -524,6 +524,24 @@ static const Col_RopeIterator colRopeIterNull = {0,0,{0}};
     ((it)->rope)
 
 /*---------------------------------------------------------------------------
+ * Macro: Col_RopeIterLength
+ *
+ *	Get length of the iterated sequence.
+ *
+ * Argument:
+ *	it	- The iterator to get length for.
+ *
+ * Result:
+ *	Length of iterated sequence.
+ *
+ * See also: 
+ *	<Col_RopeIterator>
+ *---------------------------------------------------------------------------*/
+
+#define Col_RopeIterLength(it) \
+    ((it)->length)
+
+/*---------------------------------------------------------------------------
  * Macro: Col_RopeIterIndex
  *
  *	Get current index within rope for iterator.
