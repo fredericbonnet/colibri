@@ -146,7 +146,7 @@ Col_NewCustomWord(
     WORD_CUSTOM_INIT(word, type);
     if (dataPtr) *dataPtr = WORD_CUSTOM_DATA(word, type);
 
-    DeclareCustomWord(word, type);
+    if (type->freeProc) RememberSweepable(word, type);
 
     return word;
 }

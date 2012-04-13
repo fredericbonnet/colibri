@@ -156,7 +156,7 @@ GcCleanupGroup(
 
 
 /****************************************************************************
- * Section: Word Modification and Lifetime Management
+ * Section: Word Lifetime Management
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -597,40 +597,6 @@ Col_ReleaseWord(
     }
 end:
     LeaveProtectRoots(data->groupData);
-}
-
-/*---------------------------------------------------------------------------
- * Internal Function: DeclareCustomWord
- *
- *	Remember custom words needing cleanup upon deletion. Such words are 
- *	chained in their order of creation, latest being inserted at the head of 
- *	the list. This implies that cleanup can stop traversing the list at the 
- *	first custom word that belongs to a non GC'd pool.
- *
- * Arguments:
- *	word	- The word to declare.
- *	type	- The word type.
- *
- * See also:
- *	<Col_CustomWordType>, <Col_CustomWordFreeProc>, <Col_NewCustomWord>
- *---------------------------------------------------------------------------*/
-
-void 
-DeclareCustomWord(
-    Col_Word word,
-    Col_CustomWordType *type)
-{
-    ASSERT(WORD_TYPE(word) == WORD_TYPE_CUSTOM);
-    if (type->freeProc) {
-	/*
-	 * Type needs freeing. Remember by inserting at head of list.
-	 */
-
-	ThreadData *data = PlatGetThreadData();
-	ASSERT(PAGE_GENERATION(CELL_PAGE(word)) == 1);
-	WORD_CUSTOM_NEXT(word) = data->eden.sweepables;
-	data->eden.sweepables = word;
-    }
 }
 
 
@@ -1529,6 +1495,37 @@ start:
 }
 
 /*---------------------------------------------------------------------------
+ * Internal Function: RememberSweepable
+ *
+ *	Remember custom words needing cleanup upon deletion. Such words are 
+ *	chained in their order of creation, latest being inserted at the head of 
+ *	the list. This implies that cleanup can stop traversing the list at the 
+ *	first custom word that belongs to a non GC'd pool.
+ *
+ * Arguments:
+ *	word	- The word to declare.
+ *	type	- The word type.
+ *
+ * See also:
+ *	<Col_CustomWordType>, <Col_CustomWordFreeProc>, <Col_NewCustomWord>
+ *---------------------------------------------------------------------------*/
+
+void 
+RememberSweepable(
+    Col_Word word,
+    Col_CustomWordType *type)
+{
+    ThreadData *data = PlatGetThreadData();
+
+    ASSERT(PAGE_GENERATION(CELL_PAGE(word)) == 1);
+    ASSERT(WORD_TYPE(word) == WORD_TYPE_CUSTOM);
+    ASSERT(type->freeProc);
+
+    WORD_CUSTOM_NEXT(word) = data->eden.sweepables;
+    data->eden.sweepables = word;
+}
+
+/*---------------------------------------------------------------------------
  * Internal Function: SweepUnreachableCells
  *
  *	Perform cleanup for all collected custom words that need sweeping.
@@ -1606,6 +1603,42 @@ SweepUnreachableCells(
 	*previousPtr = nextPool->sweepables;
 	nextPool->sweepables = pool->sweepables;
 	pool->sweepables = WORD_NIL;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: CleanupSweepables
+ *
+ *	Perform cleanup for all custom words that need sweeping. Called during
+ *	global cleanup.
+ *
+ * Argument:
+ *	pool	    - The pool to cleanup.
+ *
+ * Side effects:
+ *	Calls each cleaned word's freeProc.
+ *
+ * See also:
+ *	<Col_CustomWordType>, <Col_CustomWordFreeProc>, <WORD_CUSTOM_NEXT>,
+ *	<PoolCleanup>
+ *---------------------------------------------------------------------------*/
+
+void 
+CleanupSweepables(
+    MemoryPool *pool)
+{
+    Col_Word word;
+    Col_CustomWordType *typeInfo;
+
+    /*
+     * Perform cleanup on all custom words that need sweeping.
+     */
+
+    for (word = pool->sweepables; word; word = WORD_CUSTOM_NEXT(word)) {
+	ASSERT(WORD_TYPE(word) == WORD_TYPE_CUSTOM);
+	typeInfo = WORD_TYPEINFO(word);
+	ASSERT(typeInfo->freeProc);
+	typeInfo->freeProc(word);
     }
 }
 

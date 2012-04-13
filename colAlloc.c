@@ -262,6 +262,12 @@ PoolCleanup(
 {
     Page *base, *next, *page;
 
+    /*
+     * Cleanup sweepable custom ropes (those with a freeProc).
+     */
+
+    CleanupSweepables(pool);
+
     /* 
      * Free all system pages.
      */

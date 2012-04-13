@@ -415,21 +415,13 @@ void			GcCleanupGroup(GroupData *data);
  * Internal Section: Garbage Collection
  *
  * Declarations:
- *	<PerformGC>
+ *	<PerformGC>, <RememberSweepable>, <CleanupSweepables>
 ****************************************************************************/
 
 void			PerformGC(GroupData *data);
-
-
-/****************************************************************************
- * Internal Section: Word Lifetime Management
- *
- * Declarations:
- *	<DeclareCustomWord>
- ****************************************************************************/
-
-void			DeclareCustomWord(Col_Word word, 
+void			RememberSweepable(Col_Word word, 
 			    Col_CustomWordType *type);
+void			CleanupSweepables(MemoryPool *pool);
 
 
 /****************************************************************************
