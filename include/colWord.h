@@ -147,7 +147,7 @@ typedef union {
  *
  *	Function signature of custom word size procs.
  *
- * Arguments:
+ * Argument:
  *	word	- Custom word to get size for.
  *
  * Result:
@@ -165,7 +165,7 @@ typedef size_t (Col_CustomWordSizeProc) (Col_Word word);
  *	Function signature of custom word cleanup procs. Called on collected 
  *	words during the sweep phase of the garbage collection.
  *
- * Arguments:
+ * Argument:
  *	word	- Custom word to cleanup.
  *
  * See also: 

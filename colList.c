@@ -489,7 +489,7 @@ MergeChunksProc(
  *
  *	Get the depth of the list.
  *
- * Arguments:
+ * Argument:
  *	node	- List node to get depth from.
  *
  * Result:
@@ -537,7 +537,7 @@ GetDepth(
  *
  *	Get the root of the list.
  *
- * Arguments:
+ * Argument:
  *	node	- List node to get depth from.
  *
  * Result:
@@ -2977,7 +2977,6 @@ start:
  * Arguments:
  *	mlist	- Mutable list to resize.
  *	length	- New length.
- *
  *---------------------------------------------------------------------------*/
 
 void
@@ -3399,7 +3398,7 @@ ConvertToMutableAt(
  *	Convert an immutable node (concat or sublist) to a mutable concat list.
  *	The original is not modified, a mutable copy is made.
  *
- * Arguments:
+ * Argument:
  *	nodePtr	- Mutable list node to convert. Gets overwritten upon return.
  *---------------------------------------------------------------------------*/
 
@@ -3451,7 +3450,7 @@ ConvertToMConcatNode(
  *
  *	Update (depth, left length...) & rebalance mutable concat list node.
  *
- * Arguments:
+ * Argument:
  *	node	- Mutable concat list.
  *
  * Rebalancing:

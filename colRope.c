@@ -78,7 +78,7 @@ Col_EmptyRope()
  *	character buffer whose length is computed with strlen() and is passed to
  *	<Col_NewRope>.
  *
- * Arguments:
+ * Argument:
  *	string	- C string to build rope from.
  *
  * Result:
@@ -100,7 +100,7 @@ Col_NewRopeFromString(
  *
  *	Create a new rope from a single character. Use adaptive format.
  *
- * Arguments:
+ * Argument:
  *	c	- Character.
  *
  * Result:
@@ -2208,7 +2208,7 @@ MergeChunksProc(
  *
  *	Get the depth of the rope.
  *
- * Arguments:
+ * Argument:
  *	node	- Rope node to get depth from.
  *
  * Result:

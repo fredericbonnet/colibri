@@ -153,9 +153,11 @@ extern "C" {
 #include <stddef.h> /* For size_t */
 
 
-/****************************************************************************
- * Section: Basic Types
- ****************************************************************************/
+/*
+================================================================================
+Section: Basic Types
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Typedef: Col_ClientData
@@ -165,13 +167,16 @@ extern "C" {
 
 typedef void * Col_ClientData;
 
-/****************************************************************************
- * Section: Strings
- *
- * Declarations:
- *	<Col_Utf8CharAddr>, <Col_Utf8GetChar>, <Col_Utf8SetChar>, 
- *	<Col_Utf16CharAddr>, <Col_Utf16GetChar>, <Col_Utf16SetChar>
- ****************************************************************************/
+
+/*
+================================================================================
+Section: Strings
+
+Declarations:
+	<Col_Utf8CharAddr>, <Col_Utf8GetChar>, <Col_Utf8SetChar>, 
+	<Col_Utf16CharAddr>, <Col_Utf16GetChar>, <Col_Utf16SetChar>
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Typedef: Col_Char
@@ -454,12 +459,14 @@ EXTERN Col_Char2 * 	Col_Utf16SetChar(Col_Char2 * data, Col_Char c);
 #include "colTrie.h"
 
 
-/****************************************************************************
- * Section: Initialization/Cleanup
- *
- * Declarations:
- *	<Col_Init>, <Col_Cleanup>
- ****************************************************************************/
+/*
+================================================================================
+Section: Initialization/Cleanup
+
+Declarations:
+	<Col_Init>, <Col_Cleanup>
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Constants: Threading Model Constants
@@ -493,12 +500,14 @@ EXTERN void		Col_Init(unsigned int model);
 EXTERN void		Col_Cleanup(void);
 
 
-/****************************************************************************
- * Section: Error Handling
- *
- * Declarations:
- *	<Col_Error>, <Col_SetErrorProc>
- ****************************************************************************/
+/*
+================================================================================
+Section: Error Handling
+
+Declarations:
+	<Col_Error>, <Col_SetErrorProc>
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Enum: Col_ErrorLevel
@@ -539,12 +548,14 @@ EXTERN void		Col_Error(Col_ErrorLevel level, const char *format,
 EXTERN void		Col_SetErrorProc(Col_ErrorProc *proc);
 
 
-/****************************************************************************
- * Section: GC Control
- *
- * Declarations:
- *	<Col_PauseGC>, <Col_TryPauseGC>, <Col_ResumeGC>
- ****************************************************************************/
+/*
+================================================================================
+Section: GC Control
+
+Declarations:
+	<Col_PauseGC>, <Col_TryPauseGC>, <Col_ResumeGC>
+================================================================================
+*/
 
 EXTERN void		Col_PauseGC(void);
 EXTERN int		Col_TryPauseGC(void);
