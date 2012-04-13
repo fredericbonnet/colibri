@@ -94,7 +94,7 @@
 #define GC_GEN_FACTOR		10
 
 /*---------------------------------------------------------------------------
- * Internal Constants: PROMOTE_COMPACT
+ * Internal Constant: PROMOTE_COMPACT
  *
  *	Control how cells are promoted to the next generation during GC.
  *	Promotion is generally done by moving whole pages across generations,
