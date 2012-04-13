@@ -845,9 +845,6 @@ Col_Sublist(
  *
  * Side effects:
  *	May allocate memory cells.
- *
- * See also:
- *	<List Tree Balancing>
  *---------------------------------------------------------------------------*/
 
 Col_Word
