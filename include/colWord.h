@@ -260,10 +260,13 @@ EXTERN Col_Word		Col_NewCustomWord(Col_CustomWordType *type, size_t size,
  * Section: Word Access and Synonyms
  *
  * Declarations:
- *	<Col_GetWordInfo>, <Col_FindWordInfo>, <Col_GetWordSynonym>,
- *	<Col_AddWordSynonym>, <Col_ClearWordSynonym>
+ *	<Col_IntWordValue>, <Col_FloatWordValue>, <Col_GetWordInfo>, 
+ *	<Col_FindWordInfo>, <Col_GetWordSynonym>, <Col_AddWordSynonym>, 
+ *	<Col_ClearWordSynonym>
  ****************************************************************************/
 
+EXTERN intptr_t		Col_IntWordValue(Col_Word word);
+EXTERN double		Col_FloatWordValue(Col_Word word);
 EXTERN Col_WordType	Col_GetWordInfo(Col_Word word, Col_WordData *dataPtr);
 EXTERN Col_Word		Col_FindWordInfo(Col_Word word, Col_WordType type, 
 			    Col_WordData *dataPtr, int *altTypePtr, 

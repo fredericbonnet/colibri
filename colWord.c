@@ -157,6 +157,88 @@ Col_NewCustomWord(
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
+ * Function: Col_IntWordValue
+ *
+ *	Get value of integer word.
+ *
+ * Arguments:
+ *	word	- The word to get value for.
+ *
+ * Results:
+ *	The integer value.
+ *
+ * See also:
+ *	<Col_NewIntWord>
+ *---------------------------------------------------------------------------*/
+
+intptr_t
+Col_IntWordValue(
+    Col_Word word)
+{
+    switch (WORD_TYPE(word)) {
+	/*
+	 * Immediate words.
+	 */
+
+	case WORD_TYPE_SMALLINT:
+	    return WORD_SMALLINT_GET(word);
+
+	case WORD_TYPE_INT:
+	    return WORD_INT_VALUE(word);
+
+	default:
+	    /*
+	     * Invalid type.
+	     */
+
+	    Col_Error(COL_ERROR, "%x is not an integer word", word);
+	    return 0;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_FloatWordValue
+ *
+ *	Get value of floating point word.
+ *
+ * Arguments:
+ *	word	- The word to get value for.
+ *
+ * Results:
+ *	The floating point value.
+ *
+ * See also:
+ *	<Col_NewFloatWord>
+ *---------------------------------------------------------------------------*/
+
+double
+Col_FloatWordValue(
+    Col_Word word)
+{
+    switch (WORD_TYPE(word)) {
+	/*
+	 * Immediate words.
+	 */
+
+	case WORD_TYPE_SMALLFP: {
+	    FloatConvert c;
+	    return WORD_SMALLFP_GET(word, c);
+	}
+
+	case WORD_TYPE_FP:
+	    return WORD_FP_VALUE(word);
+
+	default:
+	    /*
+	     * Invalid type.
+	     */
+
+	    Col_Error(COL_ERROR, "%x is not a floating point word", word);
+	    return 0.0;
+    }
+}
+
+/*---------------------------------------------------------------------------
  * Function: Col_GetWordInfo
  *
  *	Get information about a word (type and data).
