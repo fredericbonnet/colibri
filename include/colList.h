@@ -245,7 +245,7 @@ typedef ColListIterator Col_ListIterator;
  *	<COL_LISTITER_NULL>
  *---------------------------------------------------------------------------*/
 
-static const Col_ListIterator colListIterNull = {0};
+static const Col_ListIterator colListIterNull = {WORD_NIL};
 
 /*---------------------------------------------------------------------------
  * Constant: COL_LISTITER_NULL

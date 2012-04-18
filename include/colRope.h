@@ -470,7 +470,7 @@ typedef ColRopeIterator Col_RopeIterator;
  *	<COL_ROPEITER_NULL>
  *---------------------------------------------------------------------------*/
 
-static const Col_RopeIterator colRopeIterNull = {0,0,{0}};
+static const Col_RopeIterator colRopeIterNull = {WORD_NIL,0,0,{NULL}};
 
 /*---------------------------------------------------------------------------
  * Constant: COL_ROPEITER_NULL
