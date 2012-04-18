@@ -375,13 +375,13 @@ Col_StringBufferAppendChar(
 	    break;
 
 	case COL_UTF8:
-	    Col_Utf8SetChar(((Col_Char1 *) WORD_STRBUF_BUFFER(strbuf))
-		    + width, c);
+	    Col_Utf8Set(((Col_Char1 *) WORD_STRBUF_BUFFER(strbuf)) 
+		    + WORD_STRBUF_LENGTH(strbuf), c);
 	    break;
 
 	case COL_UTF16:
-	    Col_Utf16SetChar(((Col_Char2 *) WORD_STRBUF_BUFFER(strbuf))
-		    + width, c);
+	    Col_Utf16Set(((Col_Char2 *) WORD_STRBUF_BUFFER(strbuf)) 
+		    + WORD_STRBUF_LENGTH(strbuf), c);
 	    break;
 
 	default:
@@ -791,13 +791,13 @@ Col_StringBufferFreeze(
 		 * Convert word inplace.
 		 */
 
-		const Col_Char1 *begin 
-			= (const Col_Char1 *) WORD_STRBUF_BUFFER(strbuf), *p;
+		const char *begin = (const char *) WORD_STRBUF_BUFFER(strbuf),
+			*p;
 		size_t charLength;
 		for (p=begin, charLength=0; p < begin+length; charLength++) {
 		    switch (format) {
-			case COL_UTF8:  COL_UTF8_NEXT(p); break;
-			case COL_UTF16: COL_UTF16_NEXT(p); break;
+			case COL_UTF8:  p = (const char *) Col_Utf8Next ((const Col_Char1 *) p); break;
+			case COL_UTF16: p = (const char *) Col_Utf16Next((const Col_Char2 *) p); break;
 		    }
 		}
 		WORD_UTFSTR_INIT(strbuf, COL_UTF8, charLength, 

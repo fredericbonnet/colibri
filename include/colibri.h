@@ -173,8 +173,9 @@ typedef void * Col_ClientData;
 Section: Strings
 
 Declarations:
-	<Col_Utf8CharAddr>, <Col_Utf8GetChar>, <Col_Utf8SetChar>, 
-	<Col_Utf16CharAddr>, <Col_Utf16GetChar>, <Col_Utf16SetChar>
+	<Col_Utf8Addr>, <Col_Utf8Get>, <Col_Utf8Set>, <Col_Utf8Next>, 
+	<Col_Utf8Prev>, <Col_Utf16Addr>, <Col_Utf16Get>, <Col_Utf16Set>,
+	<Col_Utf16Next>, <Col_Utf16Prev>
 ================================================================================
 */
 
@@ -257,41 +258,6 @@ typedef enum Col_StringFormat {
 } Col_StringFormat;
 
 /*---------------------------------------------------------------------------
- * Macro: COL_UTF8_NEXT
- *
- *	Move pointer to the next UTF-8 character.
- *
- * Argument:
- *	data	- The pointer to move.
- *
- * Side effects:
- *	Update the pointer.
- *---------------------------------------------------------------------------*/
-
-#define COL_UTF8_NEXT(data) \
-    *((Col_Char1 **) &data) += ( \
-	  (((*(Col_Char1 *) (data)) & 0xE0) == 0xC0)	? 2 \
-	: (((*(Col_Char1 *) (data)) & 0xF0) == 0xE0)	? 3 \
-	: (((*(Col_Char1 *) (data)) & 0xF8) == 0xF0)	? 4 \
-	: 						  1 )
-
-/*---------------------------------------------------------------------------
- * Macro: COL_UTF8_PREVIOUS
- *
- *	Move pointer to the previous UTF-8 character. This is done by skipping 
- *	all continuation code units.
- *
- * Argument:
- *	data	- The pointer to move.
- *
- * Side effects:
- *	Update the pointer.
- *---------------------------------------------------------------------------*/
-
-#define COL_UTF8_PREVIOUS(data) \
-    while ((*--(*(Col_Char1 **) &data) & 0xC0) == 0x80);
-
-/*---------------------------------------------------------------------------
  * Constant: COL_UTF8_MAX_WIDTH
  *
  *	Maximum width of character in UTF-8 code units.
@@ -319,39 +285,6 @@ typedef enum Col_StringFormat {
      : (c) <= 0xFFFF	? 3 \
      : (c) <= 0x10FFFF	? 4 \
      : 			  0 )
-
-/*---------------------------------------------------------------------------
- * Macro: COL_UTF16_NEXT
- *
- *	Move pointer to the next UTF-16 character.
- *
- * Argument:
- *	data	- The pointer to move.
- *
- * Side effects:
- *	Update the pointer.
- *---------------------------------------------------------------------------*/
-
-#define COL_UTF16_NEXT(data) \
-    *((Col_Char2 **) &data) += ( \
-	  (((*(Col_Char2 *) (data)) & 0xFC00) == 0xD800) ?  2 \
-	: 						    1 )
-
-/*---------------------------------------------------------------------------
- * Macro: COL_UTF16_PREVIOUS
- *
- *	Move pointer to the previous UTF-16 character. This is done by skipping 
- *	all low surrogate code units.
- *
- * Argument:
- *	data	- The pointer to move.
- *
- * Side effects:
- *	Update the pointer.
- *---------------------------------------------------------------------------*/
-
-#define COL_UTF16_PREVIOUS(data) \
-    while ((*--(*(Col_Char2 **) &data) & 0xFC00) == 0xDC00);
 
 /*---------------------------------------------------------------------------
  * Constant: COL_UTF16_MAX_WIDTH
@@ -398,11 +331,12 @@ typedef enum Col_StringFormat {
 
 #define COL_CHAR_NEXT(format, data, c) \
     switch (format) { \
-	case COL_UCS1:  (c) =                *((const Col_Char1 *) (data)); (data) = (const char *) (data) + 1; break; \
-	case COL_UCS2:  (c) =                *((const Col_Char2 *) (data)); (data) = (const char *) (data) + 2; break; \
-	case COL_UCS4:  (c) =                *((const Col_Char4 *) (data)); (data) = (const char *) (data) + 4; break; \
-	case COL_UTF8:  (c) = Col_Utf8GetChar ((const Col_Char1 *) data);   COL_UTF8_NEXT(data);                break; \
-	case COL_UTF16: (c) = Col_Utf16GetChar((const Col_Char2 *) data);   COL_UTF16_NEXT(data);               break; \
+	case COL_UCS1:  (c) =            *((const Col_Char1 *) (data)); (data) = (const char *) (data) + 1;                                break; \
+	case COL_UCS2:  (c) =            *((const Col_Char2 *) (data)); (data) = (const char *) (data) + 2;                                break; \
+	case COL_UCS4:  (c) =            *((const Col_Char4 *) (data)); (data) = (const char *) (data) + 4;                                break; \
+	case COL_UTF8:  (c) = Col_Utf8Get ((const Col_Char1 *) data);   (data) = (const char *) Col_Utf8Next ((const Col_Char1 *) (data)); break; \
+	case COL_UTF16: (c) = Col_Utf16Get((const Col_Char2 *) data);   (data) = (const char *) Col_Utf16Next((const Col_Char2 *) (data)); break; \
+	default: (c) = COL_CHAR_INVALID; data = NULL; /* Keep compilers happy. */ \
     }
 
 /*---------------------------------------------------------------------------
@@ -423,21 +357,30 @@ typedef enum Col_StringFormat {
 
 #define COL_CHAR_PREVIOUS(format, data, c) \
     switch (format) { \
-	case COL_UCS1:  (data) = (const char *) (data) - 1; (c) =                *((const Col_Char1 *) (data)); break; \
-	case COL_UCS2:  (data) = (const char *) (data) - 2; (c) =                *((const Col_Char2 *) (data)); break; \
-	case COL_UCS4:  (data) = (const char *) (data) - 4; (c) =                *((const Col_Char4 *) (data)); break; \
-	case COL_UTF8:  COL_UTF8_PREVIOUS(data);            (c) = Col_Utf8GetChar ((const Col_Char1 *) data);   break; \
-	case COL_UTF16: COL_UTF16_PREVIOUS(data);           (c) = Col_Utf16GetChar((const Col_Char2 *) data);   break; \
+	case COL_UCS1:  (data) = (const char *) (data) - 1;                                (c) =            *((const Col_Char1 *) (data)); break; \
+	case COL_UCS2:  (data) = (const char *) (data) - 2;                                (c) =            *((const Col_Char2 *) (data)); break; \
+	case COL_UCS4:  (data) = (const char *) (data) - 4;                                (c) =            *((const Col_Char4 *) (data)); break; \
+	case COL_UTF8:  (data) = (const char *) Col_Utf8Prev ((const Col_Char1 *) (data)); (c) = Col_Utf8Get ((const Col_Char1 *) data);   break; \
+	case COL_UTF16: (data) = (const char *) Col_Utf16Prev((const Col_Char2 *) (data)); (c) = Col_Utf16Get((const Col_Char2 *) data);   break; \
+	default: (c) = COL_CHAR_INVALID; data = NULL; /* Keep compilers happy. */ \
     }
 
-EXTERN const Col_Char1 * Col_Utf8CharAddr(const Col_Char1 * data, 
-			    size_t index, size_t length, size_t byteLength);
-EXTERN Col_Char		Col_Utf8GetChar(const Col_Char1 * data);
-EXTERN Col_Char1 * 	Col_Utf8SetChar(Col_Char1 * data, Col_Char c);
-EXTERN const Col_Char2 * Col_Utf16CharAddr(const Col_Char2 * data, 
-			    size_t index, size_t length, size_t byteLength);
-EXTERN Col_Char		Col_Utf16GetChar(const Col_Char2 * data);
-EXTERN Col_Char2 * 	Col_Utf16SetChar(Col_Char2 * data, Col_Char c);
+/*
+ * Remaining declarations.
+ */
+
+EXTERN const Col_Char1 * Col_Utf8Addr(const Col_Char1 * data, size_t index, 
+			    size_t length, size_t byteLength);
+EXTERN Col_Char		Col_Utf8Get(const Col_Char1 * data);
+EXTERN Col_Char1 * 	Col_Utf8Set(Col_Char1 * data, Col_Char c);
+EXTERN const Col_Char1 * Col_Utf8Next(const Col_Char1 * data);
+EXTERN const Col_Char1 * Col_Utf8Prev(const Col_Char1 * data);
+EXTERN const Col_Char2 * Col_Utf16Addr(const Col_Char2 * data, size_t index, 
+			    size_t length, size_t byteLength);
+EXTERN Col_Char		Col_Utf16Get(const Col_Char2 * data);
+EXTERN Col_Char2 * 	Col_Utf16Set(Col_Char2 * data, Col_Char c);
+EXTERN const Col_Char2 * Col_Utf16Next(const Col_Char2 * data);
+EXTERN const Col_Char2 * Col_Utf16Prev(const Col_Char2 * data);
 
 
 /*

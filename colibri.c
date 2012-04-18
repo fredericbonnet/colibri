@@ -21,7 +21,7 @@
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Function: Col_Utf8CharAddr
+ * Function: Col_Utf8Addr
  *
  *	Find the index-th char in a UTF-8 sequence. 
  *
@@ -41,7 +41,7 @@
  *---------------------------------------------------------------------------*/
 
 const Col_Char1 * 
-Col_Utf8CharAddr(
+Col_Utf8Addr(
     const Col_Char1 * data,
     size_t index,
     size_t length,
@@ -67,7 +67,7 @@ Col_Utf8CharAddr(
 	size_t i = 0;
 	while (i != index) {
 	    i++;		/* Increment char index. */
-	    COL_UTF8_NEXT(data);
+	    data = Col_Utf8Next(data);
 	}
 	return data;
     } else {
@@ -79,14 +79,14 @@ Col_Utf8CharAddr(
 	data = (const Col_Char1 *) ((const char *) data + byteLength);
 	while (i != index) {
 	    i--;		/* Decrement char index. */
-	    COL_UTF8_PREVIOUS(data);
+	    data = Col_Utf8Prev(data);
 	}
 	return data;
     }
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_Utf8GetChar
+ * Function: Col_Utf8Get
  *
  *	Get the first character codepoint of a UTF-8 sequence.
  *
@@ -98,7 +98,7 @@ Col_Utf8CharAddr(
  *---------------------------------------------------------------------------*/
 
 Col_Char 
-Col_Utf8GetChar(
+Col_Utf8Get(
     const Col_Char1 * data)
 {
     if (*data <= 0x7F) {
@@ -141,7 +141,7 @@ Col_Utf8GetChar(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_Utf8SetChar
+ * Function: Col_Utf8Set
  *
  *	Append character in a UTF-8 sequence.
  *
@@ -154,7 +154,7 @@ Col_Utf8GetChar(
  *---------------------------------------------------------------------------*/
 
 Col_Char1 *
-Col_Utf8SetChar(
+Col_Utf8Set(
     Col_Char1 * data,
     Col_Char c)
 {
@@ -178,7 +178,51 @@ Col_Utf8SetChar(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_Utf16CharAddr
+ * Function: Col_Utf8Next
+ *
+ *	Get next character in a UTF-8 sequence.
+ *
+ * Argument:
+ *	data	- UTF-8 code unit sequence.
+ *
+ * Result:
+ *	Position just past the first character in sequence.
+ *---------------------------------------------------------------------------*/
+
+const Col_Char1 *
+Col_Utf8Next(
+    const Col_Char1 * data)
+{
+    return data + (
+          (((*data) & 0xE0) == 0xC0) ?	2 \
+        : (((*data) & 0xF0) == 0xE0) ?	3 \
+        : (((*data) & 0xF8) == 0xF0) ?	4 \
+        :				1 );
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_Utf8Prev
+ *
+ *	Get previous character in a UTF-8 sequence. This is done by skipping
+ *      all continuation code units.
+ *
+ * Argument:
+ *	data	- UTF-8 code unit sequence.
+ *
+ * Result:
+ *	Position of the previous character in sequence.
+ *---------------------------------------------------------------------------*/
+
+const Col_Char1 *
+Col_Utf8Prev(
+    const Col_Char1 * data)
+{
+    while (((*--data) & 0xC0) == 0x80);
+    return data;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_Utf16Addr
  *
  *	Find the index-th char in a UTF-16 code unit sequence. 
  *
@@ -198,7 +242,7 @@ Col_Utf8SetChar(
  *---------------------------------------------------------------------------*/
 
 const Col_Char2 * 
-Col_Utf16CharAddr(
+Col_Utf16Addr(
     const Col_Char2 * data,
     size_t index,
     size_t length,
@@ -224,7 +268,7 @@ Col_Utf16CharAddr(
 	size_t i = 0;
 	while (i != index) {
 	    i++;		/* Increment char index. */
-	    COL_UTF16_NEXT(data);
+	    data = Col_Utf16Next(data);
 	}
 	return data;
     } else {
@@ -236,14 +280,14 @@ Col_Utf16CharAddr(
 	data = (const Col_Char2 *) ((const char *) data + byteLength);
 	while (i != index) {
 	    i--;		/* Decrement char index. */
-	    COL_UTF16_PREVIOUS(data);
+	    data = Col_Utf16Prev(data);
 	}
 	return data;
     }
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_Utf16GetChar
+ * Function: Col_Utf16Get
  *
  *	Get the first character codepoint of a UTF-16 sequence.
  *
@@ -255,7 +299,7 @@ Col_Utf16CharAddr(
  *---------------------------------------------------------------------------*/
 
 Col_Char 
-Col_Utf16GetChar(
+Col_Utf16Get(
     const Col_Char2 * data)
 {
     if ((data[0] & 0xFC00) == 0xD800 && (data[1] & 0xFC00) == 0xDC00) {
@@ -276,7 +320,7 @@ Col_Utf16GetChar(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_Utf16SetChar
+ * Function: Col_Utf16Set
  *
  *	Append character in a UTF-16 sequence.
  *
@@ -289,7 +333,7 @@ Col_Utf16GetChar(
  *---------------------------------------------------------------------------*/
 
 Col_Char2 *
-Col_Utf16SetChar(
+Col_Utf16Set(
     Col_Char2 * data,
     Col_Char c)
 {
@@ -300,6 +344,48 @@ Col_Utf16SetChar(
 	*data++ = (Col_Char2) (( (c-0x10000)     &0x3FF)+0xDC00);
     }
 
+    return data;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_Utf16Next
+ *
+ *	Get next character in a UTF-16 sequence.
+ *
+ * Argument:
+ *	data	- UTF-16 code unit sequence.
+ *
+ * Result:
+ *	Position just past the first character in sequence.
+ *---------------------------------------------------------------------------*/
+
+const Col_Char2 *
+Col_Utf16Next(
+    const Col_Char2 * data)
+{
+    return data + (
+          (((*data) & 0xFC00) == 0xD800) ?  2 \
+        :				    1 );
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_Utf16Prev
+ *
+ *	Get previous character in a UTF-16 sequence. This is done by skipping
+ *      all low surrogate code units.
+ *
+ * Argument:
+ *	data	- UTF-16 code unit sequence.
+ *
+ * Result:
+ *	Position of the previous character in sequence.
+ *---------------------------------------------------------------------------*/
+
+const Col_Char2 *
+Col_Utf16Prev(
+    const Col_Char2 * data)
+{
+    while (((*--data) & 0xFC00) == 0xDC00);
     return data;
 }
 
