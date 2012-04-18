@@ -7,6 +7,7 @@ OBJS = 	colibri.o \
 	colGc.o \
 	colUnixPlatform.o \
 	colRope.o \
+	colStrBuf.o \
 	colWord.o \
 	colVector.o \
 	colList.o \
@@ -18,7 +19,7 @@ libcolibri.so: $(OBJS)
 	gcc -pthread -shared -o libcolibri.so $(OBJS)
 	strip libcolibri.so
 
-.c.o: colibri.h colInt.h colPlat.h
+.c.o: include/colibri.h
 	gcc $(CFLAGS) -pthread -DBUILD_colibri -DHAVE_STDINT_H -c $<
 
 clean:
