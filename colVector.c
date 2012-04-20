@@ -79,11 +79,6 @@ Col_NewVector(
 {
     Col_Word vector;		/* Resulting word in the general case. */
 
-    if (!elements) {
-	Col_Error(COL_ERROR, "Element array is NULL");
-	return WORD_NIL;
-    }
-
     if (length > VECTOR_MAX_LENGTH(SIZE_MAX)) {
 	/*
 	 * Too large.
