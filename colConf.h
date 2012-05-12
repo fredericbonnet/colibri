@@ -151,6 +151,12 @@
  *	Utility macro that combines both min and max page allocation numbers
  *	for GC trigger control.
  *
+ * Argument:
+ *	threshold	- Threshold value.
+ *
+ * Result:
+ *	Actual threshold value compared to number of allocations.
+ *
  * See also:
  *	<Col_ResumeGC>, <PerformGC>, <GC_MIN_PAGE_ALLOC>, <GC_MAX_PAGE_ALLOC>
  *---------------------------------------------------------------------------*/
