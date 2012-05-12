@@ -35,7 +35,7 @@ EXTERN Col_Word		Col_CopyTrieMap(Col_Word map);
 
 
 /****************************************************************************
- * Group: Trie Map Access
+ * Group: Trie Map Accessors
  *
  * Declarations:
  *	<Col_StringTrieMapGet>, <Col_IntTrieMapGet>, <Col_StringTrieMapSet>,

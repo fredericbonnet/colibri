@@ -37,7 +37,7 @@ EXTERN Col_Word		Col_CopyHashMap(Col_Word map);
 
 
 /****************************************************************************
- * Group: Hash Map Access
+ * Group: Hash Map Accessors
  *
  * Declarations:
  *	<Col_StringHashMapGet>, <Col_IntHashMapGet>, <Col_StringHashMapSet>,
