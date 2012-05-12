@@ -111,7 +111,7 @@ Col_NewRopeFromString(
  *---------------------------------------------------------------------------*/
 
 Col_Word
-Col_NewChar(
+Col_NewCharWord(
     Col_Char c)
 {
     if (c <= COL_CHAR1_MAX) {
@@ -205,8 +205,8 @@ Col_NewRope(
 	    length = 0;
 	    for (p = source; p < source+byteLength; length++) {
 		switch (format) {
-		    case COL_UTF8:  p = (const char *) Col_Utf8Next ((const Col_Char1 *) p); break;
-		    case COL_UTF16: p = (const char *) Col_Utf16Next((const Col_Char2 *) p); break;
+		case COL_UTF8:  p = (const char *) Col_Utf8Next ((const Col_Char1 *) p); break;
+		case COL_UTF16: p = (const char *) Col_Utf16Next((const Col_Char2 *) p); break;
 		}
 	    }
 	    rope = (Col_Word) AllocCells(UTFSTR_SIZE(byteLength));
@@ -221,8 +221,8 @@ Col_NewRope(
 
 	p = source + (codeUnits/2 + 1) * CHAR_WIDTH(format);
 	switch (format) {
-	    case COL_UTF8:  p = (const char *) Col_Utf8Prev ((const Col_Char1 *) p); break;
-	    case COL_UTF16: p = (const char *) Col_Utf16Prev((const Col_Char2 *) p); break;
+	case COL_UTF8:  p = (const char *) Col_Utf8Prev ((const Col_Char1 *) p); break;
+	case COL_UTF16: p = (const char *) Col_Utf16Prev((const Col_Char2 *) p); break;
 	}
 	half = p-source;
     } else {
@@ -237,38 +237,38 @@ Col_NewRope(
 	     */
 
 	    switch (format) {
-		case COL_UCS1: return WORD_CHAR_NEW(*(const Col_Char1 *) data, format);
-		case COL_UCS2: return WORD_CHAR_NEW(*(const Col_Char2 *) data, format);
-		case COL_UCS4: return WORD_CHAR_NEW(*(const Col_Char4 *) data, format);
-		case COL_UCS: return Col_NewChar(*(const Col_Char4 *) data);
+	    case COL_UCS1: return WORD_CHAR_NEW(*(const Col_Char1 *) data, format);
+	    case COL_UCS2: return WORD_CHAR_NEW(*(const Col_Char2 *) data, format);
+	    case COL_UCS4: return WORD_CHAR_NEW(*(const Col_Char4 *) data, format);
+	    case COL_UCS: return Col_NewCharWord(*(const Col_Char4 *) data);
 	    }
 	} else if (length <= SMALLSTR_MAX_LENGTH) {
 	    switch (format) {
-		case COL_UCS1:
-		    /*
-		     * Immediate string.
-		     */
+	    case COL_UCS1:
+		/*
+		 * Immediate string.
+		 */
 
-		    WORD_SMALLSTR_SET_LENGTH(rope, length);
-		    memcpy(WORD_SMALLSTR_DATA(rope), data, length);
+		WORD_SMALLSTR_SET_LENGTH(rope, length);
+		memcpy(WORD_SMALLSTR_DATA(rope), data, length);
+		return rope;
+
+	    case COL_UCS: {
+		/*
+		 * Use immediate string if possible.
+		 */
+
+		const Col_Char4 * string = (const Col_Char4 *) data;
+		size_t i;
+		WORD_SMALLSTR_SET_LENGTH(rope, length);
+		for (i = 0; i < length; i++) {
+		    if (string[i] > COL_CHAR1_MAX) break;
+		    WORD_SMALLSTR_DATA(rope)[i] = (Col_Char1) string[i];
+		}
+		if (i == length) {
 		    return rope;
-
-		case COL_UCS: {
-		    /*
-		     * Use immediate string if possible.
-		     */
-
-		    const Col_Char4 * string = (const Col_Char4 *) data;
-		    size_t i;
-		    WORD_SMALLSTR_SET_LENGTH(rope, length);
-		    for (i = 0; i < length; i++) {
-			if (string[i] > COL_CHAR1_MAX) break;
-			WORD_SMALLSTR_DATA(rope)[i] = (Col_Char1) string[i];
-		    }
-		    if (i == length) {
-			return rope;
-		    }
-		    break;
+		}
+		break;
 		}
 	    }
 	}
@@ -297,28 +297,28 @@ Col_NewRope(
 		rope = (Col_Word) AllocCells(UCSSTR_SIZE(byteLength));
 		WORD_UCSSTR_INIT(rope, format, length);
 		switch (format) {
-		    case COL_UCS1: {
-			Col_Char1 * target 
-				= (Col_Char1 *) WORD_UCSSTR_DATA(rope);
-			for (i = 0; i < length; i++) {
-			    target[i] = string[i];
-			}
-			break;
+		case COL_UCS1: {
+		    Col_Char1 * target 
+			    = (Col_Char1 *) WORD_UCSSTR_DATA(rope);
+		    for (i = 0; i < length; i++) {
+			target[i] = string[i];
+		    }
+		    break;
 		    }
 
-		    case COL_UCS2: {
-			Col_Char2 * target 
-				= (Col_Char2 *) WORD_UCSSTR_DATA(rope);
-			for (i = 0; i < length; i++) {
-			    target[i] = string[i];
-			}
-			break;
+		case COL_UCS2: {
+		    Col_Char2 * target 
+			    = (Col_Char2 *) WORD_UCSSTR_DATA(rope);
+		    for (i = 0; i < length; i++) {
+			target[i] = string[i];
+		    }
+		    break;
 		    }
 
-		    case COL_UCS4:
-			memcpy((void *) WORD_UCSSTR_DATA(rope), data, 
-				byteLength);
-			break;
+		case COL_UCS4:
+		    memcpy((void *) WORD_UCSSTR_DATA(rope), data, 
+			    byteLength);
+		    break;
 		}
 	    } else {
 		/*
@@ -869,31 +869,31 @@ IsCompatible(
     Col_StringFormat format)
 {
     switch (WORD_TYPE(rope)) {
-	case WORD_TYPE_CHAR:
-	    return (format == WORD_CHAR_WIDTH(rope) || format == COL_UCS);
+    case WORD_TYPE_CHAR:
+	return (format == WORD_CHAR_WIDTH(rope) || format == COL_UCS);
 
-	case WORD_TYPE_SMALLSTR:
-	    return (format == COL_UCS1 || format == COL_UCS);
+    case WORD_TYPE_SMALLSTR:
+	return (format == COL_UCS1 || format == COL_UCS);
 
-	case WORD_TYPE_UCSSTR:
-	    return (format == WORD_UCSSTR_FORMAT(rope) || format == COL_UCS);
+    case WORD_TYPE_UCSSTR:
+	return (format == WORD_UCSSTR_FORMAT(rope) || format == COL_UCS);
 
-	case WORD_TYPE_UTFSTR:
-	    return (format == WORD_UTFSTR_FORMAT(rope));
+    case WORD_TYPE_UTFSTR:
+	return (format == WORD_UTFSTR_FORMAT(rope));
 
-	case WORD_TYPE_CUSTOM:
-	    return 0;
+    case WORD_TYPE_CUSTOM:
+	return 0;
 
-	case WORD_TYPE_SUBROPE:
-	    return IsCompatible(WORD_SUBROPE_SOURCE(rope), format);
+    case WORD_TYPE_SUBROPE:
+	return IsCompatible(WORD_SUBROPE_SOURCE(rope), format);
 
-	case WORD_TYPE_CONCATROPE:
-	    return IsCompatible(WORD_CONCATROPE_LEFT(rope), format)
-		    && IsCompatible(WORD_CONCATROPE_RIGHT(rope), format);
+    case WORD_TYPE_CONCATROPE:
+	return IsCompatible(WORD_CONCATROPE_LEFT(rope), format)
+		&& IsCompatible(WORD_CONCATROPE_RIGHT(rope), format);
 
-	default:
-	    /* CANTHAPPEN */
-	    return 0;
+    default:
+	/* CANTHAPPEN */
+	return 0;
     }
 }
 
@@ -922,6 +922,9 @@ IsCompatible(
  * Result:
  *	A new rope containing the character data.
  *
+ * Type checking:
+ *	*rope* must be a valid rope.
+ *
  * Side effects:
  *	May allocate memory cells.
  *
@@ -936,13 +939,20 @@ Col_NormalizeRope(
     Col_Char replace,
     int flatten)
 {
-    size_t length = Col_RopeLength(rope), byteLength;
+    size_t length, byteLength;
     Col_Word normalized;
     CopyDataInfo copyDataInfo;
     Col_RopeChunksTraverseProc *copyDataProc;
     Col_Char c;
     int type;
 
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(rope) return WORD_NIL;
+
+    length = Col_RopeLength(rope);
     if (length == 0) return WORD_SMALLSTR_EMPTY;
 
     /*
@@ -960,67 +970,67 @@ Col_NormalizeRope(
 
     type = WORD_TYPE(rope);
     switch (type) {
-	case WORD_TYPE_CHAR:
-	    flatten = 1;
-	    c = WORD_CHAR_GET(rope);
+    case WORD_TYPE_CHAR:
+	flatten = 1;
+	c = WORD_CHAR_GET(rope);
+	switch (format) {
+	case COL_UCS1:
+	    if (c < COL_CHAR1_MAX) {
+		return WORD_CHAR_NEW(c, format);
+	    } else if (replace != COL_CHAR_INVALID) {
+		return WORD_CHAR_NEW(replace, format);
+	    } else {
+		return WORD_SMALLSTR_EMPTY;
+	    }
+
+	case COL_UCS2:
+	    if (c < COL_CHAR2_MAX) {
+		return WORD_CHAR_NEW(c, format);
+	    } else if (replace != COL_CHAR_INVALID) {
+		return WORD_CHAR_NEW(replace, format);
+	    } else {
+		return WORD_SMALLSTR_EMPTY;
+	    }
+
+	case COL_UCS4:
+	    return WORD_CHAR_NEW(c, format);
+
+	case COL_UCS:
+	    return Col_NewCharWord(c);
+	}
+	break;
+
+    case WORD_TYPE_SMALLSTR:
+	flatten = 1;
+	if (WORD_SMALLSTR_LENGTH(rope) == 1) {
 	    switch (format) {
-		case COL_UCS1:
-		    if (c < COL_CHAR1_MAX) {
-			return WORD_CHAR_NEW(c, format);
-		    } else if (replace != COL_CHAR_INVALID) {
-			return WORD_CHAR_NEW(replace, format);
-		    } else {
-			return WORD_SMALLSTR_EMPTY;
-		    }
+	    case COL_UCS1:
+	    case COL_UCS2:
+	    case COL_UCS4:
+		return WORD_CHAR_NEW(*WORD_SMALLSTR_DATA(rope), format);
 
-		case COL_UCS2:
-		    if (c < COL_CHAR2_MAX) {
-			return WORD_CHAR_NEW(c, format);
-		    } else if (replace != COL_CHAR_INVALID) {
-			return WORD_CHAR_NEW(replace, format);
-		    } else {
-			return WORD_SMALLSTR_EMPTY;
-		    }
-
-		case COL_UCS4:
-		    return WORD_CHAR_NEW(c, format);
-
-		case COL_UCS:
-		    return Col_NewChar(c);
+	    case COL_UCS:
+		return Col_NewCharWord(*WORD_SMALLSTR_DATA(rope));
 	    }
-	    break;
+	} else if (format == COL_UCS1 || format == COL_UCS) {
+	    return rope;
+	}
+	break;
 
-	case WORD_TYPE_SMALLSTR:
-	    flatten = 1;
-	    if (WORD_SMALLSTR_LENGTH(rope) == 1) {
-		switch (format) {
-		    case COL_UCS1:
-		    case COL_UCS2:
-		    case COL_UCS4:
-			return WORD_CHAR_NEW(*WORD_SMALLSTR_DATA(rope), format);
-
-		    case COL_UCS:
-			return Col_NewChar(*WORD_SMALLSTR_DATA(rope));
-		}
-	    } else if (format == COL_UCS1 || format == COL_UCS) {
+    case WORD_TYPE_UCSSTR:
+	flatten = 1;
+	if (WORD_UCSSTR_FORMAT(rope) == format || format == COL_UCS) 
 		return rope;
-	    }
-	    break;
+	break;
 
-	case WORD_TYPE_UCSSTR:
-	    flatten = 1;
-	    if (WORD_UCSSTR_FORMAT(rope) == format || format == COL_UCS) 
-		    return rope;
-	    break;
+    case WORD_TYPE_UTFSTR:
+	flatten = 1;
+	if (WORD_UTFSTR_FORMAT(rope) == format) return rope;
+	break;
 
-	case WORD_TYPE_UTFSTR:
-	    flatten = 1;
-	    if (WORD_UTFSTR_FORMAT(rope) == format) return rope;
-	    break;
-
-	case WORD_TYPE_CUSTOM:
-	    flatten = 1;
-	    break;
+    case WORD_TYPE_CUSTOM:
+	flatten = 1;
+	break;
     }
 
     /*
@@ -1035,101 +1045,101 @@ Col_NormalizeRope(
 	int single = 0;
 
 	switch (format) {
-	    case COL_UCS1:
-		if (length <= UCSSTR_MAX_LENGTH) {
-		    /* 
-		     * String fits into one multi-cell leaf rope. 
-		     */
+	case COL_UCS1:
+	    if (length <= UCSSTR_MAX_LENGTH) {
+		/* 
+		    * String fits into one multi-cell leaf rope. 
+		    */
 
-		    single = 1;
-		    if (replace == COL_CHAR_INVALID) {
-			/*
-			 * Skip unrepresentable chars: compute actual length.
-			 */
+		single = 1;
+		if (replace == COL_CHAR_INVALID) {
+		    /*
+			* Skip unrepresentable chars: compute actual length.
+			*/
 
-			length = 0;
-			Col_TraverseRopeChunks(rope, 0, SIZE_MAX, 0, 
-				Ucs1ComputeLengthProc, &length, NULL);
-		    }
-		    byteLength = length * CHAR_WIDTH(format);
+		    length = 0;
+		    Col_TraverseRopeChunks(rope, 0, SIZE_MAX, 0, 
+			    Ucs1ComputeLengthProc, &length, NULL);
 		}
-		break;
+		byteLength = length * CHAR_WIDTH(format);
+	    }
+	    break;
 
-	    case COL_UCS2:
-		if (length <= UCSSTR_MAX_LENGTH) {
-		    /* 
-		     * String fits into one multi-cell leaf rope. 
-		     */
+	case COL_UCS2:
+	    if (length <= UCSSTR_MAX_LENGTH) {
+		/* 
+		    * String fits into one multi-cell leaf rope. 
+		    */
 
-		    single = 1;
-		    if (replace == COL_CHAR_INVALID) {
-			/*
-			 * Skip unrepresentable chars: compute actual length.
-			 */
+		single = 1;
+		if (replace == COL_CHAR_INVALID) {
+		    /*
+			* Skip unrepresentable chars: compute actual length.
+			*/
 
-			length = 0;
-			Col_TraverseRopeChunks(rope, 0, SIZE_MAX, 0, 
-				Ucs2ComputeLengthProc, &length, NULL);
-		    }
-		    byteLength = length * CHAR_WIDTH(format);
+		    length = 0;
+		    Col_TraverseRopeChunks(rope, 0, SIZE_MAX, 0, 
+			    Ucs2ComputeLengthProc, &length, NULL);
 		}
-		break;
+		byteLength = length * CHAR_WIDTH(format);
+	    }
+	    break;
 
-	    case COL_UCS4:
-		if (length <= UCSSTR_MAX_LENGTH) {
-		    /* 
-		     * String fits into one multi-cell leaf rope. 
-		     */
+	case COL_UCS4:
+	    if (length <= UCSSTR_MAX_LENGTH) {
+		/* 
+		    * String fits into one multi-cell leaf rope. 
+		    */
 
-		    single = 1;
-		    byteLength = length * CHAR_WIDTH(format);
-		}
-		break;
+		single = 1;
+		byteLength = length * CHAR_WIDTH(format);
+	    }
+	    break;
 
-	    case COL_UCS:
-		/*
-		 * Adaptive format.
+	case COL_UCS:
+	    /*
+	     * Adaptive format.
+	     */
+
+	    if (length <= UCSSTR_MAX_LENGTH) {
+		/* 
+		 * String fits into one multi-cell leaf rope. Get actual
+		 * format.
 		 */
 
-		if (length <= UCSSTR_MAX_LENGTH) {
-		    /* 
-		     * String fits into one multi-cell leaf rope. Get actual
-		     * format.
-		     */
+		single = 1;
+		format = COL_UCS1;
+		Col_TraverseRopeChunks(rope, 0, SIZE_MAX, 0, 
+			UcsComputeFormatProc, &format, NULL);
+		byteLength = length * CHAR_WIDTH(format);
+	    }
+	    break;
 
-		    single = 1;
-		    format = COL_UCS1;
-		    Col_TraverseRopeChunks(rope, 0, SIZE_MAX, 0, 
-			    UcsComputeFormatProc, &format, NULL);
-		    byteLength = length * CHAR_WIDTH(format);
-		}
-		break;
+	case COL_UTF8:
+	    if (length * CHAR_WIDTH(format) <= UTFSTR_MAX_BYTELENGTH) {
+		/*
+		 * String may fit into one multi-cell leaf rope, compute 
+		 * actual byte length.
+		 */
 
-	    case COL_UTF8:
-		if (length * CHAR_WIDTH(format) <= UTFSTR_MAX_BYTELENGTH) {
-		    /*
-		     * String may fit into one multi-cell leaf rope, compute 
-		     * actual byte length.
-		     */
+		byteLength = 0;
+		single = !Col_TraverseRopeChunks(rope, 0, SIZE_MAX, 0, 
+			Utf8ComputeByteLengthProc, &byteLength, NULL);
+	    }
+	    break;
 
-		    byteLength = 0;
-		    single = !Col_TraverseRopeChunks(rope, 0, SIZE_MAX, 0, 
-			    Utf8ComputeByteLengthProc, &byteLength, NULL);
-		}
-		break;
+	case COL_UTF16:
+	    if (length * CHAR_WIDTH(format) <= UTFSTR_MAX_BYTELENGTH) {
+		/*
+		 * String may fit into one multi-cell leaf rope, compute 
+		 * actual byte length.
+		 */
 
-	    case COL_UTF16:
-		if (length * CHAR_WIDTH(format) <= UTFSTR_MAX_BYTELENGTH) {
-		    /*
-		     * String may fit into one multi-cell leaf rope, compute 
-		     * actual byte length.
-		     */
-
-		    byteLength = 0;
-		    single = !Col_TraverseRopeChunks(rope, 0, SIZE_MAX, 0, 
-			    Utf16ComputeByteLengthProc, &byteLength, NULL);
-		}
-		break;
+		byteLength = 0;
+		single = !Col_TraverseRopeChunks(rope, 0, SIZE_MAX, 0, 
+			Utf16ComputeByteLengthProc, &byteLength, NULL);
+	    }
+	    break;
 	}
 
 	if (length == 0) return WORD_SMALLSTR_EMPTY;
@@ -1190,11 +1200,11 @@ Col_NormalizeRope(
 
 	copyDataInfo.replace = replace;
 	switch (format) {
-	    case COL_UCS1:  copyDataProc = Ucs1CopyDataProc; break;
-	    case COL_UCS2:  copyDataProc = Ucs2CopyDataProc; break;
-	    case COL_UCS4:  copyDataProc = Ucs4CopyDataProc; break;
-	    case COL_UTF8:  copyDataProc = Utf8CopyDataProc; break;
-	    case COL_UTF16: copyDataProc = Utf16CopyDataProc; break;
+	case COL_UCS1:  copyDataProc = Ucs1CopyDataProc;  break;
+	case COL_UCS2:  copyDataProc = Ucs2CopyDataProc;  break;
+	case COL_UCS4:  copyDataProc = Ucs4CopyDataProc;  break;
+	case COL_UTF8:  copyDataProc = Utf8CopyDataProc;  break;
+	case COL_UTF16: copyDataProc = Utf16CopyDataProc; break;
 	}
 	Col_TraverseRopeChunks(rope, 0, SIZE_MAX, 0, copyDataProc, 
 		&copyDataInfo, NULL);
@@ -1215,64 +1225,149 @@ Col_NormalizeRope(
      */
 
     switch (type) {
-	case WORD_TYPE_SUBROPE:
-	    if (IsCompatible(rope, format)) {
-		return rope;
-	    }
-	    if (WORD_SUBROPE_DEPTH(rope) == 0) {
-		/*
-		 * Source is leaf, flatten.
-		 */
-
-		return Col_NormalizeRope(rope, format, replace, 1);
-	    } else {
-		/*
-		 * Split rope and normalize both arms.
-		 */
-
-		Col_Word source = WORD_SUBROPE_SOURCE(rope),
-			left = Col_Subrope(WORD_CONCATROPE_LEFT(source),
-			WORD_SUBROPE_FIRST(rope), SIZE_MAX),
-			right = Col_Subrope(WORD_CONCATROPE_RIGHT(source),
-			0, WORD_SUBROPE_LAST(rope) - WORD_SUBROPE_FIRST(rope) 
-			+ 1 - Col_RopeLength(left));
-		left = Col_NormalizeRope(left, format, replace, 0);
-		right = Col_NormalizeRope(right, format, replace, 0);
-		return Col_ConcatRopes(left, right);
-	    }
-
-	case WORD_TYPE_CONCATROPE: {
+    case WORD_TYPE_SUBROPE:
+	if (IsCompatible(rope, format)) {
+	    return rope;
+	}
+	if (WORD_SUBROPE_DEPTH(rope) == 0) {
 	    /*
-	     * Normalize both arms.
+	     * Source is leaf, flatten.
 	     */
 
-	    Col_Word left = WORD_CONCATROPE_LEFT(rope), 
-		    right = WORD_CONCATROPE_RIGHT(rope);
+	    return Col_NormalizeRope(rope, format, replace, 1);
+	} else {
+	    /*
+	     * Split rope and normalize both arms.
+	     */
+
+	    Col_Word source = WORD_SUBROPE_SOURCE(rope),
+		    left = Col_Subrope(WORD_CONCATROPE_LEFT(source),
+		    WORD_SUBROPE_FIRST(rope), SIZE_MAX),
+		    right = Col_Subrope(WORD_CONCATROPE_RIGHT(source),
+		    0, WORD_SUBROPE_LAST(rope) - WORD_SUBROPE_FIRST(rope) 
+		    + 1 - Col_RopeLength(left));
 	    left = Col_NormalizeRope(left, format, replace, 0);
 	    right = Col_NormalizeRope(right, format, replace, 0);
-	    if (left == WORD_CONCATROPE_LEFT(rope) 
-		    && right == WORD_CONCATROPE_RIGHT(rope)) {
-		/*
-		 * Both arms are compatible and so is the rope.
-		 */
-
-		return rope;
-	    } else {
-		return Col_ConcatRopes(left, right);
-	    }
+	    return Col_ConcatRopes(left, right);
 	}
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
-	    return WORD_NIL;
+    case WORD_TYPE_CONCATROPE: {
+	/*
+	 * Normalize both arms.
+	 */
+
+	Col_Word left = WORD_CONCATROPE_LEFT(rope), 
+		right = WORD_CONCATROPE_RIGHT(rope);
+	left = Col_NormalizeRope(left, format, replace, 0);
+	right = Col_NormalizeRope(right, format, replace, 0);
+	if (left == WORD_CONCATROPE_LEFT(rope) 
+		&& right == WORD_CONCATROPE_RIGHT(rope)) {
+	    /*
+	     * Both arms are compatible and so is the rope.
+	     */
+
+	    return rope;
+	} else {
+	    return Col_ConcatRopes(left, right);
+	}
+	}
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+	return WORD_NIL;
     }
 }
 
 
 /****************************************************************************
- * Group: Rope Access and Comparison
+ * Group: Rope Accessors
  ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_CharWordValue
+ *
+ *	Get codepoint value of character word.
+ *
+ * Argument:
+ *	ch	- Character word to get value for.
+ *
+ * Type checking:
+ *	*ch* must be a valid character word.
+ *
+ * Result:
+ *	The codepoint.
+ *
+ * See also:
+ *	<Col_NewCharWord>
+ *---------------------------------------------------------------------------*/
+
+Col_Char
+Col_CharWordValue(
+    Col_Word ch)
+{
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_CHAR(ch) return COL_CHAR_INVALID;
+
+    WORD_UNWRAP(ch);
+
+    return WORD_CHAR_GET(ch);
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_StringWordFormat
+ *
+ *	Get format of string word.
+ *
+ *	A string word is a rope made of a single leaf, i.e. a flat character 
+ *	array and not a binary tree of subropes and concat nodes.
+ *
+ * Type checking:
+ *	*string* must be a valid string word.
+ *
+ * Argument:
+ *	word	- String word to get format for.
+ *
+ * Result:
+ *	The format.
+ *---------------------------------------------------------------------------*/
+
+Col_StringFormat
+Col_StringWordFormat(
+    Col_Word string)
+{
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRING(string) return (Col_StringFormat) 0;
+
+    WORD_UNWRAP(string);
+
+    switch (WORD_TYPE(string)) {
+    case WORD_TYPE_CHAR:
+	return (Col_StringFormat) WORD_CHAR_WIDTH(string);
+
+    case WORD_TYPE_SMALLSTR:
+	return COL_UCS1;
+
+    case WORD_TYPE_UCSSTR:
+	return (Col_StringFormat) WORD_UCSSTR_FORMAT(string);
+
+    case WORD_TYPE_UTFSTR:
+	return (Col_StringFormat) WORD_UTFSTR_FORMAT(string);
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/*CANTHAPPEN*/
+	ASSERT(0);
+	return (Col_StringFormat) 0;
+    }
+}
 
 /*---------------------------------------------------------------------------
  * Function: Col_RopeLength
@@ -1282,6 +1377,9 @@ Col_NormalizeRope(
  * Argument:
  *	rope	- Rope to get length for.
  *
+ * Type checking:
+ *	*rope* must be a valid rope.
+ *
  * Result:
  *	The rope length.
  *---------------------------------------------------------------------------*/
@@ -1290,66 +1388,46 @@ size_t
 Col_RopeLength(
     Col_Word rope)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(rope) return 0;
+
+    WORD_UNWRAP(rope);
+
     switch (WORD_TYPE(rope)) {
-	/*
-	 * Immediate types.
-	 */
+    case WORD_TYPE_CHAR:
+	return 1;
 
-	case WORD_TYPE_CHAR:
-	    return 1;
+    case WORD_TYPE_SMALLSTR:
+	return WORD_SMALLSTR_LENGTH(rope);
 
-	case WORD_TYPE_SMALLSTR:
-	    return WORD_SMALLSTR_LENGTH(rope);
+    case WORD_TYPE_UCSSTR:
+	return WORD_UCSSTR_LENGTH(rope);
 
+    case WORD_TYPE_UTFSTR:
+	return WORD_UTFSTR_LENGTH(rope);
+
+    case WORD_TYPE_SUBROPE:
 	/* 
-	 * Flat string, fixed or variable.
+	 * Subrope length is the range width.
 	 */
 
-	case WORD_TYPE_UCSSTR:
-	    return WORD_UCSSTR_LENGTH(rope);
-
-	case WORD_TYPE_UTFSTR:
-	    return WORD_UTFSTR_LENGTH(rope);
-
-	/*
-	 * Rope nodes.
-	 */
-
-	case WORD_TYPE_SUBROPE:
-	    /* 
-	     * Subrope length is the range width.
-	     */
-
-	    return WORD_SUBROPE_LAST(rope)-WORD_SUBROPE_FIRST(rope)+1;
+	return WORD_SUBROPE_LAST(rope)-WORD_SUBROPE_FIRST(rope)+1;
 	    
-	case WORD_TYPE_CONCATROPE:
-	    /* 
-	     * Concat length is the sum of its arms (known at creation time).
-	     */
+    case WORD_TYPE_CONCATROPE:
+	return WORD_CONCATROPE_LENGTH(rope);
 
-	    return WORD_CONCATROPE_LENGTH(rope);
+    case WORD_TYPE_CUSTOM:
+	return ((Col_CustomRopeType *) WORD_TYPEINFO(rope))->lengthProc(rope);
 
-	case WORD_TYPE_CUSTOM: {
-	    Col_CustomWordType *typeInfo = WORD_TYPEINFO(rope);
-	    if (typeInfo->type == COL_ROPE) {
-		/*
-		 * Custom ropes.
-		 */
+    /* WORD_TYPE_UNKNOWN */
 
-		return ((Col_CustomRopeType *) typeInfo)->lengthProc(rope);
-	    }
-	    /* continued */
-	}
-
-	/* WORD_TYPE_UNKNOWN */
-
-	default:
-	    /*
-	     * Invalid type.
-	     */
-
-	    Col_Error(COL_ERROR, "%x is not a rope", rope);
-	    return 0;
+    default:
+	/*CANTHAPPEN*/
+	ASSERT(0);
+	return 0;
     }
 }
 
@@ -1361,6 +1439,9 @@ Col_RopeLength(
  * Argument:
  *	rope	- Rope to get character from.
  *	index	- Character index.
+ *
+ * Type checking:
+ *	*rope* must be a valid rope.
  *
  * Result:
  *	If the index is past the end of the rope, the invalid codepoint
@@ -1374,9 +1455,20 @@ Col_RopeAt(
 {
     Col_RopeIterator it;
     
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(rope) return COL_CHAR_INVALID;
+
     Col_RopeIterBegin(rope, index, &it);
     return Col_RopeIterEnd(&it) ? COL_CHAR_INVALID : Col_RopeIterAt(&it);
 }
+
+
+/****************************************************************************
+ * Group: Rope Search and Comparison
+ ****************************************************************************/
 
 /*---------------------------------------------------------------------------
  * Internal Typedef: FindCharInfo
@@ -1479,6 +1571,9 @@ FindCharProc(
  *	max	- Maximum number of characters to search.
  *	reverse	- Whether to traverse in reverse order.
  *
+ * Type checking:
+ *	*rope* must be a valid rope.
+ *
  * Results:
  *	If found, returns the position of the character in rope. Else returns
  *	SIZE_MAX (which is an invalid character index since this is the maximum
@@ -1496,8 +1591,17 @@ Col_RopeFind(
     size_t max, 
     int reverse)
 {
-    FindCharInfo info = {c, reverse, SIZE_MAX};
+    FindCharInfo info;
 
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(rope) return SIZE_MAX;
+
+    info.c = c;
+    info.reverse = reverse;
+    info.pos = SIZE_MAX;
     Col_TraverseRopeChunks(rope, start, max, reverse, FindCharProc, &info, 
 	    NULL);
 
@@ -1620,6 +1724,9 @@ SearchSubropeProc(
  *	max	- Maximum number of characters to search.
  *	reverse	- Whether to traverse in reverse order.
  *
+ * Type checking:
+ *	*rope* and *subrope* must be valid ropes.
+ *
  * Results:
  *	If found, returns the position of the subrope in rope. Else returns
  *	SIZE_MAX (which is an invalid character index since this is the maximum
@@ -1637,10 +1744,24 @@ Col_RopeSearch(
     size_t max, 
     int reverse)
 {
-    SearchSubropeInfo info = {rope, subrope, Col_RopeAt(subrope, 0), reverse, 
-	    SIZE_MAX};
-    size_t length = Col_RopeLength(rope), 
-	    subropeLength = Col_RopeLength(subrope);
+    SearchSubropeInfo info;
+    size_t length, subropeLength;
+
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(rope) return SIZE_MAX;
+    TYPECHECK_ROPE(subrope) return SIZE_MAX;
+
+    info.rope = rope;
+    info.subrope = subrope;
+    info.first = Col_RopeAt(subrope, 0);
+    info.reverse = reverse;
+    info.pos = SIZE_MAX;
+
+    length = Col_RopeLength(rope);
+    subropeLength = Col_RopeLength(subrope);
 
     if (subropeLength == 0) {
 	/*
@@ -1815,6 +1936,9 @@ CompareChunksProc(
  *	start		- Starting index.
  *	max		- Maximum number of characters to compare.
  *
+ * Type checking:
+ *	*rope1* and *rope2* must be valid ropes.
+ *
  * Results:
  *	Returns an integral value indicating the relationship between the 
  *	ropes:
@@ -1848,17 +1972,17 @@ Col_CompareRopesL(
     Col_Word ropes[2];
     CompareChunksInfo info;
 
-    if (WORD_TYPE(rope1) == WORD_TYPE_WRAP) {
-	ropes[0] = WORD_WRAP_SOURCE(rope1);
-    } else {
-	ropes[0] = rope1;
-    }
-    if (WORD_TYPE(rope2) == WORD_TYPE_WRAP) {
-	ropes[1] = WORD_WRAP_SOURCE(rope2);
-    } else {
-	ropes[1] = rope2;
-    }
-    if (ropes[0] == ropes[1]) {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(rope1) return 1;
+    TYPECHECK_ROPE(rope2) return -1;
+
+    WORD_UNWRAP(rope1);
+    WORD_UNWRAP(rope2);
+
+    if (rope1 == rope2) {
 	/*
 	 * Ropes are equal, no need to traverse.
 	 */
@@ -1873,6 +1997,8 @@ Col_CompareRopesL(
 	return 0;
     }
 
+    ropes[0] = rope1;
+    ropes[1] = rope2;
     info.posPtr = posPtr;
     info.c1Ptr = c1Ptr;
     info.c2Ptr = c2Ptr;
@@ -2090,95 +2216,93 @@ MergeChunksProc(
 	    }
 	}
 	switch (info->format) {
-	    case COL_UCS1:
-		switch (chunks->format) {
-		    case COL_UCS2:
-			/* 
-			 * Upconvert existing data to UCS-2. 
-			 */
-
-			for (index = info->length-1; index != -1; index--) {
-			    ((Col_Char2 *) info->data)[index]
-				    = info->data[index];
-			}
-			info->byteLength = info->length*sizeof(Col_Char2);
-			info->format = COL_UCS2;
-			break;
-
-		    case COL_UCS4:
-			/* 
-			 * Upconvert existing data to UCS-4. 
-			 */
-
-			for (index = info->length-1; index != -1; index--) {
-			    ((Col_Char4 *) info->data)[index] 
-				    = info->data[index];
-			}
-			info->byteLength = info->length * sizeof(Col_Char4);
-			info->format = COL_UCS4;
-			break;
-		}
-		break;
-
+	case COL_UCS1:
+	    switch (chunks->format) {
 	    case COL_UCS2:
-		switch (chunks->format) {
-		    case COL_UCS1:
-			/* 
-			 * Append data and return, upconverting in the process.
-			 */
+		/* 
+		 * Upconvert existing data to UCS-2. 
+		 */
 
-			for (index = 0; index < length; index++) {
-			    ((Col_Char2 *) (info->data+info->byteLength))[index] 
-				    = ((Col_Char1 *) chunks->data)[index];
-			}
-			info->length += length;
-			info->byteLength += length*sizeof(Col_Char2);
-			return 0;
-
-		    case COL_UCS4:
-			/* 
-			 Upconvert existing data to UCS-4. 
-			 */
-
-			for (index = info->length-1; index != -1; index--) {
-			    ((Col_Char4 *) info->data)[index] 
-				    = ((Col_Char2 *) info->data)[index];
-			}
-			info->byteLength = info->length * sizeof(Col_Char4);
-			info->format = COL_UCS4;
-			break;
+		for (index = info->length-1; index != -1; index--) {
+		    ((Col_Char2 *) info->data)[index] = info->data[index];
 		}
+		info->byteLength = info->length*sizeof(Col_Char2);
+		info->format = COL_UCS2;
 		break;
 
 	    case COL_UCS4:
-		switch (chunks->format) {
-		    case COL_UCS1:
-			/* 
-			 * Append data and return, upconverting in the process.
-			 */
+		/* 
+		 * Upconvert existing data to UCS-4. 
+		 */
 
-			for (index = 0; index < length; index++) {
-			    ((Col_Char4 *) (info->data+info->byteLength))[index] 
-				    = ((Col_Char1 *) chunks->data)[index];
-			}
-			info->length += length;
-			info->byteLength += length*sizeof(Col_Char4);
-			return 0;
-
-		    case COL_UCS2:
-			/* 
-			 * Append data and return, upconverting in the process.
-			 */
-
-			for (index = 0; index < length; index++) {
-			    ((Col_Char4 *) (info->data+info->byteLength))[index]
-				    = ((Col_Char2 *) chunks->data)[index];
-			}
-			info->length += length;
-			info->byteLength += length*sizeof(Col_Char4);
-			return 0;
+		for (index = info->length-1; index != -1; index--) {
+		    ((Col_Char4 *) info->data)[index] = info->data[index];
 		}
+		info->byteLength = info->length * sizeof(Col_Char4);
+		info->format = COL_UCS4;
 		break;
+	    }
+	    break;
+
+	case COL_UCS2:
+	    switch (chunks->format) {
+	    case COL_UCS1:
+		/* 
+		 * Append data and return, upconverting in the process.
+		 */
+
+		for (index = 0; index < length; index++) {
+		    ((Col_Char2 *) (info->data+info->byteLength))[index] 
+			    = ((Col_Char1 *) chunks->data)[index];
+		}
+		info->length += length;
+		info->byteLength += length*sizeof(Col_Char2);
+		return 0;
+
+	    case COL_UCS4:
+		/* 
+		 Upconvert existing data to UCS-4. 
+		 */
+
+		for (index = info->length-1; index != -1; index--) {
+		    ((Col_Char4 *) info->data)[index] 
+			    = ((Col_Char2 *) info->data)[index];
+		}
+		info->byteLength = info->length * sizeof(Col_Char4);
+		info->format = COL_UCS4;
+		break;
+	    }
+	    break;
+
+	case COL_UCS4:
+	    switch (chunks->format) {
+	    case COL_UCS1:
+		/* 
+		 * Append data and return, upconverting in the process.
+		 */
+
+		for (index = 0; index < length; index++) {
+		    ((Col_Char4 *) (info->data+info->byteLength))[index] 
+			    = ((Col_Char1 *) chunks->data)[index];
+		}
+		info->length += length;
+		info->byteLength += length*sizeof(Col_Char4);
+		return 0;
+
+	    case COL_UCS2:
+		/* 
+		 * Append data and return, upconverting in the process.
+		 */
+
+		for (index = 0; index < length; index++) {
+		    ((Col_Char4 *) (info->data+info->byteLength))[index]
+			    = ((Col_Char2 *) chunks->data)[index];
+		}
+		info->length += length;
+		info->byteLength += length*sizeof(Col_Char4);
+		return 0;
+	    }
+	    break;
 	}
 
 	ASSERT(info->format == chunks->format);
@@ -2224,20 +2348,16 @@ GetDepth(
 {
     for (;;) {
 	switch (WORD_TYPE(rope)) {
-	    case WORD_TYPE_WRAP:
-		rope = WORD_WRAP_SOURCE(rope);
-		break;
+ 	case WORD_TYPE_SUBROPE:
+	    return WORD_SUBROPE_DEPTH(rope);
 
- 	   case WORD_TYPE_SUBROPE:
-		return WORD_SUBROPE_DEPTH(rope);
+	case WORD_TYPE_CONCATROPE:
+	    return WORD_CONCATROPE_DEPTH(rope);
 
-	    case WORD_TYPE_CONCATROPE:
-		return WORD_CONCATROPE_DEPTH(rope);
+	/* WORD_TYPE_UNKNOWN */
 
-	    /* WORD_TYPE_UNKNOWN */
-
-	    default:
-		return 0;
+	default:
+	    return 0;
 	}
     }
 }
@@ -2310,6 +2430,9 @@ GetArms(
  *	rope		- The rope to extract the subrope from.
  *	first, last	- Range of subrope.
  *
+ * Type checking:
+ *	*rope* must be a valid rope.
+ *
  * Result:
  *	When first is past the end of the rope, or last is before first, an
  *	empty rope.
@@ -2329,6 +2452,14 @@ Col_Subrope(
     size_t ropeLength;		/* Length of source rope. */
     unsigned char depth=0;	/* Depth of source rope. */
     size_t length;		/* Length of resulting subrope. */
+
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(rope) return WORD_NIL;
+
+    WORD_UNWRAP(rope);
 
     /* 
      * Quick cases. 
@@ -2374,86 +2505,84 @@ Col_Subrope(
      */
 
     switch (WORD_TYPE(rope)) {
+    /*
+     * Immediate types.
+     */
+
+    case WORD_TYPE_CHAR:
 	/*
-	 * Immediate types.
+	 * Identity, already done.
 	 */
 
-	case WORD_TYPE_CHAR:
-	    /*
-	     * Identity, already done.
-	     */
+	ASSERT(0);
+	return rope;
 
-	    ASSERT(0);
-	    return rope;
+    case WORD_TYPE_SMALLSTR:
+	return Col_NewRope(COL_UCS1, WORD_SMALLSTR_DATA(rope)+first, length);
 
-	case WORD_TYPE_SMALLSTR:
-	    return Col_NewRope(COL_UCS1, WORD_SMALLSTR_DATA(rope)+first, 
-		    length);
+    /* 
+     * Handle fixed width leaf ropes directly; this will be faster than the 
+     * generic case below. 
+     */
 
+    case WORD_TYPE_UCSSTR: {
+	Col_StringFormat format = (Col_StringFormat) WORD_UCSSTR_FORMAT(rope);
+	if (length * CHAR_WIDTH(format) <= MAX_SHORT_LEAF_SIZE 
+		- WORD_UCSSTR_HEADER_SIZE) {
+	    return Col_NewRope(format, WORD_UCSSTR_DATA(rope)
+		    + first * CHAR_WIDTH(format), 
+		    length * CHAR_WIDTH(format));
+	}
+	break;
+	}
+
+    case WORD_TYPE_SUBROPE:
 	/* 
-	 * Handle fixed width leaf ropes directly; this will be faster than the 
-	 * generic case below. 
+	 * Point to original source. 
 	 */
 
-	case WORD_TYPE_UCSSTR: {
-	    Col_StringFormat format 
-		    = (Col_StringFormat) WORD_UCSSTR_FORMAT(rope);
-	    if (length * CHAR_WIDTH(format) <= MAX_SHORT_LEAF_SIZE 
-		    - WORD_UCSSTR_HEADER_SIZE) {
-		return Col_NewRope(format, WORD_UCSSTR_DATA(rope)
-			+ first * CHAR_WIDTH(format), 
-			length * CHAR_WIDTH(format));
-	    }
-	    break;
-	}
+	return Col_Subrope(WORD_SUBROPE_SOURCE(rope), 
+		WORD_SUBROPE_FIRST(rope)+first, 
+		WORD_SUBROPE_FIRST(rope)+last);
 
-	case WORD_TYPE_SUBROPE:
+    case WORD_TYPE_CONCATROPE: {
+	/* 
+	 * Try to find the deepest superset of the subrope. 
+	 */
+
+	size_t leftLength = WORD_CONCATROPE_LEFT_LENGTH(rope);
+	if (leftLength == 0) {
+	    leftLength = Col_RopeLength(WORD_CONCATROPE_LEFT(rope));
+	}
+	if (last < leftLength) {
 	    /* 
-	     * Point to original source. 
+	     * Left arm is a superset of subrope. 
 	     */
 
-	    return Col_Subrope(WORD_SUBROPE_SOURCE(rope), 
-		    WORD_SUBROPE_FIRST(rope)+first, 
-		    WORD_SUBROPE_FIRST(rope)+last);
-
-	case WORD_TYPE_CONCATROPE: {
-	    /* 
-	     * Try to find the deepest superset of the subrope. 
+	    return Col_Subrope(WORD_CONCATROPE_LEFT(rope), first, last);
+	} else if (first >= leftLength) {
+	    /*
+	     * Right arm is a superset of subrope. 
 	     */
 
-	    size_t leftLength = WORD_CONCATROPE_LEFT_LENGTH(rope);
-	    if (leftLength == 0) {
-		leftLength = Col_RopeLength(WORD_CONCATROPE_LEFT(rope));
-	    }
-	    if (last < leftLength) {
-		/* 
-		 * Left arm is a superset of subrope. 
-		 */
-
-		return Col_Subrope(WORD_CONCATROPE_LEFT(rope), first, last);
-	    } else if (first >= leftLength) {
-		/*
-		 * Right arm is a superset of subrope. 
-		 */
-
-		return Col_Subrope(WORD_CONCATROPE_RIGHT(rope), first-leftLength, 
-			last-leftLength);
-	    }
-	    depth = WORD_CONCATROPE_DEPTH(rope);
-	    break;
+	    return Col_Subrope(WORD_CONCATROPE_RIGHT(rope), first-leftLength, 
+		    last-leftLength);
+	}
+	depth = WORD_CONCATROPE_DEPTH(rope);
+	break;
 	}
 
-	case WORD_TYPE_CUSTOM: {
-	    Col_CustomRopeType *typeInfo 
-		    = (Col_CustomRopeType *) WORD_TYPEINFO(rope);
-	    ASSERT(typeInfo->type.type == COL_ROPE);
-	    if (typeInfo->subropeProc) {
-		if ((subrope = typeInfo->subropeProc(rope, first, last)) 
-			!= WORD_NIL) {
-		    return subrope;
-		}
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomRopeType *typeInfo 
+		= (Col_CustomRopeType *) WORD_TYPEINFO(rope);
+	ASSERT(typeInfo->type.type == COL_ROPE);
+	if (typeInfo->subropeProc) {
+	    if ((subrope = typeInfo->subropeProc(rope, first, last)) 
+		    != WORD_NIL) {
+		return subrope;
 	    }
-	    break;
+	}
+	break;
 	}
 
 	/* WORD_TYPE_UNKNOWN */
@@ -2503,9 +2632,14 @@ Col_Subrope(
  *	left	- Left part.
  *	right	- Right part.
  *
+ * Type checking:
+ *	*left* and *right* must be valid ropes.
+ *
+ * Range checking:
+ *	Resulting length must not exceed the maximum rope length (*SIZE_MAX*).
+ *
  * Result:
- *	If the resulting rope would exceed the maximum length, nil. Else, a 
- *	rope representing the concatenation of both ropes.
+ *	A rope representing the concatenation of both ropes.
  *
  * Side effects:
  *	May allocate memory cells.
@@ -2522,18 +2656,19 @@ Col_ConcatRopes(
     size_t leftLength, rightLength;
 				/* Respective lengths. */
 
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(left) return WORD_NIL;
+    TYPECHECK_ROPE(right) return WORD_NIL;
+
     leftLength = Col_RopeLength(left);
     rightLength = Col_RopeLength(right);
-    if (SIZE_MAX-leftLength < rightLength) {
-	/*
-	 * Concatenated rope would be too long.
-	 */
+    RANGECHECK_CONCATLENGTH(leftLength, rightLength) return WORD_NIL;
 
-	Col_Error(COL_ERROR, 
-		"Combined length %u+%u exceeds the maximum allowed value for ropes (%u)", 
-		leftLength, rightLength, SIZE_MAX);
-	return WORD_NIL;
-    }
+    WORD_UNWRAP(left);
+    WORD_UNWRAP(right);
 
     if (leftLength == 0) {
 	/* 
@@ -2550,47 +2685,47 @@ Col_ConcatRopes(
     }
 
     switch (WORD_TYPE(left)) {
-	case WORD_TYPE_SUBROPE:
-	    if (WORD_TYPE(right) == WORD_TYPE_SUBROPE
-		    && WORD_SUBROPE_SOURCE(left) == WORD_SUBROPE_SOURCE(right) 
-		    && WORD_SUBROPE_LAST(left)+1 == WORD_SUBROPE_FIRST(right)) {
-		/* 
-		 * Merge if left and right are adjacent subropes. This allows
-		 * for fast consecutive insertions/removals at a given index.
-		 */
+    case WORD_TYPE_SUBROPE:
+	if (WORD_TYPE(right) == WORD_TYPE_SUBROPE
+		&& WORD_SUBROPE_SOURCE(left) == WORD_SUBROPE_SOURCE(right) 
+		&& WORD_SUBROPE_LAST(left)+1 == WORD_SUBROPE_FIRST(right)) {
+	    /* 
+	     * Merge if left and right are adjacent subropes. This allows for 
+	     * fast consecutive insertions/removals at a given index.
+	     */
 
-		return Col_Subrope(WORD_SUBROPE_SOURCE(left), 
-			WORD_SUBROPE_FIRST(left), WORD_SUBROPE_LAST(right));
-	    }
-	    break;
+	    return Col_Subrope(WORD_SUBROPE_SOURCE(left), 
+		    WORD_SUBROPE_FIRST(left), WORD_SUBROPE_LAST(right));
+	}
+	break;
 
-	case WORD_TYPE_CUSTOM: {
-	    Col_CustomRopeType *typeInfo 
-		    = (Col_CustomRopeType *) WORD_TYPEINFO(left);
-	    ASSERT(typeInfo->type.type == COL_ROPE);
-	    if (typeInfo->concatProc) {
-		if ((concatRope = typeInfo->concatProc(left, right)) 
-			!= WORD_NIL) {
-		    return concatRope;
-		}
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomRopeType *typeInfo 
+		= (Col_CustomRopeType *) WORD_TYPEINFO(left);
+	ASSERT(typeInfo->type.type == COL_ROPE);
+	if (typeInfo->concatProc) {
+	    if ((concatRope = typeInfo->concatProc(left, right)) 
+		    != WORD_NIL) {
+		return concatRope;
 	    }
-	    break;
+	}
+	break;
 	}
 
 	/* WORD_TYPE_UNKNOWN */
     }
     switch (WORD_TYPE(right)) {
-	case WORD_TYPE_CUSTOM: {
-	    Col_CustomRopeType *typeInfo 
-		    = (Col_CustomRopeType *) WORD_TYPEINFO(right);
-	    ASSERT(typeInfo->type.type == COL_ROPE);
-	    if (typeInfo->concatProc) {
-		if ((concatRope = typeInfo->concatProc(left, right)) 
-			!= WORD_NIL) {
-		    return concatRope;
-		}
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomRopeType *typeInfo 
+		= (Col_CustomRopeType *) WORD_TYPEINFO(right);
+	ASSERT(typeInfo->type.type == COL_ROPE);
+	if (typeInfo->concatProc) {
+	    if ((concatRope = typeInfo->concatProc(left, right)) 
+		    != WORD_NIL) {
+		return concatRope;
 	    }
-	    break;
+	}
+	break;
 	}
 
 	/* WORD_TYPE_UNKNOWN */
@@ -2624,8 +2759,8 @@ Col_ConcatRopes(
      * Assume the input ropes are well balanced by construction. Build a rope 
      * that is balanced as well, i.e. where left and right depths don't differ 
      * by more that 1 level.
-
-    /* Note that a subrope with depth >= 1 always points to a concat, as by 
+     *
+     * Note that a subrope with depth >= 1 always points to a concat, as by 
      * construction it cannot point to another subrope (see Col_Subrope). 
      */
 
@@ -2774,11 +2909,12 @@ Col_ConcatRopesNV(
      * typically small. 
      */
 
-    ropes = alloca(number*sizeof(Col_Word));
+    ropes = (Col_Word *) alloca(number*sizeof(Col_Word));
     va_start(args, number);
     for (i=0; i < number; i++) {
 	ropes[i] = va_arg(args, Col_Word);
     }
+    va_end(args);
     return Col_ConcatRopesA(number, ropes);
 }
 
@@ -2798,9 +2934,15 @@ Col_ConcatRopesNV(
  *	rope	- The rope to repeat.
  *	count	- Repetition factor.
  *
+ * Type checking:
+ *	*rope* must be a valid rope.
+ *
+ * Range checking:
+ *	Resulting length must not exceed the maximum rope length (*SIZE_MAX*).
+ *
  * Result:
- *	If count is zero or the resulting rope would exceed the maximum length,
- *	nil. Else, a rope representing the repetition of the source rope.
+ *	A rope representing the repetition of the source rope. A rope repeated
+ *	zero times is empty. 
  *---------------------------------------------------------------------------*/
 
 Col_Word 
@@ -2808,8 +2950,18 @@ Col_RepeatRope(
     Col_Word rope,
     size_t count)
 {
+    size_t length;
+
+    /*
+     * Prerequisites.
+     */
+
+    TYPECHECK_ROPE(rope) return WORD_NIL;
+    length = Col_RopeLength(rope);
+    RANGECHECK_REPEATLENGTH(length, count) return WORD_NIL;
+
     /* Quick cases. */
-    if (count == 0) {return WORD_NIL;}
+    if (count == 0) {return WORD_SMALLSTR_EMPTY;}
     if (count == 1) {return rope;}
     if (count == 2) {return Col_ConcatRopes(rope, rope);}
 
@@ -2830,11 +2982,13 @@ Col_RepeatRope(
  *
  *	Insertion past the end of the rope results in a concatenation.
  *
- *
  * Arguments:
  *	into	- Where to insert.
  *	index	- Index of insertion point.
  *	rope	- Rope to insert.
+ *
+ * Type checking:
+ *	*into* and *rope* must be valid ropes.
  *
  * Note:
  *	Only perform minimal tests to prevent overflow, basic ops should 
@@ -2854,6 +3008,13 @@ Col_RopeInsert(
     Col_Word rope)
 {
     size_t length;
+
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(into) return WORD_NIL;
+    TYPECHECK_ROPE(rope) return WORD_NIL;
  
     if (Col_RopeLength(rope) == 0) {
 	/*
@@ -2899,6 +3060,9 @@ Col_RopeInsert(
  *	rope		- Rope to remove sequence from.
  *	first, last	- Range of characters to remove.
  *
+ * Type checking:
+ *	*rope* must be a valid rope.
+ *
  * Note:
  *	Only perform minimal tests to prevent overflow, basic ops should 
  *	perform further optimizations anyway.
@@ -2918,16 +3082,16 @@ Col_RopeRemove(
 {
     size_t length;
 
-    if (first > last) {
-	/* 
-	 * No-op. 
-	 */
+    /*
+     * Check preconditions.
+     */
 
-	return rope;
-    }
+    TYPECHECK_ROPE(rope) return WORD_NIL;
 
     length = Col_RopeLength(rope);
-    if (length == 0 || first >= length) {
+    if (length == 0) return WORD_SMALLSTR_EMPTY;
+
+    if (first > last || first >= length) {
 	/*
 	 * No-op.
 	 */
@@ -2968,6 +3132,9 @@ Col_RopeRemove(
  *	first, last	- Inclusive range of characters to replace.
  *	with		- Replacement rope.
  *
+ * Type checking:
+ *	*rope* must be a valid rope.
+ *
  * Note:
  *	Only perform minimal tests to prevent overflow, basic ops should 
  *	perform further optimizations anyway.
@@ -2989,6 +3156,12 @@ Col_RopeReplace(
     size_t last,
     Col_Word with)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(rope) return WORD_NIL;
+
     if (first > last) {
 	/* 
 	 * No-op. 
@@ -3083,85 +3256,77 @@ GetChunk(
 
 	type = WORD_TYPE(info->rope);
 	switch (type) {
-	    case WORD_TYPE_WRAP:
-		/* 
-		 * Recurse on source.
-		 */
+	case WORD_TYPE_SUBROPE:
+	    /* 
+	     * Subrope: recurse on source rope.
+	     */
 
-		info->rope = WORD_WRAP_SOURCE(info->rope);
-		continue;
-
-	    case WORD_TYPE_SUBROPE:
-		/* 
-		 * Subrope: recurse on source rope.
-		 */
-
-		info->start += WORD_SUBROPE_FIRST(info->rope);
-		info->rope = WORD_SUBROPE_SOURCE(info->rope);
-		continue;
+	    info->start += WORD_SUBROPE_FIRST(info->rope);
+	    info->rope = WORD_SUBROPE_SOURCE(info->rope);
+	    continue;
         	    
-	    case WORD_TYPE_CONCATROPE: {
+	case WORD_TYPE_CONCATROPE: {
+	    /* 
+	     * Concat: descend into covered arms.
+	     */
+
+	    int depth;
+	    size_t leftLength = WORD_CONCATROPE_LEFT_LENGTH(info->rope);
+	    if (leftLength == 0) {
+		leftLength = Col_RopeLength(WORD_CONCATROPE_LEFT(info->rope));
+	    }
+	    if (info->start + (reverse ? 0 : info->max-1) < leftLength) {
 		/* 
-		 * Concat: descend into covered arms.
+		 * Recurse on left arm only. 
 		 */
 
-		int depth;
-		size_t leftLength = WORD_CONCATROPE_LEFT_LENGTH(info->rope);
-		if (leftLength == 0) {
-		    leftLength = Col_RopeLength(
-			    WORD_CONCATROPE_LEFT(info->rope));
-		}
-		if (info->start + (reverse ? 0 : info->max-1) < leftLength) {
-		    /* 
-		     * Recurse on left arm only. 
-		     */
-
-		    info->rope = WORD_CONCATROPE_LEFT(info->rope);
-		    continue;
-		}
-		if (info->start - (reverse ? info->max-1 : 0) >= leftLength) {
-		    /* 
-		     * Recurse on right arm only. 
-		     */
-
-		    info->start -= leftLength;
-		    info->rope = WORD_CONCATROPE_RIGHT(info->rope);
-		    continue;
-		} 
-
-		/*
-		 * Push right (resp. left for reverse) onto stack and recurse on
-		 * left (resp. right).
-		 */
-
-		ASSERT(info->backtracks);
-		depth = WORD_CONCATROPE_DEPTH(info->rope);
-		ASSERT(depth <= info->maxDepth);
-		info->backtracks[depth-1].prevDepth = info->prevDepth;
-		info->prevDepth = depth;
-		if (reverse) {
-		    ASSERT(info->start >= leftLength);
-		    info->backtracks[depth-1].rope 
-			    = WORD_CONCATROPE_LEFT(info->rope);
-		    info->backtracks[depth-1].max = info->max
-			    - (info->start-leftLength+1);
-		    info->start -= leftLength;
-		    info->max = info->start+1;
-		    info->rope = WORD_CONCATROPE_RIGHT(info->rope);
-		} else {
-		    ASSERT(info->start < leftLength);
-		    info->backtracks[depth-1].rope 
-			    = WORD_CONCATROPE_RIGHT(info->rope);
-		    info->backtracks[depth-1].max = info->max
-			    - (leftLength-info->start);
-		    info->max = leftLength-info->start;
-		    info->rope = WORD_CONCATROPE_LEFT(info->rope);
-		}
+		info->rope = WORD_CONCATROPE_LEFT(info->rope);
 		continue;
+	    }
+	    if (info->start - (reverse ? info->max-1 : 0) >= leftLength) {
+		/* 
+		 * Recurse on right arm only. 
+		 */
+
+		info->start -= leftLength;
+		info->rope = WORD_CONCATROPE_RIGHT(info->rope);
+		continue;
+	    } 
+
+	    /*
+	     * Push right (resp. left for reverse) onto stack and recurse on
+	     * left (resp. right).
+	     */
+
+	    ASSERT(info->backtracks);
+	    depth = WORD_CONCATROPE_DEPTH(info->rope);
+	    ASSERT(depth <= info->maxDepth);
+	    info->backtracks[depth-1].prevDepth = info->prevDepth;
+	    info->prevDepth = depth;
+	    if (reverse) {
+		ASSERT(info->start >= leftLength);
+		info->backtracks[depth-1].rope 
+			= WORD_CONCATROPE_LEFT(info->rope);
+		info->backtracks[depth-1].max = info->max
+			- (info->start-leftLength+1);
+		info->start -= leftLength;
+		info->max = info->start+1;
+		info->rope = WORD_CONCATROPE_RIGHT(info->rope);
+	    } else {
+		ASSERT(info->start < leftLength);
+		info->backtracks[depth-1].rope 
+			= WORD_CONCATROPE_RIGHT(info->rope);
+		info->backtracks[depth-1].max = info->max
+			- (leftLength-info->start);
+		info->max = leftLength-info->start;
+		info->rope = WORD_CONCATROPE_LEFT(info->rope);
+	    }
+	    continue;
+	    }
 
 	    /* WORD_TYPE_UNKNOWN */
-	    }
 	}
+
 	break;
     }
 
@@ -3172,83 +3337,83 @@ GetChunk(
     ASSERT(info->start + (reverse ? info->max-1 : 0) >= 0);
     ASSERT(info->start + (reverse ? 0 : info->max-1) < Col_RopeLength(info->rope));
     switch (type) {
-	case WORD_TYPE_CHAR:
-	    ASSERT(info->start == 0);
-	    ASSERT(info->max == 1);
-	    chunk->format = (Col_StringFormat) WORD_CHAR_WIDTH(info->rope);
-	    info->c = WORD_CHAR_GET(info->rope);
-	    chunk->data = &info->c;
-	    break;
+    case WORD_TYPE_CHAR:
+	ASSERT(info->start == 0);
+	ASSERT(info->max == 1);
+	chunk->format = (Col_StringFormat) WORD_CHAR_WIDTH(info->rope);
+	info->c = WORD_CHAR_GET(info->rope);
+	chunk->data = &info->c;
+	break;
 
-	case WORD_TYPE_SMALLSTR:
-	    chunk->format = COL_UCS1;
-	    chunk->data = WORD_SMALLSTR_DATA(info->rope) + info->start 
-		    - (reverse ? info->max-1 : 0);
-	    break;
+    case WORD_TYPE_SMALLSTR:
+	chunk->format = COL_UCS1;
+	chunk->data = WORD_SMALLSTR_DATA(info->rope) + info->start 
+		- (reverse ? info->max-1 : 0);
+	break;
 
-	case WORD_TYPE_UCSSTR: {
-	    /* 
-	     * Fixed-width flat strings: traverse range of chars.
-	     */
+    case WORD_TYPE_UCSSTR: {
+	/* 
+	 * Fixed-width flat strings: traverse range of chars.
+	 */
 
-	    chunk->format = (Col_StringFormat) WORD_UCSSTR_FORMAT(info->rope);
-	    chunk->data = WORD_UCSSTR_DATA(info->rope)
-		    + (info->start - (reverse ? info->max-1 : 0))
-		    * CHAR_WIDTH(chunk->format);
-	    break;
+	chunk->format = (Col_StringFormat) WORD_UCSSTR_FORMAT(info->rope);
+	chunk->data = WORD_UCSSTR_DATA(info->rope)
+		+ (info->start - (reverse ? info->max-1 : 0))
+		* CHAR_WIDTH(chunk->format);
+	break;
 	}
         	    
-	case WORD_TYPE_UTFSTR:
-	    /*
-	     * Variable-width flat string.
-	     */
+    case WORD_TYPE_UTFSTR:
+	/*
+	 * Variable-width flat string.
+	 */
 
-	    chunk->format = (Col_StringFormat) WORD_UTFSTR_FORMAT(info->rope);
-	    switch (chunk->format) {
-		case COL_UTF8:
-		    chunk->data = Col_Utf8Addr(
-			    (const Col_Char1 *) WORD_UTFSTR_DATA(info->rope), 
-			    info->start - (reverse ? info->max-1 : 0), 
-			    WORD_UTFSTR_LENGTH(info->rope), 
-			    WORD_UTFSTR_BYTELENGTH(info->rope));
-		    break;
-
-		case COL_UTF16:
-		    chunk->data = Col_Utf16Addr(
-			    (const Col_Char2 *) WORD_UTFSTR_DATA(info->rope), 
-			    info->start - (reverse ? info->max-1 : 0), 
-			    WORD_UTFSTR_LENGTH(info->rope), 
-			    WORD_UTFSTR_BYTELENGTH(info->rope));
-		    break;
-	    }
+	chunk->format = (Col_StringFormat) WORD_UTFSTR_FORMAT(info->rope);
+	switch (chunk->format) {
+	case COL_UTF8:
+	    chunk->data = Col_Utf8Addr(
+		    (const Col_Char1 *) WORD_UTFSTR_DATA(info->rope), 
+		    info->start - (reverse ? info->max-1 : 0), 
+		    WORD_UTFSTR_LENGTH(info->rope), 
+		    WORD_UTFSTR_BYTELENGTH(info->rope));
 	    break;
 
-	case WORD_TYPE_CUSTOM: {
-	    Col_CustomRopeType *typeInfo 
-		    = (Col_CustomRopeType *) WORD_TYPEINFO(info->rope);
-	    ASSERT(typeInfo->type.type == COL_ROPE);
-	    if (typeInfo->chunkAtProc) {
-		typeInfo->chunkAtProc(info->rope, info->start 
-			- (reverse ? info->max-1 : 0), info->max, &info->max, 
-			chunk);
-	    } else {
-		/*
-		 * Traverse chars individually.
-		 */
-
-		info->max = 1;
-		chunk->format = COL_UCS4;
-		info->c = typeInfo->charAtProc(info->rope, info->start);
-		chunk->data = &info->c;
-	    }
+	case COL_UTF16:
+	    chunk->data = Col_Utf16Addr(
+		    (const Col_Char2 *) WORD_UTFSTR_DATA(info->rope), 
+		    info->start - (reverse ? info->max-1 : 0), 
+		    WORD_UTFSTR_LENGTH(info->rope), 
+		    WORD_UTFSTR_BYTELENGTH(info->rope));
 	    break;
 	}
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomRopeType *typeInfo 
+		= (Col_CustomRopeType *) WORD_TYPEINFO(info->rope);
+	ASSERT(typeInfo->type.type == COL_ROPE);
+	if (typeInfo->chunkAtProc) {
+	    typeInfo->chunkAtProc(info->rope, info->start 
+		    - (reverse ? info->max-1 : 0), info->max, &info->max, 
+		    chunk);
+	} else {
+	    /*
+	     * Traverse chars individually.
+	     */
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
+	    info->max = 1;
+	    chunk->format = COL_UCS4;
+	    info->c = typeInfo->charAtProc(info->rope, info->start);
+	    chunk->data = &info->c;
+	}
+	break;
+	}
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
     }
 }
 
@@ -3325,6 +3490,9 @@ NextChunk(
  *	proc		- Callback proc called on each chunk.
  *	clientData	- Opaque data passed as is to above proc.
  *
+ * Type checking:
+ *	*ropes* elements must be valid ropes.
+ *
  * Results:
  *	The return value of the last called proc, or -1 if no traversal was
  *	performed. Additionally:
@@ -3347,17 +3515,29 @@ Col_TraverseRopeChunksN(
     RopeChunkTraverseInfo *info;
     Col_RopeChunk *chunks;
     int result;
+    size_t ropeLength;
 
-    info = alloca(sizeof(*info) * number);
-    chunks = alloca(sizeof(*chunks) * number);
+    /*
+     * Check preconditions.
+     */
 
     for (i=0; i < number; i++) {
-	size_t ropeLength = Col_RopeLength(ropes[i]);
-	if (start > ropeLength) {
+	TYPECHECK_ROPE(ropes[i]) return -1;
+    }
+
+    info = (RopeChunkTraverseInfo *) alloca(sizeof(*info) * number);
+    chunks = (Col_RopeChunk *) alloca(sizeof(*chunks) * number);
+
+    for (i=0; i < number; i++) {
+	info[i].rope = ropes[i];
+	WORD_UNWRAP(info[i].rope);
+	ropeLength = Col_RopeLength(info[i].rope);
+	if (start >= ropeLength) {
 	    /* 
 	     * Start is past the end of the rope.
 	     */
 
+	    info[i].rope = WORD_NIL;
 	    info[i].max = 0;
 	} else if (max > ropeLength-start) {
 	    /* 
@@ -3386,9 +3566,8 @@ Col_TraverseRopeChunksN(
 
     for (i=0; i < number; i++) {
 	ASSERT(info[i].max <= max);
-	info[i].rope = (info[i].max ? ropes[i] : WORD_NIL);
 	info[i].start = start;
-	info[i].maxDepth = GetDepth(ropes[i]);
+	info[i].maxDepth = info[i].rope ? GetDepth(info[i].rope) : 0;
 	info[i].backtracks = (info[i].maxDepth ? 
 	    alloca(sizeof(*info[i].backtracks) * info[i].maxDepth) : NULL);
 	info[i].prevDepth = INT_MAX;
@@ -3426,29 +3605,29 @@ Col_TraverseRopeChunksN(
 	for (i=0; i < number; i++) {
 	    if (!info[i].rope) continue;
 	    switch (chunks[i].format) {
-		case COL_UCS1:
-		case COL_UCS2:
-		case COL_UCS4:
-		    chunks[i].byteLength = max * CHAR_WIDTH(chunks[i].format);
-		    break;
+	    case COL_UCS1:
+	    case COL_UCS2:
+	    case COL_UCS4:
+		chunks[i].byteLength = max * CHAR_WIDTH(chunks[i].format);
+		break;
 
-		case COL_UTF8:
-		    chunks[i].byteLength = (const char *) Col_Utf8Addr(
-			    (const Col_Char1 *) chunks[i].data, max, 
-			    info[i].max, WORD_UTFSTR_BYTELENGTH(info[i].rope)
-			    - ((const char *) chunks[i].data
-			    - WORD_UTFSTR_DATA(info[i].rope)))
-			    - (const char *) chunks[i].data;
-		    break;
+	    case COL_UTF8:
+		chunks[i].byteLength = (const char *) Col_Utf8Addr(
+			(const Col_Char1 *) chunks[i].data, max, info[i].max, 
+			WORD_UTFSTR_BYTELENGTH(info[i].rope)
+			- ((const char *) chunks[i].data
+			- WORD_UTFSTR_DATA(info[i].rope)))
+			- (const char *) chunks[i].data;
+		break;
 
-		case COL_UTF16:
-		    chunks[i].byteLength = (const char *) Col_Utf16Addr(
-			    (const Col_Char2 *) chunks[i].data, max, 
-			    info[i].max, WORD_UTFSTR_BYTELENGTH(info[i].rope)
-			    - ((const char *) chunks[i].data
-			    - WORD_UTFSTR_DATA(info[i].rope)))
-			    - (const char *) chunks[i].data;
-		    break;
+	    case COL_UTF16:
+		chunks[i].byteLength = (const char *) Col_Utf16Addr(
+			(const Col_Char2 *) chunks[i].data, max, info[i].max, 
+			WORD_UTFSTR_BYTELENGTH(info[i].rope)
+			- ((const char *) chunks[i].data
+			- WORD_UTFSTR_DATA(info[i].rope)))
+			- (const char *) chunks[i].data;
+		break;
 	    }
 	}
 
@@ -3508,6 +3687,9 @@ Col_TraverseRopeChunksN(
  *	proc		- Callback proc called on each chunk.
  *	clientData	- Opaque data passed as is to above proc.
  *
+ * Type checking:
+ *	*rope* must be a valid rope.
+ *
  * Results:
  *	The return value of the last called proc, or -1 if no traversal was
  *	performed. Additionally:
@@ -3529,8 +3711,17 @@ Col_TraverseRopeChunks(
     RopeChunkTraverseInfo info;
     Col_RopeChunk chunk;
     int result;
-    size_t ropeLength = Col_RopeLength(rope);
+    size_t ropeLength;
 
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(rope) return -1;
+
+    WORD_UNWRAP(rope);
+
+    ropeLength = Col_RopeLength(rope);
     if (ropeLength == 0) {
 	/*
 	 * Nothing to traverse.
@@ -3540,7 +3731,7 @@ Col_TraverseRopeChunks(
     }
 
     if (reverse) {
-	if (start > ropeLength) {
+	if (start >= ropeLength) {
 	    /* 
 	     * Start is past the end of the rope.
 	     */
@@ -3555,7 +3746,7 @@ Col_TraverseRopeChunks(
 	    max = start+1;
 	}
     } else {
-	if (start > ropeLength) {
+	if (start >= ropeLength) {
 	    /* 
 	     * Start is past the end of the rope.
 	     */
@@ -3596,29 +3787,29 @@ Col_TraverseRopeChunks(
 	 */
 
 	switch (chunk.format) {
-	    case COL_UCS1:
-	    case COL_UCS2:
-	    case COL_UCS4:
-		chunk.byteLength = max * CHAR_WIDTH(chunk.format);
-		break;
+	case COL_UCS1:
+	case COL_UCS2:
+	case COL_UCS4:
+	    chunk.byteLength = max * CHAR_WIDTH(chunk.format);
+	    break;
 
-	    case COL_UTF8:
-		chunk.byteLength = (const char *) Col_Utf8Addr(
-			(const Col_Char1 *) chunk.data, max, info.max, 
-			WORD_UTFSTR_BYTELENGTH(info.rope)
-			- ((const char *) chunk.data
-			- WORD_UTFSTR_DATA(info.rope)))
-			- (const char *) chunk.data;
-		break;
+	case COL_UTF8:
+	    chunk.byteLength = (const char *) Col_Utf8Addr(
+		    (const Col_Char1 *) chunk.data, max, info.max, 
+		    WORD_UTFSTR_BYTELENGTH(info.rope)
+		    - ((const char *) chunk.data
+		    - WORD_UTFSTR_DATA(info.rope)))
+		    - (const char *) chunk.data;
+	    break;
 
-	    case COL_UTF16:
-		chunk.byteLength = (const char *) Col_Utf16Addr(
-			(const Col_Char2 *) chunk.data, max, info.max, 
-			WORD_UTFSTR_BYTELENGTH(info.rope)
-			- ((const char *) chunk.data
-			- WORD_UTFSTR_DATA(info.rope)))
-			- (const char *) chunk.data;
-		break;
+	case COL_UTF16:
+	    chunk.byteLength = (const char *) Col_Utf16Addr(
+		    (const Col_Char2 *) chunk.data, max, info.max, 
+		    WORD_UTFSTR_BYTELENGTH(info.rope)
+		    - ((const char *) chunk.data
+		    - WORD_UTFSTR_DATA(info.rope)))
+		    - (const char *) chunk.data;
+	    break;
 	}
 
 	/*
@@ -3890,7 +4081,7 @@ ColRopeIterUpdateTraversalInfo(
     ASSERT(it->rope);
     if (it->traversal.rope.subrope 
 	    && (it->index < it->traversal.rope.first 
-	    || it->index > it->traversal.rope.last)) {
+		    || it->index > it->traversal.rope.last)) {
 	/*
 	 * Out of range.
 	 */
@@ -3906,6 +4097,7 @@ ColRopeIterUpdateTraversalInfo(
 	rope = it->traversal.rope.subrope;
     } else {
 	rope = it->rope;
+	WORD_UNWRAP(rope);
 	it->traversal.rope.first = 0;
 	it->traversal.rope.last = SIZE_MAX;
 	it->traversal.rope.offset = 0;
@@ -3919,143 +4111,129 @@ ColRopeIterUpdateTraversalInfo(
 	size_t subFirst=first, subLast=last;
 
 	switch (WORD_TYPE(rope)) {
-	    case WORD_TYPE_CHAR:
-		it->traversal.rope.leaf = rope;
-		it->traversal.rope.index = it->index - offset;
-		it->traversal.rope.proc = IterAtChar;
-		ASSERT(it->traversal.rope.index == 0);
+	case WORD_TYPE_CHAR:
+	    it->traversal.rope.leaf = rope;
+	    it->traversal.rope.index = it->index - offset;
+	    it->traversal.rope.proc = IterAtChar;
+	    ASSERT(it->traversal.rope.index == 0);
+	    break;
+
+	case WORD_TYPE_SMALLSTR:
+	    it->traversal.rope.leaf = rope;
+	    it->traversal.rope.index = it->index - offset;
+	    it->traversal.rope.proc = IterAtSmallStr;
+	    ASSERT(it->traversal.rope.index < WORD_SMALLSTR_LENGTH(rope));
+	    break;
+
+	case WORD_TYPE_UCSSTR:
+	    it->traversal.rope.leaf = rope;
+	    it->traversal.rope.index = it->index - offset;
+	    switch (WORD_UCSSTR_FORMAT(rope)) {
+	    case COL_UCS1: it->traversal.rope.proc = IterAtUcs1; break;
+	    case COL_UCS2: it->traversal.rope.proc = IterAtUcs2; break;
+	    case COL_UCS4: it->traversal.rope.proc = IterAtUcs4; break;
+	    }
+	    ASSERT(it->traversal.rope.index < WORD_UCSSTR_LENGTH(rope));
+	    break;
+
+	case WORD_TYPE_UTFSTR: {
+	    const char * data = WORD_UTFSTR_DATA(rope);
+	    it->traversal.rope.leaf = rope;
+	    switch (WORD_UTFSTR_FORMAT(rope)) {
+	    case COL_UTF8:
+		it->traversal.rope.index = (unsigned short) 
+			((const char *) Col_Utf8Addr((const Col_Char1 *) data,
+				it->index - offset, WORD_UTFSTR_LENGTH(rope), 
+				WORD_UTFSTR_BYTELENGTH(rope)) - data);
+		it->traversal.rope.proc = IterAtUtf8;
 		break;
 
-	    case WORD_TYPE_SMALLSTR:
-		it->traversal.rope.leaf = rope;
-		it->traversal.rope.index = it->index - offset;
-		it->traversal.rope.proc = IterAtSmallStr;
-		ASSERT(it->traversal.rope.index < WORD_SMALLSTR_LENGTH(rope));
-		break;
-
-	    case WORD_TYPE_UCSSTR:
-		it->traversal.rope.leaf = rope;
-		it->traversal.rope.index = it->index - offset;
-		switch (WORD_UCSSTR_FORMAT(rope)) {
-		    case COL_UCS1: it->traversal.rope.proc = IterAtUcs1; break;
-		    case COL_UCS2: it->traversal.rope.proc = IterAtUcs2; break;
-		    case COL_UCS4: it->traversal.rope.proc = IterAtUcs4; break;
-		}
-		ASSERT(it->traversal.rope.index < WORD_UCSSTR_LENGTH(rope));
-		break;
-
-	    case WORD_TYPE_UTFSTR: {
-		const char * data = WORD_UTFSTR_DATA(rope);
-		it->traversal.rope.leaf = rope;
-		switch (WORD_UTFSTR_FORMAT(rope)) {
-		    case COL_UTF8:
-			it->traversal.rope.index 
-				= (unsigned short) ((const char *)
-				Col_Utf8Addr((const Col_Char1 *) data, 
-					it->index - offset, 
-					WORD_UTFSTR_LENGTH(rope), 
-					WORD_UTFSTR_BYTELENGTH(rope)) 
-				- data);
-			it->traversal.rope.proc = IterAtUtf8;
-			break;
-
-		    case COL_UTF16:
-			it->traversal.rope.index 
-				= (unsigned short) ((const char *)
-				Col_Utf16Addr((const Col_Char2 *) data, 
-					it->index - offset, 
-					WORD_UTFSTR_LENGTH(rope), 
-					WORD_UTFSTR_BYTELENGTH(rope)) 
-				- data);
-			it->traversal.rope.proc = IterAtUtf16;	
-			break;
-		}
-		ASSERT(it->traversal.rope.index < WORD_UTFSTR_BYTELENGTH(rope));
+	    case COL_UTF16:
+		it->traversal.rope.index = (unsigned short) 
+			((const char *) Col_Utf16Addr((const Col_Char2 *) data,
+				it->index - offset, WORD_UTFSTR_LENGTH(rope), 
+				WORD_UTFSTR_BYTELENGTH(rope)) - data);
+		it->traversal.rope.proc = IterAtUtf16;	
 		break;
 	    }
+	    ASSERT(it->traversal.rope.index < WORD_UTFSTR_BYTELENGTH(rope));
+	    break;
+	}
 
-	    case WORD_TYPE_CUSTOM: {
-		Col_CustomRopeType *typeInfo 
-			= (Col_CustomRopeType *) WORD_TYPEINFO(rope);
-		it->traversal.rope.leaf = rope;
-		it->traversal.rope.index = it->index - offset;
-		it->traversal.rope.proc = typeInfo->charAtProc;
-		ASSERT(it->traversal.rope.index < typeInfo->lengthProc(rope));
-		break;
+	case WORD_TYPE_CUSTOM: {
+	    Col_CustomRopeType *typeInfo 
+		    = (Col_CustomRopeType *) WORD_TYPEINFO(rope);
+	    it->traversal.rope.leaf = rope;
+	    it->traversal.rope.index = it->index - offset;
+	    it->traversal.rope.proc = typeInfo->charAtProc;
+	    ASSERT(it->traversal.rope.index < typeInfo->lengthProc(rope));
+	    break;
 	    }
 
-	    case WORD_TYPE_SUBROPE: 
+	case WORD_TYPE_SUBROPE: 
+	    /*
+	     * Always remember as subrope.
+	     */
+
+	    it->traversal.rope.subrope = rope;
+	    it->traversal.rope.first = first;
+	    it->traversal.rope.last = last;
+	    it->traversal.rope.offset = offset;
+
+	    /*
+	     * Recurse into source.
+	     * Note: offset may become negative (in 2's complement) but it 
+	     * doesn't matter.
+	     */
+
+	    offset -= WORD_SUBROPE_FIRST(rope);
+	    subLast = first - WORD_SUBROPE_FIRST(rope) 
+		    + WORD_SUBROPE_LAST(rope);
+	    rope = WORD_SUBROPE_SOURCE(rope);
+	    break;
+
+	case WORD_TYPE_CONCATROPE: {
+	    size_t leftLength = WORD_CONCATROPE_LEFT_LENGTH(rope);
+	    if (leftLength == 0) {
+		leftLength = Col_RopeLength(WORD_CONCATROPE_LEFT(rope));
+	    }
+	    if (WORD_CONCATROPE_DEPTH(rope) == MAX_ITERATOR_SUBROPE_DEPTH
+		    || !it->traversal.rope.subrope) {
 		/*
-		 * Always remember as subrope.
+		 * Remember as subrope.
 		 */
 
 		it->traversal.rope.subrope = rope;
 		it->traversal.rope.first = first;
 		it->traversal.rope.last = last;
 		it->traversal.rope.offset = offset;
-
-		/*
-		 * Recurse into source.
-		 * Note: offset may become negative (in 2's complement) but it 
-		 * doesn't matter.
-		 */
-
-		offset -= WORD_SUBROPE_FIRST(rope);
-		subLast = first - WORD_SUBROPE_FIRST(rope) 
-			+ WORD_SUBROPE_LAST(rope);
-		rope = WORD_SUBROPE_SOURCE(rope);
-		break;
-
-	    case WORD_TYPE_CONCATROPE: {
-		size_t leftLength = WORD_CONCATROPE_LEFT_LENGTH(rope);
-		if (leftLength == 0) {
-		    leftLength = Col_RopeLength(WORD_CONCATROPE_LEFT(rope));
-		}
-		if (WORD_CONCATROPE_DEPTH(rope) == MAX_ITERATOR_SUBROPE_DEPTH
-			|| !it->traversal.rope.subrope) {
-		    /*
-		     * Remember as subrope.
-		     */
-
-		    it->traversal.rope.subrope = rope;
-		    it->traversal.rope.first = first;
-		    it->traversal.rope.last = last;
-		    it->traversal.rope.offset = offset;
-		}
-
-		if (it->index - offset < leftLength) {
-		    /*
-		     * Recurse into left arm.
-		     */
-
-		    subLast = offset + leftLength-1;
-		    rope = WORD_CONCATROPE_LEFT(rope);
-		} else {
-		    /*
-		     * Recurse into right arm.
-		     */
-
-		    subFirst = offset + leftLength;
-		    offset += leftLength;
-		    rope = WORD_CONCATROPE_RIGHT(rope);
-		}
-		break;
 	    }
 
-	    case WORD_TYPE_WRAP:
+	    if (it->index - offset < leftLength) {
 		/*
-		 * Recurse into source.
+		 * Recurse into left arm.
 		 */
 
-		rope = WORD_WRAP_SOURCE(rope);
-		break;
+		subLast = offset + leftLength-1;
+		rope = WORD_CONCATROPE_LEFT(rope);
+	    } else {
+		/*
+		 * Recurse into right arm.
+		 */
 
-	    /* WORD_TYPE_UNKNOWN */
+		subFirst = offset + leftLength;
+		offset += leftLength;
+		rope = WORD_CONCATROPE_RIGHT(rope);
+	    }
+	    break;
+	    }
 
-	    default:
-		/* CANTHAPPEN */
-		ASSERT(0);
-		return;
+	/* WORD_TYPE_UNKNOWN */
+
+	default:
+	    /* CANTHAPPEN */
+	    ASSERT(0);
+	    return;
 	}
 
 	/*
@@ -4089,11 +4267,11 @@ ColStringIterCharAt(
 {
     ASSERT(!it->rope);
     switch (it->traversal.str.format) {
-	case COL_UCS1:  return             *(const Col_Char1 *) it->traversal.str.current;
-	case COL_UCS2:  return             *(const Col_Char2 *) it->traversal.str.current;
-	case COL_UCS4:  return             *(const Col_Char4 *) it->traversal.str.current;
-	case COL_UTF8:  return Col_Utf8Get ((const Col_Char1 *) it->traversal.str.current);
-	case COL_UTF16: return Col_Utf16Get((const Col_Char2 *) it->traversal.str.current);
+    case COL_UCS1:  return             *(const Col_Char1 *) it->traversal.str.current;
+    case COL_UCS2:  return             *(const Col_Char2 *) it->traversal.str.current;
+    case COL_UCS4:  return             *(const Col_Char4 *) it->traversal.str.current;
+    case COL_UTF8:  return Col_Utf8Get ((const Col_Char1 *) it->traversal.str.current);
+    case COL_UTF16: return Col_Utf16Get((const Col_Char2 *) it->traversal.str.current);
     }
 
     /* CANTHAPPEN */
@@ -4112,6 +4290,9 @@ ColStringIterCharAt(
  *	rope	- Rope to iterate over.
  *	index	- Index of character.
  *	it	- Iterator to initialize.
+ *
+ * Type checking:
+ *	*rope* must be a valid rope.
  *---------------------------------------------------------------------------*/
 
 void
@@ -4120,6 +4301,15 @@ Col_RopeIterBegin(
     size_t index,
     Col_RopeIterator *it)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(rope) {
+	*it = COL_ROPEITER_NULL;
+	return;
+    }
+
     it->rope = rope;
     it->length = Col_RopeLength(rope);;
     if (index >= it->length) {
@@ -4149,6 +4339,9 @@ Col_RopeIterBegin(
  * Arguments:
  *	rope	- Rope to iterate over.
  *	it	- Iterator to initialize.
+ *
+ * Type checking:
+ *	*rope* must be a valid rope.
  *---------------------------------------------------------------------------*/
 
 void
@@ -4156,6 +4349,15 @@ Col_RopeIterFirst(
     Col_Word rope,
     Col_RopeIterator *it)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(rope) {
+	*it = COL_ROPEITER_NULL;
+	return;
+    }
+
     it->rope = rope;
     it->length = Col_RopeLength(rope);
     it->index = 0;
@@ -4178,6 +4380,9 @@ Col_RopeIterFirst(
  * Arguments:
  *	rope	- Rope to iterate over.
  *	it	- Iterator to initialize.
+ *
+ * Type checking:
+ *	*rope* must be a valid rope.
  *---------------------------------------------------------------------------*/
 
 void
@@ -4185,6 +4390,15 @@ Col_RopeIterLast(
     Col_Word rope,
     Col_RopeIterator *it)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPE(rope) {
+	*it = COL_ROPEITER_NULL;
+	return;
+    }
+
     it->rope = rope;
     it->length = Col_RopeLength(rope);
     if (it->length == 0) {
@@ -4242,6 +4456,9 @@ Col_RopeIterString(
  *	it1	- First iterator.
  *	it2	- Second iterator.
  *
+ * Type checking:
+ *	*it1* and *it2* must be valid rope iterators.
+ *
  * Result:
  *	-  < 0 if it1 is before it2
  *	-  > 0 if it1 is after it2
@@ -4253,6 +4470,13 @@ Col_RopeIterCompare(
     const Col_RopeIterator *it1,
     const Col_RopeIterator *it2)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPEITER(it1) return 1;
+    TYPECHECK_ROPEITER(it2) return -1;
+
     /*
      * Note: iterators at end have their index set to SIZE_MAX.
      */
@@ -4296,6 +4520,12 @@ Col_RopeIterMoveTo(
  * Arguments:
  *	it	- The iterator to move.
  *	nb	- Offset.
+ *
+ * Type checking:
+ *	*it* must be a valid rope iterator.
+ *
+ * Range checking:
+ *	*it* must not be at end.
  *---------------------------------------------------------------------------*/
 
 void
@@ -4303,6 +4533,13 @@ Col_RopeIterForward(
     Col_RopeIterator *it,
     size_t nb)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPEITER(it) return;
+    RANGECHECK_ROPEITER(it) return;
+
     if (nb == 0) {
 	/*
 	 * No-op.
@@ -4311,14 +4548,9 @@ Col_RopeIterForward(
 	return;
     }
 
-    if (Col_RopeIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid rope iterator");
-	return;
-    }
-
     if (nb >= it->length - it->index) {
 	/*
-	 * End of rope.
+	 * End of rope/string.
 	 */
 
 	it->index = it->length;
@@ -4328,28 +4560,28 @@ Col_RopeIterForward(
 
     if (!it->rope) {
 	/*
-	 * Chunk iterator.
+	 * String iterator.
 	 */
 
 	Col_StringFormat format = it->traversal.str.format;
 	switch (format) {
-	    case COL_UCS1:
-	    case COL_UCS2:
-	    case COL_UCS4:
-		it->traversal.str.current += nb * CHAR_WIDTH(format);
-		break;
+	case COL_UCS1:
+	case COL_UCS2:
+	case COL_UCS4:
+	    it->traversal.str.current += nb * CHAR_WIDTH(format);
+	    break;
 
-	    case COL_UTF8:
-		while (nb--) it->traversal.str.current 
-			= (const char *) Col_Utf8Next(
-				(const Col_Char1 *) it->traversal.str.current);
-		break;
+	case COL_UTF8:
+	    while (nb--) 
+		it->traversal.str.current = (const char *) Col_Utf8Next(
+			(const Col_Char1 *) it->traversal.str.current);
+	    break;
 
-	    case COL_UTF16:
-		while (nb--) it->traversal.str.current 
-			= (const char *) Col_Utf16Next(
-				(const Col_Char2 *) it->traversal.str.current);
-		break;
+	case COL_UTF16:
+	    while (nb--)
+		it->traversal.str.current = (const char *) Col_Utf16Next(
+			(const Col_Char2 *) it->traversal.str.current);
+	    break;
 	}
 	return;
     }
@@ -4377,17 +4609,56 @@ Col_RopeIterForward(
      */
 
     switch (WORD_TYPE(it->traversal.rope.leaf)) {
-	case WORD_TYPE_CHAR:
+    case WORD_TYPE_CHAR:
+	/*
+	 * Reached end of leaf.
+	 */
+
+	ASSERT(it->traversal.rope.index == 0);
+	ASSERT(nb > 0);
+	it->traversal.rope.leaf = WORD_NIL;
+	break;
+
+    case WORD_TYPE_SMALLSTR:
+	if (nb >= WORD_SMALLSTR_LENGTH(it->traversal.rope.leaf) 
+		- it->traversal.rope.index) {
 	    /*
 	     * Reached end of leaf.
 	     */
 
-	    ASSERT(it->traversal.rope.index == 0);
-	    ASSERT(nb > 0);
 	    it->traversal.rope.leaf = WORD_NIL;
+	} else {
+	    it->traversal.rope.index += nb;
+	}
+	break;
 
-	case WORD_TYPE_SMALLSTR:
-	    if (nb >= WORD_SMALLSTR_LENGTH(it->traversal.rope.leaf) 
+    case WORD_TYPE_UCSSTR:
+	if (nb >= WORD_UCSSTR_LENGTH(it->traversal.rope.leaf) 
+		- it->traversal.rope.index) {
+	    /*
+	     * Reached end of leaf.
+	     */
+
+	    it->traversal.rope.leaf = WORD_NIL;
+	} else {
+	    it->traversal.rope.index += nb;
+	}
+	break;
+
+    case WORD_TYPE_UTFSTR: {
+	size_t byteLength = WORD_UTFSTR_BYTELENGTH(it->traversal.rope.leaf),
+		length = WORD_UTFSTR_LENGTH(it->traversal.rope.leaf);
+	const char * data = WORD_UTFSTR_DATA(it->traversal.rope.leaf),
+		*p = data + it->traversal.rope.index;
+	int format = WORD_UTFSTR_FORMAT(it->traversal.rope.leaf);
+	size_t i;
+	if (length == byteLength) {
+	    /*
+	     * No variable-width sequence, use simple arithmetics instead
+	     * of character iteration.
+	     */
+
+	    if (nb * CHAR_WIDTH(format) >= byteLength 
 		    - it->traversal.rope.index) {
 		/*
 		 * Reached end of leaf.
@@ -4395,82 +4666,43 @@ Col_RopeIterForward(
 
 		it->traversal.rope.leaf = WORD_NIL;
 	    } else {
-		it->traversal.rope.index += nb;
+		it->traversal.rope.index += nb * CHAR_WIDTH(format);
 	    }
-	    break;
-
-	case WORD_TYPE_UCSSTR:
-	    if (nb >= WORD_UCSSTR_LENGTH(it->traversal.rope.leaf) 
-		    - it->traversal.rope.index) {
-		/*
-		 * Reached end of leaf.
-		 */
-
-		it->traversal.rope.leaf = WORD_NIL;
-	    } else {
-		it->traversal.rope.index += nb;
-	    }
-	    break;
-
-	case WORD_TYPE_UTFSTR: {
-	    size_t byteLength = WORD_UTFSTR_BYTELENGTH(it->traversal.rope.leaf),
-		    length = WORD_UTFSTR_LENGTH(it->traversal.rope.leaf);
-	    const char * data = WORD_UTFSTR_DATA(it->traversal.rope.leaf),
-		    *p = data + it->traversal.rope.index;
-	    int format = WORD_UTFSTR_FORMAT(it->traversal.rope.leaf);
-	    size_t i;
-	    if (length == byteLength) {
-		/*
-		 * No variable-width sequence, use simple arithmetics instead
-		 * of character iteration.
-		 */
-
-		if (nb * CHAR_WIDTH(format) >= byteLength 
-			- it->traversal.rope.index) {
-		    /*
-		     * Reached end of leaf.
-		     */
-
-		    it->traversal.rope.leaf = WORD_NIL;
-		} else {
-		    it->traversal.rope.index += nb * CHAR_WIDTH(format);
-		}
-		break;
-	    }
-	    for (i = 0; i < nb; i++) {
-		switch (format) {
-		    case COL_UTF8:  p = (const char *) Col_Utf8Next ((const Col_Char1 *) p); break;
-		    case COL_UTF16: p = (const char *) Col_Utf16Next((const Col_Char2 *) p); break;
-		}
-		if (p >= data + byteLength) {
-		    /*
-		     * Reached end of leaf.
-		     */
-
-		    it->traversal.rope.leaf = WORD_NIL;
-		    break;
-		}
-	    }
-	    it->traversal.rope.index = p - data;
 	    break;
 	}
-
-	case WORD_TYPE_CUSTOM: {
-	    Col_CustomRopeType *typeInfo 
-		    = (Col_CustomRopeType *) 
-		    WORD_TYPEINFO(it->traversal.rope.leaf);
-	    ASSERT(typeInfo->type.type == COL_ROPE);
-	    if (nb >= typeInfo->lengthProc(it->traversal.rope.leaf) 
-		    - it->traversal.rope.index) {
+	for (i = 0; i < nb; i++) {
+	    switch (format) {
+	    case COL_UTF8:  p = (const char *) Col_Utf8Next ((const Col_Char1 *) p); break;
+	    case COL_UTF16: p = (const char *) Col_Utf16Next((const Col_Char2 *) p); break;
+	    }
+	    if (p >= data + byteLength) {
 		/*
 		 * Reached end of leaf.
 		 */
 
 		it->traversal.rope.leaf = WORD_NIL;
-	    } else {
-		it->traversal.rope.index += nb;
+		break;
 	    }
-	    break;
+	}
+	it->traversal.rope.index = p - data;
+	break;
+	}
+
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomRopeType *typeInfo 
+		= (Col_CustomRopeType *) WORD_TYPEINFO(it->traversal.rope.leaf);
+	ASSERT(typeInfo->type.type == COL_ROPE);
+	if (nb >= typeInfo->lengthProc(it->traversal.rope.leaf) 
+		- it->traversal.rope.index) {
+	    /*
+	     * Reached end of leaf.
+	     */
+
+	    it->traversal.rope.leaf = WORD_NIL;
+	} else {
+	    it->traversal.rope.index += nb;
+	}
+	break;
 	}
 
 	/* WORD_TYPE_UNKNOWN */
@@ -4485,6 +4717,9 @@ Col_RopeIterForward(
  * Arguments:
  *	it	- The iterator to move.
  *	nb	- Offset.
+ *
+ * Type checking:
+ *	*it* must be a valid rope iterator.
  *---------------------------------------------------------------------------*/
 
 void
@@ -4492,6 +4727,12 @@ Col_RopeIterBackward(
     Col_RopeIterator *it,
     size_t nb)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_ROPEITER(it) return;
+
     if (nb == 0) {
 	/*
 	 * No-op.
@@ -4501,50 +4742,54 @@ Col_RopeIterBackward(
     }
 
     if (Col_RopeIterEnd(it)) {
-	if (nb <= it->length) {
+	/*
+	 * Allow iterators at end to go back.
+	 */
+
+	if (nb > it->length) {
 	    /*
-	     * Allow iterators at end to go back.
+	     * No-op.
 	     */
 
-	    it->index = it->length-nb;
-	    if (!it->rope) {
-		/*
-		 * Chunk iterator.
-		 */
-
-		Col_StringFormat format = it->traversal.str.format;
-		switch (format) {
-		    case COL_UCS1:
-		    case COL_UCS2:
-		    case COL_UCS4:
-			it->traversal.str.current = it->traversal.str.begin
-				+ it->index * CHAR_WIDTH(format);
-			break;
-
-		    case COL_UTF8:
-			it->traversal.str.current = it->traversal.str.begin;
-			nb = it->index;
-			while (nb--) it->traversal.str.current 
-				= (const char *) Col_Utf8Next(
-					(const Col_Char1 *) it->traversal.str.current);
-			break;
-
-		    case COL_UTF16:
-			it->traversal.str.current = it->traversal.str.begin;
-			nb = it->index;
-			while (nb--) it->traversal.str.current 
-				= (const char *) Col_Utf16Next(
-					(const Col_Char2 *) it->traversal.str.current);
-			break;
-		}
-		return;
-	    }
-
-	    ASSERT(it->rope);
-	    it->traversal.rope.leaf = WORD_NIL;
 	    return;
 	}
-	Col_Error(COL_ERROR, "Invalid rope iterator");
+
+	it->index = it->length-nb;
+	if (!it->rope) {
+	    /*
+	     * String iterator.
+	     */
+
+	    Col_StringFormat format = it->traversal.str.format;
+	    switch (format) {
+	    case COL_UCS1:
+	    case COL_UCS2:
+	    case COL_UCS4:
+		it->traversal.str.current = it->traversal.str.begin
+			+ it->index * CHAR_WIDTH(format);
+		break;
+
+	    case COL_UTF8:
+		it->traversal.str.current = it->traversal.str.begin;
+		nb = it->index;
+		while (nb--) 
+		    it->traversal.str.current = (const char *) Col_Utf8Next(
+			    (const Col_Char1 *) it->traversal.str.current);
+		break;
+
+	    case COL_UTF16:
+		it->traversal.str.current = it->traversal.str.begin;
+		nb = it->index;
+		while (nb--) 
+		    it->traversal.str.current = (const char *) Col_Utf16Next(
+			    (const Col_Char2 *) it->traversal.str.current);
+		break;
+	    }
+	    return;
+	}
+
+	ASSERT(it->rope);
+	it->traversal.rope.leaf = WORD_NIL;
 	return;
     }
 
@@ -4560,28 +4805,28 @@ Col_RopeIterBackward(
 
     if (!it->rope) {
 	/*
-	 * Chunk iterator.
+	 * String iterator.
 	 */
 
 	Col_StringFormat format = it->traversal.str.format;
 	switch (format) {
-	    case COL_UCS1:
-	    case COL_UCS2:
-	    case COL_UCS4:
-		it->traversal.str.current -= nb * CHAR_WIDTH(format);
-		break;
+	case COL_UCS1:
+	case COL_UCS2:
+	case COL_UCS4:
+	    it->traversal.str.current -= nb * CHAR_WIDTH(format);
+	    break;
 
-	    case COL_UTF8:
-		while (nb--) it->traversal.str.current 
-			= (const char *) Col_Utf8Prev(
-				(const Col_Char1 *) it->traversal.str.current);
-		break;
+	case COL_UTF8:
+	    while (nb--) 
+		it->traversal.str.current = (const char *) Col_Utf8Prev(
+			(const Col_Char1 *) it->traversal.str.current);
+	    break;
 
-	    case COL_UTF16:
-		while (nb--) it->traversal.str.current
-			= (const char *) Col_Utf16Prev(
-				(const Col_Char2 *) it->traversal.str.current);
-		break;
+	case COL_UTF16:
+	    while (nb--) 
+		it->traversal.str.current = (const char *) Col_Utf16Prev(
+			(const Col_Char2 *) it->traversal.str.current);
+	    break;
 	}
 	return;
     }
@@ -4609,93 +4854,94 @@ Col_RopeIterBackward(
      */
 
     switch (WORD_TYPE(it->traversal.rope.leaf)) {
-	case WORD_TYPE_CHAR:
+    case WORD_TYPE_CHAR:
+	/*
+	 * Reached beginning of leaf. 
+	 */
+
+	ASSERT(it->traversal.rope.index == 0);
+	ASSERT(nb > 0);
+	it->traversal.rope.leaf = WORD_NIL;
+	break;
+
+    case WORD_TYPE_SMALLSTR:
+	if (it->traversal.rope.index < nb) {
+	    /*
+	     * Reached beginning of leaf.
+	     */
+
+	    it->traversal.rope.leaf = WORD_NIL;
+	} else {
+	    it->traversal.rope.index -= nb;
+	}
+	break;
+
+    case WORD_TYPE_UCSSTR:
+	if (it->traversal.rope.index < nb) {
 	    /*
 	     * Reached beginning of leaf. 
 	     */
 
-	    ASSERT(it->traversal.rope.index == 0);
-	    ASSERT(nb > 0);
 	    it->traversal.rope.leaf = WORD_NIL;
+	} else {
+	    it->traversal.rope.index -= nb;
+	}
+	break;
 
-	case WORD_TYPE_SMALLSTR:
-	    if (it->traversal.rope.index < nb) {
-		/*
-		 * Reached beginning of leaf.
-		 */
+    case WORD_TYPE_UTFSTR: {
+	size_t byteLength = WORD_UTFSTR_BYTELENGTH(it->traversal.rope.leaf),
+		length = WORD_UTFSTR_LENGTH(it->traversal.rope.leaf);
+	const char * data = WORD_UTFSTR_DATA(it->traversal.rope.leaf),
+		*p = data + it->traversal.rope.index;
+	int format = WORD_UTFSTR_FORMAT(it->traversal.rope.leaf);
+	size_t i;
+	if (length == byteLength) {
+	    /*
+	     * No variable-width sequence, use simple arithmetics instead
+	     * of character iteration.
+	     */
 
-		it->traversal.rope.leaf = WORD_NIL;
-	    } else {
-		it->traversal.rope.index -= nb;
-	    }
-	    break;
-
-	case WORD_TYPE_UCSSTR:
-	    if (it->traversal.rope.index < nb) {
+	    if (it->traversal.rope.index < nb * CHAR_WIDTH(format)) {
 		/*
 		 * Reached beginning of leaf. 
 		 */
 
 		it->traversal.rope.leaf = WORD_NIL;
 	    } else {
-		it->traversal.rope.index -= nb;
+		it->traversal.rope.index -= nb * CHAR_WIDTH(format);
 	    }
-	    break;
-
-	case WORD_TYPE_UTFSTR: {
-	    size_t byteLength = WORD_UTFSTR_BYTELENGTH(it->traversal.rope.leaf),
-		    length = WORD_UTFSTR_LENGTH(it->traversal.rope.leaf);
-	    const char * data = WORD_UTFSTR_DATA(it->traversal.rope.leaf),
-		    *p = data + it->traversal.rope.index;
-	    int format = WORD_UTFSTR_FORMAT(it->traversal.rope.leaf);
-	    size_t i;
-	    if (length == byteLength) {
-		/*
-		 * No variable-width sequence, use simple arithmetics instead
-		 * of character iteration.
-		 */
-
-		if (it->traversal.rope.index < nb * CHAR_WIDTH(format)) {
-		    /*
-		     * Reached beginning of leaf. 
-		     */
-
-		    it->traversal.rope.leaf = WORD_NIL;
-		} else {
-		    it->traversal.rope.index -= nb * CHAR_WIDTH(format);
-		}
-		break;
-	    }
-	    for (i = 0; i < nb; i++) {
-		if (p == data) {
-		    /*
-		     * Reached beginning of leaf.
-		     */
-
-		    it->traversal.rope.leaf = WORD_NIL;
-		    break;
-		}
-		switch (format) {
-		    case COL_UTF8:  p = (const char *) Col_Utf8Prev ((const Col_Char1 *) p); break;
-		    case COL_UTF16: p = (const char *) Col_Utf16Prev((const Col_Char2 *) p); break;
-		}
-	    }
-	    it->traversal.rope.index = p - data;
 	    break;
 	}
-
-	case WORD_TYPE_CUSTOM:
-	    if (it->traversal.rope.index < nb) {
+	for (i = 0; i < nb; i++) {
+	    if (p == data) {
 		/*
 		 * Reached beginning of leaf.
 		 */
 
 		it->traversal.rope.leaf = WORD_NIL;
-	    } else {
-		it->traversal.rope.index -= nb;
+		break;
 	    }
-	    break;
+	    switch (format) {
+	    case COL_UTF8:  p = (const char *) Col_Utf8Prev ((const Col_Char1 *) p); break;
+	    case COL_UTF16: p = (const char *) Col_Utf16Prev((const Col_Char2 *) p); break;
+	    }
+	}
+	it->traversal.rope.index = p - data;
+	break;
+	}
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM:
+	if (it->traversal.rope.index < nb) {
+	    /*
+	     * Reached beginning of leaf.
+	     */
+
+	    it->traversal.rope.leaf = WORD_NIL;
+	} else {
+	    it->traversal.rope.index -= nb;
+	}
+	break;
+
+    /* WORD_TYPE_UNKNOWN */
     }
 }

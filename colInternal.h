@@ -11,8 +11,10 @@
 
 #ifdef _DEBUG
 #   define DO_TRACE
-#   define ASSERT(x) {if (!(x)) Col_Error(COL_FATAL, "%s(%d) : assertion failed! (%s)", __FILE__, __LINE__, #x);}
+#   define REQUIRE(x) {if (!(x)) Col_Error(COL_FATAL, "%s(%d) : assertion failed! (%s)", __FILE__, __LINE__, #x);}
+#   define ASSERT(x) REQUIRE(x)
 #else
+#   define REQUIRE(x) (x)
 #   define ASSERT(x)
 #endif
 
@@ -508,8 +510,8 @@ void			UpdateParents(GroupData *data);
  *	accessible for both read/write operations).
  *
  * See also:
- *	<ROOT_NODE_INIT>, <ROOT_LEAF_INIT>, <Col_PreserveWord>, 
- *	<Col_ReleaseWord>
+ *	<ROOT_NODE_INIT>, <ROOT_LEAF_INIT>, <Col_WordPreserve>, 
+ *	<Col_WordRelease>
  *---------------------------------------------------------------------------*/
 
 #define ROOT_IS_LEAF(cell)		((uintptr_t)(cell) & 1)

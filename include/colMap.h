@@ -25,7 +25,7 @@ Section: Maps
 */
 
 /****************************************************************************
- * Group: Map Access
+ * Group: Map Accessors
  *
  * Declarations:
  *	<Col_MapSize>, <Col_MapGet>, <Col_IntMapGet>, <Col_MapSet>,
@@ -102,22 +102,46 @@ typedef struct ColMapIterator {
 typedef ColMapIterator Col_MapIterator;
 
 /*---------------------------------------------------------------------------
- * Macro: Col_MapIterEnd
+ * Internal Variable: colMapIterNull
  *
- *	Test whether iterator reached end of map.
+ *	Static variable for map iterator initialization.
+ *
+ * See also:
+ *	<COL_MAPITER_NULL>
+ *---------------------------------------------------------------------------*/
+
+static const Col_MapIterator colMapIterNull = {WORD_NIL};
+
+/*---------------------------------------------------------------------------
+ * Constant: COL_MAPITER_NULL
+ *
+ *	Static initializer for null map iterators.
+ *
+ * See also: 
+ *	<Col_MapIterator>, <Col_MapIterNull>
+ *---------------------------------------------------------------------------*/
+
+#define COL_MAPITER_NULL	colMapIterNull
+
+/*---------------------------------------------------------------------------
+ * Macro: Col_MapIterNull
+ *
+ *	Test whether iterator is null (e.g. it has been set to 
+ *	<COL_MAPITER_NULL>). This uninitialized states renders it unusable for
+ *	any call. Use with caution.
  *
  * Argument:
  *	it	- The iterator to test.
  *
  * Result:
- *	Non-zero if iterator is at end.
+ *	Non-zero if iterator is null.
  *
  * See also: 
- *	<Col_MapIterator>
+ *	<Col_MapIterator>, <COL_MAPITER_NULL>
  *---------------------------------------------------------------------------*/
 
-#define Col_MapIterEnd(it) \
-    (!(it)->map)
+#define Col_MapIterNull(it) \
+    ((it)->map == WORD_NIL)
 
 /*---------------------------------------------------------------------------
  * Macro: Col_MapIterMap
@@ -138,22 +162,22 @@ typedef ColMapIterator Col_MapIterator;
     ((it)->map)
 
 /*---------------------------------------------------------------------------
- * Macro: Col_MapIterSetEnd
+ * Macro: Col_MapIterEnd
  *
- *	Move iterator past end of (any) map.
+ *	Test whether iterator reached end of map.
  *
  * Argument:
- *	it	- The iterator to move.
+ *	it	- The iterator to test.
  *
  * Result:
  *	Non-zero if iterator is at end.
  *
  * See also: 
- *	<Col_MapIterator>, <Col_MapIterEnd>
+ *	<Col_MapIterator>
  *---------------------------------------------------------------------------*/
 
-#define Col_MapIterSetEnd(it)	\
-    ((it)->map = WORD_NIL)
+#define Col_MapIterEnd(it) \
+    (!(it)->entry)
 
 /*
  * Remaining declarations.

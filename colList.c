@@ -45,7 +45,6 @@
 typedef struct ListChunkTraverseInfo *pListChunkTraverseInfo;
 static Col_ListChunksTraverseProc MergeChunksProc;
 static unsigned char	GetDepth(Col_Word list);
-static Col_Word		GetRoot(Col_Word list);
 static void		GetArms(Col_Word node, Col_Word * leftPtr, 
 			    Col_Word * rightPtr);
 static void		FreezeMList(Col_Word mlist);
@@ -65,73 +64,6 @@ static void		GetChunk(struct ListChunkTraverseInfo *info,
 static void		NextChunk(struct ListChunkTraverseInfo *info, 
 			    size_t nb, int reverse);
 static ColListIterLeafAtProc IterAtVector, IterAtVoid;
-
-
-/*
-================================================================================
-Internal Section: List Internals
-================================================================================
-*/
-
-/*---------------------------------------------------------------------------
- * Algorithm: List Tree Balancing
- *
- *	Large lists are built by concatenating several sublists, forming a
- *	balanced binary tree. A balanced tree is one where the depth of the
- *	left and right arms do not differ by more than one level.
- *
- *	List trees are self-balanced by construction: when two lists are 
- *	concatenated, if their respective depths differ by more than 1, then 
- *	the tree is recursively rebalanced by splitting and merging subarms. 
- *	There are four major cases, two if we consider symmetry:
- *
- *	- Deepest subtree is an outer branch (i.e. the left resp. right child of
- *	  the left resp. right arm). In this case the tree is rotated: the
- *	  opposite child is moved and concatenated with the opposite arm.
- *	  For example, with left being deepest:
- *
- * (start diagram)
- *  Before:
- *            concat = (left1 + left2) + right
- *           /      \
- *         left    right
- *        /    \
- *     left1  left2
- *    /     \
- *   ?       ?
- *
- *
- * After:
- *           concat = left1 + (left2 + right)
- *          /      \
- *     left1        concat
- *    /     \      /      \
- *   ?       ?   left2   right
- * (end)
- *
- *	- Deepest subtree is an inner branch (i.e. the right resp. left child of
- *	  the left resp. right arm). In this case the subtree is split 
- *	  between both arms. For example, with left being deepest:
- *
- * (start diagram)
- *  Before:
- *          concat = (left1 + (left21+left22)) + right
- *         /      \
- *       left    right
- *      /    \
- *   left1  left2
- *         /     \
- *      left21  left22
- *
- *
- * After:
- *              concat = (left1 + left21) + (left22 + right)
- *             /      \
- *       concat        concat
- *      /      \      /      \
- *   left1  left21  left22  right
- * (end)
- *---------------------------------------------------------------------------*/
 
 
 /*
@@ -202,7 +134,7 @@ Col_NewList(
 
 
 /****************************************************************************
- * Group: Immutable List Access
+ * Group: Immutable List Accessors
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -214,6 +146,9 @@ Col_NewList(
  * Argument:
  *	list	- List to get length for.
  *
+ * Type checking:
+ *	*list* must be a valid list.
+ *
  * Result:
  *	The list length.
  *---------------------------------------------------------------------------*/
@@ -222,43 +157,42 @@ size_t
 Col_ListLength(
     Col_Word list)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LIST(list) return 0;
+
+    WORD_UNWRAP(list);
+
     switch (WORD_TYPE(list)) {
-	case WORD_TYPE_WRAP:
-	    return Col_ListLength(WORD_WRAP_SOURCE(list));
+    case WORD_TYPE_CIRCLIST:
+	return Col_ListLength(WORD_CIRCLIST_CORE(list));
 
-	case WORD_TYPE_CIRCLIST:
-	    return Col_ListLength(WORD_CIRCLIST_CORE(list));
+    case WORD_TYPE_VOIDLIST:
+	return WORD_VOIDLIST_LENGTH(list);
 
-	case WORD_TYPE_VOIDLIST:
-	    return WORD_VOIDLIST_LENGTH(list);
+    case WORD_TYPE_VECTOR:
+    case WORD_TYPE_MVECTOR:
+	return WORD_VECTOR_LENGTH(list);
 
-	case WORD_TYPE_VECTOR:
-	case WORD_TYPE_MVECTOR:
-	    return WORD_VECTOR_LENGTH(list);
+    case WORD_TYPE_SUBLIST:
+	/* 
+	 * Sublist length is the range width.
+	 */
 
-	case WORD_TYPE_MLIST:
-	    return Col_ListLength(WORD_MLIST_ROOT(list));
+	return WORD_SUBLIST_LAST(list)-WORD_SUBLIST_FIRST(list)+1;
 
-	case WORD_TYPE_SUBLIST:
-	    /* 
-	     * Sublist length is the range width.
-	     */
+    case WORD_TYPE_CONCATLIST:
+    case WORD_TYPE_MCONCATLIST:
+	return WORD_CONCATLIST_LENGTH(list);
 
-	    return WORD_SUBLIST_LAST(list)-WORD_SUBLIST_FIRST(list)+1;
+    /* WORD_TYPE_UNKNOWN */
 
-	case WORD_TYPE_CONCATLIST:
-	case WORD_TYPE_MCONCATLIST:
-	    return WORD_CONCATLIST_LENGTH(list);
-
-	/* WORD_TYPE_UNKNOWN */
-
-	default:
-	    /*
-	     * Invalid type.
-	     */
-
-	    Col_Error(COL_ERROR, "%x is not a list", list);
-	    return 0;
+    default:
+	/*CANTHAPPEN*/
+	ASSERT(0);
+	return 0;
     }
 }
 
@@ -270,6 +204,9 @@ Col_ListLength(
  * Argument:
  *	list	- List to get loop length for.
  *
+ * Type checking:
+ *	*list* must be a valid list.
+ *
  * Result:
  *	If the list is cyclic, the terminal loop length. Else zero.
  *---------------------------------------------------------------------------*/
@@ -278,42 +215,41 @@ size_t
 Col_ListLoopLength(
     Col_Word list)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LIST(list) return 0;
+
+    WORD_UNWRAP(list);
+
     switch (WORD_TYPE(list)) {
-	case WORD_TYPE_WRAP:
-	    return Col_ListLoopLength(WORD_WRAP_SOURCE(list));
+    case WORD_TYPE_VOIDLIST:
+    case WORD_TYPE_VECTOR:
+    case WORD_TYPE_MVECTOR:
+    case WORD_TYPE_SUBLIST:
+	return 0;
 
-	case WORD_TYPE_VOIDLIST:
-	case WORD_TYPE_VECTOR:
-	case WORD_TYPE_MVECTOR:
-	case WORD_TYPE_SUBLIST:
-	    return 0;
+    case WORD_TYPE_CIRCLIST:
+	return Col_ListLength(WORD_CIRCLIST_CORE(list));
 
-	case WORD_TYPE_CIRCLIST:
-	    return Col_ListLength(WORD_CIRCLIST_CORE(list));
-
-	case WORD_TYPE_CONCATLIST:
-	case WORD_TYPE_MCONCATLIST:
-	    if (WORD_TYPE(WORD_CONCATLIST_RIGHT(list)) == WORD_TYPE_CIRCLIST) {
-		/*
-		 * Cyclic list length is given by right arm length.
-		 */
-
-		return Col_ListLength(WORD_CONCATLIST_RIGHT(list));
-	    }
-	    return 0;
-
-	case WORD_TYPE_MLIST:
-	    return Col_ListLoopLength(WORD_MLIST_ROOT(list));
-
-	/* WORD_TYPE_UNKNOWN */
-
-	default:
+    case WORD_TYPE_CONCATLIST:
+    case WORD_TYPE_MCONCATLIST:
+	if (WORD_TYPE(WORD_CONCATLIST_RIGHT(list)) == WORD_TYPE_CIRCLIST) {
 	    /*
-	     * Invalid type.
+	     * Cyclic list length is given by right arm length.
 	     */
 
-	    Col_Error(COL_ERROR, "%x is not a list", list);
-	    return 0;
+	    return Col_ListLength(WORD_CONCATLIST_RIGHT(list));
+	}
+	return 0;
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/*CANTHAPPEN*/
+	ASSERT(0);
+	return 0;
     }
 }
 
@@ -326,6 +262,9 @@ Col_ListLoopLength(
  *	list	- List to get element from.
  *	index	- Element index.
  *
+ * Type checking:
+ *	*list* must be a valid list.
+ *
  * Result:
  *	If the index is past the end of the list, nil, else the element.
  *---------------------------------------------------------------------------*/
@@ -337,6 +276,12 @@ Col_ListAt(
 {
     Col_ListIterator it;
     
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LIST(list) return WORD_NIL;
+
     Col_ListIterBegin(list, index, &it);
     return Col_ListIterEnd(&it) ? WORD_NIL : Col_ListIterAt(&it);
 }
@@ -345,6 +290,66 @@ Col_ListAt(
 /****************************************************************************
  * Group: Immutable List Operations
  ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Algorithm: List Tree Balancing
+ *
+ *	Large lists are built by concatenating several sublists, forming a
+ *	balanced binary tree. A balanced tree is one where the depth of the
+ *	left and right arms do not differ by more than one level.
+ *
+ *	List trees are self-balanced by construction: when two lists are 
+ *	concatenated, if their respective depths differ by more than 1, then 
+ *	the tree is recursively rebalanced by splitting and merging subarms. 
+ *	There are four major cases, two if we consider symmetry:
+ *
+ *	- Deepest subtree is an outer branch (i.e. the left resp. right child of
+ *	  the left resp. right arm). In this case the tree is rotated: the
+ *	  opposite child is moved and concatenated with the opposite arm.
+ *	  For example, with left being deepest:
+ *
+ * (start diagram)
+ *  Before:
+ *            concat = (left1 + left2) + right
+ *           /      \
+ *         left    right
+ *        /    \
+ *     left1  left2
+ *    /     \
+ *   ?       ?
+ *
+ *
+ * After:
+ *           concat = left1 + (left2 + right)
+ *          /      \
+ *     left1        concat
+ *    /     \      /      \
+ *   ?       ?   left2   right
+ * (end)
+ *
+ *	- Deepest subtree is an inner branch (i.e. the right resp. left child of
+ *	  the left resp. right arm). In this case the subtree is split 
+ *	  between both arms. For example, with left being deepest:
+ *
+ * (start diagram)
+ *  Before:
+ *          concat = (left1 + (left21+left22)) + right
+ *         /      \
+ *       left    right
+ *      /    \
+ *   left1  left2
+ *         /     \
+ *      left21  left22
+ *
+ *
+ * After:
+ *              concat = (left1 + left21) + (left22 + right)
+ *             /      \
+ *       concat        concat
+ *      /      \      /      \
+ *   left1  left21  left22  right
+ * (end)
+ *---------------------------------------------------------------------------*/
 
 /*---------------------------------------------------------------------------
  * Internal Constant: MAX_SHORT_LIST_SIZE
@@ -505,61 +510,22 @@ GetDepth(
 {
     for (;;) {
 	switch (WORD_TYPE(list)) {
-	    case WORD_TYPE_WRAP:
-		list = WORD_WRAP_SOURCE(list);
-		break;
+	case WORD_TYPE_CIRCLIST:
+	    list = WORD_CIRCLIST_CORE(list);
+	    break;
 
-	    case WORD_TYPE_CIRCLIST:
-		list = WORD_CIRCLIST_CORE(list);
-		break;
+	case WORD_TYPE_SUBLIST:
+	    return WORD_SUBLIST_DEPTH(list);
 
-	    case WORD_TYPE_SUBLIST:
-		return WORD_SUBLIST_DEPTH(list);
+	case WORD_TYPE_CONCATLIST:
+	case WORD_TYPE_MCONCATLIST:
+	    return WORD_CONCATLIST_DEPTH(list);
 
-	    case WORD_TYPE_CONCATLIST:
-	    case WORD_TYPE_MCONCATLIST:
-		return WORD_CONCATLIST_DEPTH(list);
-
-	    case WORD_TYPE_MLIST:
-		list = WORD_MLIST_ROOT(list);
-		break;
-
-	    /* WORD_TYPE_UNKNOWN */
-
-	    default:
-		return 0;
-	}
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Internal Function: GetRoot
- *
- *	Get the root of the list.
- *
- * Argument:
- *	node	- List node to get depth from.
- *
- * Result:
- *	Depth of list.
- *
- * See also:
- *	<Col_ConcatLists>
- *---------------------------------------------------------------------------*/
-
-static Col_Word
-GetRoot(
-    Col_Word list)
-{
-    switch (WORD_TYPE(list)) {
-	case WORD_TYPE_WRAP:
-	    return WORD_WRAP_SOURCE(list);
-
-	case WORD_TYPE_MLIST:
-	    return WORD_MLIST_ROOT(list);
+	/* WORD_TYPE_UNKNOWN */
 
 	default:
-	    return list;
+	    return 0;
+	}
     }
 }
 
@@ -632,6 +598,9 @@ GetArms(
  *	list		- The list to extract the sublist from.
  *	first, last	- Range of sublist.
  *
+ * Type checking:
+ *	*list* must be a valid list.
+ *
  * Result:
  *	When first is past the end of the (acyclic) list, or last is before 
  *	first, an empty list.
@@ -655,11 +624,13 @@ Col_Sublist(
     unsigned char depth=0;	/* Depth of source list. */
     size_t length;		/* Length of resulting sublist. */
 
-    list = GetRoot(list);
-
     /*
-     * Note: getting length will perfom type checking as well.
+     * Check preconditions.
      */
+
+    TYPECHECK_LIST(list) return WORD_NIL;
+
+    WORD_UNWRAP(list);
 
     listLength = Col_ListLength(list);
     loop = Col_ListLoopLength(list);
@@ -751,50 +722,50 @@ Col_Sublist(
     }
 
     switch (WORD_TYPE(list)) {
-	case WORD_TYPE_VOIDLIST:
+    case WORD_TYPE_VOIDLIST:
+	/*
+	 * Use immediate value.
+	 */
+
+	ASSERT(length <= VOIDLIST_MAX_LENGTH);
+
+	return WORD_VOIDLIST_NEW(length);
+
+    case WORD_TYPE_SUBLIST:
+	/* 
+	 * Point to original source. 
+	 */
+
+	return Col_Sublist(WORD_SUBLIST_SOURCE(list), 
+		WORD_SUBLIST_FIRST(list)+first, 
+		WORD_SUBLIST_FIRST(list)+last);
+
+    case WORD_TYPE_CONCATLIST:
+    case WORD_TYPE_MCONCATLIST: {
+	/* 
+	 * Try to find the deepest superset of the sublist. 
+	 */
+
+	size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(list);
+	if (leftLength == 0) {
+	    leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(list));
+	}
+	if (last < leftLength) {
+	    /* 
+	     * Left arm is a superset of sublist. 
+	     */
+
+	    return Col_Sublist(WORD_CONCATLIST_LEFT(list), first, last);
+	} else if (first >= leftLength) {
 	    /*
-	     * Use immediate value.
+	     * Right arm is a superset of sublist. 
 	     */
 
-	    ASSERT(length <= VOIDLIST_MAX_LENGTH);
-
-	    return WORD_VOIDLIST_NEW(length);
-
-	case WORD_TYPE_SUBLIST:
-	    /* 
-	     * Point to original source. 
-	     */
-
-	    return Col_Sublist(WORD_SUBLIST_SOURCE(list), 
-		    WORD_SUBLIST_FIRST(list)+first, 
-		    WORD_SUBLIST_FIRST(list)+last);
-
-	case WORD_TYPE_CONCATLIST:
-	case WORD_TYPE_MCONCATLIST: {
-	    /* 
-	     * Try to find the deepest superset of the sublist. 
-	     */
-
-	    size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(list);
-	    if (leftLength == 0) {
-		leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(list));
-	    }
-	    if (last < leftLength) {
-		/* 
-		 * Left arm is a superset of sublist. 
-		 */
-
-		return Col_Sublist(WORD_CONCATLIST_LEFT(list), first, last);
-	    } else if (first >= leftLength) {
-		/*
-		 * Right arm is a superset of sublist. 
-		 */
-
-		return Col_Sublist(WORD_CONCATLIST_RIGHT(list), 
-			first-leftLength, last-leftLength);
-	    }
-	    depth = WORD_CONCATLIST_DEPTH(list);
-	    break;
+	    return Col_Sublist(WORD_CONCATLIST_RIGHT(list), first-leftLength, 
+		    last-leftLength);
+	}
+	depth = WORD_CONCATLIST_DEPTH(list);
+	break;
 	}
     }
 
@@ -839,9 +810,14 @@ Col_Sublist(
  *	left	- Left part.
  *	right	- Right part.
  *
+ * Type checking:
+ *	*left* and *right* must be valid lists.
+ *
+ * Range checking:
+ *	Resulting length must not exceed the maximum list length (*SIZE_MAX*).
+ *
  * Result:
- *	If the resulting list would exceed the maximum length, nil. Else, a 
- *	list representing the concatenation of both lists.
+ *	A list representing the concatenation of both lists.
  *
  * Side effects:
  *	May allocate memory cells.
@@ -859,14 +835,20 @@ Col_ConcatLists(
 				/* Respective lengths. */
     size_t rightLoop;		/* Loop length of right. */
 
-    left = GetRoot(left);
-    right = GetRoot(right);
-
     /*
-     * Note: getting lengths will perfom type checking as well.
+     * Check preconditions.
      */
 
+    TYPECHECK_LIST(left) return WORD_NIL;
+    TYPECHECK_LIST(right) return WORD_NIL;
+
     leftLength = Col_ListLength(left);
+    rightLength = Col_ListLength(right);
+    RANGECHECK_CONCATLENGTH(leftLength, rightLength) return WORD_NIL;
+
+    WORD_UNWRAP(left);
+    WORD_UNWRAP(right);
+
     if (leftLength == 0) {
 	/* 
 	 * Concat is a no-op on right. 
@@ -874,10 +856,7 @@ Col_ConcatLists(
 
 	FreezeMList(right);
 	return right;
-    }
-    
-    rightLength = Col_ListLength(right);
-    if (rightLength == 0) {
+    } else if (rightLength == 0) {
 	/* 
 	 * Concat is a no-op on left.
 	 */
@@ -893,17 +872,6 @@ Col_ConcatLists(
 
 	FreezeMList(left);
 	return left;
-    }
-
-    if (SIZE_MAX-leftLength < rightLength) {
-	/*
-	 * Concatenated list would be too long.
-	 */
-
-	Col_Error(COL_ERROR, 
-		"Combined length %u+%u exceeds the maximum allowed value for lists (%u)", 
-		leftLength, rightLength, SIZE_MAX);
-	return WORD_NIL;
     }
 
     rightLoop = Col_ListLoopLength(right);
@@ -951,35 +919,31 @@ Col_ConcatLists(
 	return concatNode;
     }
 
-    /* 
-     * Handle quick cases. 
-     */
-    
     switch (WORD_TYPE(left)) {
-	case WORD_TYPE_VOIDLIST:
-	    if (WORD_TYPE(right) == WORD_TYPE_VOIDLIST 
-		    && leftLength + rightLength <= VOIDLIST_MAX_LENGTH) {
-		/*
-		 * Merge void lists.
-		 */
+    case WORD_TYPE_VOIDLIST:
+	if (WORD_TYPE(right) == WORD_TYPE_VOIDLIST 
+		&& leftLength + rightLength <= VOIDLIST_MAX_LENGTH) {
+	    /*
+	     * Merge void lists.
+	     */
 
-		return WORD_VOIDLIST_NEW(leftLength + rightLength);
-	    }
-	    break;
+	    return WORD_VOIDLIST_NEW(leftLength + rightLength);
+	}
+	break;
 
-	case WORD_TYPE_SUBLIST:
-	    if (WORD_TYPE(right) == WORD_TYPE_SUBLIST
-		    && WORD_SUBLIST_SOURCE(left) == WORD_SUBLIST_SOURCE(right) 
-		    && WORD_SUBLIST_LAST(left)+1 == WORD_SUBLIST_FIRST(right)) {
-		/* 
-		 * Merge if left and right are adjacent sublists. This allows
-		 * for fast consecutive insertions/removals at a given index.
-		 */
+    case WORD_TYPE_SUBLIST:
+	if (WORD_TYPE(right) == WORD_TYPE_SUBLIST
+		&& WORD_SUBLIST_SOURCE(left) == WORD_SUBLIST_SOURCE(right) 
+		&& WORD_SUBLIST_LAST(left)+1 == WORD_SUBLIST_FIRST(right)) {
+	    /* 
+	     * Merge if left and right are adjacent sublists. This allows for 
+	     * fast consecutive insertions/removals at a given index.
+	     */
 
-		return Col_Sublist(WORD_SUBLIST_SOURCE(left), 
-			WORD_SUBLIST_FIRST(left), WORD_SUBLIST_LAST(right));
-	    }
-	    break;
+	    return Col_Sublist(WORD_SUBLIST_SOURCE(left), 
+		    WORD_SUBLIST_FIRST(left), WORD_SUBLIST_LAST(right));
+	}
+	break;
 
 	/* WORD_TYPE_UNKNOWN */
     }
@@ -1011,7 +975,6 @@ Col_ConcatLists(
      *
      * Note that a sublist with depth >= 1 always points to a concat node, as 
      * by construction it cannot point to another sublist (see Col_Sublist). 
-     * Likewise, the arms cannot be list root words.
      */
 
     leftDepth = GetDepth(left);
@@ -1171,11 +1134,12 @@ Col_ConcatListsNV(
      * typically small. 
      */
 
-    lists = alloca(number*sizeof(Col_Word));
+    lists = (Col_Word *) alloca(number*sizeof(Col_Word));
     va_start(args, number);
     for (i=0; i < number; i++) {
 	lists[i] = va_arg(args, Col_Word);
     }
+    va_end(args);
     return Col_ConcatListsA(number, lists);
 }
 
@@ -1195,9 +1159,15 @@ Col_ConcatListsNV(
  *	list	- The list to repeat.
  *	count	- Repetition factor.
  *
+ * Type checking:
+ *	*list* must be a valid list.
+ *
+ * Range checking:
+ *	Resulting length must not exceed the maximum list length (*SIZE_MAX*).
+ *
  * Result:
- *	If count is zero or the resulting list would exceed the maximum length,
- *	nil. Else, a list representing the repetition of the source list.
+ *	A list representing the repetition of the source list. A list repeated
+ *	zero times is empty. A cyclic list repeated more than once is identity.
  *---------------------------------------------------------------------------*/
 
 Col_Word
@@ -1205,27 +1175,28 @@ Col_RepeatList(
     Col_Word list,
     size_t count)
 {
-    if (Col_ListLength(list) == 0) {
-	/*
-	 * No-op.
-	 */
+    size_t length;
 
-	return WORD_LIST_EMPTY;
-    }
+    /*
+     * Check preconditions.
+     */
 
-    if (Col_ListLoopLength(list)) {
+    TYPECHECK_LIST(list) return WORD_NIL;
+    if (Col_ListLoopLength(list) && count > 1) {
 	/*
 	 * List is cyclic, won't repeat.
 	 */
 
-	return list;
+	count = 1;
     }
+    length = Col_ListLength(list);
+    RANGECHECK_REPEATLENGTH(length, count) return WORD_NIL;
 
     /* 
      * Quick cases. 
      */
 
-    if (count == 0) {return WORD_NIL;}
+    if (count == 0) {return WORD_LIST_EMPTY;}
     if (count == 1) {return Col_CopyMList(list);}
     if (count == 2) {return Col_ConcatLists(list, list);}
 
@@ -1246,18 +1217,24 @@ Col_RepeatList(
  * Argument:
  *	core	- The core list.
  *
- * Result:
- *	If the list is empty or cyclic, the original list. Else a new circular 
- *	list from the given core.
+ * Type checking:
+ *	*list* must be a valid list.
  *
- * Side effects:
- *	May allocate memory cells.
+ * Result:
+ *	If the list is empty or cyclic, identity. Else a new circular list from 
+ *	the given core.
  *---------------------------------------------------------------------------*/
 
 Col_Word
 Col_CircularList(
     Col_Word core)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LIST(core) return WORD_NIL;
+
     if (Col_ListLength(core) == 0) {
 	/*
 	 * No-op.
@@ -1267,6 +1244,7 @@ Col_CircularList(
     }
 
     core = Col_CopyMList(core);
+
     if (Col_ListLoopLength(core)) {
 	/*
 	 * List is cyclic, no-op.
@@ -1292,6 +1270,9 @@ Col_CircularList(
  *	index	- Index of insertion point.
  *	list	- List to insert.
  *
+ * Type checking:
+ *	*into* and *list* must be valid lists.
+ *
  * Note:
  *	Only perform minimal tests to prevent overflow, basic ops should 
  *	perform further optimizations anyway.
@@ -1311,13 +1292,19 @@ Col_ListInsert(
 {
     size_t length, loop;
 
-    into = Col_CopyMList(into);
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LIST(into) return WORD_NIL;
+    TYPECHECK_LIST(list) return WORD_NIL;
+ 
     if (Col_ListLength(list) == 0) {
 	/*
 	 * No-op.
 	 */
 
-	return into;
+	return Col_CopyMList(into);
     }
 
     if (index == 0) {
@@ -1395,6 +1382,9 @@ Col_ListInsert(
  *	list		- List to remove sequence from.
  *	first, last	- Range of elements to remove.
  *
+ * Type checking:
+ *	*list* must be a valid list.
+ *
  * Note:
  *	Only perform minimal tests to prevent overflow, basic ops should 
  *	perform further optimizations anyway.
@@ -1414,6 +1404,15 @@ Col_ListRemove(
 {
     size_t length, loop;
 
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LIST(list) return WORD_NIL;
+
+    length = Col_ListLength(list);
+    if (length == 0) return WORD_LIST_EMPTY;
+
     if (first > last) {
 	/* 
 	 * No-op. 
@@ -1422,15 +1421,12 @@ Col_ListRemove(
 	return Col_CopyMList(list);
     }
 
-    list = GetRoot(list);
-    length = Col_ListLength(list);
     loop = Col_ListLoopLength(list);
     if (length == loop) {
 	/*
 	 * List is circular.
 	 */
 
-	ASSERT(WORD_TYPE(list) == WORD_TYPE_CIRCLIST);
 	if (first == 0) {
 	    /*
 	     * Remove beginning.
@@ -1459,6 +1455,8 @@ Col_ListRemove(
 		 * Remove inner part of loop.
 		 */
 
+		WORD_UNWRAP(list);
+		ASSERT(WORD_TYPE(list) == WORD_TYPE_CIRCLIST);
 		return Col_CircularList(Col_ListRemove(WORD_CIRCLIST_CORE(list),
 			first, last));
 	    }
@@ -1468,6 +1466,7 @@ Col_ListRemove(
 	 * List is cyclic.
 	 */
 
+	WORD_UNWRAP(list);
 	ASSERT(WORD_TYPE(list) == WORD_TYPE_CONCATLIST || WORD_TYPE(list) == WORD_TYPE_MCONCATLIST);
 	ASSERT(WORD_TYPE(WORD_CONCATLIST_RIGHT(list)) == WORD_TYPE_CIRCLIST);
 
@@ -1502,7 +1501,7 @@ Col_ListRemove(
      * Acyclic list.
      */
 
-    if (length == 0 || first >= length) {
+    if (first >= length) {
 	/*
 	 * No-op.
 	 */
@@ -1543,6 +1542,9 @@ Col_ListRemove(
  *	first, last	- Inclusive range of elements to replace.
  *	with		- Replacement list.
  *
+ * Type checking:
+ *	*list* must be a valid list.
+ *
  * Note:
  *	Only perform minimal tests to prevent overflow, basic ops should 
  *	perform further optimizations anyway.
@@ -1567,12 +1569,18 @@ Col_ListReplace(
     size_t length, loop;
     Col_Word result;
 
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LIST(list) return WORD_NIL;
+
     if (first > last) {
 	/* 
 	 * No-op. 
 	 */
 
-	return list;
+	return Col_CopyMList(list);
     }
 
     length = Col_ListLength(list);
@@ -1605,8 +1613,6 @@ Col_ListReplace(
 
     return Col_ListInsert(result, first, with);
 }
-
-
 
 
 /****************************************************************************
@@ -1679,99 +1685,83 @@ GetChunk(
 
 	type = WORD_TYPE(info->list);
 	switch (type) {
-	    case WORD_TYPE_CIRCLIST:
-		/* 
-		 * Recurse on core.
-		 */
+	case WORD_TYPE_CIRCLIST:
+	    /* 
+	     * Recurse on core.
+	     */
 
-		info->list = WORD_CIRCLIST_CORE(info->list);
-		continue;
+	    info->list = WORD_CIRCLIST_CORE(info->list);
+	    continue;
 
-	    case WORD_TYPE_WRAP:
-		/* 
-		 * Recurse on source.
-		 */
+	case WORD_TYPE_SUBLIST:
+	    /* 
+	     * Sublist: recurse on source list.
+	     */
 
-		info->list = WORD_WRAP_SOURCE(info->list);
-		continue;
-
-	    case WORD_TYPE_SUBLIST:
-		/* 
-		 * Sublist: recurse on source list.
-		 */
-
-		info->start += WORD_SUBLIST_FIRST(info->list);
-		info->list = WORD_SUBLIST_SOURCE(info->list);
-		continue;
+	    info->start += WORD_SUBLIST_FIRST(info->list);
+	    info->list = WORD_SUBLIST_SOURCE(info->list);
+	    continue;
         	    
-	    case WORD_TYPE_CONCATLIST:
-	    case WORD_TYPE_MCONCATLIST: {
+	case WORD_TYPE_CONCATLIST:
+	case WORD_TYPE_MCONCATLIST: {
+	    /* 
+	     * Concat: descend into covered arms.
+	     */
+
+	    int depth;
+	    size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(info->list);
+	    if (leftLength == 0) {
+		leftLength = Col_ListLength(
+			WORD_CONCATLIST_LEFT(info->list));
+	    }
+	    if (info->start + (reverse ? 0 : info->max-1) < leftLength) {
 		/* 
-		 * Concat: descend into covered arms.
+		 * Recurse on left arm only. 
 		 */
 
-		int depth;
-		size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(info->list);
-		if (leftLength == 0) {
-		    leftLength = Col_ListLength(
-			    WORD_CONCATLIST_LEFT(info->list));
-		}
-		if (info->start + (reverse ? 0 : info->max-1) < leftLength) {
-		    /* 
-		     * Recurse on left arm only. 
-		     */
-
-		    info->list = WORD_CONCATLIST_LEFT(info->list);
-		    continue;
-		}
-		if (info->start - (reverse ? info->max-1 : 0) >= leftLength) {
-		    /* 
-		     * Recurse on right arm only. 
-		     */
-
-		    info->start -= leftLength;
-		    info->list = WORD_CONCATLIST_RIGHT(info->list);
-		    continue;
-		} 
-
-		/*
-		 * Push right (resp. left for reverse) onto stack and recurse on
-		 * left (resp. right).
-		 */
-
-		ASSERT(info->backtracks);
-		depth = WORD_CONCATLIST_DEPTH(info->list);
-		ASSERT(depth <= info->maxDepth);
-		info->backtracks[depth-1].prevDepth = info->prevDepth;
-		info->prevDepth = depth;
-		if (reverse) {
-		    ASSERT(info->start >= leftLength);
-		    info->backtracks[depth-1].list 
-			    = WORD_CONCATLIST_LEFT(info->list);
-		    info->backtracks[depth-1].max = info->max
-			    - (info->start-leftLength+1);
-		    info->start -= leftLength;
-		    info->max = info->start+1;
-		    info->list = WORD_CONCATLIST_RIGHT(info->list);
-		} else {
-		    ASSERT(info->start < leftLength);
-		    info->backtracks[depth-1].list 
-			    = WORD_CONCATLIST_RIGHT(info->list);
-		    info->backtracks[depth-1].max = info->max
-			    - (leftLength-info->start);
-		    info->max = leftLength-info->start;
-		    info->list = WORD_CONCATLIST_LEFT(info->list);
-		}
+		info->list = WORD_CONCATLIST_LEFT(info->list);
 		continue;
 	    }
-
-	    case WORD_TYPE_MLIST:
+	    if (info->start - (reverse ? info->max-1 : 0) >= leftLength) {
 		/* 
-		 * Recurse on list root.
+		 * Recurse on right arm only. 
 		 */
 
-		info->list = WORD_MLIST_ROOT(info->list);
+		info->start -= leftLength;
+		info->list = WORD_CONCATLIST_RIGHT(info->list);
 		continue;
+	    } 
+
+	    /*
+	     * Push right (resp. left for reverse) onto stack and recurse on
+	     * left (resp. right).
+	     */
+
+	    ASSERT(info->backtracks);
+	    depth = WORD_CONCATLIST_DEPTH(info->list);
+	    ASSERT(depth <= info->maxDepth);
+	    info->backtracks[depth-1].prevDepth = info->prevDepth;
+	    info->prevDepth = depth;
+	    if (reverse) {
+		ASSERT(info->start >= leftLength);
+		info->backtracks[depth-1].list 
+			= WORD_CONCATLIST_LEFT(info->list);
+		info->backtracks[depth-1].max = info->max
+			- (info->start-leftLength+1);
+		info->start -= leftLength;
+		info->max = info->start+1;
+		info->list = WORD_CONCATLIST_RIGHT(info->list);
+	    } else {
+		ASSERT(info->start < leftLength);
+		info->backtracks[depth-1].list 
+			= WORD_CONCATLIST_RIGHT(info->list);
+		info->backtracks[depth-1].max = info->max
+			- (leftLength-info->start);
+		info->max = leftLength-info->start;
+		info->list = WORD_CONCATLIST_LEFT(info->list);
+	    }
+	    continue;
+	    }
 
 	    /* WORD_TYPE_UNKNOWN */
 	}
@@ -1785,21 +1775,21 @@ GetChunk(
     ASSERT(info->start + (reverse ? info->max-1 : 0) >= 0);
     ASSERT(info->start + (reverse ? 0 : info->max-1) < Col_ListLength(info->list));
     switch (type) {
-	case WORD_TYPE_VECTOR:
-	case WORD_TYPE_MVECTOR:
-	    *elements = WORD_VECTOR_ELEMENTS(info->list) + info->start
-		    - (reverse ? info->max-1 : 0);
-	    break;
+    case WORD_TYPE_VECTOR:
+    case WORD_TYPE_MVECTOR:
+	*elements = WORD_VECTOR_ELEMENTS(info->list) + info->start
+		- (reverse ? info->max-1 : 0);
+	break;
 
-	case WORD_TYPE_VOIDLIST:
-	    *elements = COL_LISTCHUNK_VOID;
-	    break;
+    case WORD_TYPE_VOIDLIST:
+	*elements = COL_LISTCHUNK_VOID;
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    /* WORD_TYPE_UNKNOWN */
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
     }
 }
 
@@ -1876,6 +1866,9 @@ NextChunk(
  *	proc		- Callback proc called on each chunk.
  *	clientData	- Opaque data passed as is to above proc.
  *
+ * Type checking:
+ *	*lists* elements must be valid lists.
+ *
  * Results:
  *	The return value of the last called proc, or -1 if no traversal was
  *	performed. Additionally:
@@ -1898,17 +1891,29 @@ Col_TraverseListChunksN(
     ListChunkTraverseInfo *info;
     const Col_Word **elements;
     int result;
+    size_t listLength;
 
-    info = alloca(sizeof(*info) * number);
-    elements = alloca(sizeof(*elements) * number);
+    /*
+     * Check preconditions.
+     */
 
     for (i=0; i < number; i++) {
-	size_t listLength = Col_ListLength(lists[i]);
-	if (start > listLength) {
+	TYPECHECK_LIST(lists[i]) return -1;
+    }
+
+    info = (ListChunkTraverseInfo *) alloca(sizeof(*info) * number);
+    elements = (Col_Word **) alloca(sizeof(*elements) * number);
+
+    for (i=0; i < number; i++) {
+	info[i].list = lists[i];
+	WORD_UNWRAP(info[i].list);
+	listLength = Col_ListLength(info[i].list);
+	if (start >= listLength) {
 	    /* 
 	     * Start is past the end of the list.
 	     */
 
+	    info[i].list = WORD_NIL;
 	    info[i].max = 0;
 	} else if (max > listLength-start) {
 	    /* 
@@ -1937,9 +1942,8 @@ Col_TraverseListChunksN(
 
     for (i=0; i < number; i++) {
 	ASSERT(info[i].max <= max);
-	info[i].list = (info[i].max ? lists[i] : WORD_NIL);
 	info[i].start = start;
-	info[i].maxDepth = GetDepth(lists[i]);
+	info[i].maxDepth = info[i].list ? GetDepth(info[i].list) : 0;
 	info[i].backtracks = (info[i].maxDepth ? 
 	    alloca(sizeof(*info[i].backtracks) * info[i].maxDepth) : NULL);
 	info[i].prevDepth = INT_MAX;
@@ -2026,6 +2030,9 @@ Col_TraverseListChunksN(
  *	proc		- Callback proc called on each chunk.
  *	clientData	- Opaque data passed as is to above proc.
  *
+ * Type checking:
+ *	*list* must be a valid list.
+ *
  * Results:
  *	The return value of the last called proc, or -1 if no traversal was
  *	performed. Additionally:
@@ -2047,8 +2054,17 @@ Col_TraverseListChunks(
     ListChunkTraverseInfo info;
     const Col_Word *elements;
     int result;
-    size_t listLength = Col_ListLength(list);
+    size_t listLength;
 
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LIST(list) return -1;
+
+    WORD_UNWRAP(list);
+
+    listLength = Col_ListLength(list);
     if (listLength == 0) {
 	/*
 	 * Nothing to traverse.
@@ -2058,7 +2074,7 @@ Col_TraverseListChunks(
     }
 
     if (reverse) {
-	if (start > listLength) {
+	if (start >= listLength) {
 	    /* 
 	     * Start is past the end of the list.
 	     */
@@ -2073,7 +2089,7 @@ Col_TraverseListChunks(
 	    max = start+1;
 	}
     } else {
-	if (start > listLength) {
+	if (start >= listLength) {
 	    /* 
 	     * Start is past the end of the list.
 	     */
@@ -2241,132 +2257,127 @@ ColListIterUpdateTraversalInfo(
     Col_Word node;
     size_t first, last, offset;
 
-    if (it->traversal.subnode && (it->index < it->traversal.first 
-		    || it->index > it->traversal.last)) {
+    ASSERT(it->list);
+    if (it->traversal.list.subnode 
+	    && (it->index < it->traversal.list.first 
+		    || it->index > it->traversal.list.last)) {
 	/*
 	 * Out of range.
 	 */
 
-	it->traversal.subnode = WORD_NIL;
+	it->traversal.list.subnode = WORD_NIL;
     }
 
     /*
      * Search for leaf node, remember containing subnode in the process.
      */
 
-    if (it->traversal.subnode) {
-	node = it->traversal.subnode;
+    if (it->traversal.list.subnode) {
+	node = it->traversal.list.subnode;
     } else {
 	node = it->list;
-	it->traversal.first = 0;
-	it->traversal.last = SIZE_MAX;
-	it->traversal.offset = 0;
+	WORD_UNWRAP(node);
+	it->traversal.list.first = 0;
+	it->traversal.list.last = SIZE_MAX;
+	it->traversal.list.offset = 0;
     }
-    first = it->traversal.first;
-    last = it->traversal.last;
-    offset = it->traversal.offset;
+    first = it->traversal.list.first;
+    last = it->traversal.list.last;
+    offset = it->traversal.list.offset;
 
-    it->traversal.leaf = WORD_NIL;
-    while (!it->traversal.leaf) {
+    it->traversal.list.leaf = WORD_NIL;
+    while (!it->traversal.list.leaf) {
 	size_t subFirst=first, subLast=last;
 
 	switch (WORD_TYPE(node)) {
-	    case WORD_TYPE_CIRCLIST:
+	case WORD_TYPE_CIRCLIST:
+	    /*
+	     * Recurse into core.
+	     */
+
+	    node = WORD_CIRCLIST_CORE(node);
+	    break;
+
+	case WORD_TYPE_VOIDLIST:
+	    it->traversal.list.leaf = node;
+	    it->traversal.list.index = it->index - offset;
+	    it->traversal.list.proc = IterAtVoid;
+	    ASSERT(it->traversal.list.index < WORD_VOIDLIST_LENGTH(node));
+	    break;
+
+	case WORD_TYPE_VECTOR:
+	case WORD_TYPE_MVECTOR:
+	    it->traversal.list.leaf = node;
+	    it->traversal.list.index = it->index - offset;
+	    it->traversal.list.proc = IterAtVector;
+	    ASSERT(it->traversal.list.index < WORD_VECTOR_LENGTH(node));
+	    break;
+
+	case WORD_TYPE_SUBLIST: 
+	    /*
+		* Always remember as subnode.
+		*/
+
+	    it->traversal.list.subnode = node;
+	    it->traversal.list.first = first;
+	    it->traversal.list.last = last;
+	    it->traversal.list.offset = offset;
+
+	    /*
+	    * Recurse into source.
+	    * Note: offset may become negative (in 2's complement) but it 
+	    * doesn't matter.
+	    */
+
+	    offset -= WORD_SUBLIST_FIRST(node);
+	    subLast = first - WORD_SUBLIST_FIRST(node) 
+		    + WORD_SUBLIST_LAST(node);
+	    node = WORD_SUBLIST_SOURCE(node);
+	    break;
+
+	case WORD_TYPE_CONCATLIST:
+	case WORD_TYPE_MCONCATLIST: {
+	    size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(node);
+	    if (leftLength == 0) {
+		leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(node));
+	    }
+	    if (WORD_CONCATLIST_DEPTH(node) == MAX_ITERATOR_SUBNODE_DEPTH
+		    || !it->traversal.list.subnode) {
 		/*
-		 * Recurse into core.
+		 * Remember as subnode.
 		 */
 
-		node = WORD_CIRCLIST_CORE(node);
-		break;
-
-	    case WORD_TYPE_VOIDLIST:
-		it->traversal.leaf = node;
-		it->traversal.index = it->index - offset;
-		it->traversal.proc = IterAtVoid;
-		ASSERT(it->traversal.index < WORD_VOIDLIST_LENGTH(node));
-		break;
-
-	    case WORD_TYPE_VECTOR:
-	    case WORD_TYPE_MVECTOR:
-		it->traversal.leaf = node;
-		it->traversal.index = it->index - offset;
-		it->traversal.proc = IterAtVector;
-		ASSERT(it->traversal.index < WORD_VECTOR_LENGTH(node));
-		break;
-
-	    case WORD_TYPE_SUBLIST: 
-		/*
-		 * Always remember as subnode.
-		 */
-
-		it->traversal.subnode = node;
-		it->traversal.first = first;
-		it->traversal.last = last;
-		it->traversal.offset = offset;
-
-		/*
-		 * Recurse into source.
-		 * Note: offset may become negative (in 2's complement) but it 
-		 * doesn't matter.
-		 */
-
-		offset -= WORD_SUBLIST_FIRST(node);
-		subLast = first - WORD_SUBLIST_FIRST(node) 
-			+ WORD_SUBLIST_LAST(node);
-		node = WORD_SUBLIST_SOURCE(node);
-		break;
-
-	    case WORD_TYPE_CONCATLIST:
-	    case WORD_TYPE_MCONCATLIST: {
-		size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(node);
-		if (leftLength == 0) {
-		    leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(node));
-		}
-		if (WORD_CONCATLIST_DEPTH(node) == MAX_ITERATOR_SUBNODE_DEPTH
-			|| !it->traversal.subnode) {
-		    /*
-		     * Remember as subnode.
-		     */
-
-		    it->traversal.subnode = node;
-		    it->traversal.first = first;
-		    it->traversal.last = last;
-		    it->traversal.offset = offset;
-		}
-
-		if (it->index - offset < leftLength) {
-		    /*
-		     * Recurse into left arm.
-		     */
-
-		    subLast = offset + leftLength-1;
-		    node = WORD_CONCATLIST_LEFT(node);
-		} else {
-		    /*
-		     * Recurse into right arm.
-		     */
-
-		    subFirst = offset + leftLength;
-		    offset += leftLength;
-		    node = WORD_CONCATLIST_RIGHT(node);
-		}
-		break;
+		it->traversal.list.subnode = node;
+		it->traversal.list.first = first;
+		it->traversal.list.last = last;
+		it->traversal.list.offset = offset;
 	    }
 
-	    case WORD_TYPE_MLIST:
+	    if (it->index - offset < leftLength) {
 		/*
-		 * Recurse into root.
+		 * Recurse into left arm.
 		 */
 
-		node = WORD_MLIST_ROOT(node);
-		break;
+		subLast = offset + leftLength-1;
+		node = WORD_CONCATLIST_LEFT(node);
+	    } else {
+		/*
+		 * Recurse into right arm.
+		 */
 
-	    /* WORD_TYPE_UNKNOWN */
+		subFirst = offset + leftLength;
+		offset += leftLength;
+		node = WORD_CONCATLIST_RIGHT(node);
+	    }
+	    break;
+	    }
 
-	    default:
-		/* CANTHAPPEN */
-		ASSERT(0);
-		return;
+	/* WORD_TYPE_UNKNOWN */
+
+	default:
+	    /* CANTHAPPEN */
+	    ASSERT(0);
+	    return;
 	}
 
 	/*
@@ -2376,8 +2387,8 @@ ColListIterUpdateTraversalInfo(
 	if (subFirst > first) first = subFirst;
 	if (subLast < last) last = subLast;
     }
-    if (!it->traversal.subnode) {
-	it->traversal.subnode = it->traversal.leaf;
+    if (!it->traversal.list.subnode) {
+	it->traversal.list.subnode = it->traversal.list.leaf;
     }
 }
 
@@ -2393,6 +2404,9 @@ ColListIterUpdateTraversalInfo(
  *	index	- Index of element.
  *	it	- Iterator to initialize.
  *
+ * Type checking:
+ *	*list* must be a valid list.
+ *
  * Result:
  *	Whether the iterator looped or not.
  *---------------------------------------------------------------------------*/
@@ -2404,6 +2418,15 @@ Col_ListIterBegin(
     Col_ListIterator *it)
 {
     int looped=0;
+
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LIST(list) {
+	*it = COL_LISTITER_NULL;
+	return 0;
+    }
 
     it->list = list;
     it->length = Col_ListLength(list);
@@ -2430,8 +2453,8 @@ Col_ListIterBegin(
      * Traversal info will be lazily computed.
      */
 
-    it->traversal.subnode = WORD_NIL;
-    it->traversal.leaf = WORD_NIL;
+    it->traversal.list.subnode = WORD_NIL;
+    it->traversal.list.leaf = WORD_NIL;
 
     return looped;
 }
@@ -2446,6 +2469,9 @@ Col_ListIterBegin(
  * Arguments:
  *	list	- List to iterate over.
  *	it	- Iterator to initialize.
+ *
+ * Type checking:
+ *	*list* must be a valid list.
  *---------------------------------------------------------------------------*/
 
 void
@@ -2453,6 +2479,15 @@ Col_ListIterFirst(
     Col_Word list,
     Col_ListIterator *it)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LIST(list) {
+	*it = COL_LISTITER_NULL;
+	return;
+    }
+
     it->list = list;
     it->length = Col_ListLength(list);
     it->index = 0;
@@ -2461,8 +2496,8 @@ Col_ListIterFirst(
      * Traversal info will be lazily computed.
      */
 
-    it->traversal.subnode = WORD_NIL;
-    it->traversal.leaf = WORD_NIL;
+    it->traversal.list.subnode = WORD_NIL;
+    it->traversal.list.leaf = WORD_NIL;
 }
 
 /*---------------------------------------------------------------------------
@@ -2475,6 +2510,9 @@ Col_ListIterFirst(
  * Arguments:
  *	list	- List to iterate over.
  *	it	- Iterator to initialize.
+ *
+ * Type checking:
+ *	*list* must be a valid list.
  *---------------------------------------------------------------------------*/
 
 void
@@ -2482,6 +2520,15 @@ Col_ListIterLast(
     Col_Word list,
     Col_ListIterator *it)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LIST(list) {
+	*it = COL_LISTITER_NULL;
+	return;
+    }
+
     it->list = list;
     it->length = Col_ListLength(list);
     if (it->length == 0) {
@@ -2498,8 +2545,33 @@ Col_ListIterLast(
      * Traversal info will be lazily computed.
      */
 
-    it->traversal.subnode = WORD_NIL;
-    it->traversal.leaf = WORD_NIL;
+    it->traversal.list.subnode = WORD_NIL;
+    it->traversal.list.leaf = WORD_NIL;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_ListIterArray
+ *
+ *	Initialize the list iterator so that it points to the first element
+ *	in an array.
+ *
+ * Arguments:
+ *	length		- Number of elements in array.
+ *	elements	- Array of elements.
+ *	it		- Iterator to initialize.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_ListIterArray(
+    size_t length,
+    const Col_Word * elements, 
+    Col_ListIterator *it)
+{
+    it->list = WORD_NIL;
+    it->length = length;
+    it->index = 0;
+    it->traversal.array.begin = elements;
+    it->traversal.array.current = elements;
 }
 
 /*---------------------------------------------------------------------------
@@ -2510,6 +2582,9 @@ Col_ListIterLast(
  * Arguments:
  *	it1	- First iterator.
  *	it2	- Second iterator.
+ *
+ * Type checking:
+ *	*it1* and *it2* must be valid list iterators.
  *
  * Result:
  *	-  < 0 if it1 is before it2
@@ -2522,6 +2597,13 @@ Col_ListIterCompare(
     const Col_ListIterator *it1,
     const Col_ListIterator *it2)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LISTITER(it1) return 1;
+    TYPECHECK_LISTITER(it2) return -1;
+
     /*
      * Note: iterators at end have their index set to SIZE_MAX.
      */
@@ -2572,6 +2654,12 @@ Col_ListIterMoveTo(
  *	it	- The iterator to move.
  *	nb	- Offset.
  *
+ * Type checking:
+ *	*it* must be a valid list iterator.
+ *
+ * Range checking:
+ *	*it* must not be at end.
+ *
  * Result:
  *	Whether the iterator looped or not.
  *---------------------------------------------------------------------------*/
@@ -2583,28 +2671,30 @@ Col_ListIterForward(
 {
     int looped=0;
 
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LISTITER(it) return 0;
+    RANGECHECK_LISTITER(it) return 0;
+
     if (nb == 0) {
 	/*
 	 * No-op.
 	 */
 
-	return looped;
-    }
-
-    if (Col_ListIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid list iterator");
-	return looped;
+	return 0;
     }
 
     if (nb >= it->length - it->index) {
-	size_t loop = Col_ListLoopLength(it->list);
-	if (!loop) {
+	size_t loop;
+	if (!it->list || !(loop = Col_ListLoopLength(it->list))) {
 	    /*
-	     * End of list.
+	     * End of list/array.
 	     */
 
 	    it->index = it->length;
-	    return looped;
+	    return 0;
 	}
 
 	/*
@@ -2646,20 +2736,30 @@ Col_ListIterForward(
 	it->index += nb;
     }
 
-    if (!it->traversal.subnode || !it->traversal.leaf) {
+    if (!it->list) {
+	/*
+	 * Array iterator.
+	 */
+
+	it->traversal.array.current += nb;
+	return 0;
+    }
+
+    ASSERT(it->list);
+    if (!it->traversal.list.subnode || !it->traversal.list.leaf) {
 	/*
 	 * No traversal info.
 	 */
 
 	return looped;
     }
-    if (it->index > it->traversal.last) {
+    if (it->index > it->traversal.list.last) {
 	/*
 	 * Traversal info out of range. Discard leaf node info, but not 
 	 * subnode, as it may be used again should the iteration go back.
 	 */
 
-	it->traversal.leaf = WORD_NIL;
+	it->traversal.list.leaf = WORD_NIL;
 	return looped;
     }
 
@@ -2667,33 +2767,33 @@ Col_ListIterForward(
      * Update traversal info.
      */
 
-    switch (WORD_TYPE(it->traversal.leaf)) {
-	case WORD_TYPE_VECTOR:
-	case WORD_TYPE_MVECTOR:
-	    if (nb >= WORD_VECTOR_LENGTH(it->traversal.leaf) 
-		    - it->traversal.index) {
-		/*
-		 * Reached end of leaf.
-		 */
+    switch (WORD_TYPE(it->traversal.list.leaf)) {
+    case WORD_TYPE_VECTOR:
+    case WORD_TYPE_MVECTOR:
+	if (nb >= WORD_VECTOR_LENGTH(it->traversal.list.leaf) 
+		- it->traversal.list.index) {
+	    /*
+	     * Reached end of leaf.
+	     */
 
-		it->traversal.leaf = WORD_NIL;
-	    } else {
-		it->traversal.index += nb;
-	    }
-	    break;
+	    it->traversal.list.leaf = WORD_NIL;
+	} else {
+	    it->traversal.list.index += nb;
+	}
+	break;
 
-	case WORD_TYPE_VOIDLIST:
-	    if (nb >= WORD_VOIDLIST_LENGTH(it->traversal.leaf) 
-		    - it->traversal.index) {
-		/*
-		 * Reached end of leaf.
-		 */
+    case WORD_TYPE_VOIDLIST:
+	if (nb >= WORD_VOIDLIST_LENGTH(it->traversal.list.leaf) 
+		- it->traversal.list.index) {
+	    /*
+	     * Reached end of leaf.
+	     */
 
-		it->traversal.leaf = WORD_NIL;
-	    } else {
-		it->traversal.index += nb;
-	    }
-	    break;
+	    it->traversal.list.leaf = WORD_NIL;
+	} else {
+	    it->traversal.list.index += nb;
+	}
+	break;
     }
     return looped;
 }
@@ -2706,6 +2806,9 @@ Col_ListIterForward(
  * Arguments:
  *	it	- The iterator to move.
  *	nb	- Offset.
+ *
+ * Type checking:
+ *	*it* must be a valid list iterator.
  *---------------------------------------------------------------------------*/
 
 void
@@ -2713,6 +2816,12 @@ Col_ListIterBackward(
     Col_ListIterator *it,
     size_t nb)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_LISTITER(it) return;
+
     if (nb == 0) {
 	/*
 	 * No-op.
@@ -2722,16 +2831,30 @@ Col_ListIterBackward(
     }
 
     if (Col_ListIterEnd(it)) {
-	if (nb <= it->length) {
+	/*
+	 * Allow iterators at end to go back.
+	 */
+
+	if (nb > it->length) {
 	    /*
-	     * Allow iterators at end to go back.
+	     * No-op.
 	     */
 
-	    it->index = it->length-nb;
-	    it->traversal.leaf = WORD_NIL;
 	    return;
 	}
-	Col_Error(COL_ERROR, "Invalid list iterator");
+
+	it->index = it->length-nb;
+	if (!it->list) {
+	    /*
+	     * Array iterator.
+	     */
+
+	    it->traversal.array.current = it->traversal.array.begin + it->index;
+	    return;
+	}
+
+	ASSERT(it->list);
+	it->traversal.list.leaf = WORD_NIL;
 	return;
     }
 
@@ -2745,20 +2868,30 @@ Col_ListIterBackward(
     }
     it->index -= nb;
 
-    if (!it->traversal.subnode || !it->traversal.leaf) {
+    if (!it->list) {
+	/*
+	 * Array iterator.
+	 */
+
+	it->traversal.array.current -= nb;
+	return;
+    }
+
+    ASSERT(it->list);
+    if (!it->traversal.list.subnode || !it->traversal.list.leaf) {
 	/*
 	 * No traversal info.
 	 */
 
 	return;
     }
-    if (it->index < it->traversal.first) {
+    if (it->index < it->traversal.list.first) {
 	/*
 	 * Traversal info out of range. Discard leaf node info, but not 
 	 * subnode, as it may be used again should the iteration go back.
 	 */
 
-	it->traversal.leaf = WORD_NIL;
+	it->traversal.list.leaf = WORD_NIL;
 	return;
     }
 
@@ -2766,12 +2899,12 @@ Col_ListIterBackward(
      * Update traversal info.
      */
 
-    if (it->traversal.index < nb) {
+    if (it->traversal.list.index < nb) {
 	/*
 	 * Reached beginning of leaf. 
 	 */
 
-	it->traversal.leaf = WORD_NIL;
+	it->traversal.list.leaf = WORD_NIL;
 	return;
     }
 
@@ -2779,7 +2912,7 @@ Col_ListIterBackward(
      * Go backward.
      */
 
-    it->traversal.index -= nb;
+    it->traversal.list.index -= nb;
 }
 
 
@@ -2811,7 +2944,7 @@ Col_NewMList()
     Col_Word mlist;
 
     mlist = (Col_Word) AllocCells(1);
-    WORD_MLIST_INIT(mlist, WORD_LIST_EMPTY);
+    WORD_WRAP_INIT(mlist, WRAP_FLAG_MUTABLE, COL_MLIST | COL_LIST, WORD_LIST_EMPTY);
 
     return mlist;
 }
@@ -2821,13 +2954,19 @@ Col_NewMList()
  *
  *	Create an immutable list from a mutable list. If an immutable list is 
  *	given, it is simply returned. If a mutable list is given, its content
- *	is frozen and shared with the new one. Mutable vectors are copied.
+ *	is frozen and shared with the new one. 
+ *
+ *	Caution: if a mutable vector is given, it is frozen and turned into an
+ *	immutable vector!
  *
  * Argument:
  *	mlist	- The mutable list to copy.
  *
+ * Type checking:
+ *	*mlist* must be a valid list.
+ *
  * Side effects:
- *	The content of a mutable list is frozen.
+ *	The content of a mutable list is frozen. A mutable vector is frozen.
  *
  *	May allocate memory cells.
  *---------------------------------------------------------------------------*/
@@ -2836,59 +2975,23 @@ Col_Word
 Col_CopyMList(
     Col_Word mlist)
 {
-    switch (WORD_TYPE(mlist)) {
-	case WORD_TYPE_WRAP:
-	    /*
-	     * Recurse on source.
-	     */
+    /*
+     * Check preconditions.
+     */
 
-	    return Col_CopyMList(WORD_WRAP_SOURCE(mlist));
+    TYPECHECK_LIST(mlist) return WORD_NIL;
 
-	case WORD_TYPE_CIRCLIST:
-	    /*
-	     * Recurse on core.
-	     */
+    if (Col_ListLength(mlist) == 0) {
+	/*
+	 * Handle empty lists here, this avoids freezing empty mutable vectors.
+	 */
 
-	    return WORD_CIRCLIST_NEW(Col_CopyMList(WORD_CIRCLIST_CORE(mlist)));
-
-	case WORD_TYPE_VOIDLIST:
-	case WORD_TYPE_VECTOR:
-	case WORD_TYPE_SUBLIST:
-	case WORD_TYPE_CONCATLIST:
-	    /*
-	     * No-op.
-	     */
-
-	    return mlist;
-
-	case WORD_TYPE_MVECTOR:
-	    /*
-	     * Copy to immutable vector.
-	     */
-
-	    return Col_NewVector(WORD_VECTOR_LENGTH(mlist), 
-		    WORD_VECTOR_ELEMENTS(mlist));
-
-	case WORD_TYPE_MCONCATLIST:
-	    /*
-	     * Copy to immutable concat.
-	     */
-
-	    return Col_ConcatLists(WORD_CONCATLIST_LEFT(mlist),
-		    WORD_CONCATLIST_RIGHT(mlist));
-
-	case WORD_TYPE_MLIST:
-	    /*
-	     * Freeze and return content.
-	     */
-
-	    FreezeMList(WORD_MLIST_ROOT(mlist));
-	    return WORD_MLIST_ROOT(mlist);
-
-	default:
-	    Col_Error(COL_ERROR, "%x is not a mutable list", mlist);
-	    return WORD_NIL;
+	return WORD_LIST_EMPTY;
     }
+    
+    WORD_UNWRAP(mlist);
+    FreezeMList(mlist);
+    return mlist;
 }
 
 /*---------------------------------------------------------------------------
@@ -2914,50 +3017,50 @@ FreezeMList(
 
 start:
     switch (WORD_TYPE(mlist)) {
-	case WORD_TYPE_CIRCLIST:
-	    /*
-	     * Recursive on core.
-	     */
+    case WORD_TYPE_CIRCLIST:
+	/*
+	 * Recursive on core.
+	 */
 
-	    mlist = WORD_CIRCLIST_CORE(mlist);
-	    goto start;
+	mlist = WORD_CIRCLIST_CORE(mlist);
+	goto start;
 
-	case WORD_TYPE_MVECTOR: {
-	    /*
-	     * Simply change type ID. Don't mark extraneous cells, they will
-	     * be collected during GC.
-	     */
+    case WORD_TYPE_MVECTOR: {
+	/*
+	 * Simply change type ID. Don't mark extraneous cells, they will be 
+	 * collected during GC.
+	 */
 
-	    int pinned = WORD_PINNED(mlist);
-	    WORD_SET_TYPEID(mlist, WORD_TYPE_VECTOR);
-	    if (pinned) {
-		WORD_SET_PINNED(mlist);
-	    }
-	    return;
+	int pinned = WORD_PINNED(mlist);
+	WORD_SET_TYPEID(mlist, WORD_TYPE_VECTOR);
+	if (pinned) {
+	    WORD_SET_PINNED(mlist);
+	}
+	return;
+    }
+
+    case WORD_TYPE_MCONCATLIST: {
+	/*
+	 * Change type ID and recurse on child nodes (tail recurse on right 
+	 * node).
+	 */
+
+	int pinned = WORD_PINNED(mlist);
+	WORD_SET_TYPEID(mlist, WORD_TYPE_CONCATLIST);
+	if (pinned) {
+	    WORD_SET_PINNED(mlist);
+	}
+	FreezeMList(WORD_CONCATLIST_LEFT(mlist));
+	mlist = WORD_CONCATLIST_RIGHT(mlist);
+	goto start;
 	}
 
-	case WORD_TYPE_MCONCATLIST: {
-	    /*
-	     * Change type ID and recurse on child nodes (tail recurse on right 
-	     * node).
-	     */
+    default:
+	/*
+	 * Already immutable, stop there.
+	 */
 
-	    int pinned = WORD_PINNED(mlist);
-	    WORD_SET_TYPEID(mlist, WORD_TYPE_CONCATLIST);
-	    if (pinned) {
-		WORD_SET_PINNED(mlist);
-	    }
-	    FreezeMList(WORD_CONCATLIST_LEFT(mlist));
-	    mlist = WORD_CONCATLIST_RIGHT(mlist);
-	    goto start;
-	}
-
-	default:
-	    /*
-	     * Already immutable, stop there.
-	     */
-
-	    return;
+	return;
     }
 }
 
@@ -2974,6 +3077,9 @@ start:
  * Arguments:
  *	mlist	- Mutable list to resize.
  *	length	- New length.
+ *
+ * Type checking:
+ *	*mlist* must be a valid mutable list.
  *---------------------------------------------------------------------------*/
 
 void
@@ -2982,18 +3088,36 @@ Col_MListSetLength(
     size_t length)
 {
     size_t listLength, listLoop;
+    Col_Word root;
 
-    if (WORD_TYPE(mlist) != WORD_TYPE_MLIST) {
-	Col_Error(COL_ERROR, "%x is not a mutable list", mlist);
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MLIST(mlist) return;
+
+    ASSERT(WORD_TYPE(mlist) == WORD_TYPE_WRAP);
+    root = WORD_WRAP_SOURCE(mlist);
 
     if (length == 0) {
 	/*
 	 * Empty list.
 	 */
 
-	WORD_MLIST_ROOT(mlist) = WORD_LIST_EMPTY;
+
+	switch (WORD_TYPE(root)) {
+	case WORD_TYPE_MVECTOR:
+	    /*
+	     * Shrink mutable vector so as to preserve its capacity should the
+	     * list length grow in the future.
+	     */
+
+	    Col_MVectorSetLength(root, 0);
+	    break;
+
+	default:
+	    WORD_WRAP_SOURCE(mlist) = WORD_LIST_EMPTY;
+	}
 	return;
     }
 
@@ -3004,21 +3128,20 @@ Col_MListSetLength(
 	 * List is circular.
 	 */
 
-	Col_Word root = WORD_MLIST_ROOT(mlist);
 	ASSERT(WORD_TYPE(root) == WORD_TYPE_CIRCLIST);
 	if (length <= listLength) {
 	    /*
 	     * Shorten loop.
 	     */
 
-	    WORD_MLIST_ROOT(mlist) = WORD_CIRCLIST_CORE(root);
+	    WORD_WRAP_SOURCE(mlist) = WORD_CIRCLIST_CORE(root);
 	    Col_MListSetLength(mlist, length);
 	} else {
 	    /*
 	     * Sublist of circular list.
 	     */
 
-	    WORD_MLIST_ROOT(mlist) = Col_Sublist(root, 0, length-1);
+	    WORD_WRAP_SOURCE(mlist) = Col_Sublist(root, 0, length-1);
 	}
 	return;
     } else if (listLoop) {
@@ -3026,7 +3149,6 @@ Col_MListSetLength(
 	 * List is cyclic.
 	 */
 
-	Col_Word root = WORD_MLIST_ROOT(mlist);
 	ASSERT(WORD_TYPE(root) == WORD_TYPE_CONCATLIST || WORD_TYPE(root) == WORD_TYPE_MCONCATLIST);
 	ASSERT(WORD_TYPE(WORD_CONCATLIST_RIGHT(root)) == WORD_TYPE_CIRCLIST);
 
@@ -3036,7 +3158,7 @@ Col_MListSetLength(
 	     */
 
 	    ASSERT(listLoop < listLength);
-	    WORD_MLIST_ROOT(mlist) = WORD_CONCATLIST_LEFT(root);
+	    WORD_WRAP_SOURCE(mlist) = WORD_CONCATLIST_LEFT(root);
 	    ASSERT(Col_ListLength(mlist) >= length);
 	    Col_MListSetLength(mlist, length);
 	} else {
@@ -3048,11 +3170,11 @@ Col_MListSetLength(
 		ConvertToMConcatNode(&root);
 	    }
 	    ASSERT(WORD_TYPE(root) == WORD_TYPE_MCONCATLIST);
-	    WORD_MLIST_ROOT(mlist) = WORD_CONCATLIST_RIGHT(root);
+	    WORD_WRAP_SOURCE(mlist) = WORD_CONCATLIST_RIGHT(root);
 	    Col_MListSetLength(mlist, length - (listLength-listLoop));
-	    WORD_CONCATLIST_RIGHT(root) = WORD_MLIST_ROOT(mlist);
+	    WORD_CONCATLIST_RIGHT(root) = WORD_WRAP_SOURCE(mlist);
 	    UpdateMConcatNode(root);
-	    WORD_MLIST_ROOT(mlist) = root;
+	    WORD_WRAP_SOURCE(mlist) = root;
 	}
 	return;
     }
@@ -3085,6 +3207,9 @@ Col_MListSetLength(
  *
  * Argument:
  *	mlist	- The mutable list to make circular.
+ *
+ * Type checking:
+ *	*mlist* must be a valid mutable list.
  *---------------------------------------------------------------------------*/
 
 void
@@ -3092,10 +3217,11 @@ Col_MListLoop(
     Col_Word mlist)
 
 {
-    if (WORD_TYPE(mlist) != WORD_TYPE_MLIST) {
-	Col_Error(COL_ERROR, "%x is not a mutable list", mlist);
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MLIST(mlist) return;
 
     if (Col_ListLength(mlist) == 0) {
 	/*
@@ -3117,7 +3243,8 @@ Col_MListLoop(
      * Make root cyclic.
      */
 
-    WORD_MLIST_ROOT(mlist) = WORD_CIRCLIST_NEW(WORD_MLIST_ROOT(mlist));
+    ASSERT(WORD_TYPE(mlist) == WORD_TYPE_WRAP);
+    WORD_WRAP_SOURCE(mlist) = WORD_CIRCLIST_NEW(WORD_WRAP_SOURCE(mlist));
 }
 
 /*---------------------------------------------------------------------------
@@ -3129,6 +3256,12 @@ Col_MListLoop(
  *	mlist	- Mutable list to modify.
  *	index	- Element index.
  *	element	- New element.
+ *
+ * Type checking:
+ *	*mlist* must be a valid mutable list.
+ *
+ * Range checking:
+ *	*index* must be within bounds.
  *---------------------------------------------------------------------------*/
 
 void
@@ -3137,34 +3270,27 @@ Col_MListSetAt(
     size_t index,
     Col_Word element)
 {
-    size_t length;
+    size_t length, loop;
 
-    if (WORD_TYPE(mlist) != WORD_TYPE_MLIST) {
-	Col_Error(COL_ERROR, "%x is not a mutable list", mlist);
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
 
+    TYPECHECK_MLIST(mlist) return;
     length = Col_ListLength(mlist);
-    if (index >= length) {
-	size_t loop = Col_ListLoopLength(mlist);
-	if (!loop) {
-	    /*
-	     * Out of bounds.
-	     */
+    loop = Col_ListLoopLength(mlist);
+    if (!loop) RANGECHECK_BOUNDS(index, length) return;
 
-	    Col_Error(COL_ERROR, 
-		    "Index %u out of bounds for mutable list %x", index,
-		    mlist);
-	    return;
-	}
-
+    if (loop && index >= length) {
 	/*
 	 * Cyclic list. Normalize index.
 	 */
 
 	index = (index - (length-loop)) % loop + (length-loop);
     }
-    MListSetAt(&WORD_MLIST_ROOT(mlist), index, element);
+
+    ASSERT(WORD_TYPE(mlist) == WORD_TYPE_WRAP);
+    MListSetAt(&WORD_WRAP_SOURCE(mlist), index, element);
 }
 
 /*---------------------------------------------------------------------------
@@ -3196,75 +3322,75 @@ MListSetAt(
 
 start:
     switch (WORD_TYPE(*nodePtr)) {
-	/*
-	 * First mutable types...
-	 */
+    /*
+     * First mutable types...
+     */
 
-	case WORD_TYPE_MCONCATLIST: {
-	    size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(*nodePtr);
-	    if (leftLength == 0) {
-		leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(*nodePtr));
-	    }
-	    if (index < leftLength) {
-		/*
-		 * Recurse on left.
-		 */
-
-		MListSetAt(&WORD_CONCATLIST_LEFT(*nodePtr), index, element);
-	    } else {
-		/*
-		 * Recurse on right.
-		 */
-
-		MListSetAt(&WORD_CONCATLIST_RIGHT(*nodePtr), index - leftLength,
-			element);
-	    }
-
+    case WORD_TYPE_MCONCATLIST: {
+	size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(*nodePtr);
+	if (leftLength == 0) {
+	    leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(*nodePtr));
+	}
+	if (index < leftLength) {
 	    /*
-	     * Update & rebalance tree.
+	     * Recurse on left.
 	     */
 
-	    UpdateMConcatNode(*nodePtr);
-	    return;
+	    MListSetAt(&WORD_CONCATLIST_LEFT(*nodePtr), index, element);
+	} else {
+	    /*
+	     * Recurse on right.
+	     */
+
+	    MListSetAt(&WORD_CONCATLIST_RIGHT(*nodePtr), index - leftLength,
+		    element);
 	}
 
-	case WORD_TYPE_MVECTOR:
-	    /*
-	     * Set element.
-	     */
-
-	    WORD_VECTOR_ELEMENTS(*nodePtr)[index] = element;
-	    return;
-
 	/*
-	 * ... then immediate and immutable types.
+	 * Update & rebalance tree.
 	 */
 
-	case WORD_TYPE_CONCATLIST:
+	UpdateMConcatNode(*nodePtr);
+	return;
+	}
+
+    case WORD_TYPE_MVECTOR:
+	/*
+	 * Set element.
+	 */
+
+	WORD_VECTOR_ELEMENTS(*nodePtr)[index] = element;
+	return;
+
+    /*
+     * ... then immediate and immutable types.
+     */
+
+    case WORD_TYPE_CONCATLIST:
+	/*
+	 * Convert to mutable concat then retry.
+	 */
+
+	ConvertToMConcatNode(nodePtr);
+	goto start;
+
+    case WORD_TYPE_SUBLIST:
+	if (WORD_SUBLIST_DEPTH(*nodePtr) >= 1) {
 	    /*
-	     * Convert to mutable concat then retry.
+	     * Source is concat. Convert to mutable then retry.
 	     */
 
 	    ConvertToMConcatNode(nodePtr);
 	    goto start;
+	}
+	/* continued. */
+    default:
+	/*
+	 * Convert to mutable around index then retry.
+	 */
 
-	case WORD_TYPE_SUBLIST:
-	    if (WORD_SUBLIST_DEPTH(*nodePtr) >= 1) {
-		/*
-		 * Source is concat. Convert to mutable then retry.
-		 */
-
-		ConvertToMConcatNode(nodePtr);
-		goto start;
-	    }
-	    /* continued. */
-	default:
-	    /*
-	     * Convert to mutable around index then retry.
-	     */
-
-	    ConvertToMutableAt(nodePtr, index);
-	    goto start;
+	ConvertToMutableAt(nodePtr, index);
+	goto start;
     }
 }
 
@@ -3322,24 +3448,24 @@ ConvertToMutableAt(
 
     length = Col_ListLength(*nodePtr);
     switch (WORD_TYPE(*nodePtr)) {
-	case WORD_TYPE_VECTOR:
-	    elements = WORD_VECTOR_ELEMENTS(*nodePtr);
-	    break;
+    case WORD_TYPE_VECTOR:
+	elements = WORD_VECTOR_ELEMENTS(*nodePtr);
+	break;
 
-	case WORD_TYPE_VOIDLIST:
-	    elements = NULL;
-	    break;
+    case WORD_TYPE_VOIDLIST:
+	elements = NULL;
+	break;
 
-	case WORD_TYPE_SUBLIST:
-	    ASSERT(WORD_SUBLIST_DEPTH(*nodePtr) == 0);
-	    ASSERT(WORD_TYPE(WORD_SUBLIST_SOURCE(*nodePtr)) == WORD_TYPE_VECTOR);
-	    elements = WORD_VECTOR_ELEMENTS(WORD_SUBLIST_SOURCE(*nodePtr))
-		    + WORD_SUBLIST_FIRST(*nodePtr);
-	    break;
+    case WORD_TYPE_SUBLIST:
+	ASSERT(WORD_SUBLIST_DEPTH(*nodePtr) == 0);
+	ASSERT(WORD_TYPE(WORD_SUBLIST_SOURCE(*nodePtr)) == WORD_TYPE_VECTOR);
+	elements = WORD_VECTOR_ELEMENTS(WORD_SUBLIST_SOURCE(*nodePtr))
+		+ WORD_SUBLIST_FIRST(*nodePtr);
+	break;
 
-	default: 
-	    /* CANTHAPPEN */
-	    ASSERT(0);
+    default: 
+	/* CANTHAPPEN */
+	ASSERT(0);
     }
 
     if (length <= MAX_SHORT_MVECTOR_LENGTH) {
@@ -3406,37 +3532,37 @@ ConvertToMConcatNode(
     Col_Word converted;
 
     switch (WORD_TYPE(*nodePtr)) {
-	case WORD_TYPE_SUBLIST: {
-	    /*
-	     * Split sublist into mutable concat node.
-	     */
+    case WORD_TYPE_SUBLIST: {
+	/*
+	 * Split sublist into mutable concat node.
+	 */
 
-	    Col_Word left, right;
+	Col_Word left, right;
 
-	    ASSERT(WORD_SUBLIST_DEPTH(*nodePtr) >= 1);
-	    ASSERT(WORD_TYPE(WORD_SUBLIST_SOURCE(*nodePtr)) == WORD_TYPE_CONCATLIST);
+	ASSERT(WORD_SUBLIST_DEPTH(*nodePtr) >= 1);
+	ASSERT(WORD_TYPE(WORD_SUBLIST_SOURCE(*nodePtr)) == WORD_TYPE_CONCATLIST);
 
-	    GetArms(*nodePtr, &left, &right);
+	GetArms(*nodePtr, &left, &right);
 
-	    converted = NewMConcatList(left, right);
-	    break;
+	converted = NewMConcatList(left, right);
+	break;
 	}
 
-	case WORD_TYPE_CONCATLIST: {
-	    /*
-	     * Convert to mutable concat node.
-	     */
+    case WORD_TYPE_CONCATLIST: {
+	/*
+	 * Convert to mutable concat node.
+	 */
 
-	    ASSERT(WORD_CONCATLIST_DEPTH(*nodePtr) >= 1);
+	ASSERT(WORD_CONCATLIST_DEPTH(*nodePtr) >= 1);
 
-	    converted = NewMConcatList(WORD_CONCATLIST_LEFT(*nodePtr),
-		    WORD_CONCATLIST_RIGHT(*nodePtr));
-	    break;
+	converted = NewMConcatList(WORD_CONCATLIST_LEFT(*nodePtr),
+		WORD_CONCATLIST_RIGHT(*nodePtr));
+	break;
 	}
 
-	default: 
-	    /* CANTHAPPEN */
-	    ASSERT(0);
+    default: 
+	/* CANTHAPPEN */
+	ASSERT(0);
     }
 
     *nodePtr = converted;
@@ -3456,7 +3582,6 @@ ConvertToMConcatNode(
  *	are created in the process. Consequently no extraneous word is created.
  *---------------------------------------------------------------------------*/
 
-//FIXME: keep pinned flag for subtrees?
 static void
 UpdateMConcatNode(
     Col_Word node)
@@ -3710,6 +3835,13 @@ UpdateMConcatNode(
  *	into	- Mutable list to insert into.
  *	index	- Index of insertion point.
  *	list	- List to insert.
+ *
+ * Type checking:
+ *	*into* must be a valid mutable list.
+ *	*list* must be a valid list.
+ *
+ * Range checking:
+ *	Resulting length must not exceed the maximum list length (*SIZE_MAX*).
  *---------------------------------------------------------------------------*/
 
 void
@@ -3720,24 +3852,18 @@ Col_MListInsert(
 {
     size_t length, loop, listLength;
 
-    if (WORD_TYPE(into) != WORD_TYPE_MLIST) {
-	Col_Error(COL_ERROR, "%x is not a mutable list", into);
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MLIST(into) return;
+    TYPECHECK_LIST(list) return;
 
     length = Col_ListLength(into);
     listLength = Col_ListLength(list);
+    RANGECHECK_CONCATLENGTH(length, listLength) return;
 
-    if (SIZE_MAX-length < listLength) {
-	/*
-	 * Concatenated list would be too long.
-	 */
-
-	Col_Error(COL_ERROR, 
-		"Combined length %u+%u exceeds the maximum allowed value for lists (%u)", 
-		length, listLength, SIZE_MAX);
-	return;
-    }
+    ASSERT(WORD_TYPE(into) == WORD_TYPE_WRAP);
 
     if (listLength == 0) {
 	/*
@@ -3752,7 +3878,7 @@ Col_MListInsert(
 	 * Target is empty, replace content with input.
 	 */
 
-	WORD_MLIST_ROOT(into) = Col_CopyMList(list);
+	WORD_WRAP_SOURCE(into) = Col_CopyMList(list);
 	return;
     }
 
@@ -3799,8 +3925,8 @@ Col_MListInsert(
 	 */
 
 	ASSERT(WORD_TYPE(list) == WORD_TYPE_CIRCLIST);
-	node = NewMConcatList(WORD_MLIST_ROOT(into), list);
-	WORD_MLIST_ROOT(into) = node;
+	node = NewMConcatList(WORD_WRAP_SOURCE(into), list);
+	WORD_WRAP_SOURCE(into) = node;
 	return;
     }
 
@@ -3813,7 +3939,7 @@ Col_MListInsert(
 	 * Destination is circular.
 	 */
 
-	Col_Word root = WORD_MLIST_ROOT(into);
+	Col_Word root = WORD_WRAP_SOURCE(into);
 	ASSERT(WORD_TYPE(root) == WORD_TYPE_CIRCLIST);
 
 	if (index == 0) {
@@ -3822,7 +3948,7 @@ Col_MListInsert(
 	     */
 
 	    Col_Word node = NewMConcatList(Col_CopyMList(list), root);
-	    WORD_MLIST_ROOT(into) = node;
+	    WORD_WRAP_SOURCE(into) = node;
 	} else {
 	    /*
 	     * Insert into loop.
@@ -3832,7 +3958,7 @@ Col_MListInsert(
 	    if (index == 0) index = loop;
 	    root = WORD_CIRCLIST_CORE(root);
 	    MListInsert(&root, index, list);
-	    WORD_MLIST_ROOT(into) = WORD_CIRCLIST_NEW(root);
+	    WORD_WRAP_SOURCE(into) = WORD_CIRCLIST_NEW(root);
 	}
 	return;
     } else if (loop) {
@@ -3840,10 +3966,10 @@ Col_MListInsert(
 	 * Destination is cyclic.
 	 */
 
-	Col_Word root = WORD_MLIST_ROOT(into);
+	Col_Word root = WORD_WRAP_SOURCE(into);
 	if (WORD_TYPE(root) != WORD_TYPE_MCONCATLIST) {
 	    ConvertToMConcatNode(&root);
-	    WORD_MLIST_ROOT(into) = root;
+	    WORD_WRAP_SOURCE(into) = root;
 	}
 	ASSERT(WORD_TYPE(root) == WORD_TYPE_MCONCATLIST);
 	ASSERT(WORD_TYPE(WORD_CONCATLIST_RIGHT(root)) == WORD_TYPE_CIRCLIST);
@@ -3860,11 +3986,11 @@ Col_MListInsert(
 	     * call.
 	     */
 
-	    WORD_MLIST_ROOT(into) = WORD_CONCATLIST_RIGHT(root);
+	    WORD_WRAP_SOURCE(into) = WORD_CONCATLIST_RIGHT(root);
 	    Col_MListInsert(into, index - (length-loop), list);
-	    WORD_CONCATLIST_RIGHT(root) = WORD_MLIST_ROOT(into);
+	    WORD_CONCATLIST_RIGHT(root) = WORD_WRAP_SOURCE(into);
 	    ASSERT(WORD_TYPE(WORD_CONCATLIST_RIGHT(root)) == WORD_TYPE_CIRCLIST);
-	    WORD_MLIST_ROOT(into) = root;
+	    WORD_WRAP_SOURCE(into) = root;
 	}
 	UpdateMConcatNode(root);
 	return;
@@ -3886,7 +4012,7 @@ Col_MListInsert(
      * General case. 
      */
 
-    MListInsert(&WORD_MLIST_ROOT(into), index, list);
+    MListInsert(&WORD_WRAP_SOURCE(into), index, list);
 }
 
 /*---------------------------------------------------------------------------
@@ -3940,86 +4066,86 @@ start:
 
     type = WORD_TYPE(*nodePtr);
     switch (type) {
-	case WORD_TYPE_MCONCATLIST: {
-	    size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(*nodePtr);
-	    Col_Word left = WORD_CONCATLIST_LEFT(*nodePtr);
-	    if (leftLength == 0) {
-		leftLength = Col_ListLength(left);
-	    }
+    case WORD_TYPE_MCONCATLIST: {
+	size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(*nodePtr);
+	Col_Word left = WORD_CONCATLIST_LEFT(*nodePtr);
+	if (leftLength == 0) {
+	    leftLength = Col_ListLength(left);
+	}
 
-	    if (index == leftLength && WORD_CONCATLIST_DEPTH(*nodePtr) > 1) {
+	if (index == leftLength && WORD_CONCATLIST_DEPTH(*nodePtr) > 1) {
+	    /*
+	     * Insertion point is just between the two arms. Insert into
+	     * the shallowest one to balance tree.
+	     */
+
+	    if (GetDepth(left) < WORD_CONCATLIST_DEPTH(*nodePtr)-1) {
 		/*
-		 * Insertion point is just between the two arms. Insert into
-		 * the shallowest one to balance tree.
+		 * Right is deeper, insert into left.
 		 */
 
-		if (GetDepth(left) < WORD_CONCATLIST_DEPTH(*nodePtr)-1) {
-		    /*
-		     * Right is deeper, insert into left.
-		     */
-
-		    MListInsert(&WORD_CONCATLIST_LEFT(*nodePtr), index, 
-			    list);
-		    UpdateMConcatNode(*nodePtr);
-		    return;
-		}
+		MListInsert(&WORD_CONCATLIST_LEFT(*nodePtr), index, 
+			list);
+		UpdateMConcatNode(*nodePtr);
+		return;
 	    }
+	}
 
-	    if (index <= leftLength) {
-		/*
-		 * Insert into left.
-		 */
+	if (index <= leftLength) {
+	    /*
+	     * Insert into left.
+	     */
 
-		MListInsert(&WORD_CONCATLIST_LEFT(*nodePtr), index, list);
-	    } else {
-		/*
-		 * Insert into right.
-		 */
+	    MListInsert(&WORD_CONCATLIST_LEFT(*nodePtr), index, list);
+	} else {
+	    /*
+	     * Insert into right.
+	     */
 
-		MListInsert(&WORD_CONCATLIST_RIGHT(*nodePtr), 
-			index-leftLength, list);
-	    }
-	    UpdateMConcatNode(*nodePtr);
+	    MListInsert(&WORD_CONCATLIST_RIGHT(*nodePtr), 
+		    index-leftLength, list);
+	}
+	UpdateMConcatNode(*nodePtr);
+	return;
+	}
+
+    case WORD_TYPE_MVECTOR: {
+	size_t maxLength = VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(*nodePtr)
+		* CELL_SIZE);
+	Col_Word *elements = WORD_VECTOR_ELEMENTS(*nodePtr);
+	if (listLength <= maxLength-length) {
+	    /*
+	     * Insert data directly into available space.
+	     */
+
+	    MergeChunksInfo info;
+
+	    Col_MVectorSetLength(*nodePtr, length+listLength);
+
+	    /*
+	     * Move trailing elements.
+	     */
+
+	    memmove(elements+index+listLength, elements+index,
+		    (length-index) * sizeof(*elements));
+
+	    /*
+	     * Copy elements from list.
+	     */
+
+	    info.length = index;
+	    info.vector = *nodePtr;
+	    Col_TraverseListChunks(list, 0, listLength, 0, MergeChunksProc, 
+		    &info, NULL);
+	    ASSERT(info.length == index+listLength);
 	    return;
 	}
 
-	case WORD_TYPE_MVECTOR: {
-	    size_t maxLength = VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(*nodePtr)
-		    * CELL_SIZE);
-	    Col_Word *elements = WORD_VECTOR_ELEMENTS(*nodePtr);
-	    if (listLength <= maxLength-length) {
-		/*
-		 * Insert data directly into available space.
-		 */
+	/*
+	 * Try other methods below.
+	 */
 
-		MergeChunksInfo info;
-
-		Col_MVectorSetLength(*nodePtr, length+listLength);
-
-		/*
-		 * Move trailing elements.
-		 */
-
-		memmove(elements+index+listLength, elements+index,
-			(length-index) * sizeof(*elements));
-
-		/*
-		 * Copy elements from list.
-		 */
-
-		info.length = index;
-		info.vector = *nodePtr;
-		Col_TraverseListChunks(list, 0, listLength, 0, MergeChunksProc, 
-			&info, NULL);
-		ASSERT(info.length == index+listLength);
-		return;
-	    }
-
-	    /*
-	     * Try other methods below.
-	     */
-
-	    break;
+	break;
 	}
 
     }
@@ -4053,53 +4179,53 @@ start:
      */
 
     switch (type) {
-	case WORD_TYPE_CONCATLIST:
+    case WORD_TYPE_CONCATLIST:
+	/*
+	 * Convert to mutable concat then retry.
+	 */
+
+	ConvertToMConcatNode(nodePtr);
+	goto start;
+
+    case WORD_TYPE_SUBLIST:
+	if (WORD_SUBLIST_DEPTH(*nodePtr) >= 1) {
 	    /*
-	     * Convert to mutable concat then retry.
+	     * Source is concat. Convert to mutable concat then retry.
 	     */
 
 	    ConvertToMConcatNode(nodePtr);
 	    goto start;
-
-	case WORD_TYPE_SUBLIST:
-	    if (WORD_SUBLIST_DEPTH(*nodePtr) >= 1) {
-		/*
-		 * Source is concat. Convert to mutable concat then retry.
-		 */
-
-		ConvertToMConcatNode(nodePtr);
-		goto start;
-	    }
-	    /* continued. */
-	default: 
-	    if (index > 0 && index < length) {
-		/*
-		 * Split at insertion point then retry.
-		 */
-
-		SplitMutableAt(nodePtr, index);
-		goto start;
-	    }
-
+	}
+	/* continued. */
+    default: 
+	if (index > 0 && index < length) {
 	    /*
-	     * Build a mutable concat node with current node and list to insert.
+	     * Split at insertion point then retry.
 	     */
 
-	    if (index == 0) {
-		/*
-		 * Insert before.
-		 */
+	    SplitMutableAt(nodePtr, index);
+	    goto start;
+	}
 
-		*nodePtr = NewMConcatList(list, *nodePtr);
-	    } else {
-		/*
-		 * Insert after.
-		 */
+	/*
+	 * Build a mutable concat node with current node and list to insert.
+	 */
 
-		ASSERT(index >= length);
-		*nodePtr = NewMConcatList(*nodePtr, list);
-	    }
-	    return;
+	if (index == 0) {
+	    /*
+	     * Insert before.
+	     */
+
+	    *nodePtr = NewMConcatList(list, *nodePtr);
+	} else {
+	    /*
+	     * Insert after.
+	     */
+
+	    ASSERT(index >= length);
+	    *nodePtr = NewMConcatList(*nodePtr, list);
+	}
+	return;
     }
 }
 
@@ -4127,25 +4253,25 @@ SplitMutableAt(
     ASSERT(index != 0 && index < length);
     type = WORD_TYPE(*nodePtr);
     switch (type) {
-	case WORD_TYPE_VECTOR:
-	case WORD_TYPE_MVECTOR:
-	    elements = WORD_VECTOR_ELEMENTS(*nodePtr);
-	    break;
+    case WORD_TYPE_VECTOR:
+    case WORD_TYPE_MVECTOR:
+	elements = WORD_VECTOR_ELEMENTS(*nodePtr);
+	break;
 
-	case WORD_TYPE_VOIDLIST:
-	    elements = NULL;
-	    break;
+    case WORD_TYPE_VOIDLIST:
+	elements = NULL;
+	break;
 
-	case WORD_TYPE_SUBLIST: {
-	    ASSERT(WORD_SUBLIST_DEPTH(*nodePtr) == 0);
-	    elements = WORD_VECTOR_ELEMENTS(WORD_SUBLIST_SOURCE(*nodePtr))
-		    + WORD_SUBLIST_FIRST(*nodePtr);
-	    break;
-	}
+    case WORD_TYPE_SUBLIST: {
+	ASSERT(WORD_SUBLIST_DEPTH(*nodePtr) == 0);
+	elements = WORD_VECTOR_ELEMENTS(WORD_SUBLIST_SOURCE(*nodePtr))
+		+ WORD_SUBLIST_FIRST(*nodePtr);
+	break;
+    }
 
-	default: 
-	    /* CANTHAPPEN */
-	    ASSERT(0);
+    default: 
+	/* CANTHAPPEN */
+	ASSERT(0);
     }
 
     /*
@@ -4187,6 +4313,9 @@ SplitMutableAt(
  * Arguments:
  *	mlist		- Mutable list to modify.
  *	first, last	- Range of elements to remove.
+ *
+ * Type checking:
+ *	*mlist* must be a valid mutable list.
  *---------------------------------------------------------------------------*/
 
 void
@@ -4196,11 +4325,13 @@ Col_MListRemove(
     size_t last)
 {
     size_t length, loop;
+    Col_Word root;
     
-    if (WORD_TYPE(mlist) != WORD_TYPE_MLIST) {
-	Col_Error(COL_ERROR, "%x is not a mutable list", mlist);
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MLIST(mlist) return;
 
     if (first > last) {
 	/* 
@@ -4210,6 +4341,9 @@ Col_MListRemove(
 	return;
     }
 
+    ASSERT(WORD_TYPE(mlist) == WORD_TYPE_WRAP);
+    root = WORD_WRAP_SOURCE(mlist);
+
     length = Col_ListLength(mlist);
     loop = Col_ListLoopLength(mlist);
     if (length == loop) {
@@ -4217,7 +4351,6 @@ Col_MListRemove(
 	 * List is circular.
 	 */
 
-	Col_Word root = WORD_MLIST_ROOT(mlist);
 	ASSERT(WORD_TYPE(root) == WORD_TYPE_CIRCLIST);
 
 	if (first == 0) {
@@ -4251,7 +4384,7 @@ Col_MListRemove(
 		MListRemove(&root, 0, last);
 
 		node = NewMConcatList(head, WORD_CIRCLIST_NEW(root));
-		WORD_MLIST_ROOT(mlist) = node;
+		WORD_WRAP_SOURCE(mlist) = node;
 	    } else {
 		/*
 		 * Remove inner part of loop.
@@ -4259,7 +4392,7 @@ Col_MListRemove(
 
 		root = WORD_CIRCLIST_CORE(root);
 		MListRemove(&root, first, last);
-		WORD_MLIST_ROOT(mlist) = WORD_CIRCLIST_NEW(root);
+		WORD_WRAP_SOURCE(mlist) = WORD_CIRCLIST_NEW(root);
 	    }
 	}
 	return;
@@ -4268,10 +4401,9 @@ Col_MListRemove(
 	 * List is cyclic.
 	 */
 
-	Col_Word root = WORD_MLIST_ROOT(mlist);
 	if (WORD_TYPE(root) != WORD_TYPE_MCONCATLIST) {
 	    ConvertToMConcatNode(&root);
-	    WORD_MLIST_ROOT(mlist) = root;
+	    WORD_WRAP_SOURCE(mlist) = root;
 	}
 	ASSERT(WORD_TYPE(root) == WORD_TYPE_MCONCATLIST);
 	ASSERT(WORD_TYPE(WORD_CONCATLIST_RIGHT(root)) == WORD_TYPE_CIRCLIST);
@@ -4281,7 +4413,7 @@ Col_MListRemove(
 	     * Remove whole head and recurse on tail.
 	     */
 
-	    WORD_MLIST_ROOT(mlist) = WORD_CONCATLIST_RIGHT(root);
+	    WORD_WRAP_SOURCE(mlist) = WORD_CONCATLIST_RIGHT(root);
 	    if (last >= length-loop) {
 		Col_MListRemove(mlist, 0, last - (length-loop));
 	    }
@@ -4318,9 +4450,9 @@ Col_MListRemove(
 	     *  Temporarily use tail as root before recursive call.
 	     */
 
-	    WORD_MLIST_ROOT(mlist) = WORD_CONCATLIST_RIGHT(root);
+	    WORD_WRAP_SOURCE(mlist) = WORD_CONCATLIST_RIGHT(root);
 	    Col_MListRemove(mlist, first, last);
-	    tail = WORD_MLIST_ROOT(mlist);
+	    tail = WORD_WRAP_SOURCE(mlist);
 	    if (WORD_TYPE(tail) != WORD_TYPE_CIRCLIST) {
 		/*
 		 * Circular list was made cyclic in the process. Move head to 
@@ -4347,7 +4479,7 @@ Col_MListRemove(
 	     * Restore root.
 	     */
 
-	    WORD_MLIST_ROOT(mlist) = root;
+	    WORD_WRAP_SOURCE(mlist) = root;
 	}
 	UpdateMConcatNode(root);
 	return;
@@ -4373,7 +4505,7 @@ Col_MListRemove(
      * General case. 
      */
 
-    MListRemove(&WORD_MLIST_ROOT(mlist), first, last);
+    MListRemove(&WORD_WRAP_SOURCE(mlist), first, last);
 }
 
 /*---------------------------------------------------------------------------
@@ -4425,78 +4557,78 @@ start:
 
     type = WORD_TYPE(*nodePtr);
     switch (type) {
-	case WORD_TYPE_MCONCATLIST: {
-	    size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(*nodePtr);
-	    if (leftLength == 0) {
-		leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(*nodePtr));
-	    }
-
-	    if (last >= leftLength) {
-		/*
-		 * Remove part on right arm.
-		 */
-
-		MListRemove(&WORD_CONCATLIST_RIGHT(*nodePtr), 
-			(first<leftLength?0:first-leftLength), last-leftLength);
-	    }
-	    if (first < leftLength) {
-		/*
-		 * Remove part on left arm.
-		 */
-
-		MListRemove(&WORD_CONCATLIST_LEFT(*nodePtr), first, 
-			(last<leftLength?last:leftLength-1));
-		leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(*nodePtr));
-	    }
-
-	    if (leftLength == 0) {
-		/*
-		 * Whole left arm removed, replace node by right.
-		 */
-
-		*nodePtr = WORD_CONCATLIST_RIGHT(*nodePtr);
-	    } else if (Col_ListLength(WORD_CONCATLIST_RIGHT(*nodePtr)) 
-		    == 0) {
-		/*
-		 * Whole right arm removed, replace node by left.
-		 */
-
-		*nodePtr = WORD_CONCATLIST_LEFT(*nodePtr);
-	    } else {
-		/*
-		 * Update & rebalance node.
-		 */
-
-		UpdateMConcatNode(*nodePtr);
-	    }
-	    return;
+    case WORD_TYPE_MCONCATLIST: {
+	size_t leftLength = WORD_CONCATLIST_LEFT_LENGTH(*nodePtr);
+	if (leftLength == 0) {
+	    leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(*nodePtr));
 	}
 
-	case WORD_TYPE_MVECTOR:
-	    if (last < length-1) {
-		/*
-		 * Move trailing elements.
-		 */
-
-		Col_Word *elements = WORD_VECTOR_ELEMENTS(*nodePtr);
-		memmove(elements+first, elements+last+1, (length-last-1)
-			* sizeof(*elements));
-	    }
-
+	if (last >= leftLength) {
 	    /*
-	     * Shorten mutable vector, keeping reserved size.
+	     * Remove part on right arm.
 	     */
 
-	    Col_MVectorSetLength(*nodePtr, length - (last-first+1));
-	    return;
-
-	case WORD_TYPE_VOIDLIST:
+	    MListRemove(&WORD_CONCATLIST_RIGHT(*nodePtr), 
+		    (first<leftLength?0:first-leftLength), last-leftLength);
+	}
+	if (first < leftLength) {
 	    /*
-	     * Shorten void list.
+	     * Remove part on left arm.
 	     */
 
-	    *nodePtr = WORD_VOIDLIST_NEW(length - (last-first+1));
-	    return;
+	    MListRemove(&WORD_CONCATLIST_LEFT(*nodePtr), first, 
+		    (last<leftLength?last:leftLength-1));
+	    leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(*nodePtr));
+	}
+
+	if (leftLength == 0) {
+	    /*
+	     * Whole left arm removed, replace node by right.
+	     */
+
+	    *nodePtr = WORD_CONCATLIST_RIGHT(*nodePtr);
+	} else if (Col_ListLength(WORD_CONCATLIST_RIGHT(*nodePtr)) 
+		== 0) {
+	    /*
+	     * Whole right arm removed, replace node by left.
+	     */
+
+	    *nodePtr = WORD_CONCATLIST_LEFT(*nodePtr);
+	} else {
+	    /*
+	     * Update & rebalance node.
+	     */
+
+	    UpdateMConcatNode(*nodePtr);
+	}
+	return;
+	}
+
+    case WORD_TYPE_MVECTOR:
+	if (last < length-1) {
+	    /*
+	     * Move trailing elements.
+	     */
+
+	    Col_Word *elements = WORD_VECTOR_ELEMENTS(*nodePtr);
+	    memmove(elements+first, elements+last+1, (length-last-1)
+		    * sizeof(*elements));
+	}
+
+	/*
+	 * Shorten mutable vector, keeping reserved size.
+	 */
+
+	Col_MVectorSetLength(*nodePtr, length - (last-first+1));
+	return;
+
+    case WORD_TYPE_VOIDLIST:
+	/*
+	 * Shorten void list.
+	 */
+
+	*nodePtr = WORD_VOIDLIST_NEW(length - (last-first+1));
+	return;
     }
 
     if (length - (last-first+1) <= MAX_SHORT_MVECTOR_LENGTH) {
@@ -4526,47 +4658,47 @@ start:
      */
 
     switch (type) {
-	case WORD_TYPE_CONCATLIST:
+    case WORD_TYPE_CONCATLIST:
+	/*
+	 * Convert to mutable concat then retry.
+	 */
+
+	ConvertToMConcatNode(nodePtr);
+	goto start;
+
+    case WORD_TYPE_SUBLIST: 
+	if (WORD_SUBLIST_DEPTH(*nodePtr) >= 1) {
 	    /*
-	     * Convert to mutable concat then retry.
+	     * Source is concat. Convert to mutable concat then retry.
 	     */
 
 	    ConvertToMConcatNode(nodePtr);
 	    goto start;
+	}
+	/* continued. */
+    default: 
+	if (first == 0) {
+	    /*
+	     * Remove head: keep tail.
+	     */
 
-	case WORD_TYPE_SUBLIST: 
-	    if (WORD_SUBLIST_DEPTH(*nodePtr) >= 1) {
-		/*
-		 * Source is concat. Convert to mutable concat then retry.
-		 */
+	    node = Col_Sublist(*nodePtr, last+1, length-1);
+	} else if (last >= length-1) {
+	    /*
+	     * Remove tail: keep head.
+	     */
 
-		ConvertToMConcatNode(nodePtr);
-		goto start;
-	    }
-	    /* continued. */
-	default: 
-	    if (first == 0) {
-		/*
-		 * Remove head: keep tail.
-		 */
+	    node = Col_Sublist(*nodePtr, 0, first-1);
+	} else {
+	    /*
+	     * Merge head & tail into a mutable concat.
+	     */
 
-		node = Col_Sublist(*nodePtr, last+1, length-1);
-	    } else if (last >= length-1) {
-		/*
-		 * Remove tail: keep head.
-		 */
-
-		node = Col_Sublist(*nodePtr, 0, first-1);
-	    } else {
-		/*
-		 * Merge head & tail into a mutable concat.
-		 */
-
-		node = NewMConcatList(Col_Sublist(*nodePtr, 0, first-1), 
-			Col_Sublist(*nodePtr, last+1, length-1));
-	    }
-	    *nodePtr = node;
-	    return;
+	    node = NewMConcatList(Col_Sublist(*nodePtr, 0, first-1), 
+		    Col_Sublist(*nodePtr, last+1, length-1));
+	}
+	*nodePtr = node;
+	return;
     }
 }
 
@@ -4584,6 +4716,10 @@ start:
  *
  * See also:
  *	<Col_MListInsert>, <Col_MListRemove>
+ *
+ * Type checking:
+ *	*mlist* must be a valid mutable list.
+ *	*with* must be a valid list.
  *---------------------------------------------------------------------------*/
 
 void
@@ -4594,10 +4730,12 @@ Col_MListReplace(
 {
     size_t length, loop;
 
-    if (WORD_TYPE(mlist) != WORD_TYPE_MLIST) {
-	Col_Error(COL_ERROR, "%x is not a mutable list", mlist);
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MLIST(mlist) return;
+    TYPECHECK_LIST(with) return;
 
     if (first > last) {
 	/* 

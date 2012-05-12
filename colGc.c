@@ -54,9 +54,45 @@ static void		ResetPool(MemoryPool *pool);
 static Col_CustomWordChildEnumProc MarkWordChild;
 
 
-/****************************************************************************
- * Internal Section: Process & Threads
- ****************************************************************************/
+/*
+================================================================================
+Internal Section: Error Handling
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: PRECONDITION_GCPROTECTED
+ *
+ *	Precondition macro checking that the call is performed within a 
+ *	GC-protected section (i.e. between <Col_PauseGC>/<Col_TryPauseGC> and
+ *	<Col_ResumeGC>).
+ *
+ *	May be followed by a return block.
+ *
+ * Argument:
+ *	data	- <ThreadData>.
+ *
+ * Side effects:
+ *	Generate <COL_ERROR> error when outside of GC-protected section.
+ *
+ * See also:
+ *	<Col_Error>, <ThreadData>
+ *---------------------------------------------------------------------------*/
+
+#define PRECONDITION_GCPROTECTED(data) \
+    if (!(data)->pauseGC) { \
+	Col_Error(COL_ERROR, "Called outside of a GC-protected section"); \
+	goto PRECONDITION_GCPROTECTED_FAILED; \
+    } \
+    if (0) \
+PRECONDITION_GCPROTECTED_FAILED:
+
+
+/*
+================================================================================
+Internal Section: Process & Threads
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Internal Function: GcInitThread
@@ -155,9 +191,11 @@ GcCleanupGroup(
 }
 
 
-/****************************************************************************
- * Section: Word Lifetime Management
- ****************************************************************************/
+/*
+================================================================================
+Section: Word Lifetime Management
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Internal Function: GetNbCells
@@ -214,7 +252,7 @@ GetNbCells(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_PreserveWord
+ * Function: Col_WordPreserve
  *
  *	Preserve a persistent reference to a word, making it a root. This allows
  *	words to be safely stored in external structures regardless of memory 
@@ -225,6 +263,9 @@ GetNbCells(
  *
  *	Roots are stored in a trie indexed by the root source addresses.
  *
+ * Preconditions:
+ *	Must be called within a GC-protected section.
+ *
  * Arguments:
  *	word	- The word to preserve.
  *
@@ -232,11 +273,11 @@ GetNbCells(
  *	May allocate memory cells. Marks word as pinned.
  *
  * See also:
- *	<Col_ReleaseWord>
+ *	<Col_WordRelease>
  *---------------------------------------------------------------------------*/
 
 void
-Col_PreserveWord(
+Col_WordPreserve(
     Col_Word word)
 {
     ThreadData *data = PlatGetThreadData();
@@ -244,14 +285,11 @@ Col_PreserveWord(
     Col_Word leafSource;
     uintptr_t mask;
 
-    if (!data->pauseGC) {
-	/*
-	 * Can't be called outside of a GC protected section.
-	 */
+    /*
+     * Check preconditions.
+     */
 
-	Col_Error(COL_ERROR, "Called outside of a GC-protected section");
-	return;
-    }
+    PRECONDITION_GCPROTECTED(data) return;
 
     /* 
      * Rule out immediate values. 
@@ -275,7 +313,7 @@ Col_PreserveWord(
 	     * Preserve core list.
 	     */
 
-	    Col_PreserveWord(WORD_CIRCLIST_CORE(word));
+	    Col_WordPreserve(WORD_CIRCLIST_CORE(word));
 	    return;
 
 	/* WORD_TYPE_UNKNOWN */
@@ -425,12 +463,15 @@ end:
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_ReleaseWord
+ * Function: Col_WordRelease
  *
- *	Release a root word previously made by <Col_PreserveWord>.
+ *	Release a root word previously made by <Col_WordPreserve>.
  *
  *	Calls can be nested. A reference count is updated accordingly. Once the 
  *	count drops below 1, the root becomes stale.
+ *
+ * Preconditions:
+ *	Must be called within a GC-protected section.
  *
  * Arguments:
  *	word	- The root word to release.
@@ -439,24 +480,21 @@ end:
  *	May release memory cells. Unpin word.
  *
  * See also:
- *	<Col_PreserveWord>
+ *	<Col_WordPreserve>
  *---------------------------------------------------------------------------*/
 
 void
-Col_ReleaseWord(
+Col_WordRelease(
     Col_Word word)
 {
     ThreadData *data = PlatGetThreadData();
     Cell *node, *sibling, *parent, *grandParent;
 
-    if (!data->pauseGC) {
-	/*
-	 * Can't be called outside of a GC protected section.
-	 */
+    /*
+     * Check preconditions.
+     */
 
-	Col_Error(COL_ERROR, "Called outside of a GC-protected section");
-	return;
-    }
+    PRECONDITION_GCPROTECTED(data) return;
 
     /* 
      * Rule out immediate values. 
@@ -480,7 +518,7 @@ Col_ReleaseWord(
 	     * Release core list.
 	     */
 
-	    Col_ReleaseWord(WORD_CIRCLIST_CORE(word));
+	    Col_WordRelease(WORD_CIRCLIST_CORE(word));
 	    return;
 
 	/* WORD_TYPE_UNKNOWN */
@@ -600,16 +638,19 @@ end:
 }
 
 
-/****************************************************************************
- * Internal Section: Cell Allocation
- ****************************************************************************/
+/*
+================================================================================
+Internal Section: Cell Allocation
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Internal Function: AllocCells
  *
  *	Allocate cells in the eden pool.
  *
- *	Fails if outside a GC protected section.
+ * Preconditions:
+ *	Must be called within a GC-protected section.
  *
  * Arguments:
  *	number	- Number of cells to allocate.
@@ -627,14 +668,11 @@ AllocCells(
 {
     ThreadData *data = PlatGetThreadData();
 
-    if (!data->pauseGC) {
-	/*
-	 * Can't be called outside of a GC protected section.
-	 */
+    /*
+     * Check preconditions.
+     */
 
-	Col_Error(COL_ERROR, "Called outside of a GC-protected section");
-	return NULL;
-    }
+    PRECONDITION_GCPROTECTED(data) return NULL;
     
     /*
      * Alloc cells; alloc pages if needed.
@@ -644,9 +682,11 @@ AllocCells(
 }
 
 
-/****************************************************************************
- * Section: GC-Protected sections
- ****************************************************************************/
+/*
+================================================================================
+Section: GC-Protected sections
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Function: Col_PauseGC
@@ -705,6 +745,9 @@ Col_TryPauseGC()
  *
  *	Leaving a GC-protected section potentially triggers a GC.
  *
+ * Preconditions:
+ *	Must be called within a GC-protected section.
+ *
  * Side effects:
  *	May trigger the garbage collection.
  *
@@ -716,13 +759,21 @@ void
 Col_ResumeGC()
 {
     ThreadData *data = PlatGetThreadData();
+
+    /*
+     * Check preconditions.
+     */
+
+    PRECONDITION_GCPROTECTED(data) return;
+    
     if (data->pauseGC > 1) {
 	/* 
 	 * Within nested sections. 
 	 */
 
 	data->pauseGC--;
-    } else if (data->pauseGC == 1) {
+	return;
+    } else {
 	/*
 	 * Leaving protected section.
 	 */
@@ -735,21 +786,18 @@ Col_ResumeGC()
 	 */
 
 	int performGc = (data->eden.nbAlloc >= GC_THRESHOLD(threshold));
+	ASSERT(data->pauseGC == 1);
 	SyncResumeGC(data->groupData, performGc);
 	data->pauseGC = 0;
-    } else {
-	/*
-	 * Unmatched call.
-	 */
-
-	Col_Error(COL_ERROR, "Unmatched call to Col_ResumeGC");
     }
 }
 
 
-/****************************************************************************
- * Internal Section: Garbage Collection
- ****************************************************************************/
+/*
+================================================================================
+Internal Section: Garbage Collection
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Internal Function: PerformGC
@@ -1315,11 +1363,19 @@ start:
 
     switch (type) {
 	case WORD_TYPE_WRAP:
-	    /*
-	     * Follow source and tail recurse on synonym.
+
+	    if (!(WORD_WRAP_TYPE(*wordPtr) & (COL_INT | COL_FLOAT))) {
+		/*
+		 * Follow source word.
+		 */
+
+		MarkWord(data, &WORD_WRAP_SOURCE(*wordPtr), page);
+	    }
+
+	    /* 
+	     * Tail recurse on synonym.
 	     */
 
-	    MarkWord(data, &WORD_WRAP_SOURCE(*wordPtr), page);
 	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 
 	case WORD_TYPE_UCSSTR:
@@ -1340,14 +1396,6 @@ start:
 
 	    MarkWord(data, &WORD_CONCATROPE_LEFT(*wordPtr), page);
 	    TAIL_RECURSE(&WORD_CONCATROPE_RIGHT(*wordPtr), page);
-
-	case WORD_TYPE_INT:
-	case WORD_TYPE_FP:
-	    /*
-	     * Tail recurse on synonym.
-	     */
-
-	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 
 	case WORD_TYPE_VECTOR:
 	case WORD_TYPE_MVECTOR: {
@@ -1378,14 +1426,6 @@ start:
 
 	    MarkWord(data, &WORD_CONCATLIST_LEFT(*wordPtr), page);
 	    TAIL_RECURSE(&WORD_CONCATLIST_RIGHT(*wordPtr), page);
-
-	case WORD_TYPE_MLIST:
-	    /* 
-	     * Follow list root and tail recurse on synonym.
-	     */
-
-	    MarkWord(data, &WORD_MLIST_ROOT(*wordPtr), page);
-	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 
 	case WORD_TYPE_STRHASHMAP:
 	case WORD_TYPE_INTHASHMAP:

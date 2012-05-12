@@ -21,7 +21,7 @@
  *
  * See also:
  *	<colList.c>, <colList.h>, <colVectorInt.h>, <WORD_TYPE_SUBLIST>, 
- *	<WORD_TYPE_CONCATLIST>, <WORD_TYPE_MCONCATLIST>, <WORD_TYPE_MLIST>
+ *	<WORD_TYPE_CONCATLIST>, <WORD_TYPE_MCONCATLIST>
  */
 
 #ifndef _COLIBRI_LIST_INT
@@ -251,7 +251,8 @@ Internal Section: Concat Lists
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_MCONCATLIST_INIT
  *
- *	Mutable concat list word initializer.
+ *	Mutable concat list word initializer. Contrary to the immutable version,
+ *	they are never used outside of mutable list words.
  *
  * Arguments:
  *	word		- Word to initialize. (Caution: evaluated several times 
@@ -278,83 +279,188 @@ Internal Section: Concat Lists
 
 /*
 ================================================================================
-Internal Section: Mutable Lists
+Internal Section: Type Checking
 ================================================================================
 */
 
-//FIXME: remove mutable lists and replace by generic mutable wrap.
-
 /*---------------------------------------------------------------------------
- * Data Structure: Mutable List Word
+ * Internal Macro: TYPECHECK_LIST
  *
- *	Mutable lists, like mutable vectors but with no length limit.
+ *	Type checking macro for lists.
  *
- *	Mutable lists are just wrappers around a container that can be any
- *	immutable or mutable list or vector. That way the content may change
- *	but the mutable list word doesn't. They are similar to a <Wrap Word>
- *	but with list-specific semantics. They are always toplevel, and never
- *	part of a concat subtree or a sublist.
+ * Argument:
+ *	word	- Checked word.
  *
- * Requirements:
- *	Mutable list words use one single cell.
- *
- *	Mutable lists need only know their root node.
- *
- * Fields:
- *	Synonym	- Generic <Word> Synonym field.
- *	Root	- The root node, may be a vector, sublist or concat list.
- *
- * Layout:
- *	On all architectures the cell layout is as follows:
- *
- * (start table)
- *      0     7                                                       n
- *     +-------+-------------------------------------------------------+
- *   0 | Type  |                        Unused                         |
- *     +-------+-------------------------------------------------------+
- *   1 |                            Synonym                            |
- *     +---------------------------------------------------------------+
- *   2 |                             Root                              |
- *     +---------------------------------------------------------------+
- *   3 |                            Unused                             |
- *     +---------------------------------------------------------------+
- * (end)
- *---------------------------------------------------------------------------*/
-
-/*---------------------------------------------------------------------------
- * Internal Macros: WORD_MLIST_* Accessors
- *
- *	Mutable list word field accessor macros.
- *
- *  WORD_MLIST_ROOT - Root node.
- *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a list.
  *
  * See also:
- *	<Mutable List Word>, <WORD_MLIST_INIT>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
-#define WORD_MLIST_ROOT(word)		(((Col_Word *)(word))[2])
+#define TYPECHECK_LIST(word) \
+    if (!(Col_WordType(word) & COL_LIST)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a list", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
 
 /*---------------------------------------------------------------------------
- * Internal Macro: WORD_MLIST_INIT
+ * Internal Macro: TYPECHECK_MLIST
  *
- *	Mutable list word initializer.
+ *	Type checking macro for mutable lists.
  *
  * Arguments:
- *	word	- Word to initialize. (Caution: evaluated several times during 
- *		  macro expansion)
- *	root	- <WORD_MLIST_ROOT>
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a mutable list.
  *
  * See also:
- *	<Mutable List Word>, <WORD_TYPE_MLIST>, <Col_NewMList>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
-#define WORD_MLIST_INIT(word, root) \
-    WORD_SET_TYPEID((word), WORD_TYPE_MLIST); \
-    WORD_SYNONYM(word) = WORD_NIL; \
-    WORD_MLIST_ROOT(word) = (root); \
+#define TYPECHECK_MLIST(word) \
+    if (!(Col_WordType(word) & COL_MLIST)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a mutable list", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_LISTITER
+ *
+ *	Type checking macro for list iterators.
+ *
+ * Argument:
+ *	it	- Checked iterator.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *it* is not a valid list iterator.
+ *
+ * See also:
+ *	<Col_Error>, <Col_ListIterNull>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_LISTITER(it) \
+    if (Col_ListIterNull(it)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a list iterator", (it)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+
+/*
+================================================================================
+Internal Section: Range Checking
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: RANGECHECK_BOUNDS
+ *
+ *	Range checking macro for lists, ensures that index is within bounds.
+ *
+ * Arguments:
+ *	index	- Checked index.
+ *	length	- List length.
+ *
+ * Side effects:
+ *	Generate <COL_RANGECHECK> error when index is out of bounds.
+ *
+ * See also:
+ *	<Col_Error>
+ *---------------------------------------------------------------------------*/
+
+#define RANGECHECK_BOUNDS(index, length) \
+    if ((index) >= (length)) { \
+	Col_Error(COL_RANGECHECK, \
+		"Index %u out of bounds (length=%u)", \
+		(index), (length), SIZE_MAX); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: RANGECHECK_CONCATLENGTH
+ *
+ *	Range checking macro for lists, ensures that combined lengths of two
+ *	concatenated lists don't exceed the maximum value.
+ *
+ * Argument:
+ *	length1, length2    - Checked lengths.
+ *
+ * Side effects:
+ *	Generate <COL_RANGECHECK> error when resulting length exceeds the max
+ *	list length (SIZE_MAX).
+ *
+ * See also:
+ *	<Col_Error>
+ *---------------------------------------------------------------------------*/
+
+#define RANGECHECK_CONCATLENGTH(length1, length2) \
+    if (SIZE_MAX-(length1) < (length2)) { \
+	Col_Error(COL_RANGECHECK, \
+		"Combined length %u+%u exceeds the maximum allowed value %u", \
+		(length1), (length2), SIZE_MAX); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: RANGECHECK_REPEATLENGTH
+ *
+ *	Range checking macro for lists, ensures that length of a repeated list
+ *	doesn't exceed the maximum value.
+ *
+ * Argument:
+ *	length, count	- Checked length and repetition factor.
+ *
+ * Side effects:
+ *	Generate <COL_RANGECHECK> error when resulting length exceeds the max
+ *	list length (SIZE_MAX).
+ *
+ * See also:
+ *	<Col_Error>
+ *---------------------------------------------------------------------------*/
+
+#define RANGECHECK_REPEATLENGTH(length, count) \
+    if ((count) > 1 && SIZE_MAX/(count) < (length)) { \
+	Col_Error(COL_RANGECHECK, \
+		"Length %u times %u exceeds the maximum allowed value %u", \
+		(length), (count), SIZE_MAX); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: RANGECHECK_LISTITER
+ *
+ *	Range checking macro for list iterators, ensures that iterator is not
+ *	at end.
+ *
+ * Argument:
+ *	it	- Checked iterator.
+ *
+ * Side effects:
+ *	Generate <COL_RANGECHECK> error when *it* is at end.
+ *
+ * See also:
+ *	<Col_Error>, <Col_listIterEnd>
+ *---------------------------------------------------------------------------*/
+
+#define RANGECHECK_LISTITER(it) \
+    if (Col_ListIterEnd(it)) { \
+	Col_Error(COL_RANGECHECK, "Iterator %x is at end", (it)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
 
 #endif /* _COLIBRI_LIST_INT */

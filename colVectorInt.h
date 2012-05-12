@@ -127,7 +127,7 @@ Internal Section: Immutable Vectors
  *	Vector length fitting the given size.
  *
  * See also:
- *	<Immutable Vector Word>, <Col_GetMaxVectorLength>
+ *	<Immutable Vector Word>, <Col_MaxVectorLength>
  *---------------------------------------------------------------------------*/
 
 #define VECTOR_MAX_LENGTH(byteSize) \
@@ -181,7 +181,7 @@ Internal Section: Mutable Vectors
  *			  length of the element array. Given the storage 
  *			  capacity, the maximum size of a mutable vector is
  *			  smaller than that of immutable vectors (see 
- *			  <MVECTOR_MAX_SIZE>, <Col_GetMaxMVectorLength>).
+ *			  <MVECTOR_MAX_SIZE>, <Col_MaxMVectorLength>).
  *	Length		- Generic <Immutable Vector Word> Length field.
  *	Elements	- Generic <Immutable Vector Word> Elements array.
  *
@@ -262,5 +262,92 @@ Internal Section: Mutable Vectors
     WORD_SET_TYPEID((word), WORD_TYPE_MVECTOR); \
     WORD_MVECTOR_SET_SIZE((word), (size)); \
     WORD_VECTOR_LENGTH(word) = (length);
+
+
+/*
+================================================================================
+Internal Section: Type Checking
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_VECTOR
+ *
+ *	Type checking macro for vectors.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a vector.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsVector>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_VECTOR(word) \
+    if (!(Col_WordType(word) & COL_VECTOR)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a vector", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_MVECTOR
+ *
+ *	Type checking macro for mutable vectors.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a vector.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsMVector>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_MVECTOR(word) \
+    if (!(Col_WordType(word) & COL_MVECTOR)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a mutable vector", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+
+/*
+================================================================================
+Internal Section: Range Checking
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: RANGECHECK_VECTORLENGTH
+ *
+ *	Range checking macro for vectors, ensures that length does not exceed 
+ *	the maximum value.
+ *
+ * Argument:
+ *	length		- Checked length.
+ *	maxLength	- Maximum allowed value.
+ *
+ * Side effects:
+ *	Generate <COL_RANGECHECK> error when *length* exceeds *maxLength*.
+ *
+ * See also:
+ *	<Col_Error>, <VECTOR_MAX_LENGTH>
+ *---------------------------------------------------------------------------*/
+
+#define RANGECHECK_VECTORLENGTH(length, maxLength) \
+    if ((length) > (maxLength)) { \
+	Col_Error(COL_RANGECHECK, \
+		"Length %u exceeds the maximum allowed value %u", \
+		(length), (maxLength)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
 
 #endif /* _COLIBRI_VECTOR_INT */

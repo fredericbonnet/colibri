@@ -50,7 +50,7 @@ Section: Ropes
 
 EXTERN Col_Word		Col_EmptyRope();
 EXTERN Col_Word		Col_NewRopeFromString(const char *string);
-EXTERN Col_Word		Col_NewChar(Col_Char c);
+EXTERN Col_Word		Col_NewCharWord(Col_Char c);
 EXTERN Col_Word		Col_NewRope(Col_StringFormat format, const void *data, 
 			    size_t byteLength);
 EXTERN Col_Word		Col_NormalizeRope(Col_Word rope, 
@@ -59,15 +59,26 @@ EXTERN Col_Word		Col_NormalizeRope(Col_Word rope,
 
 
 /****************************************************************************
- * Group: Rope Access and Comparison
+ * Group: Rope Accessors
  *
  * Declarations:
- *	<Col_RopeLength>, <Col_RopeAt>, <Col_RopeFind>, <Col_RopeSearch>,
- *	<Col_CompareRopesL>
+ *	<Col_CharWordValue>, <Col_StringWordFormat>, <Col_RopeLength>
+ *	<Col_RopeAt>
  ****************************************************************************/
 
+EXTERN Col_Char		Col_CharWordValue(Col_Word ch);
+EXTERN Col_StringFormat	Col_StringWordFormat(Col_Word string);
 EXTERN size_t		Col_RopeLength(Col_Word rope);
 EXTERN Col_Char		Col_RopeAt(Col_Word rope, size_t index);
+
+
+/****************************************************************************
+ * Group: Rope Search and Comparison
+ *
+ * Declarations:
+ *	<Col_RopeFind>, <Col_RopeSearch>, <Col_CompareRopesL>
+ ****************************************************************************/
+
 EXTERN size_t		Col_RopeFind(Col_Word rope, Col_Char c, size_t start, 
 			    size_t max, int reverse);
 EXTERN size_t		Col_RopeSearch(Col_Word rope, Col_Word subrope, 
@@ -402,7 +413,7 @@ typedef Col_Char (ColRopeIterLeafAtProc) (Col_Word leaf, size_t index);
  *	Internal implementation of rope iterators.
  *
  * Fields:
- *	rope		- Rope being iterated. If nil, use chunk iterator mode.
+ *	rope		- Rope being iterated. If nil, use string iterator mode.
  *	length		- Rope length.
  *	index		- Current position.
  *	traversal	- Traversal info:
@@ -410,12 +421,12 @@ typedef Col_Char (ColRopeIterLeafAtProc) (Col_Word leaf, size_t index);
  *	traversal.rope	- Traversal info in rope mode.
  *
  * String mode fields:
- *	begin	- Beginning of data chunk.
+ *	begin	- Beginning of string.
  *	current	- Current position.
  *
  * Rope mode fields:
  *	subrope		- Traversed subrope.
- *	(first, last)	- Range of validity.
+ *	first, last	- Range of validity.
  *	offset		- Index offset wrt. root.
  *	leaf		- Leaf (deepest) rope.
  *	index		- Index within leaf (byte index for variable width 
@@ -463,8 +474,7 @@ typedef ColRopeIterator Col_RopeIterator;
 /*---------------------------------------------------------------------------
  * Internal Variable: colRopeIterNull
  *
- *	Static rope variable for iterator initialization. The C compiler
- *	initializes static variables to zero by default.
+ *	Static variable for rope iterator initialization.
  *
  * See also:
  *	<COL_ROPEITER_NULL>
@@ -475,7 +485,7 @@ static const Col_RopeIterator colRopeIterNull = {WORD_NIL,0,0,{NULL}};
 /*---------------------------------------------------------------------------
  * Constant: COL_ROPEITER_NULL
  *
- *	Static initializer for null iterators.
+ *	Static initializer for null rope iterators.
  *
  * See also: 
  *	<Col_RopeIterator>, <Col_RopeIterNull>
@@ -636,7 +646,7 @@ static const Col_RopeIterator colRopeIterNull = {WORD_NIL,0,0,{NULL}};
  *	<Col_RopeIterator>, <Col_RopeIterBegin>
  *---------------------------------------------------------------------------*/
 
-#define Col_RopeIterEnd(it)	\
+#define Col_RopeIterEnd(it) \
     ((it)->index >= (it)->length)
 
 /*

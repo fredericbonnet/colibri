@@ -100,7 +100,7 @@ Internal Section: String Buffers
 /*---------------------------------------------------------------------------
  * Internal Constants: WORD_STRBUF_* Constants
  *
- *	Vector size and limit constants.
+ *	String buffer size limit constants.
  *
  *  WORD_STRBUF_HEADER_SIZE	- Byte size of string buffer header.
  *  STRBUF_MAX_SIZE		- Maximum cell size taken by string buffers.
@@ -151,7 +151,7 @@ Internal Section: String Buffers
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_STRBUF_INIT
  *
- *	Mutable vector word initializer.
+ *	String buffer word initializer.
  *
  * Arguments:
  *	word	- Word to initialize. (Caution: evaluated several times during 
@@ -169,5 +169,35 @@ Internal Section: String Buffers
     WORD_STRBUF_SIZE(word) = (size); \
     WORD_STRBUF_ROPE(word) = WORD_SMALLSTR_EMPTY; \
     WORD_STRBUF_LENGTH(word) = 0;
+
+
+/*
+================================================================================
+Internal Section: Type Checking
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_STRBUF
+ *
+ *	Type checking macro for string buffers.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a string buffer
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsStringBuffer>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_STRBUF(word) \
+    if (!(Col_WordType(word) & COL_STRBUF)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a string buffer", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
 
 #endif /* _COLIBRI_STRBUF_INT */

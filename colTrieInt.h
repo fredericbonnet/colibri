@@ -562,4 +562,82 @@ Internal Section: Trie Leaves
     WORD_INTMAPENTRY_KEY(word) = (key); \
     WORD_MAPENTRY_VALUE(word) = (value);
 
+
+/*
+================================================================================
+Internal Section: Type Checking
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_TRIEMAP
+ *
+ *	Type checking macro for trie maps.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a trie map.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsTrieMap>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_TRIEMAP(word) \
+    if (!(Col_WordType(word) & COL_TRIEMAP)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a trie map", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_STRTRIEMAP
+ *
+ *	Type checking macro for string trie maps.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a string trie map.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsStringTrieMap>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_STRTRIEMAP(word) \
+    if ((Col_WordType(word) & (COL_STRMAP | COL_TRIEMAP)) \
+	    != (COL_STRMAP | COL_TRIEMAP)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a string trie map", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_INTTRIEMAP
+ *
+ *	Type checking macro for integer trie maps.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not an integer trie map.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsIntTrieMap>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_INTTRIEMAP(word) \
+    if ((Col_WordType(word) & (COL_INTMAP | COL_TRIEMAP)) \
+	    != (COL_INTMAP | COL_TRIEMAP)) { \
+	Col_Error(COL_TYPECHECK, "%x is not an integer trie map", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
 #endif /* _COLIBRI_TRIE_INT */

@@ -498,4 +498,188 @@ Internal Section: Concat Ropes
     WORD_CONCATROPE_LEFT(word) = (left); \
     WORD_CONCATROPE_RIGHT(word) = (right);
 
+
+/*
+================================================================================
+Internal Section: Type Checking
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_CHAR
+ *
+ *	Type checking macro for characters.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a character.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsChar>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_CHAR(word) \
+    if (!(Col_WordType(word) & COL_CHAR)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a character", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_STRING
+ *
+ *	Type checking macro for strings.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a string.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsString>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_STRING(word) \
+    if (!(Col_WordType(word) & COL_STRING)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a string", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_ROPE
+ *
+ *	Type checking macro for ropes.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a rope.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsRope>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_ROPE(word) \
+    if (!(Col_WordType(word) & COL_ROPE)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a rope", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_ROPEITER
+ *
+ *	Type checking macro for rope iterators.
+ *
+ * Argument:
+ *	it	- Checked iterator.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *it* is not a valid rope iterator.
+ *
+ * See also:
+ *	<Col_Error>, <Col_RopeIterNull>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_ROPEITER(it) \
+    if (Col_RopeIterNull(it)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a rope iterator", (it)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+
+/*
+================================================================================
+Internal Section: Range Checking
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: RANGECHECK_CONCATLENGTH
+ *
+ *	Range checking macro for ropes, ensures that combined lengths of two
+ *	concatenated ropes don't exceed the maximum value.
+ *
+ * Argument:
+ *	length1, length2    - Checked lengths.
+ *
+ * Side effects:
+ *	Generate <COL_RANGECHECK> error when resulting length exceeds the max
+ *	rope length (SIZE_MAX).
+ *
+ * See also:
+ *	<Col_Error>
+ *---------------------------------------------------------------------------*/
+
+#define RANGECHECK_CONCATLENGTH(length1, length2) \
+    if (SIZE_MAX-(length1) < (length2)) { \
+	Col_Error(COL_RANGECHECK, \
+		"Combined length %u+%u exceeds the maximum allowed value %u", \
+		(length1), (length2), SIZE_MAX); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: RANGECHECK_REPEATLENGTH
+ *
+ *	Range checking macro for ropes, ensures that length of a repeated rope
+ *	doesn't exceed the maximum value.
+ *
+ * Argument:
+ *	length, count	- Checked length and repetition factor.
+ *
+ * Side effects:
+ *	Generate <COL_RANGECHECK> error when resulting length exceeds the max
+ *	rope length (SIZE_MAX).
+ *
+ * See also:
+ *	<Col_Error>
+ *---------------------------------------------------------------------------*/
+
+#define RANGECHECK_REPEATLENGTH(length, count) \
+    if ((count) > 1 && SIZE_MAX/(count) < (length)) { \
+	Col_Error(COL_RANGECHECK, \
+		"Length %u times %u exceeds the maximum allowed value %u", \
+		(length), (count), SIZE_MAX); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: RANGECHECK_ROPEITER
+ *
+ *	Range checking macro for rope iterators, ensures that iterator is not
+ *	at end.
+ *
+ * Argument:
+ *	it	- Checked iterator.
+ *
+ * Side effects:
+ *	Generate <COL_RANGECHECK> error when *it* is at end.
+ *
+ * See also:
+ *	<Col_Error>, <Col_RopeIterEnd>
+ *---------------------------------------------------------------------------*/
+
+#define RANGECHECK_ROPEITER(it) \
+    if (Col_RopeIterEnd(it)) { \
+	Col_Error(COL_RANGECHECK, "Iterator %x is at end", (it)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
 #endif /* _COLIBRI_ROPE_INT */

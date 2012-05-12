@@ -49,7 +49,7 @@ Section: String Buffers
 #define STRBUF_DEFAULT_SIZE	5
 
 /*---------------------------------------------------------------------------
- * Function: Col_GetMaxStringBufferLength
+ * Function: Col_MaxStringBufferLength
  *
  *	Get the maximum length of a string buffer.
  *
@@ -61,7 +61,7 @@ Section: String Buffers
  *---------------------------------------------------------------------------*/
 
 size_t
-Col_GetMaxStringBufferLength(Col_StringFormat format)
+Col_MaxStringBufferLength(Col_StringFormat format)
 {
     return STRBUF_MAX_LENGTH(STRBUF_MAX_SIZE * CELL_SIZE, format);
 }
@@ -72,7 +72,8 @@ Col_GetMaxStringBufferLength(Col_StringFormat format)
  *	Create a new string buffer word.
  *
  *	Note that the actual maximum length will be rounded up to fit an even
- *	number of cells.
+ *	number of cells, and won't exceed the maximum value given by
+ *	<Col_MaxStringBufferLength>.
  *
  * Arguments:
  *	maxLength	- Maximum length of string buffer. If zero, use a 
@@ -113,7 +114,7 @@ Col_NewStringBuffer(
 
 
 /****************************************************************************
- * Group: String Buffer Access
+ * Group: String Buffer Accessors
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -124,6 +125,9 @@ Col_NewStringBuffer(
  * Argument:
  *	strbuf	- String buffer to get length for.
  *
+ * Type checking:
+ *	*strbuf* must be a valid string buffer.
+ *
  * Result:
  *	The string buffer format.
  *---------------------------------------------------------------------------*/
@@ -132,10 +136,11 @@ Col_StringFormat
 Col_StringBufferFormat(
     Col_Word strbuf)
 {
-    if (WORD_TYPE(strbuf) != WORD_TYPE_STRBUF) {
-	Col_Error(COL_ERROR, "%x is not a string buffer", strbuf);
-	return 0;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRBUF(strbuf) return 0;
 
     return (Col_StringFormat) WORD_STRBUF_FORMAT(strbuf);
 }
@@ -148,6 +153,9 @@ Col_StringBufferFormat(
  * Argument:
  *	strbuf	- String buffer to get length for.
  *
+ * Type checking:
+ *	*strbuf* must be a valid string buffer.
+ *
  * Result:
  *	The string buffer length.
  *---------------------------------------------------------------------------*/
@@ -156,10 +164,11 @@ size_t
 Col_StringBufferMaxLength(
     Col_Word strbuf)
 {
-    if (WORD_TYPE(strbuf) != WORD_TYPE_STRBUF) {
-	Col_Error(COL_ERROR, "%x is not a string buffer", strbuf);
-	return 0;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRBUF(strbuf) return 0;
 
     return STRBUF_MAX_LENGTH(WORD_STRBUF_SIZE(strbuf) * CELL_SIZE,
 	    WORD_STRBUF_FORMAT(strbuf));
@@ -173,6 +182,9 @@ Col_StringBufferMaxLength(
  * Argument:
  *	strbuf	- String buffer to get length for.
  *
+ * Type checking:
+ *	*strbuf* must be a valid string buffer.
+ *
  * Result:
  *	The string buffer length.
  *---------------------------------------------------------------------------*/
@@ -181,10 +193,11 @@ size_t
 Col_StringBufferLength(
     Col_Word strbuf)
 {
-    if (WORD_TYPE(strbuf) != WORD_TYPE_STRBUF) {
-	Col_Error(COL_ERROR, "%x is not a string buffer", strbuf);
-	return 0;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRBUF(strbuf) return 0;
 
     /*
      * String buffer length is the cumulated string length plus the current 
@@ -206,6 +219,9 @@ Col_StringBufferLength(
  * Result:
  *	The string buffer string.
  *
+ * Type checking:
+ *	*strbuf* must be a valid string buffer.
+ *
  * Side effects:
  *	Buffer is committed into accumulated rope.
  *---------------------------------------------------------------------------*/
@@ -214,10 +230,11 @@ Col_Word
 Col_StringBufferValue(
     Col_Word strbuf)
 {
-    if (WORD_TYPE(strbuf) != WORD_TYPE_STRBUF) {
-	Col_Error(COL_ERROR, "%x is not a string buffer", strbuf);
-	return 0;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRBUF(strbuf) return WORD_NIL;
 
     CommitBuffer(strbuf);
     return WORD_STRBUF_ROPE(strbuf);
@@ -246,6 +263,9 @@ Col_StringBufferValue(
  * Argument:
  *	strbuf	- String buffer to commit.
  *
+ * Type checking:
+ *	*strbuf* must be a valid string buffer.
+ *
  * Side effects:
  *	Data buffer may be cleared, accumulated rope may be modified, memory
  *	cells can be allocated.
@@ -264,12 +284,19 @@ CommitBuffer(
     size_t length;
     Col_StringFormat format;
 
-    if (WORD_TYPE(strbuf) != WORD_TYPE_STRBUF) {
-	Col_Error(COL_ERROR, "%x is not a string buffer", strbuf);
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRBUF(strbuf) return;
+
+    if ((length = WORD_STRBUF_LENGTH(strbuf)) == 0) {
+	/*
+	 * Nothing to commit.
+	 */
+
 	return;
     }
-
-    if ((length = WORD_STRBUF_LENGTH(strbuf)) == 0) return;
 
     /*
      * Create rope from buffer and append to accumulated rope.
@@ -291,6 +318,9 @@ CommitBuffer(
  *	strbuf	- String buffer to append character to.
  *	c	- Character to append.
  *
+ * Type checking:
+ *	*strbuf* must be a valid string buffer.
+ *
  * Result:
  *	Whether the character was appended or not, the latter may occur when
  *	the character codepoint is unrepresentable in the target format.
@@ -311,10 +341,11 @@ Col_StringBufferAppendChar(
     size_t maxLength;
     size_t width;
 
-    if (WORD_TYPE(strbuf) != WORD_TYPE_STRBUF) {
-	Col_Error(COL_ERROR, "%x is not a string buffer", strbuf);
-	return 0;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRBUF(strbuf) return 0;
 
     /*
      * Get character width.
@@ -322,24 +353,24 @@ Col_StringBufferAppendChar(
 
     format = (Col_StringFormat) WORD_STRBUF_FORMAT(strbuf);
     switch (format) {
-	case COL_UCS1:
-	    width = (c <= COL_CHAR1_MAX) ? 1 : 0;
-	    break;
+    case COL_UCS1:
+	width = (c <= COL_CHAR1_MAX) ? 1 : 0;
+	break;
 
-	case COL_UCS2:
-	    width = (c <= COL_CHAR2_MAX) ? 1 : 0;
-	    break;
+    case COL_UCS2:
+	width = (c <= COL_CHAR2_MAX) ? 1 : 0;
+	break;
 
-	case COL_UTF8:
-	    width = COL_UTF8_WIDTH(c);
-	    break;
+    case COL_UTF8:
+	width = COL_UTF8_WIDTH(c);
+	break;
 
-	case COL_UTF16:
-	    width = COL_UTF16_WIDTH(c);
-	    break;
+    case COL_UTF16:
+	width = COL_UTF16_WIDTH(c);
+	break;
 
-	default:
-	    width = 1;
+    default:
+	width = 1;
     }
     if (width == 0) {
 	/* 
@@ -364,29 +395,29 @@ Col_StringBufferAppendChar(
      */
 
     switch (format) {
-	case COL_UCS1:
-	    ((Col_Char1 *) WORD_STRBUF_BUFFER(strbuf))[
-		    WORD_STRBUF_LENGTH(strbuf)] = c;
-	    break;
+    case COL_UCS1:
+	((Col_Char1 *) WORD_STRBUF_BUFFER(strbuf))[WORD_STRBUF_LENGTH(strbuf)]
+		= c;
+	break;
 
-	case COL_UCS2:
-	    ((Col_Char2 *) WORD_STRBUF_BUFFER(strbuf))[
-		    WORD_STRBUF_LENGTH(strbuf)] = c;
-	    break;
+    case COL_UCS2:
+	((Col_Char2 *) WORD_STRBUF_BUFFER(strbuf))[WORD_STRBUF_LENGTH(strbuf)]
+		= c;
+	break;
 
-	case COL_UTF8:
-	    Col_Utf8Set(((Col_Char1 *) WORD_STRBUF_BUFFER(strbuf)) 
-		    + WORD_STRBUF_LENGTH(strbuf), c);
-	    break;
+    case COL_UTF8:
+	Col_Utf8Set(((Col_Char1 *) WORD_STRBUF_BUFFER(strbuf)) 
+		+ WORD_STRBUF_LENGTH(strbuf), c);
+	break;
 
-	case COL_UTF16:
-	    Col_Utf16Set(((Col_Char2 *) WORD_STRBUF_BUFFER(strbuf)) 
-		    + WORD_STRBUF_LENGTH(strbuf), c);
-	    break;
+    case COL_UTF16:
+	Col_Utf16Set(((Col_Char2 *) WORD_STRBUF_BUFFER(strbuf)) 
+		+ WORD_STRBUF_LENGTH(strbuf), c);
+	break;
 
-	default:
-	    ((Col_Char4 *) WORD_STRBUF_BUFFER(strbuf))[
-		    WORD_STRBUF_LENGTH(strbuf)] = c;
+    default:
+	((Col_Char4 *) WORD_STRBUF_BUFFER(strbuf))[WORD_STRBUF_LENGTH(strbuf)]
+		= c;
     }
     WORD_STRBUF_LENGTH(strbuf) += width;
     return 1;
@@ -400,6 +431,9 @@ Col_StringBufferAppendChar(
  * Arguments:
  *	strbuf	- String buffer to append character to.
  *	rope	- Rope to append.
+ *
+ * Type checking:
+ *	*strbuf* must be a valid string buffer.
  *
  * Result:
  *	Whether all characters were appended or not, the latter may occur when
@@ -421,10 +455,11 @@ Col_StringBufferAppendRope(
     size_t length, ropeLength;
     Col_Word rope2;
 
-    if (WORD_TYPE(strbuf) != WORD_TYPE_STRBUF) {
-	Col_Error(COL_ERROR, "%x is not a string buffer", strbuf);
-	return 0;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRBUF(strbuf) return 0;
 
     if ((ropeLength = Col_RopeLength(rope)) == 0) {
 	/*
@@ -484,6 +519,9 @@ Col_StringBufferAppendRope(
  *	begin	- First character in sequence.
  *	end	- First character past sequence end.
  *
+ * Type checking:
+ *	*strbuf* must be a valid string buffer.
+ *
  * Result:
  *	Whether all characters were appended or not, the latter may occur when
  *	some character codepoints are unrepresentable in the target format.
@@ -505,10 +543,11 @@ Col_StringBufferAppendSequence(
     size_t sequenceLength, endIndex;
     Col_Word rope;
 
-    if (WORD_TYPE(strbuf) != WORD_TYPE_STRBUF) {
-	Col_Error(COL_ERROR, "%x is not a string buffer", strbuf);
-	return 0;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRBUF(strbuf) return 0;
 
     if (Col_RopeIterCompare(begin, end) >= 0) {
 	/*
@@ -561,6 +600,9 @@ Col_StringBufferAppendSequence(
  *	strbuf	- String buffer to reset.
  *	length	- number of characters to reserve.
  *
+ * Type checking:
+ *	*strbuf* must be a valid string buffer.
+ *
  * Result:
  *	NULL if the buffer is too small to store the given number of characters,
  *	else points to the beginning of the reserved area.
@@ -578,10 +620,11 @@ Col_StringBufferReserve(
     size_t maxLength;
     const char *data;
 
-    if (WORD_TYPE(strbuf) != WORD_TYPE_STRBUF) {
-	Col_Error(COL_ERROR, "%x is not a string buffer", strbuf);
-	return NULL;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRBUF(strbuf) return NULL;
 
     format = (Col_StringFormat) WORD_STRBUF_FORMAT(strbuf);
     maxLength = STRBUF_MAX_LENGTH(WORD_STRBUF_SIZE(strbuf) * CELL_SIZE,
@@ -624,6 +667,9 @@ Col_StringBufferReserve(
  *	strbuf	- String buffer to reset.
  *	length	- number of characters to release.
  *
+ * Type checking:
+ *	*strbuf* must be a valid string buffer.
+ *
  * Side effects:
  *	Decrease current length.
  *---------------------------------------------------------------------------*/
@@ -633,10 +679,11 @@ Col_StringBufferRelease(
     Col_Word strbuf,
     size_t length)
 {
-    if (WORD_TYPE(strbuf) != WORD_TYPE_STRBUF) {
-	Col_Error(COL_ERROR, "%x is not a string buffer", strbuf);
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRBUF(strbuf) return;
 
     if (WORD_STRBUF_LENGTH(strbuf) < length) {
 	WORD_STRBUF_LENGTH(strbuf) = 0;
@@ -653,6 +700,9 @@ Col_StringBufferRelease(
  * Argument:
  *	strbuf	- String buffer to reset.
  *
+ * Type checking:
+ *	*strbuf* must be a valid string buffer.
+ *
  * Side effects:
  *	Reset buffer length & accumulated rope.
  *---------------------------------------------------------------------------*/
@@ -661,6 +711,12 @@ void
 Col_StringBufferReset(
     Col_Word strbuf)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRBUF(strbuf) return;
+
     WORD_STRBUF_ROPE(strbuf) = WORD_SMALLSTR_EMPTY;
     WORD_STRBUF_LENGTH(strbuf) = 0;
 }
@@ -672,6 +728,9 @@ Col_StringBufferReset(
  *
  * Argument:
  *	strbuf	- String buffer to freeze.
+ *
+ * Type checking:
+ *	*strbuf* must be a valid string buffer.
  *
  * Result:
  *	The accumulated rope so far.
@@ -686,12 +745,13 @@ Col_StringBufferFreeze(
 {
     Col_StringFormat format;
     size_t length;
-    int pinned = WORD_PINNED(strbuf);
+    int pinned;
 
-    if (WORD_TYPE(strbuf) != WORD_TYPE_STRBUF) {
-	Col_Error(COL_ERROR, "%x is not a string buffer", strbuf);
-	return WORD_NIL;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRBUF(strbuf) return WORD_NIL;
 
     length = WORD_STRBUF_LENGTH(strbuf);
     if (length == 0 || WORD_STRBUF_ROPE(strbuf) != WORD_SMALLSTR_EMPTY) {
@@ -706,111 +766,112 @@ Col_StringBufferFreeze(
      * Turn word into rope.
      */
 
+    pinned = WORD_PINNED(strbuf);
     format = (Col_StringFormat) WORD_STRBUF_FORMAT(strbuf);
     switch (format) {
-	case COL_UCS1:
-	case COL_UCS2:
-	case COL_UCS4:
-	    if (length > (format == COL_UCS1 ? SMALLSTR_MAX_LENGTH : 1) 
-		    && length <= UCSSTR_MAX_LENGTH) {
-		/*
-		 * Convert word inplace.
-		 */
+    case COL_UCS1:
+    case COL_UCS2:
+    case COL_UCS4:
+	if (length > (format == COL_UCS1 ? SMALLSTR_MAX_LENGTH : 1) 
+		&& length <= UCSSTR_MAX_LENGTH) {
+	    /*
+	     * Convert word inplace.
+	     */
 
-		ASSERT(WORD_UCSSTR_HEADER_SIZE <= WORD_STRBUF_HEADER_SIZE);
-		WORD_UCSSTR_INIT(strbuf, format, length);
-		if (pinned) {
-		    WORD_SET_PINNED(strbuf);
+	    ASSERT(WORD_UCSSTR_HEADER_SIZE <= WORD_STRBUF_HEADER_SIZE);
+	    WORD_UCSSTR_INIT(strbuf, format, length);
+	    if (pinned) {
+		WORD_SET_PINNED(strbuf);
+	    }
+	    memcpy((void *) WORD_UCSSTR_DATA(strbuf), 
+		    WORD_STRBUF_BUFFER(strbuf), 
+		    length * CHAR_WIDTH(format));
+	    return strbuf;
+	}
+	break;
+
+    case COL_UCS:
+	if (length <= UCSSTR_MAX_LENGTH) {
+	    /*
+	     * Compute format.
+	     */
+
+	    Col_Char4 *data = (Col_Char4 *) WORD_STRBUF_BUFFER(strbuf);
+	    size_t i;
+	    format = COL_UCS1;
+	    for (i=0; i < length; i++) {
+		if (data[i] > COL_CHAR2_MAX) {
+		    format = COL_UCS4;
+		    break;
+		} else if (data[i] > COL_CHAR1_MAX) {
+		    format = COL_UCS2;
 		}
+	    }
+
+	    if (length <= (format == COL_UCS1 ? SMALLSTR_MAX_LENGTH : 1)) {
+		/*
+		 * Fits immediate string.
+		 */
+		    
+		break;
+	    }
+
+	    /*
+	     * Convert word inplace.
+	     */
+
+	    ASSERT(WORD_UCSSTR_HEADER_SIZE <= WORD_STRBUF_HEADER_SIZE);
+	    WORD_UCSSTR_INIT(strbuf, format, length);
+	    if (pinned) {
+		WORD_SET_PINNED(strbuf);
+	    }
+	    if (format == COL_UCS1) {
+		Col_Char1 *data1 = (Col_Char1 *) WORD_UCSSTR_DATA(strbuf);
+		for (i=0; i < length; i++) {
+		    *data1++ = *data++;
+		}
+	    } else if (format == COL_UCS2) {
+		Col_Char2 *data2 = (Col_Char2 *) WORD_UCSSTR_DATA(strbuf);
+		for (i=0; i < length; i++) {
+		    *data2++ = *data++;
+		}
+	    } else {
+		ASSERT(format == COL_UCS4);
 		memcpy((void *) WORD_UCSSTR_DATA(strbuf), 
 			WORD_STRBUF_BUFFER(strbuf), 
 			length * CHAR_WIDTH(format));
-		return strbuf;
 	    }
-	    break;
+	    return strbuf;
+	}
+	break;
 
-	case COL_UCS:
-	    if (length <= UCSSTR_MAX_LENGTH) {
-		/*
-		 * Compute format.
-		 */
+    case COL_UTF8:
+    case COL_UTF16:
+	if (length * CHAR_WIDTH(format) <= UTFSTR_MAX_BYTELENGTH) {
+	    /*
+	     * Convert word inplace.
+	     */
 
-		Col_Char4 *data = (Col_Char4 *) WORD_STRBUF_BUFFER(strbuf);
-		size_t i;
-		format = COL_UCS1;
-		for (i=0; i < length; i++) {
-		    if (data[i] > COL_CHAR2_MAX) {
-			format = COL_UCS4;
-			break;
-		    } else if (data[i] > COL_CHAR1_MAX) {
-			format = COL_UCS2;
-		    }
+	    const char *begin = (const char *) WORD_STRBUF_BUFFER(strbuf),
+		    *p;
+	    size_t charLength;
+	    for (p=begin, charLength=0; p < begin+length; charLength++) {
+		switch (format) {
+		case COL_UTF8:  p = (const char *) Col_Utf8Next ((const Col_Char1 *) p); break;
+		case COL_UTF16: p = (const char *) Col_Utf16Next((const Col_Char2 *) p); break;
 		}
-
-		if (length <= (format == COL_UCS1 ? SMALLSTR_MAX_LENGTH : 1)) {
-		    /*
-		     * Fits immediate string.
-		     */
-		    
-		    break;
-		}
-
-		/*
-		 * Convert word inplace.
-		 */
-
-		ASSERT(WORD_UCSSTR_HEADER_SIZE <= WORD_STRBUF_HEADER_SIZE);
-		WORD_UCSSTR_INIT(strbuf, format, length);
-		if (pinned) {
-		    WORD_SET_PINNED(strbuf);
-		}
-		if (format == COL_UCS1) {
-		    Col_Char1 *data1 = (Col_Char1 *) WORD_UCSSTR_DATA(strbuf);
-		    for (i=0; i < length; i++) {
-			*data1++ = *data++;
-		    }
-		} else if (format == COL_UCS2) {
-		    Col_Char2 *data2 = (Col_Char2 *) WORD_UCSSTR_DATA(strbuf);
-		    for (i=0; i < length; i++) {
-			*data2++ = *data++;
-		    }
-		} else {
-		    ASSERT(format == COL_UCS4);
-		    memcpy((void *) WORD_UCSSTR_DATA(strbuf), 
-			    WORD_STRBUF_BUFFER(strbuf), 
-			    length * CHAR_WIDTH(format));
-		}
-		return strbuf;
 	    }
-	    break;
-
-	case COL_UTF8:
-	case COL_UTF16:
-	    if (length * CHAR_WIDTH(format) <= UTFSTR_MAX_BYTELENGTH) {
-		/*
-		 * Convert word inplace.
-		 */
-
-		const char *begin = (const char *) WORD_STRBUF_BUFFER(strbuf),
-			*p;
-		size_t charLength;
-		for (p=begin, charLength=0; p < begin+length; charLength++) {
-		    switch (format) {
-			case COL_UTF8:  p = (const char *) Col_Utf8Next ((const Col_Char1 *) p); break;
-			case COL_UTF16: p = (const char *) Col_Utf16Next((const Col_Char2 *) p); break;
-		    }
-		}
-		WORD_UTFSTR_INIT(strbuf, COL_UTF8, charLength, 
-			length * CHAR_WIDTH(format));
-		if (pinned) {
-		    WORD_SET_PINNED(strbuf);
-		}
-		memcpy((void *) WORD_UTFSTR_DATA(strbuf), 
-			WORD_STRBUF_BUFFER(strbuf), 
-			length * CHAR_WIDTH(format));
-		return strbuf;
+	    WORD_UTFSTR_INIT(strbuf, COL_UTF8, charLength, 
+		    length * CHAR_WIDTH(format));
+	    if (pinned) {
+		WORD_SET_PINNED(strbuf);
 	    }
-	    break;
+	    memcpy((void *) WORD_UTFSTR_DATA(strbuf), 
+		    WORD_STRBUF_BUFFER(strbuf), 
+		    length * CHAR_WIDTH(format));
+	    return strbuf;
+	}
+	break;
     }
 
     /*

@@ -931,6 +931,9 @@ Col_NewIntHashMap(
  * Argument:
  *	map	- Hash map to copy.
  *
+ * Type checking:
+ *	*map* must be a valid hash map.
+ *
  * Result:
  *	The new word.
  *
@@ -947,6 +950,12 @@ Col_CopyHashMap(
     size_t nbBuckets, i;
     int entryType;
 
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_HASHMAP(map) return WORD_NIL;
+
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_STRHASHMAP:
 	    entryType = WORD_TYPE_HASHENTRY;
@@ -956,9 +965,11 @@ Col_CopyHashMap(
 	    entryType = WORD_TYPE_INTHASHENTRY;
 	    break;
 
+	/* WORD_TYPE_UNKNOWN */
+
 	default:
-	    Col_Error(COL_ERROR, "%x is not a hash map", map);
-	    return WORD_NIL;
+	    /* CANTHAPPEN */
+	    ASSERT(0);
     }
 
     /*
@@ -1017,7 +1028,7 @@ Col_CopyHashMap(
 
 
 /****************************************************************************
- * Group: Hash Map Access
+ * Group: Hash Map Accessors
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -1029,6 +1040,9 @@ Col_CopyHashMap(
  *	map		- String hash map to get entry from.
  *	key		- String entry key.
  *	valuePtr	- Returned entry value, if found.
+ *
+ * Type checking:
+ *	*map* must be a valid string hash map.
  *
  * Results:
  *	Whether the key was found in the map. In this case the value is returned
@@ -1043,10 +1057,11 @@ Col_StringHashMapGet(
 {
     Col_Word entry;
 
-    if (WORD_TYPE(map) != WORD_TYPE_STRHASHMAP) {
-	Col_Error(COL_ERROR, "%x is not a string hash map", map);
-	return WORD_NIL;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRHASHMAP(map) return 0;
 
     entry = StringHashMapFindEntry(map, key, 0, NULL, NULL);
 
@@ -1069,6 +1084,9 @@ Col_StringHashMapGet(
  *	key		- Integer entry key.
  *	valuePtr	- Returned entry value, if found.
  *
+ * Type checking:
+ *	*map* must be a valid integer hash map.
+ *
  * Results:
  *	Whether the key was found in the map. In this case the value is returned
  *	through valuePtr.
@@ -1082,10 +1100,11 @@ Col_IntHashMapGet(
 {
     Col_Word entry;
     
-    if (WORD_TYPE(map) != WORD_TYPE_INTHASHMAP) {
-	Col_Error(COL_ERROR, "%x is not an integer hash map", map);
-	return WORD_NIL;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_INTHASHMAP(map) return 0;
 
     entry = IntHashMapFindEntry(map, key, 0, NULL, NULL);
     if (entry) {
@@ -1107,6 +1126,9 @@ Col_IntHashMapGet(
  *	key	- String entry key.
  *	value	- Entry value.
  *
+ * Type checking:
+ *	*map* must be a valid string hash map.
+ *
  * Result:
  *	Whether a new entry was created.
  *
@@ -1122,11 +1144,12 @@ Col_StringHashMapSet(
 {
     int create = 1;
     Col_Word entry;
-    
-    if (WORD_TYPE(map) != WORD_TYPE_STRHASHMAP) {
-	Col_Error(COL_ERROR, "%x is not a string hash map", map);
-	return WORD_NIL;
-    }
+
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRHASHMAP(map) return 0;
 
     entry = StringHashMapFindEntry(map, key, 1, &create, NULL);
     ASSERT(entry);
@@ -1145,6 +1168,9 @@ Col_StringHashMapSet(
  *	key	- Integer entry key.
  *	value	- Entry value.
  *
+ * Type checking:
+ *	*map* must be a valid integer hash map.
+ *
  * Result:
  *	Whether a new entry was created.
  *
@@ -1161,10 +1187,11 @@ Col_IntHashMapSet(
     int create = 1;
     Col_Word entry;
     
-    if (WORD_TYPE(map) != WORD_TYPE_INTHASHMAP) {
-	Col_Error(COL_ERROR, "%x is not an integer hash map", map);
-	return WORD_NIL;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_INTHASHMAP(map) return 0;
 
     entry = IntHashMapFindEntry(map, key, 1, &create, NULL);
     ASSERT(entry);
@@ -1182,6 +1209,9 @@ Col_IntHashMapSet(
  *	map	- String hash map to remove entry from.
  *	key	- String entry key.
  *
+ * Type checking:
+ *	*map* must be a valid string hash map.
+ *
  * Result:
  *	Whether an existing entry was removed.
  *---------------------------------------------------------------------------*/
@@ -1195,10 +1225,11 @@ Col_StringHashMapUnset(
     size_t nbBuckets;
     uintptr_t hash, index;
 
-    if (WORD_TYPE(map) != WORD_TYPE_STRHASHMAP) {
-	Col_Error(COL_ERROR, "%x is not a string hash map", map);
-	return 0;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_STRHASHMAP(map) return 0;
 
     /*
      * Search for matching entry.
@@ -1271,6 +1302,9 @@ Col_StringHashMapUnset(
  *	map	- Integer hash map to remove entry from.
  *	key	- Integer entry key.
  *
+ * Type checking:
+ *	*map* must be a valid integer hash map.
+ *
  * Result:
  *	Whether an existing entry was removed.
  *---------------------------------------------------------------------------*/
@@ -1284,10 +1318,11 @@ Col_IntHashMapUnset(
     size_t nbBuckets;
     uintptr_t index;
 
-    if (WORD_TYPE(map) != WORD_TYPE_INTHASHMAP) {
-	Col_Error(COL_ERROR, "%x is not an integer hash map", map);
-	return 0;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_INTHASHMAP(map) return 0;
 
     /*
      * Search for matching entry.
@@ -1363,6 +1398,9 @@ Col_IntHashMapUnset(
  * Arguments:
  *	map	- Hash map to iterate over.
  *	it	- Iterator to initialize.
+ *
+ * Type checking:
+ *	*map* must be a valid hash map.
  *---------------------------------------------------------------------------*/
 
 void
@@ -1373,22 +1411,21 @@ Col_HashMapIterBegin(
     Col_Word *buckets;
     size_t nbBuckets, i;
 
-    switch (WORD_TYPE(map)) {
-	case WORD_TYPE_STRHASHMAP:
-	case WORD_TYPE_INTHASHMAP:
-	    break;
+    /*
+     * Check preconditions.
+     */
 
-	default:
-	    Col_Error(COL_ERROR, "%x is not a hash map", map);
-	    return;
+    TYPECHECK_HASHMAP(map) {
+	*it = COL_MAPITER_NULL;
+	return;
     }
 
+    it->map = map;
     if (Col_MapSize(map) == 0) {
 	/*
-	 * Map is empty anyway.
+	 * Map is empty.
 	 */
 
-	it->map = WORD_NIL;
 	it->entry = WORD_NIL;
 	return;
     }
@@ -1397,7 +1434,6 @@ Col_HashMapIterBegin(
      * Get first entry in first nonempty bucket.
      */
 
-    it->map = map;
     GET_BUCKETS(map, 0, nbBuckets, buckets);
     for (i=0; i < nbBuckets; i++) {
 	if (buckets[i]) {
@@ -1409,7 +1445,7 @@ Col_HashMapIterBegin(
 
     /* CANTHAPPEN */
     ASSERT(0);
-    it->map = WORD_NIL;
+    *it = COL_MAPITER_NULL;
 }
 
 /*---------------------------------------------------------------------------
@@ -1424,7 +1460,10 @@ Col_HashMapIterBegin(
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
  *	it		- Iterator to initialize.
  *
- * Results:
+ * Type checking:
+ *	*map* must be a valid string hash map.
+ *
+ * Result:
  *	createPtr	- (out) If non-NULL, whether a new entry was created. 
  *---------------------------------------------------------------------------*/
 
@@ -1435,24 +1474,18 @@ Col_StringHashMapIterFind(
     int *createPtr, 
     Col_MapIterator *it)
 {
-    if (WORD_TYPE(map) != WORD_TYPE_STRHASHMAP) {
-	Col_Error(COL_ERROR, "%x is not a string hash map", map);
-	it->map = WORD_NIL;
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
 
-    it->entry = StringHashMapFindEntry(map, key, 0, createPtr, 
-	    &it->traversal.hash.bucket);
-    if (!it->entry) {
-	/*
-	 * Not found.
-	 */
-
-	it->map = WORD_NIL;
+    TYPECHECK_STRHASHMAP(map) {
+	*it = COL_MAPITER_NULL;
 	return;
     }
 
     it->map = map;
+    it->entry = StringHashMapFindEntry(map, key, 0, createPtr, 
+	    &it->traversal.hash.bucket);
 }
 
 /*---------------------------------------------------------------------------
@@ -1467,7 +1500,10 @@ Col_StringHashMapIterFind(
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
  *	it		- Iterator to initialize.
  *
- * Results:
+ * Type checking:
+ *	*map* must be a valid integer hash map.
+ *
+ * Result:
  *	createPtr	- (out) If non-NULL, whether a new entry was created. 
  *---------------------------------------------------------------------------*/
 
@@ -1478,24 +1514,18 @@ Col_IntHashMapIterFind(
     int *createPtr, 
     Col_MapIterator *it)
 {
-    if (WORD_TYPE(map) != WORD_TYPE_INTHASHMAP) {
-	Col_Error(COL_ERROR, "%x is not an integer hash map", map);
-	it->map = WORD_NIL;
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
 
-    it->entry = IntHashMapFindEntry(map, key, 0, createPtr, 
-	    &it->traversal.hash.bucket);
-    if (!it->entry) {
-	/*
-	 * Not found.
-	 */
-
-	it->map = WORD_NIL;
+    TYPECHECK_INTHASHMAP(map) {
+	*it = COL_MAPITER_NULL;
 	return;
     }
 
     it->map = map;
+    it->entry = IntHashMapFindEntry(map, key, 0, createPtr, 
+	    &it->traversal.hash.bucket);
 }
 
 /*---------------------------------------------------------------------------
@@ -1506,6 +1536,12 @@ Col_IntHashMapIterFind(
  * Arguments:
  *	it	- Map iterator to set value for.
  *	value	- Value to set.
+ *
+ * Type checking:
+ *	*it* must be a valid hash map iterator.
+ *
+ * Range checking:
+ *	*it* must not be at end.
  *---------------------------------------------------------------------------*/
 
 void
@@ -1515,11 +1551,14 @@ Col_HashMapIterSetValue(
 {
     Col_Word *buckets;
     size_t nbBuckets;
+    int type = WORD_TYPE(it->map);
 
-    if (Col_MapIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid map iterator");
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_HASHMAP(it->map) return;
+    RANGECHECK_MAPITER(it) return;
 
     ASSERT(it->entry);
 
@@ -1567,7 +1606,8 @@ Col_HashMapIterSetValue(
 	/* WORD_TYPE_UNKNOWN */
 
 	default:
-	    Col_Error(COL_ERROR, "%x is not a hash map", it->map);
+	    /* CANTHAPPEN */
+	    ASSERT(0);
     }
 }
 
@@ -1578,6 +1618,12 @@ Col_HashMapIterSetValue(
  *
  * Argument:
  *	it	- The iterator to move.
+ *
+ * Type checking:
+ *	*it* must be a valid hash map iterator.
+ *
+ * Range checking:
+ *	*it* must not be at end.
  *---------------------------------------------------------------------------*/
 
 void
@@ -1587,10 +1633,12 @@ Col_HashMapIterNext(
     Col_Word *buckets;
     size_t nbBuckets, i;
 
-    if (Col_MapIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid map iterator");
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_HASHMAP(it->map) return;
+    RANGECHECK_MAPITER(it) return;
 
     ASSERT(it->entry);
 
@@ -1625,5 +1673,5 @@ Col_HashMapIterNext(
      * End of map.
      */
 
-    it->map = WORD_NIL;
+    it->entry = WORD_NIL;
 }

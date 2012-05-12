@@ -13,6 +13,8 @@
 #include <stddef.h> /* For size_t, uintptr_t and the like */
 
 
+//TODO documentation overhaul
+
 /****************************************************************************
  * Section: Word Types
  ****************************************************************************/
@@ -34,108 +36,54 @@ typedef uintptr_t Col_Word;
 #define WORD_NIL \
     ((Col_Word) 0)
 
+
+/* FIXME replace Col_GetWordInfo/Col_FindWordInfo by better system
+and type-specific accessors */
+
 /*---------------------------------------------------------------------------
- * Enum: Col_WordType
+ * Constants: Word Type Identifiers
  *
- *	Data types recognized by Colibri. Subtype identifiers are OR'ed with 
- *	generic ones. For example, flat strings are also ropes, so (<COL_STRING>
- *	& <COL_ROPE>) == <COL_ROPE>.
+ *	Data types recognized by Colibri.
  *
  *  COL_NIL	- Nil.
- *  COL_CUSTOM	- Custom data type.
+ *  COL_CUSTOM	- Custom type.
  *  COL_INT	- Integer.
  *  COL_FLOAT	- Floating point.
- *  COL_ROPE	- Generic rope.
+ *  COL_CHAR	- Single character.
  *  COL_STRING	- Flat string.
- *  COL_LIST	- Generic list.
- *  COL_MLIST	- Mutable list.
+ *  COL_ROPE	- Generic rope.
  *  COL_VECTOR	- Vector.
  *  COL_MVECTOR	- Mutable vector.
+ *  COL_LIST	- Generic list.
+ *  COL_MLIST	- Mutable list.
+ *  COL_MAP	- Generic map.
  *  COL_STRMAP	- String-keyed map.
  *  COL_INTMAP	- Integer-keyed map.
- *  COL_HASHMAP	- Custom hash map type.
+ *  COL_HASHMAP	- Hash map.
+ *  COL_TRIEMAP	- Trie map.
+ *  COL_STRBUF	- String buffer.
  *
  * See also:
- *	<Col_GetWordInfo>, <Col_FindWordInfo>, <Col_CustomWordType>
+ *	<Col_WordType>, <Col_CustomWordType>
  *---------------------------------------------------------------------------*/
 
-typedef enum {
-    COL_NIL	= 1,
-    COL_CUSTOM	= 2,
-    COL_INT	= 4,
-    COL_FLOAT	= 8,
-    COL_ROPE	= 16,
-    COL_STRING	= 48,		/* = 32 | COL_ROPE */
-    COL_LIST	= 64,
-    COL_MLIST	= 192,		/* = 128 | COL_LIST */
-    COL_VECTOR	= 320,		/* = 256 | COL_LIST */
-    COL_MVECTOR	= 960,		/* = 512 | COL_VECTOR | COL_MLIST */
-    COL_STRMAP	= 1024,
-    COL_INTMAP	= 2048,
-    COL_HASHMAP	= 4096,
-    COL_STRBUF = 8192
-} Col_WordType;
-
-/*---------------------------------------------------------------------------
- * Typedef: Col_WordData
- *
- *	Colibri words are opaque types, this structure can be used to get the 
- *	underlying data of predefined types.
- *
- *	This type is a union so only the member matching the actual type is 
- *	valid.
- *
- * Fields:
- *	i			- <COL_INT>.
- *	f			- <COL_FLOAT>.
- *	string			- <COL_STRING>:
- *	string.format		- Format of the string. See <Col_StringFormat>.
- *	string.data		- Pointer to format-specific data.
- *	string.bytelength	- Data length in bytes.
- *	vector			- <COL_VECTOR>:
- *	vector.length		- Length of vector.
- *	vector.elements		- Array of word elements.
- *	mvector			- <COL_MVECTOR>:
- *	mvector.length		- Actual length of vector.
- *	mvector.elements	- Array of word elements.
- *	mvector.maxLength	- Maximum length of vector.
- *	custom			- Custom types:
- *	custom.type		- The word type.
- *	custom.data		- Pointer to the allocated data.
- *
- * See also:
- *	<Col_WordType>, <Col_GetWordInfo>, <Col_FindWordInfo>, 
- *	<Col_CustomWordType>
- *---------------------------------------------------------------------------*/
-
-typedef union {
-    intptr_t i;
-    double f;
-    struct {
-	Col_StringFormat format;
-	const void *data;
-	size_t byteLength;
-	union {
-	    Col_Char1 c1;
-	    Col_Char2 c2;
-	    Col_Char4 c4;
-	    Col_Word s;
-	} _smallData;
-    } string;
-    struct {
-	size_t length;
-	const Col_Word *elements;
-    } vector;
-    struct {
-	size_t length;
-	Col_Word *elements;
-	size_t maxLength;
-    } mvector;
-    struct {
-	struct Col_CustomWordType *type;
-	void *data;
-    } custom;
-} Col_WordData;
+#define COL_NIL			0
+#define COL_CUSTOM		1
+#define COL_INT			2
+#define COL_FLOAT		4
+#define COL_CHAR		8
+#define COL_STRING		16
+#define COL_ROPE		32
+#define COL_VECTOR		64
+#define COL_MVECTOR		128
+#define COL_LIST		256
+#define COL_MLIST		512
+#define COL_MAP			1024
+#define COL_STRMAP		2048
+#define COL_INTMAP		4096
+#define COL_HASHMAP		8192
+#define COL_TRIEMAP		16384
+#define COL_STRBUF		32768
 
 
 /****************************************************************************
@@ -218,8 +166,7 @@ typedef void (Col_CustomWordChildrenProc) (Col_Word word,
  *	Custom word type descriptor. 
  *
  * Fields:
- *	type		- Type identifier. Type field must be equal to 
- *			  <COL_CUSTOM>.
+ *	type		- Type identifier.
  *	name		- Name of the type, e.g. "int".
  *	sizeProc	- Called to get the size in bytes of the word. Must be 
  *			  constant during the whole lifetime.
@@ -235,13 +182,15 @@ typedef void (Col_CustomWordChildrenProc) (Col_Word word,
  *---------------------------------------------------------------------------*/
 
 typedef struct Col_CustomWordType {
-    Col_WordType type;
+    int type;
     const char *name;
     Col_CustomWordSizeProc *sizeProc;
     Col_CustomWordFreeProc *freeProc;
     Col_CustomWordChildrenProc *childrenProc;
 } Col_CustomWordType;
 
+
+//TODO sort by type and add accessors
 
 /****************************************************************************
  * Section: Word Creation
@@ -257,33 +206,40 @@ EXTERN Col_Word		Col_NewCustomWord(Col_CustomWordType *type, size_t size,
 
 
 /****************************************************************************
- * Section: Word Access and Synonyms
+ * Section: Word Accessors and Synonyms
  *
  * Declarations:
- *	<Col_IntWordValue>, <Col_FloatWordValue>, <Col_GetWordInfo>, 
- *	<Col_FindWordInfo>, <Col_GetWordSynonym>, <Col_AddWordSynonym>, 
- *	<Col_ClearWordSynonym>
+ *	<Col_WordType>, <Col_IntWordValue>, <Col_FloatWordValue>, 
+ *	<Col_CustomWordData>, <Col_WordSynonym>, <Col_WordAddSynonym>, 
+ *	<Col_WordClearSynonym>
  ****************************************************************************/
 
+EXTERN int		Col_WordType(Col_Word word);
 EXTERN intptr_t		Col_IntWordValue(Col_Word word);
 EXTERN double		Col_FloatWordValue(Col_Word word);
-EXTERN Col_WordType	Col_GetWordInfo(Col_Word word, Col_WordData *dataPtr);
-EXTERN Col_Word		Col_FindWordInfo(Col_Word word, Col_WordType type, 
-			    Col_WordData *dataPtr, int *altTypePtr, 
-			    Col_Word *altWordPtr);
-EXTERN Col_Word		Col_GetWordSynonym(Col_Word word);
-EXTERN void		Col_AddWordSynonym(Col_Word *wordPtr, Col_Word synonym);
-EXTERN void		Col_ClearWordSynonym(Col_Word word);
+EXTERN Col_CustomWordType * Col_CustomWordInfo(Col_Word word, void **dataPtr);
+EXTERN Col_Word		Col_WordSynonym(Col_Word word);
+EXTERN void		Col_WordAddSynonym(Col_Word *wordPtr, Col_Word synonym);
+EXTERN void		Col_WordClearSynonym(Col_Word word);
 
 
 /****************************************************************************
  * Section: Word Lifetime Management
  *
  * Declarations:
- *	<Col_PreserveWord>, <Col_ReleaseWord>
+ *	<Col_WordPreserve>, <Col_WordRelease>
  ****************************************************************************/
 
-EXTERN void		Col_PreserveWord(Col_Word word);
-EXTERN void		Col_ReleaseWord(Col_Word word);
+EXTERN void		Col_WordPreserve(Col_Word word);
+EXTERN void		Col_WordRelease(Col_Word word);
+
+
+
+
+
+
+
+
+
 
 #endif /* _COLIBRI_WORD */

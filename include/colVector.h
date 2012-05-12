@@ -35,7 +35,7 @@ Section: Immutable Vectors
  * Group: Immutable Vector Creation
  *
  * Declarations:
- *	<Col_GetMaxVectorLength>, <Col_NewVector>, <Col_NewVectorNV>
+ *	<Col_MaxVectorLength>, <Col_NewVector>, <Col_NewVectorNV>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -55,10 +55,21 @@ Section: Immutable Vectors
  * Remaining declarations.
  */
 
-EXTERN size_t		Col_GetMaxVectorLength(void);
+EXTERN size_t		Col_MaxVectorLength(void);
 EXTERN Col_Word		Col_NewVector(size_t length, 
 			    const Col_Word * elements);
 EXTERN Col_Word		Col_NewVectorNV(size_t length, ...);
+
+
+/****************************************************************************
+ * Group: Immutable Vector Accessors
+ *
+ * Declarations:
+ *	<Col_VectorLength>, <Col_VectorElements>
+ ****************************************************************************/
+
+EXTERN size_t		Col_VectorLength(Col_Word vector);
+EXTERN const Col_Word *	Col_VectorElements(Col_Word vector);
 
 
 /*
@@ -71,12 +82,23 @@ Section: Mutable Vectors
  * Group: Mutable Vector Creation
  *
  * Declarations:
- *	<Col_GetMaxMVectorLength>, <Col_NewMVector>
+ *	<Col_MaxMVectorLength>, <Col_NewMVector>
  ****************************************************************************/
 
-EXTERN size_t		Col_GetMaxMVectorLength(void);
+EXTERN size_t		Col_MaxMVectorLength(void);
 EXTERN Col_Word		Col_NewMVector(size_t maxLength, size_t length, 
 			    const Col_Word * elements);
+
+
+/****************************************************************************
+ * Group: Mutable Vector Accessors
+ *
+ * Declarations:
+ *	<Col_MVectorMaxLength>, <Col_MVectorElements>
+ ****************************************************************************/
+
+EXTERN size_t		Col_MVectorMaxLength(Col_Word mvector);
+EXTERN Col_Word *	Col_MVectorElements(Col_Word mvector);
 
 
 /****************************************************************************

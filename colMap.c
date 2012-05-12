@@ -28,7 +28,7 @@ Section: Maps
 */
 
 /****************************************************************************
- * Group: Map Access
+ * Group: Map Accessors
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -39,6 +39,9 @@ Section: Maps
  * Argument:
  *	map	- Map to get size for.
  *
+ * Type checking:
+ *	*map* must be a valid map.
+ *
  * Result:
  *	The map size.
  *---------------------------------------------------------------------------*/
@@ -47,6 +50,12 @@ size_t
 Col_MapSize(
     Col_Word map)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MAP(map) return 0;
+
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_STRHASHMAP:
 	case WORD_TYPE_INTHASHMAP:
@@ -59,11 +68,8 @@ Col_MapSize(
 	/* WORD_TYPE_UNKNOWN */
 
 	default:
-	    /*
-	     * Invalid type.
-	     */
-
-	    Col_Error(COL_ERROR, "%x is not a map", map);
+	    /* CANTHAPPEN */
+	    ASSERT(0);
 	    return 0;
     }
 }
@@ -81,6 +87,9 @@ Col_MapSize(
  *			  however it must match the actual type used by the map.
  *	valuePtr	- Returned entry value, if found.
  *
+ * Type checking:
+ *	*map* must be a valid generic or string map.
+ *
  * Results:
  *	Whether the key was found in the map. In this case the value is returned
  *	through valuePtr.
@@ -92,6 +101,12 @@ Col_MapGet(
     Col_Word key,
     Col_Word *valuePtr)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_WORDMAP(map) return 0;
+
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_STRHASHMAP:
 	    return Col_StringHashMapGet(map, key, valuePtr);
@@ -102,7 +117,8 @@ Col_MapGet(
 	/* WORD_TYPE_UNKNOWN */
 
 	default:
-	    Col_Error(COL_ERROR, "%x is not a string map", map);
+	    /* CANTHAPPEN */
+	    ASSERT(0);
 	    return 0;
     }
 }
@@ -120,6 +136,9 @@ Col_MapGet(
  *	key		- Integer entry key.
  *	valuePtr	- Returned entry value, if found.
  *
+ * Type checking:
+ *	*map* must be a valid integer map.
+ *
  * Results:
  *	Whether the key was found in the map. In this case the value is returned
  *	through valuePtr.
@@ -131,6 +150,12 @@ Col_IntMapGet(
     intptr_t key,
     Col_Word *valuePtr)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_INTMAP(map) return 0;
+
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_INTHASHMAP:
 	    return Col_IntHashMapGet(map, key, valuePtr);
@@ -141,7 +166,8 @@ Col_IntMapGet(
 	/* WORD_TYPE_UNKNOWN */
 
 	default:
-	    Col_Error(COL_ERROR, "%x is not an integer map", map);
+	    /* CANTHAPPEN */
+	    ASSERT(0);
 	    return 0;
     }
 }
@@ -159,6 +185,9 @@ Col_IntMapGet(
  *		  must match the actual type used by the map.
  *	value	- Entry value.
  *
+ * Type checking:
+ *	*map* must be a valid generic or string map.
+ *
  * Result:
  *	Whether a new entry was created.
  *
@@ -172,6 +201,12 @@ Col_MapSet(
     Col_Word key,
     Col_Word value)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_WORDMAP(map) return 0;
+
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_STRHASHMAP:
 	    return Col_StringHashMapSet(map, key, value);
@@ -182,7 +217,8 @@ Col_MapSet(
 	/* WORD_TYPE_UNKNOWN */
 
 	default:
-	    Col_Error(COL_ERROR, "%x is not a string map", map);
+	    /* CANTHAPPEN */
+	    ASSERT(0);
 	    return 0;
     }
 }
@@ -200,6 +236,9 @@ Col_MapSet(
  *	key	- Integer entry key.
  *	value	- Entry value.
  *
+ * Type checking:
+ *	*map* must be a valid integer map.
+ *
  * Result:
  *	Whether a new entry was created.
  *
@@ -213,6 +252,12 @@ Col_IntMapSet(
     intptr_t key,
     Col_Word value)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_INTMAP(map) return 0;
+
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_INTHASHMAP:
 	    return Col_IntHashMapSet(map, key, value);
@@ -223,7 +268,8 @@ Col_IntMapSet(
 	/* WORD_TYPE_UNKNOWN */
 
 	default:
-	    Col_Error(COL_ERROR, "%x is not an integer map", map);
+	    /* CANTHAPPEN */
+	    ASSERT(0);
 	    return 0;
     }
 }
@@ -240,6 +286,9 @@ Col_IntMapSet(
  *	key	- Entry key. Can be any word type, including string, however it
  *		  must match the actual type used by the map.
  *
+ * Type checking:
+ *	*map* must be a valid generic or string map.
+ *
  * Result:
  *	Whether an existing entry was removed.
  *---------------------------------------------------------------------------*/
@@ -249,6 +298,12 @@ Col_MapUnset(
     Col_Word map,
     Col_Word key)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_WORDMAP(map) return 0;
+
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_STRHASHMAP:
 	    return Col_StringHashMapUnset(map, key);
@@ -259,7 +314,8 @@ Col_MapUnset(
 	/* WORD_TYPE_UNKNOWN */
 
 	default:
-	    Col_Error(COL_ERROR, "%x is not a string map", map);
+	    /* CANTHAPPEN */
+	    ASSERT(0);
 	    return 0;
     }
 }
@@ -276,6 +332,9 @@ Col_MapUnset(
  *	map	- Integer map to remove entry from.
  *	key	- Integer entry key.
  *
+ * Type checking:
+ *	*map* must be a valid integer map.
+ *
  * Result:
  *	Whether an existing entry was removed.
  *---------------------------------------------------------------------------*/
@@ -285,6 +344,12 @@ Col_IntMapUnset(
     Col_Word map,
     intptr_t key)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_INTMAP(map) return 0;
+
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_INTHASHMAP:
 	    return Col_IntHashMapUnset(map, key);
@@ -295,7 +360,8 @@ Col_IntMapUnset(
 	/* WORD_TYPE_UNKNOWN */
 
 	default:
-	    Col_Error(COL_ERROR, "%x is not an integer map", map);
+	    /* CANTHAPPEN */
+	    ASSERT(0);
 	    return 0;
     }
 }
@@ -314,6 +380,9 @@ Col_IntMapUnset(
  * Arguments:
  *	map	- Map to iterate over.
  *	it	- Iterator to initialize.
+ *
+ * Type checking:
+ *	*map* must be a valid map.
  *---------------------------------------------------------------------------*/
 
 void
@@ -321,6 +390,15 @@ Col_MapIterBegin(
     Col_Word map,
     Col_MapIterator *it)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MAP(map) {
+	*it = COL_MAPITER_NULL;
+	return;
+    }
+
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_STRHASHMAP:
 	case WORD_TYPE_INTHASHMAP:
@@ -335,11 +413,9 @@ Col_MapIterBegin(
 	/* WORD_TYPE_UNKNOWN */
 
 	default:
-	    /*
-	     * Invalid type.
-	     */
-
-	    Col_Error(COL_ERROR, "%x is not a map", map);
+	    /* CANTHAPPEN */
+	    ASSERT(0);
+	    *it = COL_MAPITER_NULL;
     }
 }
 
@@ -356,7 +432,10 @@ Col_MapIterBegin(
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
  *	it		- Iterator to initialize.
  *
- * Results:
+ * Type checking:
+ *	*map* must be a valid generic or string map.
+ *
+ * Result:
  *	createPtr	- (out) If non-NULL, whether a new entry was created. 
  *---------------------------------------------------------------------------*/
 
@@ -367,6 +446,15 @@ Col_MapIterFind(
     int *createPtr, 
     Col_MapIterator *it)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_WORDMAP(map) {
+	*it = COL_MAPITER_NULL;
+	return;
+    }
+
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_STRHASHMAP:
 	    Col_StringHashMapIterFind(map, key, createPtr, it);
@@ -379,11 +467,9 @@ Col_MapIterFind(
 	/* WORD_TYPE_UNKNOWN */
 
 	default:
-	    /*
-	     * Invalid type.
-	     */
-
-	    Col_Error(COL_ERROR, "%x is not a generic or string map", map);
+	    /* CANTHAPPEN */
+	    ASSERT(0);
+	    *it = COL_MAPITER_NULL;
     }
 }
 
@@ -399,7 +485,10 @@ Col_MapIterFind(
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
  *	it		- Iterator to initialize.
  *
- * Results:
+ * Type checking:
+ *	*map* must be a valid integer map.
+ *
+ * Result:
  *	createPtr	- (out) If non-NULL, whether a new entry was created. 
  *---------------------------------------------------------------------------*/
 
@@ -410,6 +499,15 @@ Col_IntMapIterFind(
     int *createPtr, 
     Col_MapIterator *it)
 {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_INTMAP(map) {
+	*it = COL_MAPITER_NULL;
+	return;
+    }
+
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_INTHASHMAP:
 	    Col_IntHashMapIterFind(map, key, createPtr, it);
@@ -422,11 +520,9 @@ Col_IntMapIterFind(
 	/* WORD_TYPE_UNKNOWN */
 
 	default:
-	    /*
-	     * Invalid type.
-	     */
-
-	    Col_Error(COL_ERROR, "%x is not an integer map", map);
+	    /* CANTHAPPEN */
+	    ASSERT(0);
+	    *it = COL_MAPITER_NULL;
     }
 }
 
@@ -437,6 +533,12 @@ Col_IntMapIterFind(
  *
  * Argument:
  *	it		- Map iterator to get key & value from.
+ *
+ * Type checking:
+ *	*it* must be a valid generic or string map iterator.
+ *
+ * Range checking:
+ *	*it* must not be at end.
  *
  * Results:
  *	keyPtr		- Entry key.
@@ -449,23 +551,22 @@ Col_MapIterGet(
     Col_Word *keyPtr,
     Col_Word *valuePtr)
 {
-    if (Col_MapIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid map iterator");
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
 
-    switch (WORD_TYPE(it->entry)) {
-	case WORD_TYPE_HASHENTRY:
-	case WORD_TYPE_MHASHENTRY:
-	case WORD_TYPE_TRIELEAF:
-	case WORD_TYPE_MTRIELEAF:
-	    *keyPtr = WORD_MAPENTRY_KEY(it->entry);
-	    *valuePtr = WORD_MAPENTRY_VALUE(it->entry);
-	    break;
+    TYPECHECK_WORDMAP(it->map) return;
+    RANGECHECK_MAPITER(it) return;
 
-	default:
-	    Col_Error(COL_ERROR, "Not a generic or string map iterator");
-    }
+    ASSERT(it->entry);
+
+    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_HASHENTRY 
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MHASHENTRY
+	    || WORD_TYPE(it->entry) == WORD_TYPE_TRIELEAF
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MTRIELEAF);
+
+    *keyPtr = WORD_MAPENTRY_KEY(it->entry);
+    *valuePtr = WORD_MAPENTRY_VALUE(it->entry);
 }
 
 /*---------------------------------------------------------------------------
@@ -475,6 +576,12 @@ Col_MapIterGet(
  *
  * Argument:
  *	it		- Integer map iterator to get key & value from.
+ *
+ * Type checking:
+ *	*it* must be a valid integer map iterator.
+ *
+ * Range checking:
+ *	*it* must not be at end.
  *
  * Results:
  *	keyPtr		- Integer entry key.
@@ -487,23 +594,22 @@ Col_IntMapIterGet(
     intptr_t *keyPtr,
     Col_Word *valuePtr)
 {
-    if (Col_MapIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid map iterator");
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
 
-    switch (WORD_TYPE(it->entry)) {
-	case WORD_TYPE_INTHASHENTRY:
-	case WORD_TYPE_MINTHASHENTRY:
-	case WORD_TYPE_INTTRIELEAF:
-	case WORD_TYPE_MINTTRIELEAF:
-	    *keyPtr = WORD_INTMAPENTRY_KEY(it->entry);
-	    *valuePtr = WORD_MAPENTRY_VALUE(it->entry);
-	    break;
+    TYPECHECK_INTMAP(it->map) return;
+    RANGECHECK_MAPITER(it) return;
 
-	default:
-	    Col_Error(COL_ERROR, "Not an integer map iterator");
-    }
+    ASSERT(it->entry);
+
+    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTHASHENTRY 
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MINTHASHENTRY
+	    || WORD_TYPE(it->entry) == WORD_TYPE_INTTRIELEAF
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MINTTRIELEAF);
+
+    *keyPtr = WORD_INTMAPENTRY_KEY(it->entry);
+    *valuePtr = WORD_MAPENTRY_VALUE(it->entry);
 }
 
 /*---------------------------------------------------------------------------
@@ -514,6 +620,12 @@ Col_IntMapIterGet(
  * Argument:
  *	it	- Map iterator to get key & value from.
  *
+ * Type checking:
+ *	*it* must be a valid generic or string map iterator.
+ *
+ * Range checking:
+ *	*it* must not be at end.
+ *
  * Result:
  *	Key word.
  *---------------------------------------------------------------------------*/
@@ -522,22 +634,21 @@ Col_Word
 Col_MapIterGetKey(
     Col_MapIterator *it)
 {
-    if (Col_MapIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid map iterator");
-	return WORD_NIL;
-    }
+    /*
+     * Check preconditions.
+     */
 
-    switch (WORD_TYPE(it->entry)) {
-	case WORD_TYPE_HASHENTRY:
-	case WORD_TYPE_MHASHENTRY:
-	case WORD_TYPE_TRIELEAF:
-	case WORD_TYPE_MTRIELEAF:
-	    return WORD_MAPENTRY_KEY(it->entry);
+    TYPECHECK_WORDMAP(it->map) return WORD_NIL;
+    RANGECHECK_MAPITER(it) return WORD_NIL;
 
-	default:
-	    Col_Error(COL_ERROR, "Not a generic or string map iterator");
-	    return WORD_NIL;
-    }
+    ASSERT(it->entry);
+
+    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_HASHENTRY 
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MHASHENTRY
+	    || WORD_TYPE(it->entry) == WORD_TYPE_TRIELEAF
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MTRIELEAF);
+
+    return WORD_MAPENTRY_KEY(it->entry);
 }
 
 /*---------------------------------------------------------------------------
@@ -548,6 +659,12 @@ Col_MapIterGetKey(
  * Argument:
  *	it	- Integer map iterator to get integer key from.
  *
+ * Type checking:
+ *	*it* must be a valid integer map iterator.
+ *
+ * Range checking:
+ *	*it* must not be at end.
+ *
  * Result:
  *	Integer key.
  *---------------------------------------------------------------------------*/
@@ -556,22 +673,21 @@ intptr_t
 Col_IntMapIterGetKey(
     Col_MapIterator *it)
 {
-    if (Col_MapIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid map iterator");
-	return 0;
-    }
+    /*
+     * Check preconditions.
+     */
 
-    switch (WORD_TYPE(it->entry)) {
-	case WORD_TYPE_INTHASHENTRY:
-	case WORD_TYPE_MINTHASHENTRY:
-	case WORD_TYPE_INTTRIELEAF:
-	case WORD_TYPE_MINTTRIELEAF:
-	    return WORD_INTMAPENTRY_KEY(it->entry);
+    TYPECHECK_INTMAP(it->map) return 0;
+    RANGECHECK_MAPITER(it) return 0;
 
-	default:
-	    Col_Error(COL_ERROR, "Not an integer map iterator");
-	    return WORD_NIL;
-    }
+    ASSERT(it->entry);
+
+    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTHASHENTRY 
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MINTHASHENTRY
+	    || WORD_TYPE(it->entry) == WORD_TYPE_INTTRIELEAF
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MINTTRIELEAF);
+
+    return WORD_INTMAPENTRY_KEY(it->entry);
 }
 
 /*---------------------------------------------------------------------------
@@ -582,6 +698,12 @@ Col_IntMapIterGetKey(
  * Argument:
  *	it	- Map iterator to get value from.
  *
+ * Type checking:
+ *	*it* must be a valid map iterator.
+ *
+ * Range checking:
+ *	*it* must not be at end.
+ *
  * Result:
  *	Value word.
  *---------------------------------------------------------------------------*/
@@ -590,10 +712,23 @@ Col_Word
 Col_MapIterGetValue(
     Col_MapIterator *it)
 {
-    if (Col_MapIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid map iterator");
-	return WORD_NIL;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MAPITER(it) return WORD_NIL;
+    RANGECHECK_MAPITER(it) return WORD_NIL;
+
+    ASSERT(it->entry);
+
+    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_HASHENTRY 
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MHASHENTRY
+	    || WORD_TYPE(it->entry) == WORD_TYPE_INTHASHENTRY 
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MINTHASHENTRY
+	    || WORD_TYPE(it->entry) == WORD_TYPE_TRIELEAF
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MTRIELEAF
+	    || WORD_TYPE(it->entry) == WORD_TYPE_INTTRIELEAF
+	    || WORD_TYPE(it->entry) == WORD_TYPE_MINTTRIELEAF);
 
     return WORD_MAPENTRY_VALUE(it->entry);
 }
@@ -606,6 +741,12 @@ Col_MapIterGetValue(
  * Argument:
  *	it	- Map iterator to set value for.
  *	value	- Value to set.
+ *
+ * Type checking:
+ *	*it* must be a valid map iterator.
+ *
+ * Range checking:
+ *	*it* must not be at end.
  *---------------------------------------------------------------------------*/
 
 void
@@ -613,10 +754,12 @@ Col_MapIterSetValue(
     Col_MapIterator *it,
     Col_Word value)
 {
-    if (Col_MapIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid map iterator");
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MAPITER(it) return;
+    RANGECHECK_MAPITER(it) return;
 
     switch (WORD_TYPE(it->map)) {
 	case WORD_TYPE_STRHASHMAP:
@@ -644,16 +787,24 @@ Col_MapIterSetValue(
  *
  * Argument:
  *	it	- The iterator to move.
+ *
+ * Type checking:
+ *	*it* must be a valid map iterator.
+ *
+ * Range checking:
+ *	*it* must not be at end.
  *---------------------------------------------------------------------------*/
 
 void
 Col_MapIterNext(
     Col_MapIterator *it)
 {
-    if (Col_MapIterEnd(it)) {
-	Col_Error(COL_ERROR, "Invalid map iterator");
-	return;
-    }
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MAPITER(it) return;
+    RANGECHECK_MAPITER(it) return;
 
     switch (WORD_TYPE(it->map)) {
 	case WORD_TYPE_STRHASHMAP:

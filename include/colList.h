@@ -11,13 +11,13 @@
  *	They come in both immutable and mutable forms :
  *	
  *	- Immutable lists can be composed of immutable vectors and lists. 
- *	Immutable vectors can themselves be used in place of immutable lists. 
+ *	  Immutable vectors can themselves be used in place of immutable lists.
  *
  *	- Mutable lists can be composed of either mutable or immutable lists and
- *	vectors. They can be "frozen" and turned into immutable versions.
- *	Mutable vectors *cannot* be used in place of mutable lists, as the 
- *	latter can grow indefinitely whereas the former have a maximum length 
- *	set at creation time.
+ *	  vectors. They can be "frozen" and turned into immutable versions.
+ *	  Mutable vectors *cannot* be used in place of mutable lists, as the 
+ *	  latter can grow indefinitely whereas the former have a maximum length 
+ *	  set at creation time.
  *
  * See also:
  *	<colList.c>, <colVector.h>
@@ -48,7 +48,7 @@ EXTERN Col_Word		Col_NewList(size_t length,
 
 
 /****************************************************************************
- * Group: Immutable List Access
+ * Group: Immutable List Accessors
  *
  * Declarations:
  *	<Col_ListLength>, <Col_ListLoopLength>, <Col_ListAt>
@@ -160,8 +160,9 @@ EXTERN int		Col_TraverseListChunks(Col_Word list, size_t start,
  *
  * Declarations: 
  *	<Col_ListIterBegin>, <Col_ListIterFirst>, <Col_ListIterLast>, 
- *	<Col_ListIterCompare>, <Col_ListIterMoveTo>, <Col_ListIterForward>, 
- *	<Col_ListIterBackward>, <ColListIterUpdateTraversalInfo>
+ *	<Col_ListIterArray>, <Col_ListIterCompare>, <Col_ListIterMoveTo>, 
+ *	<Col_ListIterForward>, <Col_ListIterBackward>, 
+ *	<ColListIterUpdateTraversalInfo>
  *
  * Note:
  *	Works with mutable or immutable lists and vectors, however modifying a 
@@ -192,16 +193,24 @@ typedef Col_Word (ColListIterLeafAtProc) (Col_Word leaf, size_t index);
  *	Internal implementation of list iterators.
  *
  * Fields:
- *	list			- List being iterated.
- *	length			- List length.
- *	index			- Current position.
- *	traversal		- Traversal info:
- *	traversal.subnode	- Traversed subnode.
- *	traversal.(first, last)	- Range of validity.
- *	traversal.offset	- Index offset wrt. root.
- *	traversal.leaf		- Leaf (deepest) node.
- *	traversal.index		- Index within leaf.
- *	traversal.proc		- Access proc within leaf.
+ *	list		- List being iterated. If nil, use array iterator mode.
+ *	length		- List length.
+ *	index		- Current position.
+ *	traversal	- Traversal info:
+ *	traversal.array	- Traversal info in string mode.
+ *	traversal.list	- Traversal info in list mode.
+ *
+ * Array mode fields:
+ *	begin	- Beginning of array.
+ *	current	- Current position.
+ *
+ * List mode fields:
+ *	subnode		- Traversed subnode.
+ *	first, last	- Range of validity.
+ *	offset		- Index offset wrt. root.
+ *	leaf		- Leaf (deepest) node.
+ *	index		- Index within leaf.
+ *	proc		- Access proc within leaf.
  *
  * See also:
  *	<Col_ListIterator>
@@ -211,13 +220,18 @@ typedef struct ColListIterator {
     Col_Word list;
     size_t length;
     size_t index;
-    struct {
-	Col_Word subnode;
-	size_t first, last;
-	size_t offset;
-	Col_Word leaf;
-	size_t index;
-	ColListIterLeafAtProc *proc;
+    union {
+	struct {
+	    const Col_Word *begin, *current;
+	} array;
+       struct {
+	    Col_Word subnode;
+	    size_t first, last;
+	    size_t offset;
+	    Col_Word leaf;
+	    size_t index;
+	    ColListIterLeafAtProc *proc;
+	} list;
     } traversal;
 } ColListIterator;
 
@@ -238,19 +252,18 @@ typedef ColListIterator Col_ListIterator;
 /*---------------------------------------------------------------------------
  * Internal Variable: colListIterNull
  *
- *	Static list variable for iterator initialization. The C compiler
- *	initializes static variables to zero by default.
+ *	Static variable for list iterator initialization.
  *
  * See also:
  *	<COL_LISTITER_NULL>
  *---------------------------------------------------------------------------*/
 
-static const Col_ListIterator colListIterNull = {WORD_NIL};
+static const Col_ListIterator colListIterNull = {WORD_NIL,0,0,{NULL}};
 
 /*---------------------------------------------------------------------------
  * Constant: COL_LISTITER_NULL
  *
- *	Static initializer for null iterators.
+ *	Static initializer for null list iterators.
  *
  * See also: 
  *	<Col_ListIterator>, <Col_ListIterNull>
@@ -266,7 +279,8 @@ static const Col_ListIterator colListIterNull = {WORD_NIL};
  *	any call. Use with caution.
  *
  * Argument:
- *	it	- The iterator to test.
+ *	it	- The iterator to test. (Caution: evaluated several times during
+ *		  macro expansion)
  *
  * Result:
  *	Non-zero if iterator is null.
@@ -276,7 +290,7 @@ static const Col_ListIterator colListIterNull = {WORD_NIL};
  *---------------------------------------------------------------------------*/
 
 #define Col_ListIterNull(it) \
-    ((it)->list == WORD_NIL)
+    ((it)->list == WORD_NIL && (it)->traversal.array.begin == NULL)
 
 /*---------------------------------------------------------------------------
  * Macro: Col_ListIterList
@@ -287,7 +301,8 @@ static const Col_ListIterator colListIterNull = {WORD_NIL};
  *	it	- The iterator to get list for.
  *
  * Result:
- *	The list. Undefined if at end.
+ *	The list, or <WORD_NIL> if iterator was initialized with
+ *	<Col_ListIterArray>. Undefined if at end.
  *
  * See also: 
  *	<Col_ListIterator>, <Col_ListIterEnd>
@@ -335,7 +350,7 @@ static const Col_ListIterator colListIterNull = {WORD_NIL};
 /*---------------------------------------------------------------------------
  * Macro: Col_ListIterAt
  *
- *	Get current list element for iterator.
+ *	Get current list element for iterator. Undefined if at end.
  *
  * Argument:
  *	it	- The iterator to get element for. (Caution: evaluated several
@@ -353,7 +368,9 @@ static const Col_ListIterator colListIterNull = {WORD_NIL};
  *---------------------------------------------------------------------------*/
 
 #define Col_ListIterAt(it) \
-    (!(it)->traversal.leaf?ColListIterUpdateTraversalInfo(it),0:0,(it)->traversal.proc((it)->traversal.leaf, (it)->traversal.index))
+    ((it)->list \
+	? (!(it)->traversal.list.leaf?ColListIterUpdateTraversalInfo(it),0:0,(it)->traversal.list.proc((it)->traversal.list.leaf, (it)->traversal.list.index)) \
+	: *(it)->traversal.array.current)
 
 /*---------------------------------------------------------------------------
  * Macro: Col_ListIterNext
@@ -421,6 +438,8 @@ EXTERN int		Col_ListIterBegin(Col_Word list, size_t index,
 			    Col_ListIterator *it);
 EXTERN void		Col_ListIterFirst(Col_Word list, Col_ListIterator *it);
 EXTERN void		Col_ListIterLast(Col_Word list, Col_ListIterator *it);
+EXTERN void		Col_ListIterArray(size_t length, 
+			    const Col_Word *elements, Col_ListIterator *it);
 EXTERN int		Col_ListIterCompare(const Col_ListIterator *it1, 
 			    const Col_ListIterator *it2);
 EXTERN int		Col_ListIterMoveTo(Col_ListIterator *it, size_t index);

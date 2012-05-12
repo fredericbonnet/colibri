@@ -28,16 +28,16 @@ Section: String Buffers
  * Group: String Buffer Creation
  *
  * Declarations:
- *	<Col_GetMaxStringBufferLength>, <Col_NewStringBuffer>
+ *	<Col_MaxStringBufferLength>, <Col_NewStringBuffer>
  ****************************************************************************/
 
-EXTERN size_t		Col_GetMaxStringBufferLength(Col_StringFormat format);
+EXTERN size_t		Col_MaxStringBufferLength(Col_StringFormat format);
 EXTERN Col_Word		Col_NewStringBuffer(size_t maxLength, 
 			    Col_StringFormat format);
 
 
 /****************************************************************************
- * Group: String Buffer Access
+ * Group: String Buffer Accessors
  *
  * Declarations:
  *	<Col_StringBufferFormat>, <Col_StringBufferMaxLength>,

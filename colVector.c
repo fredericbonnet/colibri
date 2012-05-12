@@ -40,7 +40,7 @@ Section: Immutable Vectors
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Function: Col_GetMaxVectorLength
+ * Function: Col_MaxVectorLength
  *
  *	Get the maximum length of a vector word.
  *
@@ -49,7 +49,7 @@ Section: Immutable Vectors
  *---------------------------------------------------------------------------*/
 
 size_t
-Col_GetMaxVectorLength()
+Col_MaxVectorLength()
 {
     return VECTOR_MAX_LENGTH(SIZE_MAX);
 }
@@ -63,6 +63,10 @@ Col_GetMaxVectorLength()
  *	length		- Length of below array.
  *	elements	- Array of words to populate vector with, or NULL. In
  *			  the latter case, elements are initialized to nil.
+ *
+ * Range checking:
+ *	*length* must not exceed the maximum vector length given by 
+ *	<Col_MaxVectorLength>.
  *
  * Result:
  *	If the given length is larger than the maximum length allowed, nil.
@@ -79,16 +83,12 @@ Col_NewVector(
 {
     Col_Word vector;		/* Resulting word in the general case. */
 
-    if (length > VECTOR_MAX_LENGTH(SIZE_MAX)) {
-	/*
-	 * Too large.
-	 */
+    /*
+     * Check preconditions.
+     */
 
-	Col_Error(COL_ERROR, 
-		"Length %u exceeds the maximum allowed value for vectors (%u)", 
-		length, VECTOR_MAX_LENGTH(SIZE_MAX));
-	return WORD_NIL;
-    }
+    RANGECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX)) 
+	    return WORD_NIL;
 
     if (length == 0) {
 	/* 
@@ -132,6 +132,10 @@ Col_NewVector(
  *	length	- Number of arguments.
  *	...	- Remaining arguments, i.e. words to add in order.
  *
+ * Range checking:
+ *	*length* must not exceed the maximum vector length given by 
+ *	<Col_MaxVectorLength>.
+ *
  * Result:
  *	If the given length is larger than the maximum length allowed, nil.
  *	Else the new word.
@@ -149,23 +153,19 @@ Col_NewVectorNV(
     va_list args;
     Col_Word vector, *elements;
 
+    /*
+     * Check preconditions.
+     */
+
+    RANGECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX)) 
+	    return WORD_NIL;
+
     if (length == 0) {
 	/* 
 	 * Use immediate value.
 	 */
 
 	return WORD_LIST_EMPTY;
-    }
-    
-    if (length > VECTOR_MAX_LENGTH(SIZE_MAX)) {
-	/*
-	 * Too large.
-	 */
-
-	Col_Error(COL_ERROR, 
-		"Length %u exceeds the maximum allowed value for vectors (%u)", 
-		length, VECTOR_MAX_LENGTH(SIZE_MAX));
-	return WORD_NIL;
     }
 
     /*
@@ -182,8 +182,74 @@ Col_NewVectorNV(
     for (i=0; i < length; i++) {
 	elements[i] = va_arg(args, Col_Word);
     }
+    va_end(args);
 
     return vector;
+}
+
+
+/****************************************************************************
+ * Group: Immutable Vector Accessors
+ ****************************************************************************/
+
+/*TODO*/
+size_t
+Col_VectorLength(
+    Col_Word vector)
+{
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_VECTOR(vector) return 0;
+
+    WORD_UNWRAP(vector);
+
+    switch (WORD_TYPE(vector)) {
+    case WORD_TYPE_VECTOR: 
+    case WORD_TYPE_MVECTOR: 
+	return WORD_VECTOR_LENGTH(vector);
+
+    case WORD_TYPE_VOIDLIST:
+	ASSERT(WORD_VOIDLIST_LENGTH(vector) == 0);
+	return 0;
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/*CANTHAPPEN*/
+	ASSERT(0);
+	return 0;
+    }
+}
+const Col_Word *
+Col_VectorElements(
+    Col_Word vector)
+{
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_VECTOR(vector) return NULL;
+
+    WORD_UNWRAP(vector);
+
+    switch (WORD_TYPE(vector)) {
+    case WORD_TYPE_VECTOR: 
+    case WORD_TYPE_MVECTOR: 
+	return WORD_VECTOR_ELEMENTS(vector);
+
+    case WORD_TYPE_VOIDLIST:
+	ASSERT(WORD_VOIDLIST_LENGTH(vector) == 0);
+	return NULL;
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/*CANTHAPPEN*/
+	ASSERT(0);
+	return 0;
+    }
 }
 
 
@@ -198,7 +264,7 @@ Section: Mutable Vectors
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Function: Col_GetMaxMVectorLength
+ * Function: Col_MaxMVectorLength
  *
  *	Get the maximum length of a mutable vector word.
  *
@@ -207,7 +273,7 @@ Section: Mutable Vectors
  *---------------------------------------------------------------------------*/
 
 size_t
-Col_GetMaxMVectorLength()
+Col_MaxMVectorLength()
 {
     return VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE);
 }
@@ -226,6 +292,10 @@ Col_GetMaxMVectorLength()
  *	length		- Length of below array.
  *	elements	- Array of words to populate vector with, or NULL. In
  *			  the latter case, elements are initialized to nil.
+ *
+ * Range checking:
+ *	*maxLength* and *length* must not exceed the maximum mutable vector 
+ *	length given by <Col_MaxMVectorLength>.
  *
  * Result:
  *	If the given length is larger than the maximum length allowed, nil.
@@ -246,29 +316,19 @@ Col_NewMVector(
 				 * of maxLength elements. */
 
     /*
-     * Quick cases.
+     * Normalize max length.
      */
 
     if (maxLength < length) {
 	maxLength = length;
     }
-    if (maxLength == 0) {
-	/* 
-	 * Mutable vector will always be empty. Use immediate value.
-	 */
 
-	return WORD_LIST_EMPTY;
-    }
-    if (maxLength > VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE)) {
-	/*
-	 * Too large.
-	 */
+    /*
+     * Check preconditions.
+     */
 
-	Col_Error(COL_ERROR, 
-		"Length %u exceeds the maximum allowed value for mutable vectors (%u)", 
-		maxLength, VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE) * CELL_SIZE);
-	return WORD_NIL;
-    }
+    RANGECHECK_VECTORLENGTH(maxLength, 
+	    VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE)) return WORD_NIL;
 
     /*
      * Create a new mutable vector word.
@@ -300,6 +360,45 @@ Col_NewMVector(
 
 
 /****************************************************************************
+ * Group: Mutable Vector Accessors
+ ****************************************************************************/
+
+/*TODO*/
+size_t
+Col_MVectorMaxLength(
+    Col_Word mvector)
+{
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MVECTOR(mvector) return 0;
+
+    if (WORD_TYPE(mvector) == WORD_TYPE_WRAP) {
+	mvector = WORD_WRAP_SOURCE(mvector);
+    }
+
+    return VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(mvector) * CELL_SIZE);
+}
+Col_Word *
+Col_MVectorElements(
+    Col_Word mvector)
+{
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MVECTOR(mvector) return NULL;
+
+    if (WORD_TYPE(mvector) == WORD_TYPE_WRAP) {
+	mvector = WORD_WRAP_SOURCE(mvector);
+    }
+
+    return WORD_VECTOR_ELEMENTS(mvector);
+}
+
+
+/****************************************************************************
  * Group: Mutable Vector Operations
  ****************************************************************************/
 
@@ -311,6 +410,13 @@ Col_NewMVector(
  * Arguments:
  *	mvector	- Mutable vector to resize.
  *	length	- New length. Must not exceed max length set at creation.
+ *
+ * Type checking:
+ *	*map* must be a valid mutable vector.
+ *
+ * Range checking:
+ *	*length* must not exceed the maximum length given at mutable vector 
+ *	creation time.
  *---------------------------------------------------------------------------*/
 
 void
@@ -320,26 +426,18 @@ Col_MVectorSetLength(
 {
     size_t maxLength, oldLength;
 
-    if (WORD_TYPE(mvector) != WORD_TYPE_MVECTOR) {
-	/*
-	 * Invalid type.
-	 */
+    /*
+     * Check preconditions.
+     */
 
-	Col_Error(COL_ERROR, "%x is not a mutable vector", mvector);
-	return;
+    TYPECHECK_MVECTOR(mvector) return;
+
+    if (WORD_TYPE(mvector) == WORD_TYPE_WRAP) {
+	mvector = WORD_WRAP_SOURCE(mvector);
     }
 
     maxLength = VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(mvector) * CELL_SIZE);
-    if (length > maxLength) {
-	/*
-	 * Too large.
-	 */
-
-	Col_Error(COL_ERROR, 
-		"Length %u exceeds the maximum value for this mutable vector (%u)", 
-		length, maxLength);
-	return;
-    }
+    RANGECHECK_VECTORLENGTH(length, maxLength) return;
 
     oldLength = WORD_VECTOR_LENGTH(mvector);
     if (length > oldLength) {
@@ -361,19 +459,33 @@ Col_MVectorSetLength(
  *
  * Argument:
  *	mvector	- Mutable vector to freeze. 
+ *
+ * Type checking:
+ *	*map* must be a valid vector.
  *---------------------------------------------------------------------------*/
 
 void
 Col_MVectorFreeze(
     Col_Word mvector)
 {
-    switch (WORD_TYPE(mvector)) {
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MVECTOR(mvector) return;
+
+    for (;;) {
+	switch (WORD_TYPE(mvector)) {
+	case WORD_TYPE_WRAP:
+	    mvector = WORD_WRAP_SOURCE(mvector);
+	    continue;
+
 	case WORD_TYPE_VECTOR:
 	    /*
 	     * No-op.
 	     */
 
-	    break;
+	    return;
 
 	case WORD_TYPE_MVECTOR: {
 	    /*
@@ -386,10 +498,14 @@ Col_MVectorFreeze(
 	    if (pinned) {
 		WORD_SET_PINNED(mvector);
 	    }
-	    break;
+	    return;
 	}
 
+	/* WORD_TYPE_UNKNOWN */
+
 	default:
-	    Col_Error(COL_ERROR, "%x is not a mutable vector", mvector);
+	    /* CANTHAPPEN */
+	    ASSERT(0);
+	}
     }
 }

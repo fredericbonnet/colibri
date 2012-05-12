@@ -81,4 +81,157 @@ Internal Section: Map Entries
 #define WORD_INTMAPENTRY_KEY(word)	(((intptr_t *)(word))[2])
 #define WORD_MAPENTRY_VALUE(word)	(((Col_Word *)(word))[3])
 
+
+/*
+================================================================================
+Internal Section: Type Checking
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_MAP
+ *
+ *	Type checking macro for maps.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a map.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsMap>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_MAP(word) \
+    if (!(Col_WordType(word) & (COL_MAP | COL_STRMAP | COL_INTMAP))) { \
+	Col_Error(COL_TYPECHECK, "%x is not a map", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_WORDMAP
+ *
+ *	Type checking macro for word-based maps (generic or string).
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a word-based map.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsStringMap>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_WORDMAP(word) \
+    if (!(Col_WordType(word) & (COL_MAP | COL_STRMAP))) { \
+	Col_Error(COL_TYPECHECK, "%x is not a generic or string map", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_STRMAP
+ *
+ *	Type checking macro for string maps.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a string map.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsStringMap>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_STRMAP(word) \
+    if (!(Col_WordType(word) & COL_STRMAP)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a string map", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_INTMAP
+ *
+ *	Type checking macro for integer maps.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not an integer map.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsIntMap>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_INTMAP(word) \
+    if (!(Col_WordType(word) & COL_INTMAP)) { \
+	Col_Error(COL_TYPECHECK, "%x is not an integer map", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_MAPITER
+ *
+ *	Type checking macro for map iterators.
+ *
+ * Argument:
+ *	it	- Checked iterator.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *it* is not a valid map iterator.
+ *
+ * See also:
+ *	<Col_Error>, <Col_MapIterNull>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_MAPITER(it) \
+    if (Col_MapIterNull(it)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a map iterator", (it)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+
+/*
+================================================================================
+Internal Section: Range Checking
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: RANGECHECK_MAPITER
+ *
+ *	Range checking macro for map iterators, ensures that iterator is not
+ *	at end.
+ *
+ * Argument:
+ *	it	- Checked iterator.
+ *
+ * Side effects:
+ *	Generate <COL_RANGECHECK> error when *it* is at end.
+ *
+ * See also:
+ *	<Col_Error>, <Col_MapIterEnd>
+ *---------------------------------------------------------------------------*/
+
+#define RANGECHECK_MAPITER(it) \
+    if (Col_MapIterEnd(it)) { \
+	Col_Error(COL_RANGECHECK, "Iterator %x is at end", (it)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
 #endif /* _COLIBRI_MAP_INT */

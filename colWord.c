@@ -29,6 +29,8 @@ static int		HasSynonymField(Col_Word word);
 static void		AddSynonymField(Col_Word *wordPtr);
 
 
+//TODO documentation overhaul
+
 /****************************************************************************
  * Section: Word Creation
  ****************************************************************************/
@@ -70,7 +72,7 @@ Col_NewIntWord(
      */
 
     word = (Col_Word) AllocCells(1);
-    WORD_INT_INIT(word, value);
+    WORD_INTWRAP_INIT(word, 0, value);
 
     return word;
 }
@@ -114,7 +116,7 @@ Col_NewFloatWord(
      */
 
     word = (Col_Word) AllocCells(1);
-    WORD_FP_INIT(word, value);
+    WORD_FPWRAP_INIT(word, 0, value);
 
     return word;
 }
@@ -153,18 +155,130 @@ Col_NewCustomWord(
 
 
 /****************************************************************************
- * Section: Word Access and Synonyms
+ * Section: Word Accessors and Synonyms
  ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_WordType
+ *
+ *	Get word type. Actual value may be a combination of known <Word Type
+ *	Identifiers>.
+ *
+ * Argument:
+ *	word	- The word to get type for.
+ *
+ * Result:
+ *	A combination of <Word Type Identifiers>.
+ *---------------------------------------------------------------------------*/
+
+int
+Col_WordType(
+    Col_Word word)
+{
+    switch (WORD_TYPE(word)) {
+    /*
+     * Immediate words.
+     */
+
+    case WORD_TYPE_NIL:
+	return COL_NIL;
+	    
+    case WORD_TYPE_SMALLINT:
+	return COL_INT;
+
+    case WORD_TYPE_SMALLFP:
+	return COL_FLOAT;
+
+    case WORD_TYPE_CHAR:
+	return COL_CHAR | COL_STRING | COL_ROPE;
+
+    case WORD_TYPE_SMALLSTR:
+	return COL_STRING | COL_ROPE;
+
+    case WORD_TYPE_CIRCLIST:
+	return COL_LIST;
+
+    case WORD_TYPE_VOIDLIST:
+	return (WORD_VOIDLIST_LENGTH(word) == 0 ? COL_VECTOR : 0) | COL_LIST;
+
+    /*
+     * Predefined types.
+     */
+
+    case WORD_TYPE_WRAP:
+	return WORD_WRAP_TYPE(word);
+
+    case WORD_TYPE_UCSSTR:
+	return COL_STRING | COL_ROPE;
+
+    case WORD_TYPE_UTFSTR:
+	return COL_STRING | COL_ROPE;
+
+    case WORD_TYPE_SUBROPE:
+    case WORD_TYPE_CONCATROPE:
+	return COL_ROPE;
+
+    case WORD_TYPE_VECTOR:
+	return COL_VECTOR | COL_LIST;
+
+    case WORD_TYPE_MVECTOR:
+	return COL_MVECTOR | COL_VECTOR | COL_LIST;
+
+    case WORD_TYPE_SUBLIST:
+    case WORD_TYPE_CONCATLIST:
+	return COL_LIST;
+
+    case WORD_TYPE_STRHASHMAP:
+	return COL_HASHMAP | COL_STRMAP;
+
+    case WORD_TYPE_INTHASHMAP:
+	return COL_HASHMAP | COL_INTMAP;
+
+    case WORD_TYPE_STRTRIEMAP:
+	return COL_TRIEMAP | COL_STRMAP;
+
+    case WORD_TYPE_INTTRIEMAP:
+	return COL_TRIEMAP | COL_INTMAP;
+
+    case WORD_TYPE_STRBUF:
+	return COL_STRBUF;
+
+    /*
+     * Mutable concat list nodes are only used internally, but handle them here 
+     * anyway for proper type checking in list procs.
+     */
+
+    case WORD_TYPE_MCONCATLIST:
+	return COL_MLIST | COL_LIST;
+
+    /*
+     * Custom word.
+     */
+
+    case WORD_TYPE_CUSTOM:
+	return WORD_TYPEINFO(word)->type | COL_CUSTOM;
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+	return 0;
+    }
+}
 
 /*---------------------------------------------------------------------------
  * Function: Col_IntWordValue
  *
  *	Get value of integer word.
  *
- * Arguments:
+ * Argument:
  *	word	- The word to get value for.
  *
- * Results:
+ * Type checking:
+ *	TODO
+ *
+ * Result:
  *	The integer value.
  *
  * See also:
@@ -176,23 +290,21 @@ Col_IntWordValue(
     Col_Word word)
 {
     switch (WORD_TYPE(word)) {
+    case WORD_TYPE_SMALLINT:
+	return WORD_SMALLINT_GET(word);
+
+    case WORD_TYPE_WRAP:
+	if (WORD_WRAP_TYPE(word) == COL_INT) {
+	    return WORD_INTWRAP_VALUE(word);
+	}
+	/* continued. */
+    default:
 	/*
-	 * Immediate words.
+	 * Invalid type.
 	 */
 
-	case WORD_TYPE_SMALLINT:
-	    return WORD_SMALLINT_GET(word);
-
-	case WORD_TYPE_INT:
-	    return WORD_INT_VALUE(word);
-
-	default:
-	    /*
-	     * Invalid type.
-	     */
-
-	    Col_Error(COL_ERROR, "%x is not an integer word", word);
-	    return 0;
+	Col_Error(COL_TYPECHECK, "%x is not an integer word", word);
+	return 0;
     }
 }
 
@@ -201,10 +313,13 @@ Col_IntWordValue(
  *
  *	Get value of floating point word.
  *
- * Arguments:
+ * Argument:
  *	word	- The word to get value for.
  *
- * Results:
+ * Type checking:
+ *	TODO
+ *
+ * Result:
  *	The floating point value.
  *
  * See also:
@@ -216,279 +331,66 @@ Col_FloatWordValue(
     Col_Word word)
 {
     switch (WORD_TYPE(word)) {
+    case WORD_TYPE_SMALLFP: {
+	FloatConvert c;
+	return WORD_SMALLFP_GET(word, c);
+    }
+
+    case WORD_TYPE_WRAP:
+	if (WORD_WRAP_TYPE(word) == COL_FLOAT) {
+	    return WORD_FPWRAP_VALUE(word);
+	}
+	/* continued. */
+    default:
 	/*
-	 * Immediate words.
+	 * Invalid type.
 	 */
 
-	case WORD_TYPE_SMALLFP: {
-	    FloatConvert c;
-	    return WORD_SMALLFP_GET(word, c);
-	}
-
-	case WORD_TYPE_FP:
-	    return WORD_FP_VALUE(word);
-
-	default:
-	    /*
-	     * Invalid type.
-	     */
-
-	    Col_Error(COL_ERROR, "%x is not a floating point word", word);
-	    return 0.0;
+	Col_Error(COL_TYPECHECK, "%x is not a floating point word", word);
+	return 0.0;
     }
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_GetWordInfo
+ * Function: Col_CustomWordInfo
  *
- *	Get information about a word (type and data).
+ *	Get custom word type and data.
  *
- * Arguments:
- *	word	- The word to get info for.
+ * Argument:
+ *	word	- The word to get data for.
+ *
+ * Type checking:
+ *	TODO
  *
  * Results:
- *	A type ID or pointer. Additionally:
+ *	TODO
+ *	dataPtr	- TODO
  *
- *	dataPtr	- If non-NULL, type-specific info.
+ * See also:
+ *	<Col_NewCustomWord>
  *---------------------------------------------------------------------------*/
 
-Col_WordType
-Col_GetWordInfo(
+Col_CustomWordType *
+Col_CustomWordInfo(
     Col_Word word,
-    Col_WordData *dataPtr)
+    void **dataPtr)
 {
+    Col_CustomWordType *type;
+
     switch (WORD_TYPE(word)) {
+    case WORD_TYPE_CUSTOM: 
+	type = WORD_TYPEINFO(word);
+	*dataPtr = WORD_CUSTOM_DATA(word, type);
+	return type;
+
+    default:
 	/*
-	 * Immediate words.
+	 * Invalid type.
 	 */
 
-	case WORD_TYPE_NIL:
-	    return COL_NIL;
-	    
-	case WORD_TYPE_SMALLINT:
-	    if (dataPtr) dataPtr->i = WORD_SMALLINT_GET(word);
-	    return COL_INT;
-
-	case WORD_TYPE_SMALLFP:
-	    if (dataPtr) {
-		FloatConvert c;
-		dataPtr->f = WORD_SMALLFP_GET(word, c);
-	    }
-	    return COL_FLOAT;
-
-	case WORD_TYPE_CHAR:
-	    if (dataPtr) {
-		dataPtr->string.format 
-			= (Col_StringFormat) WORD_CHAR_WIDTH(word);
-		dataPtr->string.byteLength = CHAR_WIDTH(dataPtr->string.format);
-		switch (dataPtr->string.format) {
-		    case 1:
-			dataPtr->string._smallData.c1
-				= (Col_Word) WORD_CHAR_GET(word);
-			dataPtr->string.data = &dataPtr->string._smallData.c1;
-			break;
-
-		    case 2:
-			dataPtr->string._smallData.c2
-				= (Col_Word) WORD_CHAR_GET(word);
-			dataPtr->string.data = &dataPtr->string._smallData.c2;
-			break;
-
-		    case 4:
-			dataPtr->string._smallData.c4
-				= (Col_Word) WORD_CHAR_GET(word);
-			dataPtr->string.data = &dataPtr->string._smallData.c4;
-			break;
-		}
-	    }
-	    return COL_STRING;
-
-	case WORD_TYPE_SMALLSTR:
-	    if (dataPtr) {
-		dataPtr->string.format = COL_UCS1;
-		dataPtr->string._smallData.s = word;
-		dataPtr->string.data 
-			= WORD_SMALLSTR_DATA(dataPtr->string._smallData);
-		dataPtr->string.byteLength = WORD_SMALLSTR_LENGTH(word);
-	    }
-	    return COL_STRING;
-
-	case WORD_TYPE_CIRCLIST:
-	    /*
-	     * Same as core list.
-	     */
-
-	    return Col_GetWordInfo(WORD_CIRCLIST_CORE(word), dataPtr);
-
-	case WORD_TYPE_VOIDLIST:
-	    return COL_LIST;
-
-	/*
-	 * Predefined types.
-	 */
-
-	case WORD_TYPE_WRAP:
-	    return Col_GetWordInfo(word, dataPtr);
-
-	case WORD_TYPE_UCSSTR:
-	    if (dataPtr) {
-		dataPtr->string.format 
-			= (Col_StringFormat) WORD_UCSSTR_FORMAT(word);
-		dataPtr->string.data = WORD_UCSSTR_DATA(word);
-		dataPtr->string.byteLength = WORD_UCSSTR_LENGTH(word)
-			* CHAR_WIDTH(WORD_UCSSTR_FORMAT(word));
-	    }
-	    return COL_STRING;
-
-	case WORD_TYPE_UTFSTR:
-	    if (dataPtr) {
-		dataPtr->string.format 
-			= (Col_StringFormat) WORD_UTFSTR_FORMAT(word);
-		dataPtr->string.data = WORD_UTFSTR_DATA(word);
-		dataPtr->string.byteLength = WORD_UTFSTR_BYTELENGTH(word);
-	    }
-	    return COL_STRING;
-
-	case WORD_TYPE_SUBROPE:
-	case WORD_TYPE_CONCATROPE:
-	    return COL_ROPE;
-
-	case WORD_TYPE_INT:
-	    if (dataPtr) dataPtr->i = WORD_INT_VALUE(word);
-	    return COL_INT;
-
-	case WORD_TYPE_FP:
-	    if (dataPtr) dataPtr->f = WORD_FP_VALUE(word);
-	    return COL_FLOAT;
-
-	case WORD_TYPE_VECTOR:
-	    if (dataPtr) {
-		dataPtr->vector.length = WORD_VECTOR_LENGTH(word);
-		dataPtr->vector.elements = WORD_VECTOR_ELEMENTS(word);
-	    }
-	    return COL_VECTOR;
-
-	case WORD_TYPE_MVECTOR:
-	    if (dataPtr) {
-		dataPtr->mvector.length = WORD_VECTOR_LENGTH(word);
-		dataPtr->mvector.elements = WORD_VECTOR_ELEMENTS(word);
-		dataPtr->mvector.maxLength 
-			= VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(word) 
-			* CELL_SIZE);
-	    }
-	    return COL_MVECTOR;
-
-	case WORD_TYPE_SUBLIST:
-	case WORD_TYPE_CONCATLIST:
-	    return COL_LIST;
-
-	case WORD_TYPE_MLIST:
-	case WORD_TYPE_MCONCATLIST:
-	    return COL_MLIST;
-
-	case WORD_TYPE_STRHASHMAP:
-	case WORD_TYPE_STRTRIEMAP:
-	    return COL_STRMAP;
-
-	case WORD_TYPE_INTHASHMAP:
-	case WORD_TYPE_INTTRIEMAP:
-	    return COL_INTMAP;
-
-	case WORD_TYPE_STRBUF:
-	    return COL_STRBUF;
-
-	/*
-	 * Custom word.
-	 */
-
-	case WORD_TYPE_CUSTOM:
-	    if (dataPtr) {
-		Col_CustomWordType *typeInfo = WORD_TYPEINFO(word);
-		dataPtr->custom.type = typeInfo;
-		dataPtr->custom.data = WORD_CUSTOM_DATA(word, 
-			dataPtr->custom.type);
-	    }
-	    return COL_CUSTOM;
-
-	/* WORD_TYPE_UNKNOWN */
-
-	default:
-	    return COL_NIL;
+	Col_Error(COL_TYPECHECK, "%x is not a custom word", word);
+	return NULL;
     }
-}
-
-/*---------------------------------------------------------------------------
- * Function: Col_FindWordInfo
- *
- *	Find data for a word with the given type in the synonym chain. If none 
- *	found, optionally find first word matching a given set of types.
- *
- * Arguments:
- *	word		- The word to get data from.
- *	type		- The required type.
- *	altTypePtr	- If non-NULL, OR-ed set of acceptable types for 
- *			  alternate word.
- *
- * Results:
- *	The word or nil if not found. Additionally:
- *
- *	dataPtr		- If non-NULL, type-specific info.
- *	altTypePtr	- If non-NULL, actual type of any alternate word found.
- *	altWordPtr	- If non-NULL, alternate word found.
- *---------------------------------------------------------------------------*/
-
-Col_Word
-Col_FindWordInfo(
-    Col_Word word,
-    Col_WordType type,
-    Col_WordData *dataPtr,
-    int *altTypePtr,
-    Col_Word *altWordPtr)
-{
-    Col_Word synonym;
-
-    synonym = word;
-    while (synonym) {
-	Col_WordType wordType = Col_GetWordInfo(synonym, dataPtr);
-	if (wordType & type) {
-	    /*
-	     * Found !
-	     */
-
-	    return synonym;
-	}
-
-	if (altTypePtr && altWordPtr  && (wordType & *altTypePtr)) {
-	    /*
-	     * Alternate word found. Prevent further finds by NULLing pointers.
-	     */
-
-	    *altTypePtr = wordType;
-	    *altWordPtr = synonym;
-	    altTypePtr = NULL;
-	    altWordPtr = NULL;
-	}
-
-	if (!HasSynonymField(synonym)) {
-	    /*
-	     * Not a chain.
-	     */
-
-	    break;
-	}
-
-	synonym = WORD_SYNONYM(synonym);
-	if (synonym == word) {
-	    /*
-	     * Looped back.
-	     */
-
-	    break;
-	}
-    }
-    if (altTypePtr) *altTypePtr = COL_NIL;
-    if (altWordPtr) *altWordPtr = WORD_NIL;
-    return WORD_NIL;
 }
 
 /*---------------------------------------------------------------------------
@@ -508,20 +410,18 @@ HasSynonymField(
     Col_Word word)
 {
     switch (WORD_TYPE(word)) {
-	case WORD_TYPE_WRAP:
-	case WORD_TYPE_INT:
-	case WORD_TYPE_FP:
-	case WORD_TYPE_MLIST:
-	case WORD_TYPE_STRHASHMAP:
-	case WORD_TYPE_INTHASHMAP:
-	case WORD_TYPE_STRTRIEMAP:
-	case WORD_TYPE_INTTRIEMAP:
-	    return 1;
+    case WORD_TYPE_CUSTOM:
+    case WORD_TYPE_WRAP:
+    case WORD_TYPE_STRHASHMAP:
+    case WORD_TYPE_INTHASHMAP:
+    case WORD_TYPE_STRTRIEMAP:
+    case WORD_TYPE_INTTRIEMAP:
+	return 1;
 
-	/* WORD_TYPE_UNKNOWN */
+    /* WORD_TYPE_UNKNOWN */
 
-	default:
-	    return 0;
+    default:
+	return 0;
     }
 }
 
@@ -551,57 +451,34 @@ AddSynonymField(
 
     converted = (Col_Word) AllocCells(1);
     switch (WORD_TYPE(*wordPtr)) {
+    /*
+     * Some types have dedicated wrappers.
+     */
+
+    case WORD_TYPE_SMALLINT:
+	WORD_INTWRAP_INIT(converted, 0, WORD_SMALLINT_GET(*wordPtr));
+	break;
+
+    case WORD_TYPE_SMALLFP: {
+	FloatConvert c;
+	WORD_FPWRAP_INIT(converted, 0, WORD_SMALLFP_GET(*wordPtr, c));
+	break;
+    }
+
+    default:
 	/*
-	 * Some types have dedicated wrappers.
+	 * Use generic wrapper.
 	 */
 
-	case WORD_TYPE_SMALLINT:
-	    WORD_INT_INIT(converted, WORD_SMALLINT_GET(*wordPtr));
-	    break;
-
-	case WORD_TYPE_SMALLFP: {
-	    FloatConvert c;
-	    WORD_FP_INIT(converted, WORD_SMALLFP_GET(*wordPtr, c));
-	    break;
-	}
-
-	case WORD_TYPE_MCONCATLIST:
-	    WORD_MLIST_INIT(converted, *wordPtr);
-	    break;
-
-	case WORD_TYPE_CIRCLIST:
-	    if (WORD_TYPE(WORD_CIRCLIST_CORE(*wordPtr)) 
-		    == WORD_TYPE_MCONCATLIST) {
-		/*
-		 * Use mutable list.
-		 */
-
-		WORD_MLIST_INIT(converted, *wordPtr);
-	    } else {
-		/*
-		 * Use generic wrapper.
-		 */
-
-		WORD_WRAP_INIT(converted, *wordPtr);
-	    }
-	    break;
-
-	/* WORD_TYPE_UNKNOWN */
-
-	default:
-	    /*
-	     * Use generic wrapper.
-	     */
-
-	    WORD_WRAP_INIT(converted, *wordPtr);
-	    break;
+	WORD_WRAP_INIT(converted, 0, Col_WordType(*wordPtr), *wordPtr);
+	break;
     }
 
     *wordPtr = converted;
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_GetWordSynonym
+ * Function: Col_WordSynonym
  *
  *	Get a synonym for the word.
  *
@@ -617,7 +494,7 @@ AddSynonymField(
  *---------------------------------------------------------------------------*/
 
 Col_Word
-Col_GetWordSynonym(
+Col_WordSynonym(
     Col_Word word)
 {
     if (!HasSynonymField(word)) {
@@ -628,7 +505,7 @@ Col_GetWordSynonym(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_AddWordSynonym
+ * Function: Col_WordAddSynonym
  *
  *	Add a synonym to a word.
  *
@@ -643,7 +520,7 @@ Col_GetWordSynonym(
  *---------------------------------------------------------------------------*/
 
 void
-Col_AddWordSynonym(
+Col_WordAddSynonym(
     Col_Word *wordPtr,
     Col_Word synonym)
 {
@@ -713,6 +590,7 @@ Col_AddWordSynonym(
      * Merging circular lists is simply done by exchanging the heads' next
      * pointers.
      */
+    // FIXME: if words are already part of the same chain, this splits the chain!
 
     {
 	Col_Word tmp = WORD_SYNONYM(word);
@@ -722,7 +600,7 @@ Col_AddWordSynonym(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_ClearWordSynonym
+ * Function: Col_WordClearSynonym
  *
  *	Clear a word's synonym. This removes the word from the synonym chain 
  *	it belongs to.
@@ -732,7 +610,7 @@ Col_AddWordSynonym(
  *---------------------------------------------------------------------------*/
 
 void
-Col_ClearWordSynonym(
+Col_WordClearSynonym(
     Col_Word word)
 {
     Col_Word synonym;

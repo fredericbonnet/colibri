@@ -382,4 +382,82 @@ Internal Section: Hash Maps
     WORD_MAPENTRY_VALUE(word) = (value); \
     WORD_HASHENTRY_NEXT(word) = (next);
 
+
+/*
+================================================================================
+Internal Section: Type Checking
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_HASHMAP
+ *
+ *	Type checking macro for hash maps.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a hash map.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsHashMap>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_HASHMAP(word) \
+    if (!(Col_WordType(word) & COL_HASHMAP)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a hash map", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_STRHASHMAP
+ *
+ *	Type checking macro for string hash maps.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a string hash map.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsStringHashMap>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_STRHASHMAP(word) \
+    if ((Col_WordType(word) & (COL_STRMAP | COL_HASHMAP)) \
+	    != (COL_STRMAP | COL_HASHMAP)) { \
+	Col_Error(COL_TYPECHECK, "%x is not a string hash map", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_INTHASHMAP
+ *
+ *	Type checking macro for integer hash maps.
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not an integer hash map.
+ *
+ * See also:
+ *	<Col_Error>, <Col_WordIsIntHashMap>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_INTHASHMAP(word) \
+    if ((Col_WordType(word) & (COL_INTMAP | COL_HASHMAP)) \
+	    != (COL_INTMAP | COL_HASHMAP)) { \
+	Col_Error(COL_TYPECHECK, "%x is not an integer hash map", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
 #endif /* _COLIBRI_HASH_INT */
