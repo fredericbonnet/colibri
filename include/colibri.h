@@ -457,8 +457,21 @@ Declarations:
  *
  *	Error levels.
  *
- *  COL_FATAL	- Fatal error within Colibri, forces process termination.
- *  COL_ERROR	- Error typically caused by the application (bad input...).
+ *  COL_FATAL		- Fatal error within Colibri, forces process termination.
+ *  COL_ERROR		- Error typically caused by the application (bad 
+ *			  input...) with potential side effects, leaving the 
+ *			  application in a potentially unstable state. Typically
+ *			  when trying to allocate cells outside a GC-protected
+ *			  section. Default implementation forces process 
+ *			  termination.
+ *  COL_TYPECHECK	- Idempotent (i.e. without side effect) type-related 
+ *			  error. Typically when passing words of a bad type. 
+ *			  Default implementation does not force process 
+ *			  termination.
+ *  COL_RANGECHECK	- Idempotent (i.e. without side effect) range-related 
+ *			  error. Typically when using lengths, indices or 
+ *			  iterators outside of their validity range. Default
+ *			  implementation does not force process termination.
  *
  * See also: 
  *	<Col_Error>
@@ -466,7 +479,9 @@ Declarations:
 
 typedef enum {
     COL_FATAL,
-    COL_ERROR
+    COL_ERROR,
+    COL_TYPECHECK,
+    COL_RANGECHECK,
 } Col_ErrorLevel;
 
 /*---------------------------------------------------------------------------

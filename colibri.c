@@ -460,6 +460,7 @@ Col_Error(
     ...)
 {
     va_list args;
+    int terminate = 1;
     ThreadData *data = PlatGetThreadData();
 
     va_start(args, format);
@@ -469,6 +470,7 @@ Col_Error(
 	 */
 
 	(data->errorProc)(level, format, args);
+	va_end(args);
 	return;
     }
 
@@ -484,12 +486,24 @@ Col_Error(
 	case COL_ERROR:
 	    fprintf(stderr, "[ERROR] ");
 	    break;
+
+	case COL_TYPECHECK:
+	    fprintf(stderr, "[TYPECHECK] ");
+	    terminate = 0;
+	    break;
+
+	case COL_RANGECHECK:
+	    fprintf(stderr, "[RANGECHECK] ");
+	    terminate = 0;
+	    break;
     }
     vfprintf(stderr, format, args);
     fprintf(stderr, "\n");
     fflush(stderr);
 
-    abort();
+    va_end(args);
+
+    if (terminate) abort();
 }
 
 /*---------------------------------------------------------------------------
