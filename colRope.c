@@ -4160,16 +4160,6 @@ ColRopeIterUpdateTraversalInfo(
 	    break;
 	}
 
-	case WORD_TYPE_CUSTOM: {
-	    Col_CustomRopeType *typeInfo 
-		    = (Col_CustomRopeType *) WORD_TYPEINFO(rope);
-	    it->traversal.rope.leaf = rope;
-	    it->traversal.rope.index = it->index - offset;
-	    it->traversal.rope.proc = typeInfo->charAtProc;
-	    ASSERT(it->traversal.rope.index < typeInfo->lengthProc(rope));
-	    break;
-	    }
-
 	case WORD_TYPE_SUBROPE: 
 	    /*
 	     * Always remember as subrope.
@@ -4225,6 +4215,17 @@ ColRopeIterUpdateTraversalInfo(
 		offset += leftLength;
 		rope = WORD_CONCATROPE_RIGHT(rope);
 	    }
+	    break;
+	    }
+
+	case WORD_TYPE_CUSTOM: {
+	    Col_CustomRopeType *typeInfo 
+		    = (Col_CustomRopeType *) WORD_TYPEINFO(rope);
+	    ASSERT(typeInfo->type.type == COL_ROPE);
+	    it->traversal.rope.leaf = rope;
+	    it->traversal.rope.index = it->index - offset;
+	    it->traversal.rope.proc = typeInfo->charAtProc;
+	    ASSERT(it->traversal.rope.index < typeInfo->lengthProc(rope));
 	    break;
 	    }
 
@@ -4865,21 +4866,11 @@ Col_RopeIterBackward(
 	break;
 
     case WORD_TYPE_SMALLSTR:
+    case WORD_TYPE_UCSSTR:
+    case WORD_TYPE_CUSTOM:
 	if (it->traversal.rope.index < nb) {
 	    /*
 	     * Reached beginning of leaf.
-	     */
-
-	    it->traversal.rope.leaf = WORD_NIL;
-	} else {
-	    it->traversal.rope.index -= nb;
-	}
-	break;
-
-    case WORD_TYPE_UCSSTR:
-	if (it->traversal.rope.index < nb) {
-	    /*
-	     * Reached beginning of leaf. 
 	     */
 
 	    it->traversal.rope.leaf = WORD_NIL;
@@ -4929,18 +4920,6 @@ Col_RopeIterBackward(
 	it->traversal.rope.index = p - data;
 	break;
 	}
-
-    case WORD_TYPE_CUSTOM:
-	if (it->traversal.rope.index < nb) {
-	    /*
-	     * Reached beginning of leaf.
-	     */
-
-	    it->traversal.rope.leaf = WORD_NIL;
-	} else {
-	    it->traversal.rope.index -= nb;
-	}
-	break;
 
     /* WORD_TYPE_UNKNOWN */
     }

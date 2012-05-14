@@ -726,8 +726,6 @@ typedef Col_Char (Col_RopeCharAtProc) (Col_Word rope, size_t index);
  *	By construction, indices are guaranteed to be within valid range.
  *
  * Results:
- *	The Unicode codepoint of the character at the given index. Additionally:
- *
  *	lengthPtr	- Actual length.
  *	chunkPtr	- Chunk information. See <Col_RopeChunk>.
  *
