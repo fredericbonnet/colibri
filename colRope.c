@@ -2156,7 +2156,7 @@ MergeChunksProc(
 	    return -1;
 	}
 	if (info->byteLength + chunks->byteLength
-		> MAX_SHORT_LEAF_SIZE - WORD_UTFSTR_HEADER_SIZE) {
+		> MAX_SHORT_LEAF_SIZE - UTFSTR_HEADER_SIZE) {
 	    /* 
 	     * Data won't fit. 
 	     */
@@ -2194,7 +2194,7 @@ MergeChunksProc(
 	     */
 
 	    if (info->byteLength + (length * CHAR_WIDTH(info->format))
-		    > MAX_SHORT_LEAF_SIZE - WORD_UCSSTR_HEADER_SIZE) {
+		    > MAX_SHORT_LEAF_SIZE - UCSSTR_HEADER_SIZE) {
 		/* 
 		    * Data won't fit. 
 		    */
@@ -2207,7 +2207,7 @@ MergeChunksProc(
 	     */
 
 	    if ((info->length + length) * CHAR_WIDTH(chunks->format)
-		    > MAX_SHORT_LEAF_SIZE - WORD_UCSSTR_HEADER_SIZE) {
+		    > MAX_SHORT_LEAF_SIZE - UCSSTR_HEADER_SIZE) {
 		/* 
 		 * Data won't fit. 
 		 */
@@ -2308,7 +2308,7 @@ MergeChunksProc(
 	ASSERT(info->format == chunks->format);
 
 	if (info->byteLength + chunks->byteLength
-		> MAX_SHORT_LEAF_SIZE - WORD_UCSSTR_HEADER_SIZE) {
+		> MAX_SHORT_LEAF_SIZE - UCSSTR_HEADER_SIZE) {
 	    /* 
 	     * Data won't fit. 
 	     */
@@ -2528,7 +2528,7 @@ Col_Subrope(
     case WORD_TYPE_UCSSTR: {
 	Col_StringFormat format = (Col_StringFormat) WORD_UCSSTR_FORMAT(rope);
 	if (length * CHAR_WIDTH(format) <= MAX_SHORT_LEAF_SIZE 
-		- WORD_UCSSTR_HEADER_SIZE) {
+		- UCSSTR_HEADER_SIZE) {
 	    return Col_NewRope(format, WORD_UCSSTR_DATA(rope)
 		    + first * CHAR_WIDTH(format), 
 		    length * CHAR_WIDTH(format));

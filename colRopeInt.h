@@ -84,10 +84,10 @@ Internal Section: Fixed-Width UCS Strings
 
 #define WORD_UCSSTR_FORMAT(word)	(((int8_t *)(word))[1])
 #define WORD_UCSSTR_LENGTH(word)	(((uint16_t *)(word))[1])
-#define WORD_UCSSTR_DATA(word)		((const char *)(word)+WORD_UCSSTR_HEADER_SIZE)
+#define WORD_UCSSTR_DATA(word)		((const char *)(word)+UCSSTR_HEADER_SIZE)
 
 /*---------------------------------------------------------------------------
- * Internal Constant: WORD_UCSSTR_HEADER_SIZE
+ * Internal Constant: UCSSTR_HEADER_SIZE
  *
  *	Byte size of UCS string header.
  *
@@ -95,10 +95,10 @@ Internal Section: Fixed-Width UCS Strings
  *	<Fixed-Width UCS String Word>
  *---------------------------------------------------------------------------*/
 
-#define WORD_UCSSTR_HEADER_SIZE		(sizeof(uint16_t)*2)
+#define UCSSTR_HEADER_SIZE		(sizeof(uint16_t)*2)
 
 /*---------------------------------------------------------------------------
- * Internal Constant: WORD_UCSSTR_HEADER_SIZE
+ * Internal Constant: UCSSTR_MAX_LENGTH
  *
  *	Maximum char length of UCS strings.
  *
@@ -124,7 +124,7 @@ Internal Section: Fixed-Width UCS Strings
  *---------------------------------------------------------------------------*/
 
 #define UCSSTR_SIZE(byteLength) \
-    (NB_CELLS(WORD_UCSSTR_HEADER_SIZE+(byteLength)))
+    (NB_CELLS(UCSSTR_HEADER_SIZE+(byteLength)))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_UCSSTR_INIT
@@ -215,10 +215,10 @@ Internal Section: Variable-Width UTF Strings
 #define WORD_UTFSTR_FORMAT(word)	(((int8_t *)(word))[1])
 #define WORD_UTFSTR_LENGTH(word)	(((uint16_t *)(word))[1])
 #define WORD_UTFSTR_BYTELENGTH(word)	(((uint16_t *)(word))[2])
-#define WORD_UTFSTR_DATA(word)		((const char *)(word)+WORD_UTFSTR_HEADER_SIZE)
+#define WORD_UTFSTR_DATA(word)		((const char *)(word)+UTFSTR_HEADER_SIZE)
 
 /*---------------------------------------------------------------------------
- * Internal Constant: WORD_UTFSTR_HEADER_SIZE
+ * Internal Constant: UTFSTR_HEADER_SIZE
  *
  *	Byte size of UTF-8/16 string header.
  *
@@ -226,7 +226,7 @@ Internal Section: Variable-Width UTF Strings
  *	<Variable-Width UTF-8/16 String Word>
  *---------------------------------------------------------------------------*/
 
-#define WORD_UTFSTR_HEADER_SIZE		(sizeof(uint16_t)*3)
+#define UTFSTR_HEADER_SIZE		(sizeof(uint16_t)*3)
 
 /*---------------------------------------------------------------------------
  * Internal Constant: UTFSTR_MAX_BYTELENGTH
@@ -241,7 +241,7 @@ Internal Section: Variable-Width UTF Strings
  *	<Variable-Width UTF-8/16 String Word>
  *---------------------------------------------------------------------------*/
 
-#define UTFSTR_MAX_BYTELENGTH		(AVAILABLE_CELLS*CELL_SIZE-WORD_UTFSTR_HEADER_SIZE)
+#define UTFSTR_MAX_BYTELENGTH		(AVAILABLE_CELLS*CELL_SIZE-UTFSTR_HEADER_SIZE)
 
 /*---------------------------------------------------------------------------
  * Internal Macro: UTFSTR_SIZE
@@ -259,7 +259,7 @@ Internal Section: Variable-Width UTF Strings
  *---------------------------------------------------------------------------*/
 
 #define UTFSTR_SIZE(byteLength) \
-    (NB_CELLS(WORD_UTFSTR_HEADER_SIZE+(byteLength)))
+    (NB_CELLS(UTFSTR_HEADER_SIZE+(byteLength)))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_UTFSTR_INIT
@@ -517,7 +517,7 @@ Internal Section: Type Checking
  *	Generate <COL_TYPECHECK> error when *word* is not a character.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsChar>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_CHAR(word) \
@@ -540,7 +540,7 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a string.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsString>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_STRING(word) \
@@ -563,7 +563,7 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a rope.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsRope>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_ROPE(word) \

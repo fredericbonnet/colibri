@@ -778,7 +778,7 @@ Col_StringBufferFreeze(
 	     * Convert word inplace.
 	     */
 
-	    ASSERT(WORD_UCSSTR_HEADER_SIZE <= WORD_STRBUF_HEADER_SIZE);
+	    ASSERT(UCSSTR_HEADER_SIZE <= STRBUF_HEADER_SIZE);
 	    WORD_UCSSTR_INIT(strbuf, format, length);
 	    if (pinned) {
 		WORD_SET_PINNED(strbuf);
@@ -820,7 +820,7 @@ Col_StringBufferFreeze(
 	     * Convert word inplace.
 	     */
 
-	    ASSERT(WORD_UCSSTR_HEADER_SIZE <= WORD_STRBUF_HEADER_SIZE);
+	    ASSERT(UCSSTR_HEADER_SIZE <= STRBUF_HEADER_SIZE);
 	    WORD_UCSSTR_INIT(strbuf, format, length);
 	    if (pinned) {
 		WORD_SET_PINNED(strbuf);

@@ -581,7 +581,7 @@ Internal Section: Type Checking
  *	Generate <COL_TYPECHECK> error when *word* is not a trie map.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsTrieMap>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_TRIEMAP(word) \
@@ -604,7 +604,7 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a string trie map.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsStringTrieMap>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_STRTRIEMAP(word) \
@@ -628,7 +628,7 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not an integer trie map.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsIntTrieMap>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_INTTRIEMAP(word) \

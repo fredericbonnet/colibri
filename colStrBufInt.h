@@ -95,21 +95,21 @@ Internal Section: String Buffers
 #define WORD_STRBUF_SIZE(word)		(((uint16_t *)(word))[1])
 #define WORD_STRBUF_ROPE(word)		(((Col_Word *)(word))[1])
 #define WORD_STRBUF_LENGTH(word)	(((size_t *)(word))[2])
-#define WORD_STRBUF_BUFFER(word)	((const char *)(word)+WORD_STRBUF_HEADER_SIZE)
+#define WORD_STRBUF_BUFFER(word)	((const char *)(word)+STRBUF_HEADER_SIZE)
 
 /*---------------------------------------------------------------------------
  * Internal Constants: WORD_STRBUF_* Constants
  *
  *	String buffer size limit constants.
  *
- *  WORD_STRBUF_HEADER_SIZE	- Byte size of string buffer header.
+ *  STRBUF_HEADER_SIZE		- Byte size of string buffer header.
  *  STRBUF_MAX_SIZE		- Maximum cell size taken by string buffers.
  *
  * See also:
  *	<String Buffer Word>
  *---------------------------------------------------------------------------*/
 
-#define WORD_STRBUF_HEADER_SIZE	(sizeof(size_t)*3)
+#define STRBUF_HEADER_SIZE	(sizeof(size_t)*3)
 #define STRBUF_MAX_SIZE		UINT16_MAX
 
 /*---------------------------------------------------------------------------
@@ -128,7 +128,7 @@ Internal Section: String Buffers
  *---------------------------------------------------------------------------*/
 
 #define STRBUF_SIZE(byteLength) \
-    (NB_CELLS(WORD_STRBUF_HEADER_SIZE+(byteLength)))
+    (NB_CELLS(STRBUF_HEADER_SIZE+(byteLength)))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: STRBUF_MAX_LENGTH
@@ -146,7 +146,7 @@ Internal Section: String Buffers
  *---------------------------------------------------------------------------*/
 
 #define STRBUF_MAX_LENGTH(byteSize, format) \
-    (((byteSize)-WORD_STRBUF_HEADER_SIZE)/CHAR_WIDTH(format))
+    (((byteSize)-STRBUF_HEADER_SIZE)/CHAR_WIDTH(format))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_STRBUF_INIT
@@ -189,7 +189,7 @@ Internal Section: Type Checking
  *	Generate <COL_TYPECHECK> error when *word* is not a string buffer
  *
  * See also:
- *	<Col_Error>, <Col_WordIsStringBuffer>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_STRBUF(word) \

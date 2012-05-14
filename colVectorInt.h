@@ -87,7 +87,7 @@ Internal Section: Immutable Vectors
 #define WORD_VECTOR_ELEMENTS(word)	((Col_Word *)(word)+2)
 
 /*---------------------------------------------------------------------------
- * Internal Constant: WORD_VECTOR_HEADER_SIZE
+ * Internal Constant: VECTOR_HEADER_SIZE
  *
  *	Byte size of vector header.
  *
@@ -95,7 +95,7 @@ Internal Section: Immutable Vectors
  *	<Immutable Vector Word>
  *---------------------------------------------------------------------------*/
 
-#define WORD_VECTOR_HEADER_SIZE	(sizeof(size_t)*2)
+#define VECTOR_HEADER_SIZE		(sizeof(size_t)*2)
 
 /*---------------------------------------------------------------------------
  * Internal Macro: VECTOR_SIZE
@@ -113,7 +113,7 @@ Internal Section: Immutable Vectors
  *---------------------------------------------------------------------------*/
 
 #define VECTOR_SIZE(length) \
-    (NB_CELLS(WORD_VECTOR_HEADER_SIZE+(length)*sizeof(Col_Word)))
+    (NB_CELLS(VECTOR_HEADER_SIZE+(length)*sizeof(Col_Word)))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: VECTOR_MAX_LENGTH
@@ -131,7 +131,7 @@ Internal Section: Immutable Vectors
  *---------------------------------------------------------------------------*/
 
 #define VECTOR_MAX_LENGTH(byteSize) \
-    (((byteSize)-WORD_VECTOR_HEADER_SIZE)/sizeof(Col_Word))
+    (((byteSize)-VECTOR_HEADER_SIZE)/sizeof(Col_Word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_VECTOR_INIT
@@ -282,7 +282,7 @@ Internal Section: Type Checking
  *	Generate <COL_TYPECHECK> error when *word* is not a vector.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsVector>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_VECTOR(word) \
@@ -305,7 +305,7 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a vector.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsMVector>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_MVECTOR(word) \
