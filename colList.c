@@ -187,6 +187,9 @@ Col_ListLength(
     case WORD_TYPE_MCONCATLIST:
 	return WORD_CONCATLIST_LENGTH(list);
 
+    case WORD_TYPE_CUSTOM:
+	return ((Col_CustomListType *) WORD_TYPEINFO(list))->lengthProc(list);
+
     /* WORD_TYPE_UNKNOWN */
 
     default:
@@ -767,6 +770,21 @@ Col_Sublist(
 	depth = WORD_CONCATLIST_DEPTH(list);
 	break;
 	}
+
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomListType *typeInfo 
+		= (Col_CustomListType *) WORD_TYPEINFO(list);
+	ASSERT(typeInfo->type.type == COL_LIST);
+	if (typeInfo->sublistProc) {
+	    if ((sublist = typeInfo->sublistProc(list, first, last)) 
+		    != WORD_NIL) {
+		return sublist;
+	    }
+	}
+	break;
+	}
+
+	/* WORD_TYPE_UNKNOWN */
     }
 
     if (length <= (WORD_TYPE(list) == WORD_TYPE_MVECTOR 
@@ -944,6 +962,35 @@ Col_ConcatLists(
 		    WORD_SUBLIST_FIRST(left), WORD_SUBLIST_LAST(right));
 	}
 	break;
+
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomListType *typeInfo 
+		= (Col_CustomListType *) WORD_TYPEINFO(left);
+	ASSERT(typeInfo->type.type == COL_LIST);
+	if (typeInfo->concatProc) {
+	    if ((concatNode = typeInfo->concatProc(left, right)) 
+		    != WORD_NIL) {
+		return concatNode;
+	    }
+	}
+	break;
+	}
+
+	/* WORD_TYPE_UNKNOWN */
+    }
+    switch (WORD_TYPE(right)) {
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomListType *typeInfo 
+		= (Col_CustomListType *) WORD_TYPEINFO(right);
+	ASSERT(typeInfo->type.type == COL_LIST);
+	if (typeInfo->concatProc) {
+	    if ((concatNode = typeInfo->concatProc(left, right)) 
+		    != WORD_NIL) {
+		return concatNode;
+	    }
+	}
+	break;
+	}
 
 	/* WORD_TYPE_UNKNOWN */
     }
@@ -1630,6 +1677,8 @@ Col_ListReplace(
  * Fields:
  *	backtracks	- Pre-allocated backtracking structure.
  *	list		- Currently traversed list.
+ *	e		- Element used as buffer for single element lists (e.g.
+ *			  element-based custom lists).
  *	start		- Index of first element traversed in list.
  *	max		- Max number of elements traversed in list.
  *	maxDepth	- Depth of toplevel concat node.
@@ -1651,6 +1700,7 @@ typedef struct ListChunkTraverseInfo {
 	size_t max;
     } *backtracks;
     Col_Word list;
+    Col_Word e;
     size_t start, max;
     int maxDepth, prevDepth;
 } ListChunkTraverseInfo;
@@ -1784,6 +1834,26 @@ GetChunk(
     case WORD_TYPE_VOIDLIST:
 	*elements = COL_LISTCHUNK_VOID;
 	break;
+
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomListType *typeInfo 
+		= (Col_CustomListType *) WORD_TYPEINFO(info->list);
+	ASSERT(typeInfo->type.type == COL_LIST);
+	if (typeInfo->chunkAtProc) {
+	    typeInfo->chunkAtProc(info->list, info->start 
+		    - (reverse ? info->max-1 : 0), info->max, &info->max, 
+		    elements);
+	} else {
+	    /*
+	     * Traverse elements individually.
+	     */
+
+	    info->max = 1;
+	    info->e = typeInfo->elementAtProc(info->list, info->start);
+	    *elements = &info->e;
+	}
+	break;
+	}
 
     /* WORD_TYPE_UNKNOWN */
 
@@ -2372,6 +2442,17 @@ ColListIterUpdateTraversalInfo(
 	    break;
 	    }
 
+	case WORD_TYPE_CUSTOM: {
+	    Col_CustomListType *typeInfo 
+		    = (Col_CustomListType *) WORD_TYPEINFO(node);
+	    ASSERT(typeInfo->type.type == COL_LIST);
+	    it->traversal.list.leaf = node;
+	    it->traversal.list.index = it->index - offset;
+	    it->traversal.list.proc = typeInfo->elementAtProc;
+	    ASSERT(it->traversal.list.index < typeInfo->lengthProc(node));
+	    break;
+	    }
+
 	/* WORD_TYPE_UNKNOWN */
 
 	default:
@@ -2794,6 +2875,25 @@ Col_ListIterForward(
 	    it->traversal.list.index += nb;
 	}
 	break;
+
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomListType *typeInfo 
+		= (Col_CustomListType *) WORD_TYPEINFO(it->traversal.list.leaf);
+	ASSERT(typeInfo->type.type == COL_LIST);
+	if (nb >= typeInfo->lengthProc(it->traversal.list.leaf) 
+		- it->traversal.list.index) {
+	    /*
+	     * Reached end of leaf.
+	     */
+
+	    it->traversal.list.leaf = WORD_NIL;
+	} else {
+	    it->traversal.list.index += nb;
+	}
+	break;
+	}
+
+	/* WORD_TYPE_UNKNOWN */
     }
     return looped;
 }
@@ -3443,76 +3543,65 @@ ConvertToMutableAt(
     size_t index)
 {
     size_t length;
-    Col_Word *elements;
-    Col_Word converted;
+    MergeChunksInfo info;
 
     length = Col_ListLength(*nodePtr);
-    switch (WORD_TYPE(*nodePtr)) {
-    case WORD_TYPE_VECTOR:
-	elements = WORD_VECTOR_ELEMENTS(*nodePtr);
-	break;
-
-    case WORD_TYPE_VOIDLIST:
-	elements = NULL;
-	break;
-
-    case WORD_TYPE_SUBLIST:
-	ASSERT(WORD_SUBLIST_DEPTH(*nodePtr) == 0);
-	ASSERT(WORD_TYPE(WORD_SUBLIST_SOURCE(*nodePtr)) == WORD_TYPE_VECTOR);
-	elements = WORD_VECTOR_ELEMENTS(WORD_SUBLIST_SOURCE(*nodePtr))
-		+ WORD_SUBLIST_FIRST(*nodePtr);
-	break;
-
-    default: 
-	/* CANTHAPPEN */
-	ASSERT(0);
-    }
-
     if (length <= MAX_SHORT_MVECTOR_LENGTH) {
 	/*
 	 * Convert whole.
 	 */
 
-	converted = Col_NewMVector(0, length, elements);
+	info.length = 0;
+	info.vector = Col_NewMVector(0, length, NULL);
+	Col_TraverseListChunks(*nodePtr, 0, length, 0, MergeChunksProc, &info, 
+		NULL);
+	ASSERT(info.length == length);
+
+	*nodePtr = info.vector;
     } else if (index < MAX_SHORT_MVECTOR_LENGTH) {
 	/*
 	 * Convert head.
 	 */
 
-	Col_Word mvector = Col_NewMVector(0, MAX_SHORT_MVECTOR_LENGTH, 
-		elements);
+	info.length = 0;
+	info.vector = Col_NewMVector(0, MAX_SHORT_MVECTOR_LENGTH, NULL);
+	Col_TraverseListChunks(*nodePtr, 0, MAX_SHORT_MVECTOR_LENGTH, 0, 
+		MergeChunksProc, &info, NULL);
+	ASSERT(info.length == MAX_SHORT_MVECTOR_LENGTH);
 
-	converted = NewMConcatList(mvector, Col_Sublist(*nodePtr, 
+	*nodePtr = NewMConcatList(info.vector, Col_Sublist(*nodePtr, 
 		MAX_SHORT_MVECTOR_LENGTH, length-1));
-    } else if (index >= WORD_VOIDLIST_LENGTH(*nodePtr)
-	    - MAX_SHORT_MVECTOR_LENGTH) {
+    } else if (index >= length - MAX_SHORT_MVECTOR_LENGTH) {
 	/*
 	 * Convert tail.
 	 */
 
 	size_t leftLength = length - MAX_SHORT_MVECTOR_LENGTH;
-	Col_Word mvector = Col_NewMVector(0, MAX_SHORT_MVECTOR_LENGTH, 
-		(elements ? elements + leftLength : NULL));
-
 	ASSERT(leftLength >= 1);
 
-	converted = NewMConcatList(Col_Sublist(*nodePtr, 0, leftLength-1), 
-		mvector);
+	info.length = 0;
+	info.vector = Col_NewMVector(0, MAX_SHORT_MVECTOR_LENGTH, NULL);
+	Col_TraverseListChunks(*nodePtr, leftLength, MAX_SHORT_MVECTOR_LENGTH, 0, 
+		MergeChunksProc, &info, NULL);
+	ASSERT(info.length == MAX_SHORT_MVECTOR_LENGTH);
+
+	*nodePtr = NewMConcatList(Col_Sublist(*nodePtr, 0, leftLength-1), 
+		info.vector);
     } else {
 	/*
 	 * Convert central part starting at index.
 	 */
 
-	Col_Word mvector = Col_NewMVector(0, MAX_SHORT_MVECTOR_LENGTH,
-		(elements ? elements + index : NULL));
-	Col_Word left = NewMConcatList(Col_Sublist(*nodePtr, 0, index-1), 
-		mvector);
+	info.length = 0;
+	info.vector = Col_NewMVector(0, MAX_SHORT_MVECTOR_LENGTH, NULL);
+	Col_TraverseListChunks(*nodePtr, index, MAX_SHORT_MVECTOR_LENGTH, 0, 
+		MergeChunksProc, &info, NULL);
+	ASSERT(info.length == MAX_SHORT_MVECTOR_LENGTH);
 
-	converted = NewMConcatList(left, Col_Sublist(*nodePtr, index 
+	*nodePtr = NewMConcatList(NewMConcatList(Col_Sublist(*nodePtr, 0, 
+		index-1), info.vector), Col_Sublist(*nodePtr, index 
 		+ MAX_SHORT_MVECTOR_LENGTH, length-1));
     }
-
-    *nodePtr = converted;
 }
 
 /*---------------------------------------------------------------------------
@@ -4246,28 +4335,72 @@ SplitMutableAt(
 {
     size_t length;
     Col_Word *elements;
-    Col_Word converted;
+    Col_Word right;
     int type;
 
     length = Col_ListLength(*nodePtr);
     ASSERT(index != 0 && index < length);
     type = WORD_TYPE(*nodePtr);
     switch (type) {
+    case WORD_TYPE_VOIDLIST:
+	/*
+	 * Build mutable concat node with two void lists.
+	 */
+
+	*nodePtr = NewMConcatList(WORD_VOIDLIST_NEW(index), 
+		WORD_VOIDLIST_NEW(length-index));
+	return;
+
     case WORD_TYPE_VECTOR:
     case WORD_TYPE_MVECTOR:
+	/*
+	 * Get vector element array for use below.
+	 */
+
 	elements = WORD_VECTOR_ELEMENTS(*nodePtr);
 	break;
 
-    case WORD_TYPE_VOIDLIST:
-	elements = NULL;
-	break;
-
     case WORD_TYPE_SUBLIST: {
+	Col_Word source = WORD_SUBLIST_SOURCE(*nodePtr);
+	size_t first = WORD_SUBLIST_FIRST(*nodePtr);
 	ASSERT(WORD_SUBLIST_DEPTH(*nodePtr) == 0);
-	elements = WORD_VECTOR_ELEMENTS(WORD_SUBLIST_SOURCE(*nodePtr))
-		+ WORD_SUBLIST_FIRST(*nodePtr);
+	switch (WORD_TYPE(source)) {
+	case WORD_TYPE_VECTOR:
+	    /*
+	     * Get source element array for use below.
+	     */
+
+	    elements = WORD_VECTOR_ELEMENTS(source) + first;
+	    break;
+
+	case WORD_TYPE_CUSTOM:
+	    /*	
+	     * Build mutable concat node with custom list sublists.
+	     */
+
+	    *nodePtr = NewMConcatList(Col_Sublist(source, first, first+index-1),
+		    Col_Sublist(*nodePtr, first+index, first+length-1));
+	    break;
+
+	/* WORD_TYPE_UNKNOWN */
+
+	default: 
+	    /* CANTHAPPEN */
+	    ASSERT(0);
+	}
 	break;
-    }
+	}
+
+    case WORD_TYPE_CUSTOM:
+	/*	
+	 * Build mutable concat node with custom list sublists.
+	 */
+
+	*nodePtr = NewMConcatList(Col_Sublist(*nodePtr, 0, index-1), 
+		Col_Sublist(*nodePtr, index, length-1));
+	return;
+
+    /* WORD_TYPE_UNKNOWN */
 
     default: 
 	/* CANTHAPPEN */
@@ -4275,34 +4408,27 @@ SplitMutableAt(
     }
 
     /*
-     * Build a mutable concat node.
+     * Build a mutable concat node from element array.
+     *
+     * First, build new mutable vector for right arm.
      */
 
-    if (!elements) {
-	ASSERT(type == WORD_TYPE_VOIDLIST);
-	converted = NewMConcatList(WORD_VOIDLIST_NEW(index), 
-		WORD_VOIDLIST_NEW(length-index));
+    right = Col_NewMVector(0, length-index, elements+index);
+
+    if (type == WORD_TYPE_MVECTOR) {
+	/*
+	 * Shrink existing vector and use as left arm.
+	 */
+
+	Col_MVectorSetLength(*nodePtr, index);
+	*nodePtr = NewMConcatList(*nodePtr, right);
     } else {
-	Col_Word right = Col_NewMVector(0, length-index, elements+index);
+	/*
+	 * Build new mutable vector for left arm.
+	 */
 
-	if (type == WORD_TYPE_MVECTOR) {
-	    /*
-	     * Shrink existing vector and use as left arm.
-	     */
-
-	    Col_MVectorSetLength(*nodePtr, index);
-	    converted = NewMConcatList(*nodePtr, right);
-	} else {
-	    /*
-	     * Build new vector for left arm.
-	     */
-
-	    converted = NewMConcatList(Col_NewMVector(0, index, elements), 
-		    right);
-	}
+	*nodePtr = NewMConcatList(Col_NewMVector(0, index, elements), right);
     }
-
-    *nodePtr = converted;
 }
 
 /*---------------------------------------------------------------------------

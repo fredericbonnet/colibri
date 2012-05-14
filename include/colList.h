@@ -143,7 +143,7 @@ typedef int (Col_ListChunksTraverseProc) (size_t index, size_t length,
  *---------------------------------------------------------------------------*/
 
 #define COL_LISTCHUNK_VOID \
-    ((void *)-1)
+    ((Col_Word *)-1)
 
 EXTERN int		Col_TraverseListChunksN(size_t number, Col_Word *lists, 
 			    size_t start, size_t max, 
@@ -172,7 +172,7 @@ EXTERN int		Col_TraverseListChunks(Col_Word list, size_t start,
 /*---------------------------------------------------------------------------
  * Internal Typedef: ColListIterLeafAtProc
  *
- *	Helper for list iterators to access characters in leaves.
+ *	Helper for list iterators to access elements in leaves.
  *
  * Arguments:
  *	leaf	- Leaf node.
@@ -447,6 +447,145 @@ EXTERN int		Col_ListIterForward(Col_ListIterator *it, size_t nb);
 EXTERN void		Col_ListIterBackward(Col_ListIterator *it, size_t nb);
 
 EXTERN void		ColListIterUpdateTraversalInfo(Col_ListIterator *it);
+
+
+/****************************************************************************
+ * Group: Custom Lists
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_ListLengthProc
+ *
+ *	Function signature of custom list length procs.
+ *
+ * Argument:
+ *	list	- Custom list to get length for.
+ *
+ * Result:
+ *	The custom list length.
+ *
+ * See also: 
+ *	<Col_CustomListType>
+ *---------------------------------------------------------------------------*/
+
+typedef size_t (Col_ListLengthProc) (Col_Word list);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_ListElementAtProc
+ *
+ *	Function signature of custom list element access procs.
+ *
+ * Arguments:
+ *	list	- Custom list to get element from.
+ *	index	- Element index.
+ *
+ * Note:
+ *	By construction, indices are guaranteed to be within valid range.
+ *
+ * Result:
+ *	The element at the given index.
+ *
+ * See also: 
+ *	<Col_CustomListType>
+ *---------------------------------------------------------------------------*/
+
+typedef Col_Word (Col_ListElementAtProc) (Col_Word list, size_t index);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_ListChunkAtProc
+ *
+ *	Function signature of custom list chunk access procs.
+ *
+ * Arguments:
+ *	list		- Custom list to get chunk from.
+ *	start		- Start index of chunk.
+ *	max		- Maximum length of chunk.
+ *
+ * Note:
+ *	By construction, indices are guaranteed to be within valid range.
+ *
+ * Results:
+ *	lengthPtr	- Actual length.
+ *	chunkPtr	- Chunk. If <COL_LISTCHUNK_VOID>, the chunk is void.
+ *
+ * See also: 
+ *	<Col_CustomListType>
+ *---------------------------------------------------------------------------*/
+
+typedef void (Col_ListChunkAtProc) (Col_Word list, size_t start, size_t max, 
+    size_t *lengthPtr, const Col_Word **chunkPtr);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_ListSublistProc
+ *
+ *	Function signature of custom list sublist extraction.
+ *
+ * Arguments:
+ *	list		- Custom list to extract sublist from.
+ *	first, last	- Range of sublist to extract (inclusive).
+ *
+ * Note:
+ *	By construction, indices are guaranteed to be within valid range.
+ *
+ * Result:
+ *	A list representing the sublist, or nil.
+ *
+ * See also: 
+ *	<Col_CustomListType>
+ *---------------------------------------------------------------------------*/
+
+typedef Col_Word (Col_ListSublistProc) (Col_Word list, size_t first, 
+    size_t last);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_ListConcatProc
+ *
+ *	Function signature of custom list concatenation.
+ *
+ * Arguments:
+ *	left, right	- Lists to concatenate.
+ *
+ * Result:
+ *	A list representing the concatenation of both lists, or nil.
+ *
+ * See also: 
+ *	<Col_CustomListType>
+ *---------------------------------------------------------------------------*/
+
+typedef Col_Word (Col_ListConcatProc) (Col_Word left, Col_Word right);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_CustomListType
+ *
+ *	Custom list type descriptor. Inherits from <Col_CustomWordType>.
+ *
+ * Fields:
+ *	type		- Generic word type descriptor. Type field must be equal
+ *			  to <COL_LIST>.
+ *	lengthProc	- Called to get the length of the list. Must be constant
+ *			  during the whole lifetime.
+ *	elmentAtProc	- Called to get the element at a given position. Must
+ *			  be constant during the whole lifetime.
+ *	chunkAtProc	- Called during traversal. If NULL, traversal is done 
+ *			  per element.
+ *	sublistProc	- Called to extract sublist. If NULL, or if it returns 
+ *			  nil, use the standard procedure.
+ *	concatProc	- Called to concat lists. If NULL, or if it returns nil,
+ *			  use the standard procedure.
+ *
+ * See also:
+ *	<Col_CustomWordType>, <Col_ListLengthProc>, <Col_ListElementAtProc>, 
+ *	<Col_ListChunkAtProc>, <Col_ListSublistProc>, <Col_ListConcatProc>
+ *---------------------------------------------------------------------------*/
+
+typedef struct Col_CustomListType {
+    Col_CustomWordType type;
+    Col_ListLengthProc *lengthProc;
+    Col_ListElementAtProc *elementAtProc;
+    Col_ListChunkAtProc *chunkAtProc;
+    Col_ListSublistProc *sublistProc;
+    Col_ListConcatProc *concatProc;
+} Col_CustomListType;
 
 
 /*
