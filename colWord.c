@@ -540,22 +540,25 @@ Col_WordAddSynonym(
 
     if (!HasSynonymField(*wordPtr)) {
 	AddSynonymField(wordPtr);
-    }
-    word = *wordPtr;
-
-    if (word == synonym) {
+    } else {
 	/*
-	 * A word cannot be synonym with itself.
+	 * Ensure that synonym is not already part of word's chain.
 	 */
 
-	return;
+	word = *wordPtr;
+	do {
+	    if (word == synonym) return;
+	    if (!HasSynonymField(word)) break;
+	    word = WORD_SYNONYM(word);
+	} while (word != *wordPtr);
     }
+    word = *wordPtr;
 
     if (!HasSynonymField(synonym)) {
 	if (!WORD_SYNONYM(word)) {
 	    /*
 	     * Word has no current synonym, simply add the new one without
-	     * converting the synonym.
+	     * wrapping the synonym.
 	     */
 
 	    WORD_SYNONYM(word) = synonym;
@@ -590,7 +593,6 @@ Col_WordAddSynonym(
      * Merging circular lists is simply done by exchanging the heads' next
      * pointers.
      */
-    // FIXME: if words are already part of the same chain, this splits the chain!
 
     {
 	Col_Word tmp = WORD_SYNONYM(word);
