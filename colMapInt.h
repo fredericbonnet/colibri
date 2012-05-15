@@ -100,11 +100,11 @@ Internal Section: Type Checking
  *	Generate <COL_TYPECHECK> error when *word* is not a map.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsMap>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_MAP(word) \
-    if (!(Col_WordType(word) & (COL_MAP | COL_STRMAP | COL_INTMAP))) { \
+    if (!(Col_WordType(word) & (COL_MAP | COL_HASHMAP | COL_TRIEMAP | COL_STRMAP | COL_INTMAP))) { \
 	Col_Error(COL_TYPECHECK, "%x is not a map", (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
@@ -114,7 +114,7 @@ COL_CONCATENATE(FAILED,__LINE__):
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_WORDMAP
  *
- *	Type checking macro for word-based maps (generic or string).
+ *	Type checking macro for word-based maps (string or custom).
  *
  * Argument:
  *	word	- Checked word.
@@ -123,12 +123,12 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a word-based map.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsStringMap>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_WORDMAP(word) \
     if (!(Col_WordType(word) & (COL_MAP | COL_STRMAP))) { \
-	Col_Error(COL_TYPECHECK, "%x is not a generic or string map", (word)); \
+	Col_Error(COL_TYPECHECK, "%x is not a string or custom map", (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -146,7 +146,7 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a string map.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsStringMap>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_STRMAP(word) \
@@ -169,7 +169,7 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not an integer map.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsIntMap>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_INTMAP(word) \

@@ -40,19 +40,19 @@ EXTERN Col_Word		Col_CopyHashMap(Col_Word map);
  * Group: Hash Map Accessors
  *
  * Declarations:
- *	<Col_StringHashMapGet>, <Col_IntHashMapGet>, <Col_StringHashMapSet>,
- *	<Col_IntHashMapSet>, <Col_StringHashMapUnset>, <Col_IntHashMapUnset>
+ *	<Col_HashMapGet>, <Col_IntHashMapGet>, <Col_HashMapSet>,
+ *	<Col_IntHashMapSet>, <Col_HashMapUnset>, <Col_IntHashMapUnset>
  ****************************************************************************/
 
-EXTERN int		Col_StringHashMapGet(Col_Word map, Col_Word key, 
+EXTERN int		Col_HashMapGet(Col_Word map, Col_Word key, 
 			    Col_Word *valuePtr);
 EXTERN int		Col_IntHashMapGet(Col_Word map, intptr_t key, 
 			    Col_Word *valuePtr);
-EXTERN int		Col_StringHashMapSet(Col_Word map, Col_Word key, 
+EXTERN int		Col_HashMapSet(Col_Word map, Col_Word key, 
 			    Col_Word value);
 EXTERN int		Col_IntHashMapSet(Col_Word map, intptr_t key, 
 			    Col_Word value);
-EXTERN int		Col_StringHashMapUnset(Col_Word map, Col_Word key);
+EXTERN int		Col_HashMapUnset(Col_Word map, Col_Word key);
 EXTERN int		Col_IntHashMapUnset(Col_Word map, intptr_t key);
 
 
@@ -60,14 +60,12 @@ EXTERN int		Col_IntHashMapUnset(Col_Word map, intptr_t key);
  * Group: Hash Map Iteration
  *
  * Declarations:
- *	<Col_HashMapIterBegin>, <Col_StringHashMapIterFind>, 
- *	<Col_IntHashMapIterFind>, <Col_HashMapIterSetValue>, 
- *	<Col_HashMapIterNext>
+ *	<Col_HashMapIterBegin>, <Col_HashMapIterFind>, <Col_IntHashMapIterFind>,
+ *	<Col_HashMapIterSetValue>, <Col_HashMapIterNext>
  ****************************************************************************/
 
-EXTERN void		Col_HashMapIterBegin(Col_Word map, 
-			    Col_MapIterator *it);
-EXTERN void		Col_StringHashMapIterFind(Col_Word map, Col_Word key, 
+EXTERN void		Col_HashMapIterBegin(Col_Word map, Col_MapIterator *it);
+EXTERN void		Col_HashMapIterFind(Col_Word map, Col_Word key, 
 			    int *createPtr, Col_MapIterator *it);
 EXTERN void		Col_IntHashMapIterFind(Col_Word map, intptr_t key, 
 			    int *createPtr, Col_MapIterator *it);
@@ -87,11 +85,11 @@ Section: Custom Hash Maps
  *
  *	Function signature of custom hash map's key hashing function.
  *
- * Arguments:
- *	key		- Key word to generate hash value for.
+ * Argument:
+ *	key	- Key word to generate hash value for.
  *
  * Result:
- *	The hash hash value.
+ *	The key hash value.
  *
  * See also: 
  *	<Col_CustomHashMapType>
@@ -137,5 +135,15 @@ typedef struct Col_CustomHashMapType {
     Col_HashProc *hashProc;
     Col_CompareProc *compareProc;
 } Col_CustomHashMapType;
+
+/****************************************************************************
+ * Group: Custom Hash Map Creation
+ *
+ * Declarations:
+ *	<Col_NewCustomHashMap>
+ ****************************************************************************/
+
+EXTERN Col_Word		Col_NewCustomHashMap(Col_CustomHashMapType *type, 
+			    size_t capacity, size_t size, void **dataPtr);
 
 #endif /* _COLIBRI_HASH */

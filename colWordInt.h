@@ -958,11 +958,41 @@ Internal Section: Custom Words
  *	accessible for both read/write operations).
  *
  * See also:
- *	<WORD_CUSTOM_INIT>, <SweepUnreachableCells>, <Col_CustomWordType>
+ *	<WORD_CUSTOM_INIT>, <WORD_CUSTOM_HEADER_SIZE>, <SweepUnreachableCells>,
+ *	<Col_CustomWordType>
  *---------------------------------------------------------------------------*/
 
-#define WORD_CUSTOM_NEXT(word)		(((Col_Word *)(word))[2])
-#define WORD_CUSTOM_DATA(word, typeInfo) ((void *)(&WORD_CUSTOM_NEXT(word)+((typeInfo)->freeProc?1:0)))
+#define WORD_CUSTOM_NEXT(word, typeInfo) (*(Col_Word *)(((char *)(word))+WORD_CUSTOM_HEADER_SIZE(typeInfo)))
+#define WORD_CUSTOM_DATA(word, typeInfo) ((void *)(&WORD_CUSTOM_NEXT((word), (typeInfo))+((typeInfo)->freeProc?1:0)))
+
+/*---------------------------------------------------------------------------
+ * Internal Constant: CUSTOM_HEADER_SIZE
+ *
+ *	Byte size of custom word header.
+ *
+ * See also:
+ *	<Custom Word>
+ *---------------------------------------------------------------------------*/
+
+#define CUSTOM_HEADER_SIZE		(sizeof(Col_CustomWordType *)+sizeof(Col_Word *))
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_CUSTOM_HEADER_SIZE
+ *
+ *	Get number of cells taken by the custom word header.
+ *
+ * Arguments:
+ *	typeInfo	- <WORD_TYPEINFO>
+ *
+ * Result:
+ *	Number of cells taken by word header.
+ *
+ * See also:
+ *	<Custom Word>, <CUSTOM_HEADER_SIZE>, <CUSTOMHASHMAP_HEADER_SIZE>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_CUSTOM_HEADER_SIZE(typeInfo) \
+    ((typeInfo)->type&COL_HASHMAP?CUSTOMHASHMAP_HEADER_SIZE:CUSTOM_HEADER_SIZE)
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_CUSTOM_SIZE
@@ -970,8 +1000,8 @@ Internal Section: Custom Words
  *	Get number of cells taken by the custom word.
  *
  * Arguments:
- *	size		- Byte size of custom word data.
  *	typeInfo	- <WORD_TYPEINFO>
+ *	size		- Byte size of custom word data.
  *
  * Result:
  *	Number of cells taken by word.
@@ -980,8 +1010,8 @@ Internal Section: Custom Words
  *	<Custom Word>
  *---------------------------------------------------------------------------*/
 
-#define WORD_CUSTOM_SIZE(size, typeInfo) \
-    (NB_CELLS((size)+sizeof(Col_CustomWordType *)+sizeof(Col_Word *)+((typeInfo)->freeProc?sizeof(Cell *):0)))
+#define WORD_CUSTOM_SIZE(typeInfo, size) \
+    (NB_CELLS(WORD_CUSTOM_HEADER_SIZE(typeInfo)+((typeInfo)->freeProc?sizeof(Cell *):0)+(size)))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_CUSTOM_INIT

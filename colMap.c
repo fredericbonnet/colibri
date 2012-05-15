@@ -88,7 +88,7 @@ Col_MapSize(
  *	valuePtr	- Returned entry value, if found.
  *
  * Type checking:
- *	*map* must be a valid generic or string map.
+ *	*map* must be a valid string or custom map.
  *
  * Results:
  *	Whether the key was found in the map. In this case the value is returned
@@ -109,7 +109,7 @@ Col_MapGet(
 
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_STRHASHMAP:
-	    return Col_StringHashMapGet(map, key, valuePtr);
+	    return Col_HashMapGet(map, key, valuePtr);
 
 	case WORD_TYPE_STRTRIEMAP:
 	    return Col_StringTrieMapGet(map, key, valuePtr);
@@ -186,7 +186,7 @@ Col_IntMapGet(
  *	value	- Entry value.
  *
  * Type checking:
- *	*map* must be a valid generic or string map.
+ *	*map* must be a valid string or custom map.
  *
  * Result:
  *	Whether a new entry was created.
@@ -209,7 +209,7 @@ Col_MapSet(
 
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_STRHASHMAP:
-	    return Col_StringHashMapSet(map, key, value);
+	    return Col_HashMapSet(map, key, value);
 
 	case WORD_TYPE_STRTRIEMAP:
 	    return Col_StringTrieMapSet(map, key, value);
@@ -287,7 +287,7 @@ Col_IntMapSet(
  *		  must match the actual type used by the map.
  *
  * Type checking:
- *	*map* must be a valid generic or string map.
+ *	*map* must be a valid string or custom map.
  *
  * Result:
  *	Whether an existing entry was removed.
@@ -306,7 +306,7 @@ Col_MapUnset(
 
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_STRHASHMAP:
-	    return Col_StringHashMapUnset(map, key);
+	    return Col_HashMapUnset(map, key);
 
 	case WORD_TYPE_STRTRIEMAP:
 	    return Col_StringTrieMapUnset(map, key);
@@ -433,7 +433,7 @@ Col_MapIterBegin(
  *	it		- Iterator to initialize.
  *
  * Type checking:
- *	*map* must be a valid generic or string map.
+ *	*map* must be a valid string or custom map.
  *
  * Result:
  *	createPtr	- (out) If non-NULL, whether a new entry was created. 
@@ -457,7 +457,7 @@ Col_MapIterFind(
 
     switch (WORD_TYPE(map)) {
 	case WORD_TYPE_STRHASHMAP:
-	    Col_StringHashMapIterFind(map, key, createPtr, it);
+	    Col_HashMapIterFind(map, key, createPtr, it);
 	    break;
 
 	case WORD_TYPE_STRTRIEMAP:
@@ -535,7 +535,7 @@ Col_IntMapIterFind(
  *	it		- Map iterator to get key & value from.
  *
  * Type checking:
- *	*it* must be a valid generic or string map iterator.
+ *	*it* must be a valid string or custom map iterator.
  *
  * Range checking:
  *	*it* must not be at end.
@@ -621,7 +621,7 @@ Col_IntMapIterGet(
  *	it	- Map iterator to get key & value from.
  *
  * Type checking:
- *	*it* must be a valid generic or string map iterator.
+ *	*it* must be a valid string or custom map iterator.
  *
  * Range checking:
  *	*it* must not be at end.

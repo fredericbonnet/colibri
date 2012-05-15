@@ -102,14 +102,14 @@ Internal Section: Hash Maps
 
 #define WORD_HASHMAP_SIZE(word)		(((size_t *)(word))[2])
 #define WORD_HASHMAP_BUCKETS(word)	(((Col_Word *)(word))[3])
-#define WORD_HASHMAP_STATICBUCKETS(word) ((Col_Word *)((char *)(word)+WORD_HASHMAP_HEADER_SIZE))
+#define WORD_HASHMAP_STATICBUCKETS(word) ((Col_Word *)((char *)(word)+HASHMAP_HEADER_SIZE))
 
 /*---------------------------------------------------------------------------
  * Internal Constants: WORD_HASHMAP_* Constants
  *
  *	Hash map size related constants.
  *
- *  WORD_HASHMAP_HEADER_SIZE		- Byte size of hash map header.
+ *  HASHMAP_HEADER_SIZE			- Byte size of hash map header.
  *  HASHMAP_STATICBUCKETS_NBCELLS	- Number of cells allocated for static 
  *					  bucket array.
  *  HASHMAP_STATICBUCKETS_SIZE		- Number of elements in static bucket
@@ -120,10 +120,21 @@ Internal Section: Hash Maps
  *	<Hash Map Word>
  *---------------------------------------------------------------------------*/
 
-#define WORD_HASHMAP_HEADER_SIZE	(sizeof(Col_CustomWordType*)+sizeof(Col_Word)*2+sizeof(size_t))
+#define HASHMAP_HEADER_SIZE		(sizeof(Col_CustomWordType*)+sizeof(Col_Word)*2+sizeof(size_t))
 #define HASHMAP_STATICBUCKETS_NBCELLS	2
 #define HASHMAP_STATICBUCKETS_SIZE	(HASHMAP_STATICBUCKETS_NBCELLS*CELL_SIZE/sizeof(Col_Word))
 #define HASHMAP_NBCELLS			(HASHMAP_STATICBUCKETS_NBCELLS+1)
+
+/*---------------------------------------------------------------------------
+ * Internal Constant: CUSTOMHASHMAP_HEADER_SIZE
+ *
+ *	Byte size of custom hash map word header.
+ *
+ * See also:
+ *	<Custom Word>
+ *---------------------------------------------------------------------------*/
+
+#define CUSTOMHASHMAP_HEADER_SIZE	(HASHMAP_NBCELLS*CELL_SIZE)
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_HASHMAP_INIT
@@ -401,12 +412,35 @@ Internal Section: Type Checking
  *	Generate <COL_TYPECHECK> error when *word* is not a hash map.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsHashMap>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_HASHMAP(word) \
     if (!(Col_WordType(word) & COL_HASHMAP)) { \
 	Col_Error(COL_TYPECHECK, "%x is not a hash map", (word)); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK_WORDHASHMAP
+ *
+ *	Type checking macro for word-based hash maps (string or custom).
+ *
+ * Argument:
+ *	word	- Checked word.
+ *
+ * Side effects:
+ *	Generate <COL_TYPECHECK> error when *word* is not a word-based hash map.
+ *
+ * See also:
+ *	<Col_Error>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK_WORDHASHMAP(word) \
+    if ((Col_WordType(word) & (COL_HASHMAP | COL_INTMAP)) != COL_HASHMAP) { \
+	Col_Error(COL_TYPECHECK, "%x is not a string or custom hash map", (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -424,7 +458,7 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a string hash map.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsStringHashMap>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_STRHASHMAP(word) \
@@ -448,7 +482,7 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not an integer hash map.
  *
  * See also:
- *	<Col_Error>, <Col_WordIsIntHashMap>
+ *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_INTHASHMAP(word) \

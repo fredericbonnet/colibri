@@ -17,6 +17,7 @@
 #include "colRopeInt.h"
 #include "colVectorInt.h"
 #include "colListInt.h"
+#include "colHashInt.h"
 
 #include <string.h>
 #include <limits.h>
@@ -128,11 +129,12 @@ Col_NewFloatWord(
  *
  * Arguments:
  *	type	- The word type.
- *	size	- Size of data.
- *	dataPtr	- Will hold a pointer to the allocated data.
+ *	size	- Size of custom data.
  *
  * Result:
- *	A new word of the given size.
+ *	A new word of the given size. Additionally:
+ *
+ *	dataPtr	- Points to the allocated custom data.
  *
  * Side effects:
  *	Allocates memory cells.
@@ -144,9 +146,23 @@ Col_NewCustomWord(
     size_t size,
     void **dataPtr)
 {
-    Col_Word word = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(size, type));
-    WORD_CUSTOM_INIT(word, type);
-    if (dataPtr) *dataPtr = WORD_CUSTOM_DATA(word, type);
+    Col_Word word;
+    
+    if (type->type & COL_HASHMAP) {
+	/*
+	 * Custom hash map word. Use default capacity value (0).
+	 */
+
+	word = Col_NewCustomHashMap((Col_CustomHashMapType *) type, 0, size, dataPtr);
+    } else {
+	/*
+	 * Basic custom word.
+	 */
+
+	word = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(type, size));
+	WORD_CUSTOM_INIT(word, type);
+	if (dataPtr) *dataPtr = WORD_CUSTOM_DATA(word, type);
+    }
 
     if (type->freeProc) RememberSweepable(word, type);
 
@@ -376,9 +392,9 @@ Col_CustomWordInfo(
     void **dataPtr)
 {
     Col_CustomWordType *type;
-
+    
     switch (WORD_TYPE(word)) {
-    case WORD_TYPE_CUSTOM: 
+    case WORD_TYPE_CUSTOM:
 	type = WORD_TYPEINFO(word);
 	*dataPtr = WORD_CUSTOM_DATA(word, type);
 	return type;

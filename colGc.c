@@ -219,35 +219,35 @@ GetNbCells(
      */
 
     switch (WORD_TYPE(word)) {
-	case WORD_TYPE_UCSSTR:
-	    return UCSSTR_SIZE(WORD_UCSSTR_LENGTH(word)
-		    * CHAR_WIDTH(WORD_UCSSTR_FORMAT(word)));
+    case WORD_TYPE_UCSSTR:
+	return UCSSTR_SIZE(WORD_UCSSTR_LENGTH(word)
+		* CHAR_WIDTH(WORD_UCSSTR_FORMAT(word)));
 
-	case WORD_TYPE_UTFSTR:
-	    return UTFSTR_SIZE(WORD_UTFSTR_BYTELENGTH(word));
+    case WORD_TYPE_UTFSTR:
+	return UTFSTR_SIZE(WORD_UTFSTR_BYTELENGTH(word));
 
-	case WORD_TYPE_VECTOR:
-	    return VECTOR_SIZE(WORD_VECTOR_LENGTH(word));
+    case WORD_TYPE_VECTOR:
+	return VECTOR_SIZE(WORD_VECTOR_LENGTH(word));
 
-	case WORD_TYPE_MVECTOR:
-	    return WORD_MVECTOR_SIZE(word);
+    case WORD_TYPE_MVECTOR:
+	return WORD_MVECTOR_SIZE(word);
 
-	case WORD_TYPE_CUSTOM: {
-	    Col_CustomWordType *typeInfo = WORD_TYPEINFO(word);
-	    return WORD_CUSTOM_SIZE(typeInfo->sizeProc(word), typeInfo);
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomWordType *typeInfo = WORD_TYPEINFO(word);
+	return WORD_CUSTOM_SIZE(typeInfo, typeInfo->sizeProc(word));
 	}
 
-	case WORD_TYPE_STRHASHMAP:
-	case WORD_TYPE_INTHASHMAP:
-	    return HASHMAP_NBCELLS;
+    case WORD_TYPE_STRHASHMAP:
+    case WORD_TYPE_INTHASHMAP:
+	return HASHMAP_NBCELLS;
 
-	case WORD_TYPE_STRBUF:
-	    return WORD_STRBUF_SIZE(word);
+    case WORD_TYPE_STRBUF:
+	return WORD_STRBUF_SIZE(word);
 
-	/* WORD_TYPE_UNKNOWN */
+    /* WORD_TYPE_UNKNOWN */
 
-	default:
-	    return 1;
+    default:
+	return 1;
     }
 }
 
@@ -296,25 +296,25 @@ Col_WordPreserve(
      */
 
     switch (WORD_TYPE(word)) {
-	case WORD_TYPE_NIL:
-	case WORD_TYPE_SMALLINT:
-	case WORD_TYPE_SMALLFP:
-	case WORD_TYPE_CHAR:
-	case WORD_TYPE_SMALLSTR:
-	case WORD_TYPE_VOIDLIST:
-	    /* 
-	     * Immediate values. 
-	     */
+    case WORD_TYPE_NIL:
+    case WORD_TYPE_SMALLINT:
+    case WORD_TYPE_SMALLFP:
+    case WORD_TYPE_CHAR:
+    case WORD_TYPE_SMALLSTR:
+    case WORD_TYPE_VOIDLIST:
+	/* 
+	 * Immediate values. 
+	 */
 
-	    return;
+	return;
 
-	case WORD_TYPE_CIRCLIST:
-	    /*
-	     * Preserve core list.
-	     */
+    case WORD_TYPE_CIRCLIST:
+	/*
+	 * Preserve core list.
+	 */
 
-	    Col_WordPreserve(WORD_CIRCLIST_CORE(word));
-	    return;
+	Col_WordPreserve(WORD_CIRCLIST_CORE(word));
+	return;
 
 	/* WORD_TYPE_UNKNOWN */
     }
@@ -501,25 +501,25 @@ Col_WordRelease(
      */
 
     switch (WORD_TYPE(word)) {
-	case WORD_TYPE_NIL:
-	case WORD_TYPE_SMALLINT:
-	case WORD_TYPE_SMALLFP:
-	case WORD_TYPE_CHAR:
-	case WORD_TYPE_SMALLSTR:
-	case WORD_TYPE_VOIDLIST:
-	    /* 
-	     * Immediate values. 
-	     */
+    case WORD_TYPE_NIL:
+    case WORD_TYPE_SMALLINT:
+    case WORD_TYPE_SMALLFP:
+    case WORD_TYPE_CHAR:
+    case WORD_TYPE_SMALLSTR:
+    case WORD_TYPE_VOIDLIST:
+	/* 
+	 * Immediate values. 
+	 */
 
-	    return;
+	return;
 
-	case WORD_TYPE_CIRCLIST:
-	    /*
-	     * Release core list.
-	     */
+    case WORD_TYPE_CIRCLIST:
+	/*
+	 * Release core list.
+	 */
 
-	    Col_WordRelease(WORD_CIRCLIST_CORE(word));
-	    return;
+	Col_WordRelease(WORD_CIRCLIST_CORE(word));
+	return;
 
 	/* WORD_TYPE_UNKNOWN */
     }
@@ -1265,40 +1265,40 @@ start:
 
     type = WORD_TYPE(*wordPtr);
     switch (type) {
-	case WORD_TYPE_NIL:
-	case WORD_TYPE_SMALLINT:
-	case WORD_TYPE_SMALLFP:
-	case WORD_TYPE_CHAR:
-	case WORD_TYPE_SMALLSTR:
-	case WORD_TYPE_VOIDLIST:
-	    /* 
-	     * No cell to mark nor child to follow.
-	     */
+    case WORD_TYPE_NIL:
+    case WORD_TYPE_SMALLINT:
+    case WORD_TYPE_SMALLFP:
+    case WORD_TYPE_CHAR:
+    case WORD_TYPE_SMALLSTR:
+    case WORD_TYPE_VOIDLIST:
+	/* 
+	 * No cell to mark nor child to follow.
+	 */
 
-	    return;
+	return;
 
-	case WORD_TYPE_CIRCLIST: {
-	    /*
-	     * Recurse on core list and update immediate word if needed.
-	     */
+    case WORD_TYPE_CIRCLIST: {
+	/*
+	 * Recurse on core list and update immediate word if needed.
+	 */
 
-	    Col_Word core = WORD_CIRCLIST_CORE(*wordPtr);
-	    MarkWord(data, &core, parentPage);
-	    *wordPtr = WORD_CIRCLIST_NEW(core);
-	    return;
-	}
+	Col_Word core = WORD_CIRCLIST_CORE(*wordPtr);
+	MarkWord(data, &core, parentPage);
+	*wordPtr = WORD_CIRCLIST_NEW(core);
+	return;
+    }
 
 #ifdef PROMOTE_COMPACT
-	case WORD_TYPE_REDIRECT:
-	    /* 
-	     * Overwrite reference and tail recurse on source.
-	     */
+    case WORD_TYPE_REDIRECT:
+	/* 
+	 * Overwrite reference and tail recurse on source.
+	 */
 
-	    *wordPtr = WORD_REDIRECT_SOURCE(*wordPtr);
-	    TAIL_RECURSE(wordPtr, parentPage);
+	*wordPtr = WORD_REDIRECT_SOURCE(*wordPtr);
+	TAIL_RECURSE(wordPtr, parentPage);
 #endif /* PROMOTE_COMPACT */
 
-	/* WORD_TYPE_UNKNOWN */
+    /* WORD_TYPE_UNKNOWN */
     }
 
     page = CELL_PAGE(*wordPtr);
@@ -1362,175 +1362,174 @@ start:
      */
 
     switch (type) {
-	case WORD_TYPE_WRAP:
-
-	    if (!(WORD_WRAP_TYPE(*wordPtr) & (COL_INT | COL_FLOAT))) {
-		/*
-		 * Follow source word.
-		 */
-
-		MarkWord(data, &WORD_WRAP_SOURCE(*wordPtr), page);
-	    }
-
-	    /* 
-	     * Tail recurse on synonym.
+    case WORD_TYPE_WRAP:
+	if (!(WORD_WRAP_TYPE(*wordPtr) & (COL_INT | COL_FLOAT))) {
+	    /*
+	     * Follow source word.
 	     */
 
-	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
+	    MarkWord(data, &WORD_WRAP_SOURCE(*wordPtr), page);
+	}
 
-	case WORD_TYPE_UCSSTR:
-	case WORD_TYPE_UTFSTR:
-	    return;
+	/* 
+	 * Tail recurse on synonym.
+	 */
 
-	case WORD_TYPE_SUBROPE:
-	    /* 
-	     * Tail recurse on source.
-	     */
+	TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 
-	    TAIL_RECURSE(&WORD_SUBROPE_SOURCE(*wordPtr), page);
+    case WORD_TYPE_UCSSTR:
+    case WORD_TYPE_UTFSTR:
+	return;
+
+    case WORD_TYPE_SUBROPE:
+	/* 
+	 * Tail recurse on source.
+	 */
+
+	TAIL_RECURSE(&WORD_SUBROPE_SOURCE(*wordPtr), page);
     	    
-	case WORD_TYPE_CONCATROPE:
-	    /* 
-	     * Follow left arm and tail recurse on right. 
-	     */
+    case WORD_TYPE_CONCATROPE:
+	/* 
+	 * Follow left arm and tail recurse on right. 
+	 */
 
-	    MarkWord(data, &WORD_CONCATROPE_LEFT(*wordPtr), page);
-	    TAIL_RECURSE(&WORD_CONCATROPE_RIGHT(*wordPtr), page);
+	MarkWord(data, &WORD_CONCATROPE_LEFT(*wordPtr), page);
+	TAIL_RECURSE(&WORD_CONCATROPE_RIGHT(*wordPtr), page);
 
-	case WORD_TYPE_VECTOR:
-	case WORD_TYPE_MVECTOR: {
-	    /* 
-	     * Follow elements.
-	     */
+    case WORD_TYPE_VECTOR:
+    case WORD_TYPE_MVECTOR: {
+	/* 
+	 * Follow elements.
+	 */
 
-	    size_t i, length = WORD_VECTOR_LENGTH(*wordPtr);
-	    Col_Word *elements = WORD_VECTOR_ELEMENTS(*wordPtr);
-	    for (i = 0; i < length; i++) {
-		MarkWord(data, elements+i, page);
-	    }
-	    return;
+	size_t i, length = WORD_VECTOR_LENGTH(*wordPtr);
+	Col_Word *elements = WORD_VECTOR_ELEMENTS(*wordPtr);
+	for (i = 0; i < length; i++) {
+	    MarkWord(data, elements+i, page);
+	}
+	return;
 	}
 
-	case WORD_TYPE_SUBLIST:
-	    /* 
-	     * Tail recurse on source.
+    case WORD_TYPE_SUBLIST:
+	/* 
+	 * Tail recurse on source.
+	 */
+
+	TAIL_RECURSE(&WORD_SUBLIST_SOURCE(*wordPtr), page);
+
+    case WORD_TYPE_CONCATLIST:
+    case WORD_TYPE_MCONCATLIST:
+	/* 
+	 * Follow left arm and tail recurse on right. 
+	 */
+
+	MarkWord(data, &WORD_CONCATLIST_LEFT(*wordPtr), page);
+	TAIL_RECURSE(&WORD_CONCATLIST_RIGHT(*wordPtr), page);
+
+    case WORD_TYPE_STRHASHMAP:
+    case WORD_TYPE_INTHASHMAP:
+	if (WORD_HASHMAP_BUCKETS(*wordPtr)) {
+	    /*
+	     * Buckets are stored in a separate word.
 	     */
 
-	    TAIL_RECURSE(&WORD_SUBLIST_SOURCE(*wordPtr), page);
-
-	case WORD_TYPE_CONCATLIST:
-	case WORD_TYPE_MCONCATLIST:
-	    /* 
-	     * Follow left arm and tail recurse on right. 
+	    MarkWord(data, &WORD_HASHMAP_BUCKETS(*wordPtr), page);
+	} else {
+	    /*
+	     * Buckets are stored inline.
 	     */
 
-	    MarkWord(data, &WORD_CONCATLIST_LEFT(*wordPtr), page);
-	    TAIL_RECURSE(&WORD_CONCATLIST_RIGHT(*wordPtr), page);
-
-	case WORD_TYPE_STRHASHMAP:
-	case WORD_TYPE_INTHASHMAP:
-	    if (WORD_HASHMAP_BUCKETS(*wordPtr)) {
-		/*
-		 * Buckets are stored in a separate word.
-		 */
-
-		MarkWord(data, &WORD_HASHMAP_BUCKETS(*wordPtr), page);
-	    } else {
-		/*
-		 * Buckets are stored inline.
-		 */
-
-		size_t i;
-		Col_Word *buckets = WORD_HASHMAP_STATICBUCKETS(*wordPtr);
-		for (i = 0; i < HASHMAP_STATICBUCKETS_SIZE; i++) {
-		    MarkWord(data, buckets+i, page);
-		}
+	    size_t i;
+	    Col_Word *buckets = WORD_HASHMAP_STATICBUCKETS(*wordPtr);
+	    for (i = 0; i < HASHMAP_STATICBUCKETS_SIZE; i++) {
+		MarkWord(data, buckets+i, page);
 	    }
-
-	    /*
-	     * Tail recurse on synonym.
-	     */
-
-	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
-
-	case WORD_TYPE_HASHENTRY:
-	case WORD_TYPE_MHASHENTRY:
-	    /*
-	     * Follow key.
-	     */
-
-	    MarkWord(data, &WORD_MAPENTRY_KEY(*wordPtr), page);
-	    /* continued. */
-	case WORD_TYPE_INTHASHENTRY:
-	case WORD_TYPE_MINTHASHENTRY:
-	    /*
-	     * Follow value and tail recurse on next.
-	     */
-
-	    MarkWord(data, &WORD_MAPENTRY_VALUE(*wordPtr), page);
-	    TAIL_RECURSE(&WORD_HASHENTRY_NEXT(*wordPtr), page);
-
-	case WORD_TYPE_STRTRIEMAP:
-	case WORD_TYPE_INTTRIEMAP:
-	    /* 
-	     * Follow trie root and tail recurse on synonym.
-	     */
-
-	    MarkWord(data, &WORD_TRIEMAP_ROOT(*wordPtr), page);
-	    TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
-
-	case WORD_TYPE_STRTRIENODE:
-	case WORD_TYPE_MSTRTRIENODE:
-	case WORD_TYPE_INTTRIENODE:
-	case WORD_TYPE_MINTTRIENODE:
-	    /* 
-	     * Follow left arm and tail recurse on right. 
-	     */
-
-	    MarkWord(data, &WORD_TRIENODE_LEFT(*wordPtr), page);
-	    TAIL_RECURSE(&WORD_TRIENODE_RIGHT(*wordPtr), page);
-
-	case WORD_TYPE_TRIELEAF:
-	case WORD_TYPE_MTRIELEAF:
-	    /*
-	     * Follow key.
-	     */
-
-	    MarkWord(data, &WORD_MAPENTRY_KEY(*wordPtr), page);
-	    /* continued. */
-	case WORD_TYPE_INTTRIELEAF:
-	case WORD_TYPE_MINTTRIELEAF:
-	    /*
-	     * Tail recurse on value.
-	     */
-
-	    TAIL_RECURSE(&WORD_MAPENTRY_VALUE(*wordPtr), page);
-
-	case WORD_TYPE_STRBUF:
-	    /*
-	     * Tail recurse on rope.
-	     */
-
-	    TAIL_RECURSE(&WORD_STRBUF_ROPE(*wordPtr), page);
-
-	case WORD_TYPE_CUSTOM: {
-	    Col_CustomWordType *typeInfo = WORD_TYPEINFO(*wordPtr);
-	    if (typeInfo->childrenProc) {
-		/*
-		 * Follow children.
-		 */
-
-		typeInfo->childrenProc(*wordPtr, MarkWordChild, data);
-	    }
-	    return;
 	}
 
-	/* WORD_TYPE_UNKNOWN */
+	/*
+	 * Tail recurse on synonym.
+	 */
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
-	    return;
+	TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
+
+    case WORD_TYPE_HASHENTRY:
+    case WORD_TYPE_MHASHENTRY:
+	/*
+	 * Follow key.
+	 */
+
+	MarkWord(data, &WORD_MAPENTRY_KEY(*wordPtr), page);
+	/* continued. */
+    case WORD_TYPE_INTHASHENTRY:
+    case WORD_TYPE_MINTHASHENTRY:
+	/*
+	 * Follow value and tail recurse on next.
+	 */
+
+	MarkWord(data, &WORD_MAPENTRY_VALUE(*wordPtr), page);
+	TAIL_RECURSE(&WORD_HASHENTRY_NEXT(*wordPtr), page);
+
+    case WORD_TYPE_STRTRIEMAP:
+    case WORD_TYPE_INTTRIEMAP:
+	/* 
+	 * Follow trie root and tail recurse on synonym.
+	 */
+
+	MarkWord(data, &WORD_TRIEMAP_ROOT(*wordPtr), page);
+	TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
+
+    case WORD_TYPE_STRTRIENODE:
+    case WORD_TYPE_MSTRTRIENODE:
+    case WORD_TYPE_INTTRIENODE:
+    case WORD_TYPE_MINTTRIENODE:
+	/* 
+	 * Follow left arm and tail recurse on right. 
+	 */
+
+	MarkWord(data, &WORD_TRIENODE_LEFT(*wordPtr), page);
+	TAIL_RECURSE(&WORD_TRIENODE_RIGHT(*wordPtr), page);
+
+    case WORD_TYPE_TRIELEAF:
+    case WORD_TYPE_MTRIELEAF:
+	/*
+	 * Follow key.
+	 */
+
+	MarkWord(data, &WORD_MAPENTRY_KEY(*wordPtr), page);
+	/* continued. */
+    case WORD_TYPE_INTTRIELEAF:
+    case WORD_TYPE_MINTTRIELEAF:
+	/*
+	 * Tail recurse on value.
+	 */
+
+	TAIL_RECURSE(&WORD_MAPENTRY_VALUE(*wordPtr), page);
+
+    case WORD_TYPE_STRBUF:
+	/*
+	 * Tail recurse on rope.
+	 */
+
+	TAIL_RECURSE(&WORD_STRBUF_ROPE(*wordPtr), page);
+
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomWordType *typeInfo = WORD_TYPEINFO(*wordPtr);
+	if (typeInfo->childrenProc) {
+	    /*
+	     * Follow children.
+	     */
+
+	    typeInfo->childrenProc(*wordPtr, MarkWordChild, data);
+	}
+	return;
+	}
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+	return;
     }
 }
 
@@ -1560,8 +1559,7 @@ RememberSweepable(
     ASSERT(PAGE_GENERATION(CELL_PAGE(word)) == 1);
     ASSERT(WORD_TYPE(word) == WORD_TYPE_CUSTOM);
     ASSERT(type->freeProc);
-
-    WORD_CUSTOM_NEXT(word) = data->eden.sweepables;
+    WORD_CUSTOM_NEXT(word, type) = data->eden.sweepables;
     data->eden.sweepables = word;
 }
 
@@ -1587,7 +1585,7 @@ SweepUnreachableCells(
     MemoryPool *pool)
 {
     Col_Word word, *previousPtr;
-    Col_CustomWordType *typeInfo;
+    Col_CustomWordType *type;
 
     ASSERT(pool->generation <= data->maxCollectedGeneration);
     for (previousPtr = &pool->sweepables, word = pool->sweepables; word; 
@@ -1608,21 +1606,21 @@ SweepUnreachableCells(
 	}
 #endif
 	ASSERT(WORD_TYPE(word) == WORD_TYPE_CUSTOM);
-	typeInfo = WORD_TYPEINFO(word);
-	ASSERT(typeInfo->freeProc);
+	type = WORD_TYPEINFO(word);
+	ASSERT(type->freeProc);
 
 	if (!TestCell(CELL_PAGE(word), CELL_INDEX(word))) {
 	    /*
 	     * Cleanup.
 	     */
 
-	    typeInfo->freeProc(word);
+	    type->freeProc(word);
 
 	    /* 
 	     * Remove from list. 
 	     */
 
-	    *previousPtr = WORD_CUSTOM_NEXT(word);
+	    *previousPtr = WORD_CUSTOM_NEXT(word, type);
 	} else {
 	    /*
 	     * Keep, updating reference in case of redirection.
@@ -1630,7 +1628,7 @@ SweepUnreachableCells(
 
 	    *previousPtr = word;
 
-	    previousPtr = &WORD_CUSTOM_NEXT(word);
+	    previousPtr = &WORD_CUSTOM_NEXT(word, type);
 	}
     }
 
@@ -1668,17 +1666,17 @@ CleanupSweepables(
     MemoryPool *pool)
 {
     Col_Word word;
-    Col_CustomWordType *typeInfo;
+    Col_CustomWordType *type;
 
     /*
      * Perform cleanup on all custom words that need sweeping.
      */
 
-    for (word = pool->sweepables; word; word = WORD_CUSTOM_NEXT(word)) {
+    for (word = pool->sweepables; word; word = WORD_CUSTOM_NEXT(word, type)) {
 	ASSERT(WORD_TYPE(word) == WORD_TYPE_CUSTOM);
-	typeInfo = WORD_TYPEINFO(word);
-	ASSERT(typeInfo->freeProc);
-	typeInfo->freeProc(word);
+	type = WORD_TYPEINFO(word);
+	ASSERT(type->freeProc);
+	type->freeProc(word);
     }
 }
 

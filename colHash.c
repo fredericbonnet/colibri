@@ -30,10 +30,12 @@
 
 static Col_RopeChunksTraverseProc HashChunkProc;
 static Col_HashProc HashString;
+static Col_CompareProc CompareStrings;
 static void		AllocBuckets(Col_Word map, size_t capacity);
-static int		GrowHashMap(Col_Word map, Col_HashProc proc);
+static int		GrowHashMap(Col_Word map, Col_HashProc hashProc);
 static int		GrowIntHashMap(Col_Word map);
-static Col_Word		StringHashMapFindEntry(Col_Word map, Col_Word key,
+static Col_Word		HashMapFindEntry(Col_Word map, Col_HashProc hashProc,
+			    Col_CompareProc compareProc, Col_Word key,
 			    int mutable, int *createPtr, size_t *bucketPtr);
 static Col_Word		IntHashMapFindEntry(Col_Word map, intptr_t key,
 			    int mutable, int *createPtr, size_t *bucketPtr);
@@ -159,11 +161,14 @@ HashChunkProc(
  *	Compute a string key hash value. Uses <Col_TraverseRopeChunks> with
  *	traversal proc <HashChunkProc>. Follows <Col_HashProc> signature.
  *
+ * Argument:
+ *	key	- Key word to generate hash value for.
+ *
  * Result:
  *	The given rope's hash value.
  *
  * See also:
- *	<HashString>, <Col_TraverseRopeChunks>
+ *	<HashChunkProc>, <Col_TraverseRopeChunks>
  *---------------------------------------------------------------------------*/
 
 static uintptr_t 
@@ -173,6 +178,27 @@ HashString(
     uintptr_t hash = 0;
     Col_TraverseRopeChunks(key, 0, SIZE_MAX, 0, HashChunkProc, &hash, NULL);
     return hash;
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: CompareStrings
+ *
+ *	Compare string keys. Follows <Col_CompareProc> signature.
+ *
+ * Arguments:
+ *	key1, key2	- Key words to compare.
+ *
+ * Result:
+ *	Negative if key1 is less than key2, positive if key2 is greater than
+ *	key2, zero if both keys are equal.
+ *---------------------------------------------------------------------------*/
+
+static int 
+CompareStrings(
+    Col_Word key1,
+    Col_Word key2)
+{
+    return Col_CompareRopes(key1, key2);
 }
 
 
@@ -267,8 +293,8 @@ HashString(
  *	maximum mutable vector length.
  *
  * Arguments:
- *	map	- Hash map to grow.
- *	proc	- Hash proc to apply on keys.
+ *	map		- Hash map to grow.
+ *	hashProc	- <Col_HashProc>.
  *
  * Result:
  *	Whether the bucket container was resized or not. 
@@ -280,7 +306,7 @@ HashString(
 static int
 GrowHashMap(
     Col_Word map,
-    Col_HashProc proc)
+    Col_HashProc hashProc)
 {
     Col_Word *buckets, *newBuckets, newBucketContainer, entry, next;
     size_t nbBuckets, newNbBuckets;
@@ -326,22 +352,22 @@ GrowHashMap(
 		 * Recompute full hash.
 		 */
 
-		hash = proc(key);
+		hash = hashProc(key);
 	    } else {
-		/*
+	    /*
 		 * Get actual hash by combining entry hash and index.
 		 */
 
 		hash = WORD_HASHENTRY_HASH(entry) | index;
-		ASSERT(hash == proc(key));
+		ASSERT(hash == hashProc(key));
 	    }
 	    newIndex = hash & (newNbBuckets-1);
 
 	    switch (WORD_TYPE(entry)) {
 		case WORD_TYPE_HASHENTRY:
 		    if (!WORD_HASHENTRY_NEXT(entry) && !newBuckets[newIndex]) {
-			/*
-			 * Share immutable entry in new bucket.
+		    /*
+		     * Share immutable entry in new bucket.
 			 */
 
 			newBuckets[newIndex] = entry;
@@ -349,16 +375,16 @@ GrowHashMap(
 			break;
 		    }
 
-		    /*
-		     * Convert to mutable first.
+		/*
+		 * Convert to mutable first.
 		     */
 
 		    entry = ConvertEntryToMutable(entry, &entry);
 		    /* continued. */
 
 		case WORD_TYPE_MHASHENTRY:
-		    /*
-		     * Move entry at head of new bucket.
+		/*
+		 * Move entry at head of new bucket.
 		     */
 
 		    next = WORD_HASHENTRY_NEXT(entry);
@@ -368,7 +394,7 @@ GrowHashMap(
 
 	    entry = next;
 	}
-    }
+}
 
     WORD_HASHMAP_BUCKETS(map) = newBucketContainer;
 
@@ -486,13 +512,15 @@ GrowIntHashMap(
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Function: StringHashMapFindEntry
+ * Internal Function: HashMapFindEntry
  *
- *	Find or create in string hash map the entry mapped to the given key.
+ *	Find or create in hash map the entry mapped to the given key.
  *
  * Arguments:
- *	map		- String hash map to find or create entry into.
- *	key		- String entry key.
+ *	map		- Hash map to find or create entry into.
+ *	hashProc	- <Col_HashProc>.
+ *	compareProc	- <Col_CompareProc>.
+ *	key		- Entry key.
  *	mutable		- If true, ensure that entry is mutable.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
  *
@@ -504,8 +532,10 @@ GrowIntHashMap(
  *---------------------------------------------------------------------------*/
 
 static Col_Word
-StringHashMapFindEntry(
+HashMapFindEntry(
     Col_Word map,
+    Col_HashProc hashProc,
+    Col_CompareProc compareProc, 
     Col_Word key,
     int mutable,
     int *createPtr,
@@ -515,6 +545,7 @@ StringHashMapFindEntry(
     size_t nbBuckets;
     uintptr_t hash, index;
 
+start:
     /*
      * Search for matching entry.
      *
@@ -523,13 +554,13 @@ StringHashMapFindEntry(
 
     GET_BUCKETS(map, 0, nbBuckets, buckets);
     ASSERT(!(nbBuckets & (nbBuckets-1)));
-    hash = HashString(key);
+    hash = hashProc(key);
     index = hash & (nbBuckets-1);
     entry = buckets[index];
     while (entry) {
 	ASSERT(WORD_TYPE(entry) == WORD_TYPE_HASHENTRY || WORD_TYPE(entry) == WORD_TYPE_MHASHENTRY);
 	if (WORD_HASHENTRY_HASH(entry) == (hash & HASHENTRY_HASH_MASK)
-		&& Col_CompareRopes(WORD_MAPENTRY_KEY(entry), key) == 0) {
+		&& compareProc(WORD_MAPENTRY_KEY(entry), key) == 0) {
 	    /*
 	     * Found!
 	     */
@@ -563,12 +594,12 @@ StringHashMapFindEntry(
     *createPtr = 1;
 
     if (WORD_HASHMAP_SIZE(map) >= nbBuckets * LOAD_FACTOR
-	    && GrowHashMap(map, HashString)) {
+	    && GrowHashMap(map, hashProc)) {
 	/*
 	 * Grow map and insert again.
 	 */
 
-	return StringHashMapFindEntry(map, key, mutable, createPtr, bucketPtr);
+	goto start;
     }
 
     /*
@@ -617,6 +648,7 @@ IntHashMapFindEntry(
     size_t nbBuckets;
     uintptr_t index;
 
+start:
     /*
      * Search for matching entry.
      *
@@ -668,7 +700,7 @@ IntHashMapFindEntry(
 	 * Grow map and insert again.
 	 */
 
-	return IntHashMapFindEntry(map, key, mutable, createPtr, bucketPtr);
+	goto start;
     }
 
     /*
@@ -957,19 +989,20 @@ Col_CopyHashMap(
     TYPECHECK_HASHMAP(map) return WORD_NIL;
 
     switch (WORD_TYPE(map)) {
-	case WORD_TYPE_STRHASHMAP:
-	    entryType = WORD_TYPE_HASHENTRY;
-	    break;
+    case WORD_TYPE_STRHASHMAP:
+    case WORD_TYPE_CUSTOM:
+	entryType = WORD_TYPE_HASHENTRY;
+	break;
 
-	case WORD_TYPE_INTHASHMAP:
-	    entryType = WORD_TYPE_INTHASHENTRY;
-	    break;
+    case WORD_TYPE_INTHASHMAP:
+	entryType = WORD_TYPE_INTHASHENTRY;
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    /* WORD_TYPE_UNKNOWN */
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
     }
 
     /*
@@ -1032,17 +1065,18 @@ Col_CopyHashMap(
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Function: Col_StringHashMapGet
+ * Function: Col_HashMapGet
  *
- *	Get value mapped to the given string key if present.
+ *	Get value mapped to the given key if present.
  *
  * Arguments:
- *	map		- String hash map to get entry from.
- *	key		- String entry key.
+ *	map		- Hash map to get entry from.
+ *	key		- Entry key. Can be any word type, including string, 
+ *			  however it must match the actual type used by the map.
  *	valuePtr	- Returned entry value, if found.
  *
  * Type checking:
- *	*map* must be a valid string hash map.
+ *	*map* must be a valid string or custom hash map.
  *
  * Results:
  *	Whether the key was found in the map. In this case the value is returned
@@ -1050,21 +1084,44 @@ Col_CopyHashMap(
  *---------------------------------------------------------------------------*/
 
 int
-Col_StringHashMapGet(
+Col_HashMapGet(
     Col_Word map,
     Col_Word key,
     Col_Word *valuePtr)
 {
+    Col_HashProc *hashProc;
+    Col_CompareProc *compareProc;
     Col_Word entry;
 
     /*
      * Check preconditions.
      */
 
-    TYPECHECK_STRHASHMAP(map) return 0;
+    TYPECHECK_WORDHASHMAP(map) return 0;
 
-    entry = StringHashMapFindEntry(map, key, 0, NULL, NULL);
+    switch (WORD_TYPE(map)) {
+    case WORD_TYPE_STRHASHMAP:
+	hashProc = HashString;
+	compareProc = CompareStrings;
+	break;
+	
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomHashMapType *typeInfo 
+		= (Col_CustomHashMapType *) WORD_TYPEINFO(map);
+	ASSERT(typeInfo->type.type == COL_HASHMAP);
+	hashProc = typeInfo->hashProc;
+	compareProc = typeInfo->compareProc;
+	break;
+	}
 
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+    }
+
+    entry = HashMapFindEntry(map, hashProc, compareProc, key, 0, NULL, NULL);
     if (entry) {
 	ASSERT(WORD_TYPE(entry) == WORD_TYPE_MHASHENTRY);
 	*valuePtr = WORD_MAPENTRY_VALUE(entry);
@@ -1117,17 +1174,18 @@ Col_IntHashMapGet(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_StringHashMapSet
+ * Function: Col_HashMapSet
  *
- *	Map the value to the string key, replacing any existing.
+ *	Map the value to the key, replacing any existing.
  *
  * Arguments:
- *	map	- String hash map to insert entry into.
- *	key	- String entry key.
+ *	map	- Hash map to insert entry into.
+ *	key	- Entry key. Can be any word type, including string, however it
+ *		  must match the actual type used by the map.
  *	value	- Entry value.
  *
  * Type checking:
- *	*map* must be a valid string hash map.
+ *	*map* must be a valid string or custom hash map.
  *
  * Result:
  *	Whether a new entry was created.
@@ -1137,11 +1195,13 @@ Col_IntHashMapGet(
  *---------------------------------------------------------------------------*/
 
 int
-Col_StringHashMapSet(
+Col_HashMapSet(
     Col_Word map,
     Col_Word key,
     Col_Word value)
 {
+    Col_HashProc *hashProc;
+    Col_CompareProc *compareProc;
     int create = 1;
     Col_Word entry;
 
@@ -1149,9 +1209,31 @@ Col_StringHashMapSet(
      * Check preconditions.
      */
 
-    TYPECHECK_STRHASHMAP(map) return 0;
+    TYPECHECK_WORDHASHMAP(map) return 0;
 
-    entry = StringHashMapFindEntry(map, key, 1, &create, NULL);
+    switch (WORD_TYPE(map)) {
+    case WORD_TYPE_STRHASHMAP:
+	hashProc = HashString;
+	compareProc = CompareStrings;
+	break;
+	
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomHashMapType *typeInfo 
+		= (Col_CustomHashMapType *) WORD_TYPEINFO(map);
+	ASSERT(typeInfo->type.type == COL_HASHMAP);
+	hashProc = typeInfo->hashProc;
+	compareProc = typeInfo->compareProc;
+	break;
+	}
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+    }
+
+    entry = HashMapFindEntry(map, hashProc, compareProc, key, 1, &create, NULL);
     ASSERT(entry);
     ASSERT(WORD_TYPE(entry) == WORD_TYPE_MHASHENTRY);
     WORD_MAPENTRY_VALUE(entry) = value;
@@ -1201,26 +1283,29 @@ Col_IntHashMapSet(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_StringHashMapUnset
+ * Function: Col_HashMapUnset
  *
- *	Remove any value mapped to the given string key.
+ *	Remove any value mapped to the given key.
  *
  * Arguments:
- *	map	- String hash map to remove entry from.
- *	key	- String entry key.
+ *	map	- Hash map to remove entry from.
+ *	key	- Entry key. Can be any word type, including string, however it
+ *		  must match the actual type used by the map.
  *
  * Type checking:
- *	*map* must be a valid string hash map.
+ *	*map* must be a valid string or custom hash map.
  *
  * Result:
  *	Whether an existing entry was removed.
  *---------------------------------------------------------------------------*/
 
 int
-Col_StringHashMapUnset(
+Col_HashMapUnset(
     Col_Word map,
     Col_Word key)
 {
+    Col_HashProc *hashProc;
+    Col_CompareProc *compareProc;
     Col_Word *buckets, prev, entry;
     size_t nbBuckets;
     uintptr_t hash, index;
@@ -1229,7 +1314,29 @@ Col_StringHashMapUnset(
      * Check preconditions.
      */
 
-    TYPECHECK_STRHASHMAP(map) return 0;
+    TYPECHECK_WORDHASHMAP(map) return 0;
+
+    switch (WORD_TYPE(map)) {
+    case WORD_TYPE_STRHASHMAP:
+	hashProc = HashString;
+	compareProc = CompareStrings;
+	break;
+	
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomHashMapType *typeInfo 
+		= (Col_CustomHashMapType *) WORD_TYPEINFO(map);
+	ASSERT(typeInfo->type.type == COL_HASHMAP);
+	hashProc = typeInfo->hashProc;
+	compareProc = typeInfo->compareProc;
+	break;
+	}
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+    }
 
     /*
      * Search for matching entry.
@@ -1239,44 +1346,44 @@ Col_StringHashMapUnset(
 
     GET_BUCKETS(map, 0, nbBuckets, buckets);
     ASSERT(!(nbBuckets & (nbBuckets-1)));
-    hash = HashString(key);
+    hash = hashProc(key);
     index = hash & (nbBuckets-1);
     prev = WORD_NIL;
     entry = buckets[index];
     while (entry) {
 	if (WORD_HASHENTRY_HASH(entry) == (hash & HASHENTRY_HASH_MASK)
-		&& Col_CompareRopes(WORD_MAPENTRY_KEY(entry), key) == 0) {
+		&& compareProc(WORD_MAPENTRY_KEY(entry), key) == 0) {
 	    /*
 	     * Found! Unlink & remove entry.
 	     */
 
 	    switch (WORD_TYPE(prev)) {
-		case WORD_TYPE_NIL:
-		    /*
-		     * Removed entry is first in bucket, ensure it is mutable 
-		     * before pointing to next entry.
-		     */
+	    case WORD_TYPE_NIL:
+		/*
+		 * Removed entry is first in bucket, ensure it is mutable 
+		 * before pointing to next entry.
+		 */
 
-		    GET_BUCKETS(map, 1, nbBuckets, buckets);
-		    buckets[index] = WORD_HASHENTRY_NEXT(entry);
-		    break;
+		GET_BUCKETS(map, 1, nbBuckets, buckets);
+		buckets[index] = WORD_HASHENTRY_NEXT(entry);
+		break;
 
-		case WORD_TYPE_HASHENTRY:
-		    /*
-		     * Previous entry is immutable, convert first.
-		     */
+	    case WORD_TYPE_HASHENTRY:
+		/*
+		 * Previous entry is immutable, convert first.
+		 */
 
-		    GET_BUCKETS(map, 1, nbBuckets, buckets);
-		    prev = ConvertEntryToMutable(prev, &buckets[index]);
-		    ASSERT(WORD_TYPE(prev) == WORD_TYPE_MHASHENTRY);
-		    /* continued. */
+		GET_BUCKETS(map, 1, nbBuckets, buckets);
+		prev = ConvertEntryToMutable(prev, &buckets[index]);
+		ASSERT(WORD_TYPE(prev) == WORD_TYPE_MHASHENTRY);
+		/* continued. */
 
-		case WORD_TYPE_MHASHENTRY:
-		    /*
-		     * Skip removed entry.
-		     */
+	    case WORD_TYPE_MHASHENTRY:
+		/*
+		 * Skip removed entry.
+		 */
 
-		    WORD_HASHENTRY_NEXT(prev) = WORD_HASHENTRY_NEXT(entry);
+		WORD_HASHENTRY_NEXT(prev) = WORD_HASHENTRY_NEXT(entry);
 	    }
 	    WORD_HASHMAP_SIZE(map)--;
 	    return 1;
@@ -1342,32 +1449,32 @@ Col_IntHashMapUnset(
 	     */
 
 	    switch (WORD_TYPE(prev)) {
-		case WORD_TYPE_NIL:
-		    /*
-		     * Removed entry is first in bucket, ensure it is mutable 
-		     * before pointing to next entry.
-		     */
+	    case WORD_TYPE_NIL:
+		/*
+		 * Removed entry is first in bucket, ensure it is mutable 
+		 * before pointing to next entry.
+		 */
 
-		    GET_BUCKETS(map, 1, nbBuckets, buckets);
-		    buckets[index] = WORD_HASHENTRY_NEXT(entry);
-		    break;
+		GET_BUCKETS(map, 1, nbBuckets, buckets);
+		buckets[index] = WORD_HASHENTRY_NEXT(entry);
+		break;
 
-		case WORD_TYPE_INTHASHENTRY:
-		    /*
-		     * Previous entry is immutable, convert first.
-		     */
+	    case WORD_TYPE_INTHASHENTRY:
+		/*
+		 * Previous entry is immutable, convert first.
+		 */
 
-		    GET_BUCKETS(map, 1, nbBuckets, buckets);
-		    prev = ConvertIntEntryToMutable(prev, &buckets[index]);
-		    ASSERT(WORD_TYPE(prev) == WORD_TYPE_MHASHENTRY);
-		    /* continued. */
+		GET_BUCKETS(map, 1, nbBuckets, buckets);
+		prev = ConvertIntEntryToMutable(prev, &buckets[index]);
+		ASSERT(WORD_TYPE(prev) == WORD_TYPE_MHASHENTRY);
+		/* continued. */
 
-		case WORD_TYPE_MINTHASHENTRY:
-		    /*
-		     * Skip removed entry.
-		     */
+	    case WORD_TYPE_MINTHASHENTRY:
+		/*
+		 * Skip removed entry.
+		 */
 
-		    WORD_HASHENTRY_NEXT(prev) = WORD_HASHENTRY_NEXT(entry);
+		WORD_HASHENTRY_NEXT(prev) = WORD_HASHENTRY_NEXT(entry);
 	    }
 	    WORD_HASHMAP_SIZE(map)--;
 	    return 1;
@@ -1449,7 +1556,7 @@ Col_HashMapIterBegin(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_StringHashMapIterFind
+ * Function: Col_HashMapIterFind
  *
  *	Initialize the hash map iterator so that it points to the entry with
  *	the given string key within the map.
@@ -1468,7 +1575,7 @@ Col_HashMapIterBegin(
  *---------------------------------------------------------------------------*/
 
 void
-Col_StringHashMapIterFind(
+Col_HashMapIterFind(
     Col_Word map, 
     Col_Word key, 
     int *createPtr, 
@@ -1478,14 +1585,14 @@ Col_StringHashMapIterFind(
      * Check preconditions.
      */
 
-    TYPECHECK_STRHASHMAP(map) {
+    TYPECHECK_WORDHASHMAP(map) {
 	*it = COL_MAPITER_NULL;
 	return;
     }
 
     it->map = map;
-    it->entry = StringHashMapFindEntry(map, key, 0, createPtr, 
-	    &it->traversal.hash.bucket);
+    it->entry = HashMapFindEntry(map, HashString, CompareStrings, key, 0, 
+	    createPtr, &it->traversal.hash.bucket);
 }
 
 /*---------------------------------------------------------------------------
@@ -1563,51 +1670,52 @@ Col_HashMapIterSetValue(
     ASSERT(it->entry);
 
     switch (WORD_TYPE(it->map)) {
-	case WORD_TYPE_STRHASHMAP:
-	    if (WORD_TYPE(it->entry) != WORD_TYPE_MHASHENTRY) {
-		/*
-		 * Entry is immutable, convert to mutable.
-		 */
-
-		ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_HASHENTRY);
-		GET_BUCKETS(it->map, 1, nbBuckets, buckets);
-		it->entry = ConvertEntryToMutable(it->entry, 
-			&buckets[it->traversal.hash.bucket]);
-	    }
-
+    case WORD_TYPE_STRHASHMAP:
+    case WORD_TYPE_CUSTOM:
+	if (WORD_TYPE(it->entry) != WORD_TYPE_MHASHENTRY) {
 	    /*
-	     * Set entry value.
+	     * Entry is immutable, convert to mutable.
 	     */
 
-	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MHASHENTRY);
-	    WORD_MAPENTRY_VALUE(it->entry) = value;
-	    break;
+	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_HASHENTRY);
+	    GET_BUCKETS(it->map, 1, nbBuckets, buckets);
+	    it->entry = ConvertEntryToMutable(it->entry, 
+		    &buckets[it->traversal.hash.bucket]);
+	}
 
-	case WORD_TYPE_INTHASHMAP:
-	    if (WORD_TYPE(it->entry) != WORD_TYPE_MINTHASHENTRY) {
-		/*
-		 * Entry is immutable, convert to mutable.
-		 */
+	/*
+	 * Set entry value.
+	 */
 
-		ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTHASHENTRY);
-		GET_BUCKETS(it->map, 1, nbBuckets, buckets);
-		it->entry = ConvertIntEntryToMutable(it->entry, 
-			&buckets[it->traversal.hash.bucket]);
-	    }
+	ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MHASHENTRY);
+	WORD_MAPENTRY_VALUE(it->entry) = value;
+	break;
 
+    case WORD_TYPE_INTHASHMAP:
+	if (WORD_TYPE(it->entry) != WORD_TYPE_MINTHASHENTRY) {
 	    /*
-	     * Set entry value.
+	     * Entry is immutable, convert to mutable.
 	     */
 
-	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MINTHASHENTRY);
-	    WORD_MAPENTRY_VALUE(it->entry) = value;
-	    break;
+	    ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTHASHENTRY);
+	    GET_BUCKETS(it->map, 1, nbBuckets, buckets);
+	    it->entry = ConvertIntEntryToMutable(it->entry, 
+		    &buckets[it->traversal.hash.bucket]);
+	}
 
-	/* WORD_TYPE_UNKNOWN */
+	/*
+	 * Set entry value.
+	 */
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
+	ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_MINTHASHENTRY);
+	WORD_MAPENTRY_VALUE(it->entry) = value;
+	break;
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
     }
 }
 
@@ -1674,4 +1782,54 @@ Col_HashMapIterNext(
      */
 
     it->entry = WORD_NIL;
+}
+
+
+/*
+================================================================================
+Section: Custom Hash Maps
+================================================================================
+*/
+
+/****************************************************************************
+ * Group: Custom Hash Map Creation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_NewCustomHashMap
+ *
+ *	Create a new custom hash map word.
+ *
+ * Arguments:
+ *	type		- The hash map word type.
+ *	capacity	- Initial bucket size. Rounded up to the next power of
+ *			  2.
+ *	size		- Size of custom data.
+ *	dataPtr		- Will hold a pointer to the allocated data.
+ *
+ * Result:
+  *	A new custom hash map word of the given size. Additionally:
+ *
+ *	dataPtr	- Points to the allocated custom data.
+*
+ * Side effects:
+ *	Allocates memory cells.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_NewCustomHashMap(
+    Col_CustomHashMapType *type,
+    size_t capacity,
+    size_t size,
+    void **dataPtr)
+{
+    Col_Word map;
+    
+    ASSERT(type->type.type & COL_HASHMAP);
+
+    map = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(&type->type, size));
+    WORD_HASHMAP_INIT(map, type);
+    AllocBuckets(map, capacity);
+
+    return map;
 }
