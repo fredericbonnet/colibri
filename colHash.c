@@ -1009,6 +1009,7 @@ Col_CopyHashMap(
      * Copy word first.
      */
 
+    //TODO: provide custom data copy mechanism
     newMap = (Col_Word) AllocCells(HASHMAP_NBCELLS);
     memcpy((void *) newMap, (void *) map, sizeof(Cell) * HASHMAP_NBCELLS);
     WORD_SYNONYM(newMap) = WORD_NIL;
@@ -1559,16 +1560,17 @@ Col_HashMapIterBegin(
  * Function: Col_HashMapIterFind
  *
  *	Initialize the hash map iterator so that it points to the entry with
- *	the given string key within the map.
+ *	the given key within the map.
  *
  * Arguments:
- *	map		- String hash map to find or create entry into.
- *	key		- String entry key.
+ *	map		- Hash map to find or create entry into.
+ *	key		- Entry key. Can be any word type, including string,
+ *			  however it must match the actual type used by the map.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
  *	it		- Iterator to initialize.
  *
  * Type checking:
- *	*map* must be a valid string hash map.
+ *	*map* must be a valid string or custom hash map.
  *
  * Result:
  *	createPtr	- (out) If non-NULL, whether a new entry was created. 
@@ -1581,6 +1583,9 @@ Col_HashMapIterFind(
     int *createPtr, 
     Col_MapIterator *it)
 {
+    Col_HashProc *hashProc;
+    Col_CompareProc *compareProc;
+
     /*
      * Check preconditions.
      */
@@ -1590,9 +1595,25 @@ Col_HashMapIterFind(
 	return;
     }
 
+    switch (WORD_TYPE(map)) {
+    case WORD_TYPE_STRHASHMAP:
+	hashProc = HashString;
+	compareProc = CompareStrings;
+	break;
+	
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomHashMapType *typeInfo 
+		= (Col_CustomHashMapType *) WORD_TYPEINFO(map);
+	ASSERT(typeInfo->type.type == COL_HASHMAP);
+	hashProc = typeInfo->hashProc;
+	compareProc = typeInfo->compareProc;
+	break;
+	}
+    }
+
     it->map = map;
-    it->entry = HashMapFindEntry(map, HashString, CompareStrings, key, 0, 
-	    createPtr, &it->traversal.hash.bucket);
+    it->entry = HashMapFindEntry(map, hashProc, compareProc, key, 0, createPtr,
+	    &it->traversal.hash.bucket);
 }
 
 /*---------------------------------------------------------------------------
@@ -1825,7 +1846,7 @@ Col_NewCustomHashMap(
 {
     Col_Word map;
     
-    ASSERT(type->type.type & COL_HASHMAP);
+    ASSERT(type->type.type == COL_HASHMAP);
 
     map = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(&type->type, size));
     WORD_HASHMAP_INIT(map, type);

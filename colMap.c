@@ -112,7 +112,7 @@ Col_MapGet(
 	    return Col_HashMapGet(map, key, valuePtr);
 
 	case WORD_TYPE_STRTRIEMAP:
-	    return Col_StringTrieMapGet(map, key, valuePtr);
+	    return Col_TrieMapGet(map, key, valuePtr);
 
 	/* WORD_TYPE_UNKNOWN */
 
@@ -212,7 +212,7 @@ Col_MapSet(
 	    return Col_HashMapSet(map, key, value);
 
 	case WORD_TYPE_STRTRIEMAP:
-	    return Col_StringTrieMapSet(map, key, value);
+	    return Col_TrieMapSet(map, key, value);
 
 	/* WORD_TYPE_UNKNOWN */
 
@@ -309,7 +309,7 @@ Col_MapUnset(
 	    return Col_HashMapUnset(map, key);
 
 	case WORD_TYPE_STRTRIEMAP:
-	    return Col_StringTrieMapUnset(map, key);
+	    return Col_TrieMapUnset(map, key);
 
 	/* WORD_TYPE_UNKNOWN */
 
@@ -461,7 +461,7 @@ Col_MapIterFind(
 	    break;
 
 	case WORD_TYPE_STRTRIEMAP:
-	    Col_StringTrieMapIterFind(map, key, createPtr, it);
+	    Col_TrieMapIterFind(map, key, createPtr, it);
 	    break;
 
 	/* WORD_TYPE_UNKNOWN */

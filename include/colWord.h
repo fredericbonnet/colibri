@@ -56,8 +56,7 @@ and type-specific accessors */
  *  COL_MVECTOR	- Mutable vector.
  *  COL_LIST	- Generic list.
  *  COL_MLIST	- Mutable list.
- *  COL_MAP	- Generic map.
- *  COL_STRMAP	- String-keyed map.
+ *  COL_MAP	- Map (word- or string-keyed).
  *  COL_INTMAP	- Integer-keyed map.
  *  COL_HASHMAP	- Hash map.
  *  COL_TRIEMAP	- Trie map.
@@ -79,11 +78,10 @@ and type-specific accessors */
 #define COL_LIST		256
 #define COL_MLIST		512
 #define COL_MAP			1024
-#define COL_STRMAP		2048
-#define COL_INTMAP		4096
-#define COL_HASHMAP		8192
-#define COL_TRIEMAP		16384
-#define COL_STRBUF		32768
+#define COL_INTMAP		2048
+#define COL_HASHMAP		4096
+#define COL_TRIEMAP		8192
+#define COL_STRBUF		16384
 
 
 /****************************************************************************

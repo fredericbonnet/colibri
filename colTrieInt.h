@@ -10,10 +10,10 @@
  *
  * See also:
  *	<colTrie.c>, <colTrie.h>, <colMapInt.h>, <WORD_TYPE_STRTRIEMAP>, 
- *	<WORD_TYPE_INTTRIEMAP>, <WORD_TYPE_STRTRIENODE>, 
- *	<WORD_TYPE_MSTRTRIENODE>, <WORD_TYPE_INTTRIENODE>, 
- *	<WORD_TYPE_MINTTRIENODE>, <WORD_TYPE_TRIELEAF>, <WORD_TYPE_MTRIELEAF>, 
- *	<WORD_TYPE_INTTRIELEAF>, <WORD_TYPE_MINTTRIELEAF>
+ *	<WORD_TYPE_INTTRIEMAP>, <WORD_TYPE_TRIENODE>, <WORD_TYPE_MTRIENODE>, 
+ *	<WORD_TYPE_STRTRIENODE>, <WORD_TYPE_MSTRTRIENODE>, 
+ *	<WORD_TYPE_INTTRIENODE>, <WORD_TYPE_MINTTRIENODE>, <WORD_TYPE_TRIELEAF>,
+ *	<WORD_TYPE_MTRIELEAF>, <WORD_TYPE_INTTRIELEAF>, <WORD_TYPE_MINTTRIELEAF>
  */
 
 #ifndef _COLIBRI_TRIE_INT
@@ -30,7 +30,7 @@ Internal Section: Trie Maps
  * Data Structure: Trie Map Word
  *
  *	Trie maps are an implementation of generic maps that use crit-bit trees
- *	for string and integer keys
+ *	for string, integer and custom keys.
  *
  *	They are always mutable.
  *
@@ -53,10 +53,10 @@ Internal Section: Trie Maps
  *	On all architectures the cell layout is as follows:
  *
  * (start table)
- *      0     7                                                       n
- *     +-------+-------------------------------------------------------+
- *   0 | Type  |                        Unused                         |
- *     +-------+-------------------------------------------------------+
+ *      0                                                             n
+ *     +---------------------------------------------------------------+
+ *   0 |                           Type info                           |
+ *     +---------------------------------------------------------------+
  *   1 |                            Synonym                            |
  *     +---------------------------------------------------------------+
  *   2 |                             Size                              |
@@ -87,6 +87,29 @@ Internal Section: Trie Maps
 
 #define WORD_TRIEMAP_SIZE(word)		(((size_t *)(word))[2])
 #define WORD_TRIEMAP_ROOT(word)		(((Col_Word *)(word))[3])
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_TRIEMAP_INIT
+ *
+ *	Generic trie map word initializer.
+ *
+ *	Generic trie maps are custom word types of type <COL_TRIEMAP>.
+ *
+ * Arguments:
+ *	word		- Word to initialize. (Caution: evaluated several times 
+ *			  during macro expansion)
+ *	typeInfo	- <WORD_SET_TYPEINFO>
+ *
+ * See also:
+ *	<Trie Map Word>, <Col_NewCustomTrieMap>, <Col_CustomTrieMapType>,
+ *	<COL_TRIEMAP>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_TRIEMAP_INIT(word, typeInfo) \
+    WORD_SET_TYPEINFO((word), (typeInfo)); \
+    WORD_SYNONYM(word) = WORD_NIL; \
+    WORD_TRIEMAP_SIZE(word) = 0; \
+    WORD_TRIEMAP_ROOT(word) = WORD_NIL;
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_STRTRIEMAP_INIT
@@ -136,22 +159,38 @@ Internal Section: Trie Nodes
 /*---------------------------------------------------------------------------
  * Data Structure: Trie Node Word
  *
- *	Generic nodes in trie map trees.
+ *	Generic trie nodes.
  *
  *	Trie maps store map entries hierarchically, in such a way that all 
  *	entries in a subtree share a common prefix. This implementation uses 
- *	crit-bit trees for integer and string keys: each node stores a critical
- *	bit, which is the index of the bit where both branches differ. Entries 
- *	where this bit is cleared are stored in the left subtree, and those with
- *	this bit set are stored in the right subtree, all in a recursive manner.
+ *	crit-bit trees for keys: each node stores a critical bit, which is the 
+ *	index of the bit where both branches differ. Entries where this bit is 
+ *	cleared are stored in the left subtree, and those with this bit set are 
+ *	stored in the right subtree, all in a recursive manner.
+ *
+ *	They are usually mutable but can become immutable as a result of a copy
+ *	(see <Col_CopyTrieMap>): in this case the copy and the original would
+ *	share most of their internals (rendered immutable in the process).
+ *	Likewise, mutable operations on the copies would use copy-on-write
+ *	semantics: immutable structures are copied to new mutable ones before 
+ *	modification.
  *
  * Requirements:
  *	Trie node words use one single cell.
+ *
+ *	Trie node words must know their critical bit, which is the highest bit 
+ *	of the first differing key element where left and right subtrie keys 
+ *	differ. They store this information as the index of the differing key 
+ *	element as well as the position of the critical bit.
  *
  *	Crit-bit tries are binary trees and thus must know their left and right
  *	subtrie.
  *
  * Fields:
+ *	Diff	- Index of first differing key element in left and right keys.
+ *	Bit	- Position of the critical bit in key element. 24-bit should be
+ *		  sufficient for most applications (this handles up to 
+ *		  16777216-bit/2MB-long key elements).
  *	Left	- Left subtrie. Keys have their critical bit cleared.
  *	Right	- Right subtrie. Keys have their critical bit set.
  *
@@ -159,21 +198,20 @@ Internal Section: Trie Nodes
  *	On all architectures the cell layout is as follows:
  *
  * (start table)
- *      0     7 8                                                     n
- *     +-------+-------------------------------------------------------+
- *   0 | Type  |                                                       |
- *     +-------+                   Type-specific data                  +
- *   1 |                                                               |
+ *      0     7 8                    31                               n
+ *     +-------+-----------------------+-------------------------------+
+ *   0 | Type  |        Bit            |        Unused (n > 32)        |
+ *     +-------+-----------------------+-------------------------------+
+ *   1 |                             Diff                              |
  *     +---------------------------------------------------------------+
- *   2 |                             Left                              |
+ *   2 |                        Left (Generic)                         |
  *     +---------------------------------------------------------------+
- *   3 |                             Right                             |
+ *   3 |                        Right (Generic)                        |
  *     +---------------------------------------------------------------+
  * (end)
  *
  * See also:
- *	<String Trie Node Word>, <Integer Trie Node Word>, <Trie Map Word>, 
- *	<Trie Leaf Word>
+ *	<Trie Node Word>, <Trie Map Word>, <Trie Leaf Word>
  *---------------------------------------------------------------------------*/
 
 /*---------------------------------------------------------------------------
@@ -181,6 +219,9 @@ Internal Section: Trie Nodes
  *
  *	Trie node field accessor macros.
  *
+ *  WORD_TRIENODE_BIT		- Get critical bit position.
+ *  WORD_TRIENODE_SET_BIT	- Set critical bit position.
+ *  WORD_TRIENODE_DIFF		- Index of first differing key element in left 
  *  WORD_TRIENODE_LEFT	- Left subtrie.
  *  WORD_TRIENODE_RIGHT	- Right subtrie.
  *
@@ -189,16 +230,80 @@ Internal Section: Trie Nodes
  *	accessible for both read/write operations).
  *
  * See also:
- *	<Trie Node Word>, <WORD_STRTRIENODE_INIT>, <WORD_INTTRIENODE_INIT>
+ *	<Trie Node Word>, <WORD_TRIENODE_INIT>, <WORD_MTRIENODE_INIT>
  *---------------------------------------------------------------------------*/
 
+#define TRIENODE_MASK			(UINT_MAX>>CHAR_BIT)
+#ifdef COL_BIGENDIAN
+#   define WORD_TRIENODE_BIT(word)	((((Col_Char *)(word))[0])&TRIENODE_MASK)
+#   define WORD_TRIENODE_SET_BIT(word, mask) ((((Col_Char *)(word))[0])&=~TRIENODE_MASK,(((Col_Char *)(word))[0])|=((size)&TRIENODE_MASK))
+#else
+#   define WORD_TRIENODE_BIT(word)	((((Col_Char *)(word))[0]>>CHAR_BIT)&TRIENODE_MASK)
+#   define WORD_TRIENODE_SET_BIT(word, mask) ((((Col_Char *)(word))[0])&=~(TRIENODE_MASK<<CHAR_BIT),(((Col_Char *)(word))[0])|=(((mask)&TRIENODE_MASK)<<CHAR_BIT))
+#endif
+#define WORD_TRIENODE_DIFF(word)	(((size_t *)(word))[1])
 #define WORD_TRIENODE_LEFT(word)	(((Col_Word *)(word))[2])
 #define WORD_TRIENODE_RIGHT(word)	(((Col_Word *)(word))[3])
 
 /*---------------------------------------------------------------------------
+ * Internal Macro: WORD_TRIENODE_INIT
+ *
+ *	Immutable trie node initializer.
+ *
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	diff	- <WORD_TRIENODE_DIFF>
+ *	bit	- <WORD_TRIENODE_SET_BIT>
+ *	left	- <WORD_TRIENODE_LEFT>
+ *	right	- <WORD_TRIENODE_RIGHT>
+ *
+ * See also:
+ *	<Trie Node Word>, <WORD_TYPE_TRIENODE>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_TRIENODE_INIT(word, diff, bit, left, right) \
+    WORD_SET_TYPEID((word), WORD_TYPE_TRIENODE); \
+    WORD_TRIENODE_SET_BIT((word), (bit)); \
+    WORD_TRIENODE_DIFF(word) = (diff); \
+    WORD_TRIENODE_LEFT(word) = (left); \
+    WORD_TRIENODE_RIGHT(word) = (right);
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_MTRIENODE_INIT
+ *
+ *	Mutable trie node initializer.
+ *
+ * Arguments:
+ *	word	- Word to initialize. (Caution: evaluated several times during 
+ *		  macro expansion)
+ *	diff	- <WORD_TRIENODE_DIFF>
+ *	bit	- <WORD_TRIENODE_SET_BIT>
+ *	left	- <WORD_TRIENODE_LEFT>
+ *	right	- <WORD_TRIENODE_RIGHT>
+ *
+ * See also:
+ *	<Trie Node Word>, <WORD_TYPE_TRIENODE>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_MTRIENODE_INIT(word, diff, bit, left, right) \
+    WORD_SET_TYPEID((word), WORD_TYPE_MTRIENODE); \
+    WORD_TRIENODE_SET_BIT((word), (bit)); \
+    WORD_TRIENODE_DIFF(word) = (diff); \
+    WORD_TRIENODE_LEFT(word) = (left); \
+    WORD_TRIENODE_RIGHT(word) = (right);
+
+
+/*
+================================================================================
+Internal Section: String Trie Nodes
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
  * Data Structure: String Trie Node Word
  *
- *	String trie nodes are generic trie nodes with string trie-specific data.
+ *	String trie nodes are generic trie nodes with string-specific data.
  *
  *	They are usually mutable but can become immutable as a result of a copy
  *	(see <Col_CopyTrieMap>): in this case the copy and the original would
@@ -259,7 +364,7 @@ Internal Section: Trie Nodes
  *
  * See also:
  *	<String Trie Node Word>, <WORD_TRIENODE_* Accessors>, 
- *	<WORD_STRTRIENODE_INIT>
+ *	<WORD_STRTRIENODE_INIT>, <WORD_MSTRTRIENODE_INIT>
  *---------------------------------------------------------------------------*/
 
 #define STRTRIENODE_MASK		(UINT_MAX>>CHAR_BIT)
@@ -315,16 +420,22 @@ Internal Section: Trie Nodes
 
 #define WORD_MSTRTRIENODE_INIT(word, diff, mask, left, right) \
     WORD_SET_TYPEID((word), WORD_TYPE_MSTRTRIENODE); \
-    WORD_STRTRIENODE_SET_MASK(word, mask); \
+    WORD_STRTRIENODE_SET_MASK((word), (mask)); \
     WORD_STRTRIENODE_DIFF(word) = (diff); \
     WORD_TRIENODE_LEFT(word) = (left); \
     WORD_TRIENODE_RIGHT(word) = (right);
 
+
+/*
+================================================================================
+Internal Section: Integer Trie Nodes
+================================================================================
+*/
+
 /*---------------------------------------------------------------------------
  * Data Structure: Integer Trie Node Word
  *
- *	Integer trie nodes are generic trie nodes with integer trie-specific 
- *	data.
+ *	Integer trie nodes are generic trie nodes with integer-specific data.
  *
  *	They are usually mutable but can become immutable as a result of a copy
  *	(see <Col_CopyTrieMap>): in this case the copy and the original would
@@ -377,7 +488,8 @@ Internal Section: Trie Nodes
  *	accessible for both read/write operations).
  *
  * See also:
- *	<Integer Trie Node Word>, <WORD_MINTTRIENODE_INIT>
+ *	<Integer Trie Node Word>, <WORD_INTTRIENODE_INIT>, 
+ *	<WORD_MINTTRIENODE_INIT>
  *---------------------------------------------------------------------------*/
 
 #define WORD_INTTRIENODE_MASK(word)	(((intptr_t *)(word))[1])
@@ -593,24 +705,23 @@ Internal Section: Type Checking
 COL_CONCATENATE(FAILED,__LINE__): 
 
 /*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_STRTRIEMAP
+ * Internal Macro: TYPECHECK_WORDTRIEMAP
  *
- *	Type checking macro for string trie maps.
+ *	Type checking macro for word-based trie maps (string or custom).
  *
  * Argument:
  *	word	- Checked word.
  *
  * Side effects:
- *	Generate <COL_TYPECHECK> error when *word* is not a string trie map.
+ *	Generate <COL_TYPECHECK> error when *word* is not a word-based trie map.
  *
  * See also:
  *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
-#define TYPECHECK_STRTRIEMAP(word) \
-    if ((Col_WordType(word) & (COL_STRMAP | COL_TRIEMAP)) \
-	    != (COL_STRMAP | COL_TRIEMAP)) { \
-	Col_Error(COL_TYPECHECK, "%x is not a string trie map", (word)); \
+#define TYPECHECK_WORDTRIEMAP(word) \
+    if ((Col_WordType(word) & (COL_TRIEMAP | COL_INTMAP)) != COL_TRIEMAP) { \
+	Col_Error(COL_TYPECHECK, "%x is not a string or custom trie map", (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -632,8 +743,8 @@ COL_CONCATENATE(FAILED,__LINE__):
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_INTTRIEMAP(word) \
-    if ((Col_WordType(word) & (COL_INTMAP | COL_TRIEMAP)) \
-	    != (COL_INTMAP | COL_TRIEMAP)) { \
+    if ((Col_WordType(word) & (COL_TRIEMAP | COL_INTMAP)) \
+	    != (COL_TRIEMAP | COL_INTMAP)) { \
 	Col_Error(COL_TYPECHECK, "%x is not an integer trie map", (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \

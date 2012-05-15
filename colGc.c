@@ -1482,6 +1482,8 @@ start:
     case WORD_TYPE_MSTRTRIENODE:
     case WORD_TYPE_INTTRIENODE:
     case WORD_TYPE_MINTTRIENODE:
+    case WORD_TYPE_TRIENODE:
+    case WORD_TYPE_MTRIENODE:
 	/* 
 	 * Follow left arm and tail recurse on right. 
 	 */
@@ -1514,6 +1516,41 @@ start:
 
     case WORD_TYPE_CUSTOM: {
 	Col_CustomWordType *typeInfo = WORD_TYPEINFO(*wordPtr);
+
+	/*
+	 * Handle type-specific children.
+	 */
+
+	switch (typeInfo->type) {
+	case COL_HASHMAP:
+	    if (WORD_HASHMAP_BUCKETS(*wordPtr)) {
+		/*
+		 * Buckets are stored in a separate word.
+		 */
+
+		MarkWord(data, &WORD_HASHMAP_BUCKETS(*wordPtr), page);
+	    } else {
+		/*
+		 * Buckets are stored inline.
+		 */
+
+		size_t i;
+		Col_Word *buckets = WORD_HASHMAP_STATICBUCKETS(*wordPtr);
+		for (i = 0; i < HASHMAP_STATICBUCKETS_SIZE; i++) {
+		    MarkWord(data, buckets+i, page);
+		}
+	    }
+	    break;
+
+	case COL_TRIEMAP:
+	    /* 
+	     * Follow trie root.
+	     */
+
+	    MarkWord(data, &WORD_TRIEMAP_ROOT(*wordPtr), page);
+	    break;
+	}
+
 	if (typeInfo->childrenProc) {
 	    /*
 	     * Follow children.
@@ -1521,7 +1558,12 @@ start:
 
 	    typeInfo->childrenProc(*wordPtr, MarkWordChild, data);
 	}
-	return;
+
+	/*
+	 * Tail recurse on synonym.
+	 */
+
+	TAIL_RECURSE(&WORD_SYNONYM(*wordPtr), page);
 	}
 
     /* WORD_TYPE_UNKNOWN */

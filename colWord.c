@@ -18,6 +18,7 @@
 #include "colVectorInt.h"
 #include "colListInt.h"
 #include "colHashInt.h"
+#include "colTrieInt.h"
 
 #include <string.h>
 #include <limits.h>
@@ -148,13 +149,24 @@ Col_NewCustomWord(
 {
     Col_Word word;
     
-    if (type->type & COL_HASHMAP) {
+    switch (type->type) {
+    case COL_HASHMAP:
 	/*
 	 * Custom hash map word. Use default capacity value (0).
 	 */
 
 	word = Col_NewCustomHashMap((Col_CustomHashMapType *) type, 0, size, dataPtr);
-    } else {
+	break;
+
+    case COL_TRIEMAP:
+	/*
+	 * Custom trie map word.
+	 */
+
+	word = Col_NewCustomTrieMap((Col_CustomTrieMapType *) type, size, dataPtr);
+	break;
+
+    default:
 	/*
 	 * Basic custom word.
 	 */
@@ -245,16 +257,16 @@ Col_WordType(
 	return COL_LIST;
 
     case WORD_TYPE_STRHASHMAP:
-	return COL_HASHMAP | COL_STRMAP;
+	return COL_MAP | COL_HASHMAP;
 
     case WORD_TYPE_INTHASHMAP:
-	return COL_HASHMAP | COL_INTMAP;
+	return COL_INTMAP | COL_HASHMAP;
 
     case WORD_TYPE_STRTRIEMAP:
-	return COL_TRIEMAP | COL_STRMAP;
+	return COL_MAP | COL_TRIEMAP;
 
     case WORD_TYPE_INTTRIEMAP:
-	return COL_TRIEMAP | COL_INTMAP;
+	return COL_INTMAP | COL_TRIEMAP;
 
     case WORD_TYPE_STRBUF:
 	return COL_STRBUF;
@@ -272,7 +284,11 @@ Col_WordType(
      */
 
     case WORD_TYPE_CUSTOM:
-	return WORD_TYPEINFO(word)->type | COL_CUSTOM;
+	switch (WORD_TYPEINFO(word)->type) {
+	case COL_HASHMAP: return COL_CUSTOM | COL_MAP | COL_HASHMAP;
+	case COL_TRIEMAP: return COL_CUSTOM | COL_MAP | COL_TRIEMAP;
+	default:          return COL_CUSTOM | WORD_TYPEINFO(word)->type;
+	}
 
     /* WORD_TYPE_UNKNOWN */
 

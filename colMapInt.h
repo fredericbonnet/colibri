@@ -104,7 +104,7 @@ Internal Section: Type Checking
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_MAP(word) \
-    if (!(Col_WordType(word) & (COL_MAP | COL_HASHMAP | COL_TRIEMAP | COL_STRMAP | COL_INTMAP))) { \
+    if (!(Col_WordType(word) & (COL_MAP | COL_INTMAP))) { \
 	Col_Error(COL_TYPECHECK, "%x is not a map", (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
@@ -127,31 +127,8 @@ COL_CONCATENATE(FAILED,__LINE__):
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_WORDMAP(word) \
-    if (!(Col_WordType(word) & (COL_MAP | COL_STRMAP))) { \
+    if ((Col_WordType(word) & (COL_MAP | COL_INTMAP)) != COL_MAP) { \
 	Col_Error(COL_TYPECHECK, "%x is not a string or custom map", (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
-
-/*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_STRMAP
- *
- *	Type checking macro for string maps.
- *
- * Argument:
- *	word	- Checked word.
- *
- * Side effects:
- *	Generate <COL_TYPECHECK> error when *word* is not a string map.
- *
- * See also:
- *	<Col_Error>
- *---------------------------------------------------------------------------*/
-
-#define TYPECHECK_STRMAP(word) \
-    if (!(Col_WordType(word) & COL_STRMAP)) { \
-	Col_Error(COL_TYPECHECK, "%x is not a string map", (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
