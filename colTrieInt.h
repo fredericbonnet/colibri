@@ -89,6 +89,17 @@ Internal Section: Trie Maps
 #define WORD_TRIEMAP_ROOT(word)		(((Col_Word *)(word))[3])
 
 /*---------------------------------------------------------------------------
+ * Internal Constant: CUSTOMTRIEMAP_HEADER_SIZE
+ *
+ *	Byte size of custom trie map word header.
+ *
+ * See also:
+ *	<Custom Word>
+ *---------------------------------------------------------------------------*/
+
+#define CUSTOMTRIEMAP_HEADER_SIZE	CELL_SIZE
+
+/*---------------------------------------------------------------------------
  * Internal Macro: WORD_TRIEMAP_INIT
  *
  *	Generic trie map word initializer.

@@ -234,7 +234,14 @@ GetNbCells(
 
     case WORD_TYPE_CUSTOM: {
 	Col_CustomWordType *typeInfo = WORD_TYPEINFO(word);
-	return WORD_CUSTOM_SIZE(typeInfo, typeInfo->sizeProc(word));
+	size_t headerSize;
+	switch (typeInfo->type) {
+	case COL_HASHMAP: headerSize = CUSTOMHASHMAP_HEADER_SIZE;
+	case COL_TRIEMAP: headerSize = CUSTOMTRIEMAP_HEADER_SIZE;
+	default:          headerSize = CUSTOM_HEADER_SIZE;
+	}
+	return WORD_CUSTOM_SIZE(typeInfo, headerSize, 
+		typeInfo->sizeProc(word));
 	}
 
     case WORD_TYPE_STRHASHMAP:
@@ -1597,11 +1604,17 @@ RememberSweepable(
     Col_CustomWordType *type)
 {
     ThreadData *data = PlatGetThreadData();
+    size_t headerSize;
 
     ASSERT(PAGE_GENERATION(CELL_PAGE(word)) == 1);
     ASSERT(WORD_TYPE(word) == WORD_TYPE_CUSTOM);
     ASSERT(type->freeProc);
-    WORD_CUSTOM_NEXT(word, type) = data->eden.sweepables;
+    switch (type->type) {
+    case COL_HASHMAP: headerSize = CUSTOMHASHMAP_HEADER_SIZE;
+    case COL_TRIEMAP: headerSize = CUSTOMTRIEMAP_HEADER_SIZE;
+    default:          headerSize = CUSTOM_HEADER_SIZE;
+    }
+    WORD_CUSTOM_NEXT(word, type, headerSize) = data->eden.sweepables;
     data->eden.sweepables = word;
 }
 
@@ -1628,6 +1641,7 @@ SweepUnreachableCells(
 {
     Col_Word word, *previousPtr;
     Col_CustomWordType *type;
+    size_t headerSize;
 
     ASSERT(pool->generation <= data->maxCollectedGeneration);
     for (previousPtr = &pool->sweepables, word = pool->sweepables; word; 
@@ -1650,6 +1664,11 @@ SweepUnreachableCells(
 	ASSERT(WORD_TYPE(word) == WORD_TYPE_CUSTOM);
 	type = WORD_TYPEINFO(word);
 	ASSERT(type->freeProc);
+	switch (type->type) {
+	case COL_HASHMAP: headerSize = CUSTOMHASHMAP_HEADER_SIZE;
+	case COL_TRIEMAP: headerSize = CUSTOMTRIEMAP_HEADER_SIZE;
+	default:          headerSize = CUSTOM_HEADER_SIZE;
+	}
 
 	if (!TestCell(CELL_PAGE(word), CELL_INDEX(word))) {
 	    /*
@@ -1662,7 +1681,7 @@ SweepUnreachableCells(
 	     * Remove from list. 
 	     */
 
-	    *previousPtr = WORD_CUSTOM_NEXT(word, type);
+	    *previousPtr = WORD_CUSTOM_NEXT(word, type, headerSize);
 	} else {
 	    /*
 	     * Keep, updating reference in case of redirection.
@@ -1670,7 +1689,7 @@ SweepUnreachableCells(
 
 	    *previousPtr = word;
 
-	    previousPtr = &WORD_CUSTOM_NEXT(word, type);
+	    previousPtr = &WORD_CUSTOM_NEXT(word, type, headerSize);
 	}
     }
 
@@ -1709,15 +1728,21 @@ CleanupSweepables(
 {
     Col_Word word;
     Col_CustomWordType *type;
+    size_t headerSize;
 
     /*
      * Perform cleanup on all custom words that need sweeping.
      */
 
-    for (word = pool->sweepables; word; word = WORD_CUSTOM_NEXT(word, type)) {
+    for (word = pool->sweepables; word; word = WORD_CUSTOM_NEXT(word, type, headerSize)) {
 	ASSERT(WORD_TYPE(word) == WORD_TYPE_CUSTOM);
 	type = WORD_TYPEINFO(word);
 	ASSERT(type->freeProc);
+	switch (type->type) {
+	case COL_HASHMAP: headerSize = CUSTOMHASHMAP_HEADER_SIZE;
+	case COL_TRIEMAP: headerSize = CUSTOMTRIEMAP_HEADER_SIZE;
+	default:          headerSize = CUSTOM_HEADER_SIZE;
+	}
 	type->freeProc(word);
     }
 }

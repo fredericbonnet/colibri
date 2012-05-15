@@ -57,20 +57,29 @@ Col_MapSize(
     TYPECHECK_MAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
-	case WORD_TYPE_STRHASHMAP:
-	case WORD_TYPE_INTHASHMAP:
-	    return WORD_HASHMAP_SIZE(map);
+    case WORD_TYPE_STRHASHMAP:
+    case WORD_TYPE_INTHASHMAP:
+	return WORD_HASHMAP_SIZE(map);
 
-	case WORD_TYPE_STRTRIEMAP:
-	case WORD_TYPE_INTTRIEMAP:
-	    return WORD_TRIEMAP_SIZE(map);
+    case WORD_TYPE_STRTRIEMAP:
+    case WORD_TYPE_INTTRIEMAP:
+	return WORD_TRIEMAP_SIZE(map);
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM: 
+	switch (WORD_TYPEINFO(map)->type) {
+	case COL_HASHMAP: return WORD_HASHMAP_SIZE                                      (map);
+	case COL_TRIEMAP: return WORD_TRIEMAP_SIZE                                      (map);
+	case COL_MAP:     return ((Col_CustomMapType *)    WORD_TYPEINFO(map))->sizeProc(map);
+	case COL_INTMAP:  return ((Col_CustomIntMapType *) WORD_TYPEINFO(map))->sizeProc(map);
+	}
+	/* continued. */
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
-	    return 0;
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+	return 0;
     }
 }
 
@@ -101,6 +110,8 @@ Col_MapGet(
     Col_Word key,
     Col_Word *valuePtr)
 {
+    Col_MapGetProc *proc;
+
     /*
      * Check preconditions.
      */
@@ -108,19 +119,33 @@ Col_MapGet(
     TYPECHECK_WORDMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
-	case WORD_TYPE_STRHASHMAP:
-	    return Col_HashMapGet(map, key, valuePtr);
+    case WORD_TYPE_STRHASHMAP:
+	proc = Col_HashMapGet;
+	break;
 
-	case WORD_TYPE_STRTRIEMAP:
-	    return Col_TrieMapGet(map, key, valuePtr);
+    case WORD_TYPE_STRTRIEMAP:
+	proc = Col_TrieMapGet;
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomMapType *type = (Col_CustomMapType *) WORD_TYPEINFO(map);
+	switch (type->type.type) {
+	case COL_HASHMAP: proc = Col_HashMapGet; break;
+	case COL_TRIEMAP: proc = Col_TrieMapGet; break;
+	case COL_MAP:     proc = type->getProc; break;
+	}
+	break;
+	}
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
-	    return 0;
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+	return 0;
     }
+
+    return proc(map, key, valuePtr);
 }
 
 /*---------------------------------------------------------------------------
@@ -150,6 +175,8 @@ Col_IntMapGet(
     intptr_t key,
     Col_Word *valuePtr)
 {
+    Col_IntMapGetProc *proc;
+
     /*
      * Check preconditions.
      */
@@ -157,19 +184,28 @@ Col_IntMapGet(
     TYPECHECK_INTMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
-	case WORD_TYPE_INTHASHMAP:
-	    return Col_IntHashMapGet(map, key, valuePtr);
+    case WORD_TYPE_INTHASHMAP:
+	proc = Col_IntHashMapGet;
+	break;
 
-	case WORD_TYPE_INTTRIEMAP:
-	    return Col_IntTrieMapGet(map, key, valuePtr);
+    case WORD_TYPE_INTTRIEMAP:
+	proc = Col_IntTrieMapGet;
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM: 
+	ASSERT(WORD_TYPEINFO(map)->type == COL_INTMAP);
+	proc = ((Col_CustomIntMapType *) WORD_TYPEINFO(map))->getProc;
+	break;
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
-	    return 0;
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+	return 0;
     }
+
+    return proc(map, key, valuePtr);
 }
 
 /*---------------------------------------------------------------------------
@@ -201,6 +237,8 @@ Col_MapSet(
     Col_Word key,
     Col_Word value)
 {
+    Col_MapSetProc *proc;
+
     /*
      * Check preconditions.
      */
@@ -208,19 +246,33 @@ Col_MapSet(
     TYPECHECK_WORDMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
-	case WORD_TYPE_STRHASHMAP:
-	    return Col_HashMapSet(map, key, value);
+    case WORD_TYPE_STRHASHMAP:
+	proc = Col_HashMapSet;
+	break;
 
-	case WORD_TYPE_STRTRIEMAP:
-	    return Col_TrieMapSet(map, key, value);
+    case WORD_TYPE_STRTRIEMAP:
+	proc = Col_TrieMapSet;
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomMapType *type = (Col_CustomMapType *) WORD_TYPEINFO(map);
+	switch (type->type.type) {
+	case COL_HASHMAP: proc = Col_HashMapSet; break;
+	case COL_TRIEMAP: proc = Col_TrieMapSet; break;
+	case COL_MAP:     proc = type->setProc; break;
+	}
+	break;
+	}
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
-	    return 0;
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+	return 0;
     }
+
+    return proc(map, key, value);
 }
 
 /*---------------------------------------------------------------------------
@@ -252,6 +304,8 @@ Col_IntMapSet(
     intptr_t key,
     Col_Word value)
 {
+    Col_IntMapSetProc *proc;
+
     /*
      * Check preconditions.
      */
@@ -259,19 +313,28 @@ Col_IntMapSet(
     TYPECHECK_INTMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
-	case WORD_TYPE_INTHASHMAP:
-	    return Col_IntHashMapSet(map, key, value);
+    case WORD_TYPE_INTHASHMAP:
+	proc = Col_IntHashMapSet;
+	break;
 
-	case WORD_TYPE_INTTRIEMAP:
-	    return Col_IntTrieMapSet(map, key, value);
+    case WORD_TYPE_INTTRIEMAP:
+	proc = Col_IntTrieMapSet;
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM: 
+	ASSERT(WORD_TYPEINFO(map)->type == COL_INTMAP);
+	proc = ((Col_CustomIntMapType *) WORD_TYPEINFO(map))->setProc;
+	break;
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
-	    return 0;
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+	return 0;
     }
+
+    return proc(map, key, value);
 }
 
 /*---------------------------------------------------------------------------
@@ -298,6 +361,8 @@ Col_MapUnset(
     Col_Word map,
     Col_Word key)
 {
+    Col_MapUnsetProc *proc;
+
     /*
      * Check preconditions.
      */
@@ -305,19 +370,33 @@ Col_MapUnset(
     TYPECHECK_WORDMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
-	case WORD_TYPE_STRHASHMAP:
-	    return Col_HashMapUnset(map, key);
+    case WORD_TYPE_STRHASHMAP:
+	proc = Col_HashMapUnset;
+	break;
 
-	case WORD_TYPE_STRTRIEMAP:
-	    return Col_TrieMapUnset(map, key);
+    case WORD_TYPE_STRTRIEMAP:
+	proc = Col_TrieMapUnset;
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM: {
+	Col_CustomMapType *type = (Col_CustomMapType *) WORD_TYPEINFO(map);
+	switch (type->type.type) {
+	case COL_HASHMAP: proc = Col_HashMapUnset; break;
+	case COL_TRIEMAP: proc = Col_TrieMapUnset; break;
+	case COL_MAP:     proc = type->unsetProc; break;
+	}
+	break;
+	}
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
-	    return 0;
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+	return 0;
     }
+
+    return proc(map, key);
 }
 
 /*---------------------------------------------------------------------------
@@ -344,6 +423,8 @@ Col_IntMapUnset(
     Col_Word map,
     intptr_t key)
 {
+    Col_IntMapUnsetProc *proc;
+
     /*
      * Check preconditions.
      */
@@ -351,19 +432,28 @@ Col_IntMapUnset(
     TYPECHECK_INTMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
-	case WORD_TYPE_INTHASHMAP:
-	    return Col_IntHashMapUnset(map, key);
+    case WORD_TYPE_INTHASHMAP:
+	proc = Col_IntHashMapUnset;
+	break;
 
-	case WORD_TYPE_INTTRIEMAP:
-	    return Col_IntTrieMapUnset(map, key);
+    case WORD_TYPE_INTTRIEMAP:
+	proc = Col_IntTrieMapUnset;
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM: 
+	ASSERT(WORD_TYPEINFO(map)->type == COL_INTMAP);
+	proc = ((Col_CustomIntMapType *) WORD_TYPEINFO(map))->unsetProc;
+	break;
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
-	    return 0;
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+	return 0;
     }
+
+    return proc(map, key);
 }
 
 
@@ -400,22 +490,38 @@ Col_MapIterBegin(
     }
 
     switch (WORD_TYPE(map)) {
-	case WORD_TYPE_STRHASHMAP:
-	case WORD_TYPE_INTHASHMAP:
-	    Col_HashMapIterBegin(map, it);
-	    break;
+    case WORD_TYPE_STRHASHMAP:
+    case WORD_TYPE_INTHASHMAP:
+	Col_HashMapIterBegin(map, it);
+	break;
 
-	case WORD_TYPE_STRTRIEMAP:
-	case WORD_TYPE_INTTRIEMAP:
-	    Col_TrieMapIterFirst(map, it);
-	    break;
+    case WORD_TYPE_STRTRIEMAP:
+    case WORD_TYPE_INTTRIEMAP:
+	Col_TrieMapIterFirst(map, it);
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM: 
+	switch (WORD_TYPEINFO(map)->type) {
+	case COL_HASHMAP: Col_HashMapIterBegin(map, it); return;
+	case COL_TRIEMAP: Col_TrieMapIterFirst(map, it); return;
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
-	    *it = COL_MAPITER_NULL;
+	/*
+	 * Note: for custom maps we set the iterator entry field to a non-nil 
+	 * value upon success (i.e. when iterBeginProc returns non-zero) so that
+	 * Col_MapIterEnd() is false.
+	 */
+
+	case COL_MAP:    it->entry = ((Col_CustomMapType *)    WORD_TYPEINFO(map))->iterBeginProc(map, &it->traversal.custom) ? 1 : WORD_NIL; return;
+	case COL_INTMAP: it->entry = ((Col_CustomIntMapType *) WORD_TYPEINFO(map))->iterBeginProc(map, &it->traversal.custom) ? 1 : WORD_NIL; return;
+	}
+	/* continued. */
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+	*it = COL_MAPITER_NULL;
     }
 }
 
@@ -456,20 +562,35 @@ Col_MapIterFind(
     }
 
     switch (WORD_TYPE(map)) {
-	case WORD_TYPE_STRHASHMAP:
-	    Col_HashMapIterFind(map, key, createPtr, it);
-	    break;
+    case WORD_TYPE_STRHASHMAP:
+	Col_HashMapIterFind(map, key, createPtr, it);
+	break;
 
-	case WORD_TYPE_STRTRIEMAP:
-	    Col_TrieMapIterFind(map, key, createPtr, it);
-	    break;
+    case WORD_TYPE_STRTRIEMAP:
+	Col_TrieMapIterFind(map, key, createPtr, it);
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM: 
+	switch (WORD_TYPEINFO(map)->type) {
+	case COL_HASHMAP: Col_HashMapIterFind(map, key, createPtr, it); return;
+	case COL_TRIEMAP: Col_TrieMapIterFind(map, key, createPtr, it); return;
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
-	    *it = COL_MAPITER_NULL;
+	/*
+	 * Note: for custom maps we set the iterator entry field to a non-nil 
+	 * value upon success (i.e. when iterFindProc returns non-zero) so that
+	 * Col_MapIterEnd() is false.
+	 */
+
+	case COL_MAP: it->entry = ((Col_CustomMapType *) WORD_TYPEINFO(map))->iterFindProc(map, key, createPtr, &it->traversal.custom) ? 1 : WORD_NIL; return;
+	}
+	/* continued. */
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+	*it = COL_MAPITER_NULL;
     }
 }
 
@@ -480,7 +601,7 @@ Col_MapIterFind(
  *	given integer key within the map.
  *
  * Arguments:
- *	map		- Integer hash map to find or create entry into.
+ *	map		- Integer map to find or create entry into.
  *	key		- Integer entry key.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
  *	it		- Iterator to initialize.
@@ -509,20 +630,31 @@ Col_IntMapIterFind(
     }
 
     switch (WORD_TYPE(map)) {
-	case WORD_TYPE_INTHASHMAP:
-	    Col_IntHashMapIterFind(map, key, createPtr, it);
-	    break;
+    case WORD_TYPE_INTHASHMAP:
+	Col_IntHashMapIterFind(map, key, createPtr, it);
+	break;
 
-	case WORD_TYPE_INTTRIEMAP:
-	    Col_IntTrieMapIterFind(map, key, createPtr, it);
-	    break;
+    case WORD_TYPE_INTTRIEMAP:
+	Col_IntTrieMapIterFind(map, key, createPtr, it);
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM: 
+	ASSERT(WORD_TYPEINFO(map)->type == COL_INTMAP);
+	/*
+	 * Note: for custom maps we set the iterator entry field to a non-nil 
+	 * value upon success (i.e. when iterFindProc returns non-zero) so that
+	 * Col_MapIterEnd() is false.
+	 */
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
-	    *it = COL_MAPITER_NULL;
+	it->entry = ((Col_CustomIntMapType *) WORD_TYPEINFO(map))->iterFindProc(map, key, createPtr, &it->traversal.custom) ? 1 : WORD_NIL; return;
+	break;
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
+	*it = COL_MAPITER_NULL;
     }
 }
 
@@ -532,7 +664,7 @@ Col_IntMapIterFind(
  *	Get key & value from map iterator.
  *
  * Argument:
- *	it		- Map iterator to get key & value from.
+ *	it	- Map iterator to get key & value from.
  *
  * Type checking:
  *	*it* must be a valid string or custom map iterator.
@@ -560,12 +692,28 @@ Col_MapIterGet(
 
     ASSERT(it->entry);
 
+    if (WORD_TYPE(it->map) == WORD_TYPE_CUSTOM) {
+	switch (WORD_TYPEINFO(it->map)->type) {
+	case COL_MAP: {
+	    Col_CustomMapType *type 
+		    = (Col_CustomMapType *) WORD_TYPEINFO(it->map);
+	    *keyPtr   = type->iterGetKeyProc  (it->map, &it->traversal.custom);
+	    *valuePtr = type->iterGetValueProc(it->map, &it->traversal.custom);
+	    return;
+	    }
+	}
+
+	/*
+	 * Other custom maps are hash or trie maps and use regular entries.
+	 */
+    }
+
     ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_HASHENTRY 
 	    || WORD_TYPE(it->entry) == WORD_TYPE_MHASHENTRY
 	    || WORD_TYPE(it->entry) == WORD_TYPE_TRIELEAF
 	    || WORD_TYPE(it->entry) == WORD_TYPE_MTRIELEAF);
 
-    *keyPtr = WORD_MAPENTRY_KEY(it->entry);
+    *keyPtr   = WORD_MAPENTRY_KEY  (it->entry);
     *valuePtr = WORD_MAPENTRY_VALUE(it->entry);
 }
 
@@ -575,7 +723,7 @@ Col_MapIterGet(
  *	Get key & value from integer map iterator.
  *
  * Argument:
- *	it		- Integer map iterator to get key & value from.
+ *	it	- Integer map iterator to get key & value from.
  *
  * Type checking:
  *	*it* must be a valid integer map iterator.
@@ -603,13 +751,22 @@ Col_IntMapIterGet(
 
     ASSERT(it->entry);
 
+    if (WORD_TYPE(it->map) == WORD_TYPE_CUSTOM) {
+	Col_CustomIntMapType *type 
+		= (Col_CustomIntMapType *) WORD_TYPEINFO(it->map);
+	ASSERT(WORD_TYPEINFO(it->map)->type == COL_INTMAP);
+	*keyPtr   = type->iterGetKeyProc  (it->map, &it->traversal.custom);
+	*valuePtr = type->iterGetValueProc(it->map, &it->traversal.custom);
+	return;
+    }
+
     ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTHASHENTRY 
 	    || WORD_TYPE(it->entry) == WORD_TYPE_MINTHASHENTRY
 	    || WORD_TYPE(it->entry) == WORD_TYPE_INTTRIELEAF
 	    || WORD_TYPE(it->entry) == WORD_TYPE_MINTTRIELEAF);
 
-    *keyPtr = WORD_INTMAPENTRY_KEY(it->entry);
-    *valuePtr = WORD_MAPENTRY_VALUE(it->entry);
+    *keyPtr   = WORD_INTMAPENTRY_KEY(it->entry);
+    *valuePtr = WORD_MAPENTRY_VALUE (it->entry);
 }
 
 /*---------------------------------------------------------------------------
@@ -618,7 +775,7 @@ Col_IntMapIterGet(
  *	Get key from map iterator.
  *
  * Argument:
- *	it	- Map iterator to get key & value from.
+ *	it	- Map iterator to get key from.
  *
  * Type checking:
  *	*it* must be a valid string or custom map iterator.
@@ -642,6 +799,16 @@ Col_MapIterGetKey(
     RANGECHECK_MAPITER(it) return WORD_NIL;
 
     ASSERT(it->entry);
+
+    if (WORD_TYPE(it->map) == WORD_TYPE_CUSTOM) {
+	switch (WORD_TYPEINFO(it->map)->type) {
+	case COL_MAP: return ((Col_CustomMapType *) WORD_TYPEINFO(it->map))->iterGetKeyProc(it->map, &it->traversal.custom);
+	}
+
+	/*
+	 * Other custom maps are hash or trie maps and use regular entries.
+	 */
+    }
 
     ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_HASHENTRY 
 	    || WORD_TYPE(it->entry) == WORD_TYPE_MHASHENTRY
@@ -682,6 +849,11 @@ Col_IntMapIterGetKey(
 
     ASSERT(it->entry);
 
+    if (WORD_TYPE(it->map) == WORD_TYPE_CUSTOM) {
+	ASSERT(WORD_TYPEINFO(it->map)->type == COL_INTMAP);
+	return ((Col_CustomIntMapType *) WORD_TYPEINFO(it->map))->iterGetKeyProc(it->map, &it->traversal.custom);
+    }
+
     ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_INTHASHENTRY 
 	    || WORD_TYPE(it->entry) == WORD_TYPE_MINTHASHENTRY
 	    || WORD_TYPE(it->entry) == WORD_TYPE_INTTRIELEAF
@@ -720,6 +892,17 @@ Col_MapIterGetValue(
     RANGECHECK_MAPITER(it) return WORD_NIL;
 
     ASSERT(it->entry);
+
+    if (WORD_TYPE(it->map) == WORD_TYPE_CUSTOM) {
+	switch (WORD_TYPEINFO(it->map)->type) {
+	case COL_MAP:    return ((Col_CustomMapType *)    WORD_TYPEINFO(it->map))->iterGetValueProc(it->map, &it->traversal.custom);
+	case COL_INTMAP: return ((Col_CustomIntMapType *) WORD_TYPEINFO(it->map))->iterGetValueProc(it->map, &it->traversal.custom);
+	}
+
+	/*
+	 * Other custom maps are hash or trie maps and use regular entries.
+	 */
+    }
 
     ASSERT(WORD_TYPE(it->entry) == WORD_TYPE_HASHENTRY 
 	    || WORD_TYPE(it->entry) == WORD_TYPE_MHASHENTRY
@@ -762,21 +945,30 @@ Col_MapIterSetValue(
     RANGECHECK_MAPITER(it) return;
 
     switch (WORD_TYPE(it->map)) {
-	case WORD_TYPE_STRHASHMAP:
-	case WORD_TYPE_INTHASHMAP:
-	    Col_HashMapIterSetValue(it, value);
-	    break;
+    case WORD_TYPE_STRHASHMAP:
+    case WORD_TYPE_INTHASHMAP:
+	Col_HashMapIterSetValue(it, value);
+	break;
 
-	case WORD_TYPE_STRTRIEMAP:
-	case WORD_TYPE_INTTRIEMAP:
-	    Col_TrieMapIterSetValue(it, value);
-	    break;
+    case WORD_TYPE_STRTRIEMAP:
+    case WORD_TYPE_INTTRIEMAP:
+	Col_TrieMapIterSetValue(it, value);
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM: 
+	switch (WORD_TYPEINFO(it->map)->type) {
+	case COL_HASHMAP: Col_HashMapIterSetValue(it, value); return;
+	case COL_TRIEMAP: Col_TrieMapIterSetValue(it, value); return;
+	case COL_MAP:     ((Col_CustomMapType *)    WORD_TYPEINFO(it->map))->iterSetValueProc(it->map, value, &it->traversal.custom); return;
+	case COL_INTMAP:  ((Col_CustomIntMapType *) WORD_TYPEINFO(it->map))->iterSetValueProc(it->map, value, &it->traversal.custom); return;
+	}
+	/* continued. */
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
     }
 }
 
@@ -807,20 +999,36 @@ Col_MapIterNext(
     RANGECHECK_MAPITER(it) return;
 
     switch (WORD_TYPE(it->map)) {
-	case WORD_TYPE_STRHASHMAP:
-	case WORD_TYPE_INTHASHMAP:
-	    Col_HashMapIterNext(it);
-	    break;
+    case WORD_TYPE_STRHASHMAP:
+    case WORD_TYPE_INTHASHMAP:
+	Col_HashMapIterNext(it);
+	break;
 
-	case WORD_TYPE_STRTRIEMAP:
-	case WORD_TYPE_INTTRIEMAP:
-	    Col_TrieMapIterNext(it);
-	    break;
+    case WORD_TYPE_STRTRIEMAP:
+    case WORD_TYPE_INTTRIEMAP:
+	Col_TrieMapIterNext(it);
+	break;
 
-	/* WORD_TYPE_UNKNOWN */
+    case WORD_TYPE_CUSTOM: 
+	switch (WORD_TYPEINFO(it->map)->type) {
+	case COL_HASHMAP: Col_HashMapIterNext(it); return;
+	case COL_TRIEMAP: Col_TrieMapIterNext(it); return;
 
-	default:
-	    /* CANTHAPPEN */
-	    ASSERT(0);
+	/*
+	 * Note: for custom maps we set the iterator entry field to a non-nil 
+	 * value upon success (i.e. when iterNextProc returns non-zero) so that
+	 * Col_MapIterEnd() is false.
+	 */
+
+	case COL_MAP:    it->entry = ((Col_CustomMapType *)    WORD_TYPEINFO(it->map))->iterNextProc(it->map, &it->traversal.custom) ? 1 : WORD_NIL; return;
+	case COL_INTMAP: it->entry = ((Col_CustomIntMapType *) WORD_TYPEINFO(it->map))->iterNextProc(it->map, &it->traversal.custom) ? 1 : WORD_NIL; return;
+	}
+	/* continued. */
+
+    /* WORD_TYPE_UNKNOWN */
+
+    default:
+	/* CANTHAPPEN */
+	ASSERT(0);
     }
 }

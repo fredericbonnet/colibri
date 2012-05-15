@@ -69,6 +69,10 @@ EXTERN int		Col_IntMapUnset(Col_Word map, intptr_t key);
  *	trie.prev	- Subtrie whose rightmost leaf is the previous entry.
  *	trie.next	- Subtrie whose leftmost leaf is the next entry.
  *
+ * Custom-specific fields:
+ *	custom		- Opaque client data. A pair of values is available to
+ *			  custom map types for iteration purpose.
+ *
  * See also:
  *	<Col_MapIterator>
  *---------------------------------------------------------------------------*/
@@ -84,6 +88,7 @@ typedef struct ColMapIterator {
 	    Col_Word prev;
 	    Col_Word next;
 	} trie;
+	Col_ClientData custom[2];
     } traversal;
 } ColMapIterator;
 
@@ -198,5 +203,401 @@ EXTERN Col_Word		Col_MapIterGetValue(Col_MapIterator *it);
 EXTERN void		Col_MapIterSetValue(Col_MapIterator *it, 
 			    Col_Word value);
 EXTERN void		Col_MapIterNext(Col_MapIterator *it);
+
+
+/*
+================================================================================
+Section: Custom Maps
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_MapSizeProc
+ *
+ *	Function signature of custom map size procs.
+ *
+ * Argument:
+ *	map	- Custom map to get size for.
+ *
+ * Result:
+ *	The custom map size.
+ *
+ * See also: 
+ *	<Col_CustomMapType>, <Col_CustomIntMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef size_t (Col_MapSizeProc) (Col_Word map);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_MapGetProc
+ *
+ *	Function signature of custom map get procs.
+ *
+ * Arguments:
+ *	map		- Custom map to get entry from.
+ *	key		- Entry key. Can be any word type, including string, 
+ *			  however it must match the actual type used by the map.
+ *	valuePtr	- Returned entry value, if found.
+ *
+ * Results:
+ *	Whether the key was found in the map. In this case the value is returned
+ *	through valuePtr.
+ *
+ * See also: 
+ *	<Col_CustomMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef int (Col_MapGetProc)(Col_Word map, Col_Word key, Col_Word *valuePtr);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_IntMapGetProc
+ *
+ *	Function signature of custom integer map get procs.
+ *
+ * Arguments:
+ *	map		- Custom integer map to get entry from.
+ *	key		- Integer entry key.
+ *	valuePtr	- Returned entry value, if found.
+ *
+ * Results:
+ *	Whether the key was found in the map. In this case the value is returned
+ *	through valuePtr.
+ *
+ * See also: 
+ *	<Col_CustomIntMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef int (Col_IntMapGetProc)(Col_Word map, intptr_t key, Col_Word *valuePtr);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_MapSetProc
+ *
+ *	Function signature of custom map set procs.
+ *
+ * Arguments:
+ *	map	- Custom map to insert entry into.
+ *	key	- Entry key. Can be any word type, including string, however it
+ *		  must match the actual type used by the map.
+ *	value	- Entry value.
+ *
+ * Result:
+ *	Whether a new entry was created.
+ *
+ * See also: 
+ *	<Col_CustomMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef int (Col_MapSetProc)(Col_Word map, Col_Word key, Col_Word value);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_IntMapSetProc
+ *
+ *	Function signature of custom integer map set procs.
+ *
+ * Arguments:
+ *	map	- Custom integer map to insert entry into.
+ *	key	- Integer entry key.
+ *	value	- Entry value.
+ *
+ * Result:
+ *	Whether a new entry was created.
+ *
+ * See also: 
+ *	<Col_CustomIntMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef int (Col_IntMapSetProc)(Col_Word map, intptr_t key, Col_Word value);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_MapUnsetProc
+ *
+ *	Function signature of custom map unset procs.
+ *
+ * Arguments:
+ *	map	- Custom map to remove entry from.
+ *	key	- Entry key. Can be any word type, including string, however it
+ *		  must match the actual type used by the map.
+ *
+ * See also: 
+ *	<Col_CustomMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef int (Col_MapUnsetProc)(Col_Word map, Col_Word key);
+    
+/*---------------------------------------------------------------------------
+ * Typedef: Col_IntMapUnsetProc
+ *
+ *	Function signature of custom integer map unset procs.
+ *
+ * Arguments:
+ *	map	- Custom integer map to remove entry from.
+ *	key	- Integer entry key.
+ *
+ * See also: 
+ *	<Col_CustomIntMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef int (Col_IntMapUnsetProc)(Col_Word map, intptr_t key);
+    
+/*---------------------------------------------------------------------------
+ * Typedef: Col_MapIterBeginProc
+ *
+ *	Function signature of custom map iter begin procs.
+ *
+ * Arguments:
+ *	map		- Custom map to begin iteration for.
+ *	clientData	- Opaque client data. A pair of values is available to
+ *			  custom map types for iteration purpose.
+ *
+ * Result:
+ *	Nonzero if iteration began, zero if at end.
+ *
+ * See also: 
+ *	<Col_CustomMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef int (Col_MapIterBeginProc)(Col_Word map, 
+    Col_ClientData (*clientData)[2]);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_MapIterFindProc
+ *
+ *	Function signature of custom map iter find procs.
+ *
+ * Arguments:
+ *	map		- Custom map to find or create entry into.
+ *	key		- Entry key. Can be any word type, including string,
+ *			  however it must match the actual type used by the map.
+ *	createPtr	- (in) If non-NULL, whether to create entry if absent.
+ *	clientData	- Opaque client data. A pair of values is available to
+ *			  custom map types for iteration purpose.
+ *
+ * Result:
+ *	Nonzero if iteration began, zero if at end.
+ *
+ * See also: 
+ *	<Col_CustomMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef int (Col_MapIterFindProc)(Col_Word map, Col_Word key, int *createPtr,
+    Col_ClientData (*clientData)[2]);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_IntMapIterFindProc
+ *
+ *	Function signature of custom integer map iter find procs.
+ *
+ * Arguments:
+ *	map		- Custom integer map to find or create entry into.
+ *	key		- Integer entry key.
+ *	createPtr	- (in) If non-NULL, whether to create entry if absent.
+ *	clientData	- Opaque client data. A pair of values is available to
+ *			  custom map types for iteration purpose.
+ *
+ * Result:
+ *	Nonzero if iteration began, zero if at end.
+ *
+ * See also: 
+ *	<Col_CustomMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef int (Col_IntMapIterFindProc)(Col_Word map, intptr_t key, int *createPtr,
+    Col_ClientData (*clientData)[2]);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_MapIterNextProc
+ *
+ *	Function signature of custom map iter next procs.
+ *
+ * Arguments:
+ *	map		- Custom map to continue iteration for.
+ *	clientData	- Opaque client data. A pair of values is available to
+ *			  custom map types for iteration purpose.
+ *
+ * Result:
+ *	Nonzero if iteration continued, zero if at end.
+ *
+ * See also: 
+ *	<Col_CustomMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef int (Col_MapIterNextProc)(Col_Word map, 
+    Col_ClientData (*clientData)[2]);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_MapIterGetKeyProc
+ *
+ *	Function signature of custom map iter key get procs.
+ *
+ * Arguments:
+ *	map		- Custom map to get iterator key from.
+ *	clientData	- Opaque client data. A pair of values is available to
+ *			  custom map types for iteration purpose.
+ *
+ * Result:
+ *	Key word.
+ *
+ * See also: 
+ *	<Col_CustomMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef Col_Word (Col_MapIterGetKeyProc)(Col_Word map, 
+    Col_ClientData (*clientData)[2]);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_IntMapIterGetKeyProc
+ *
+ *	Function signature of custom integer map iter key get procs.
+ *
+ * Arguments:
+ *	map		- Custom integer map to get iterator key from.
+ *	key		- Integer entry key.
+ *	createPtr	- (in) If non-NULL, whether to create entry if absent.
+ *	clientData	- Opaque client data. A pair of values is available to
+ *			  custom map types for iteration purpose.
+ *
+ * Result:
+ *	Integer key.
+ *
+ * See also: 
+ *	<Col_CustomMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef intptr_t (Col_IntMapIterGetKeyProc)(Col_Word map,
+    Col_ClientData (*clientData)[2]);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_MapIterGetValueProc
+ *
+ *	Function signature of custom map iter value get procs.
+ *
+ * Arguments:
+ *	map		- Custom map to get iterator value from.
+ *	clientData	- Opaque client data. A pair of values is available to
+ *			  custom map types for iteration purpose.
+ *
+ * Result:
+ *	Value word.
+ *
+ * See also: 
+ *	<Col_CustomMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef Col_Word (Col_MapIterGetValueProc)(Col_Word map, 
+    Col_ClientData (*clientData)[2]);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_MapIterSetValueProc
+ *
+ *	Function signature of custom map iter value set procs.
+ *
+ * Arguments:
+ *	map		- Custom map to set iterator value for.
+ *	value		- Value to set.
+ *	clientData	- Opaque client data. A pair of values is available to
+ *			  custom map types for iteration purpose.
+ *
+ * Result:
+ *	Value word.
+ *
+ * See also: 
+ *	<Col_CustomMapType>
+ *---------------------------------------------------------------------------*/
+
+typedef Col_Word (Col_MapIterSetValueProc)(Col_Word map, Col_Word value,
+    Col_ClientData (*clientData)[2]);
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_CustomMapType
+ *
+ *	Custom map type descriptor. Inherits from <Col_CustomWordType>.
+ *
+ * Fields:
+ *	type			- Generic word type descriptor. Type field must 
+ *				  be equal to <COL_MAP>.
+ *	sizeProc		- Called to get map size.
+ *	getProc			- Called to get entry value.
+ *	setProc			- Called to set entry value.
+ *	unsetProc		- Called to unset entry.
+ *	iterBeginProc		- Called to begin iteration.
+ *	iterFindProc		- Called to begin iteration at given key.
+ *	iterNextProc		- Called to continue iteration.
+ *	iterGetKeyProc		- Called to get iterator key.
+ *	iterGetValueProc	- Called to get iterator value.
+ *	iterSetValueProc	- Called to set iterator value.
+ *
+ * See also:
+ *	<Col_CustomWordType>, <Col_MapSizeProc>, <Col_MapGetProc>, 
+ *	<Col_MapSetProc>, <Col_MapUnsetProc>, <Col_MapIterBeginProc>, 
+ *	<Col_MapIterFindProc>, <Col_MapIterNextProc>, <Col_MapIterGetKeyProc>, 
+ *	<Col_MapIterGetValueProc>, <Col_MapIterSetValueProc>
+ *---------------------------------------------------------------------------*/
+
+typedef struct Col_CustomMapType {
+    Col_CustomWordType type;
+    Col_MapSizeProc *sizeProc;
+    Col_MapGetProc *getProc;
+    Col_MapSetProc *setProc;
+    Col_MapUnsetProc *unsetProc;
+    Col_MapIterBeginProc *iterBeginProc;
+    Col_MapIterFindProc *iterFindProc;
+    Col_MapIterNextProc *iterNextProc;
+    Col_MapIterGetKeyProc *iterGetKeyProc;
+    Col_MapIterGetValueProc *iterGetValueProc;
+    Col_MapIterSetValueProc *iterSetValueProc;
+} Col_CustomMapType;
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_CustomIntMapType
+ *
+ *	Custom integer map type descriptor. Inherits from <Col_CustomWordType>.
+ *
+ * Fields:
+ *	type			- Generic word type descriptor. Type field must 
+ *				  be equal to <COL_INTMAP>.
+ *	sizeProc		- Called to get map size.
+ *	getProc			- Called to get entry value.
+ *	setProc			- Called to set entry value.
+ *	unsetProc		- Called to unset entry.
+ *	iterBeginProc		- Called to begin iteration.
+ *	iterFindProc		- Called to begin iteration at given key.
+ *	iterNextProc		- Called to continue iteration.
+ *	iterGetKeyProc		- Called to get iterator key.
+ *	iterGetValueProc	- Called to get iterator value.
+ *	iterSetValueProc	- Called to set iterator value.
+ *
+ * See also:
+ *	<Col_CustomWordType>, <Col_MapSizeProc>, <Col_IntMapGetProc>, 
+ *	<Col_IntMapSetProc>, <Col_IntMapUnsetProc>, <Col_MapIterBeginProc>, 
+ *	<Col_IntMapIterFindProc>, <Col_MapIterNextProc>, 
+ *	<Col_IntMapIterGetKeyProc>, <Col_MapIterGetValueProc>, 
+ *	<Col_MapIterSetValueProc>
+ *---------------------------------------------------------------------------*/
+
+typedef struct Col_CustomIntMapType {
+    Col_CustomWordType type;
+    Col_MapSizeProc *sizeProc;
+    Col_IntMapGetProc *getProc;
+    Col_IntMapSetProc *setProc;
+    Col_IntMapUnsetProc *unsetProc;
+    Col_MapIterBeginProc *iterBeginProc;
+    Col_IntMapIterFindProc *iterFindProc;
+    Col_MapIterNextProc *iterNextProc;
+    Col_IntMapIterGetKeyProc *iterGetKeyProc;
+    Col_MapIterGetValueProc *iterGetValueProc;
+    Col_MapIterSetValueProc *iterSetValueProc;
+} Col_CustomIntMapType;
+
+/****************************************************************************
+ * Group: Custom Map Creation
+ *
+ * Declarations:
+ *	<Col_NewCustomMap>, <Col_NewCustomIntMap>
+ ****************************************************************************/
+
+EXTERN Col_Word		Col_NewCustomMapMap(Col_CustomMapType *type, 
+			    size_t size, void **dataPtr);
+EXTERN Col_Word		Col_NewCustomIntMapMap(Col_CustomIntMapType *type, 
+			    size_t size, void **dataPtr);
 
 #endif /* _COLIBRI_MAP */

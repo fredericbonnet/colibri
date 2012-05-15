@@ -1829,10 +1829,10 @@ Section: Custom Hash Maps
  *	dataPtr		- Will hold a pointer to the allocated data.
  *
  * Result:
-  *	A new custom hash map word of the given size. Additionally:
+ *	A new custom hash map word of the given size. Additionally:
  *
  *	dataPtr	- Points to the allocated custom data.
-*
+ *
  * Side effects:
  *	Allocates memory cells.
  *---------------------------------------------------------------------------*/
@@ -1848,7 +1848,8 @@ Col_NewCustomHashMap(
     
     ASSERT(type->type.type == COL_HASHMAP);
 
-    map = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(&type->type, size));
+    map = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(&type->type, 
+	    CUSTOMHASHMAP_HEADER_SIZE, size));
     WORD_HASHMAP_INIT(map, type);
     AllocBuckets(map, capacity);
 

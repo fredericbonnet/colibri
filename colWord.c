@@ -171,9 +171,10 @@ Col_NewCustomWord(
 	 * Basic custom word.
 	 */
 
-	word = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(type, size));
+	word = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(type, CUSTOM_HEADER_SIZE,
+		size));
 	WORD_CUSTOM_INIT(word, type);
-	if (dataPtr) *dataPtr = WORD_CUSTOM_DATA(word, type);
+	if (dataPtr) *dataPtr = WORD_CUSTOM_DATA(word, type, CUSTOM_HEADER_SIZE);
     }
 
     if (type->freeProc) RememberSweepable(word, type);
@@ -408,11 +409,17 @@ Col_CustomWordInfo(
     void **dataPtr)
 {
     Col_CustomWordType *type;
+    size_t headerSize;
     
     switch (WORD_TYPE(word)) {
     case WORD_TYPE_CUSTOM:
 	type = WORD_TYPEINFO(word);
-	*dataPtr = WORD_CUSTOM_DATA(word, type);
+	switch (type->type) {
+	case COL_HASHMAP: headerSize = CUSTOMHASHMAP_HEADER_SIZE;
+	case COL_TRIEMAP: headerSize = CUSTOMTRIEMAP_HEADER_SIZE;
+	default:          headerSize = CUSTOM_HEADER_SIZE;
+	}
+	*dataPtr = WORD_CUSTOM_DATA(word, type, headerSize);
 	return type;
 
     default:

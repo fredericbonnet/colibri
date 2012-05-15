@@ -17,7 +17,6 @@
 
 #include "colWordInt.h"
 #include "colMapInt.h"
-#include "colHashInt.h"
 #include "colTrieInt.h"
 
 #include <stdlib.h>
@@ -2405,10 +2404,10 @@ Section: Custom Trie Maps
  *	dataPtr	- Will hold a pointer to the allocated data.
  *
  * Result:
-  *	A new custom trie map word of the given size. Additionally:
+ *	A new custom trie map word of the given size. Additionally:
  *
  *	dataPtr	- Points to the allocated custom data.
-*
+ *
  * Side effects:
  *	Allocates memory cells.
  *---------------------------------------------------------------------------*/
@@ -2423,7 +2422,8 @@ Col_NewCustomTrieMap(
     
     ASSERT(type->type.type == COL_TRIEMAP);
 
-    map = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(&type->type, size));
+    map = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(&type->type, 
+	    CUSTOMTRIEMAP_HEADER_SIZE, size));
     WORD_TRIEMAP_INIT(map, type);
 
     return map;

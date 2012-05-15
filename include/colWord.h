@@ -36,14 +36,12 @@ typedef uintptr_t Col_Word;
 #define WORD_NIL \
     ((Col_Word) 0)
 
-
-/* FIXME replace Col_GetWordInfo/Col_FindWordInfo by better system
-and type-specific accessors */
-
 /*---------------------------------------------------------------------------
  * Constants: Word Type Identifiers
  *
- *	Data types recognized by Colibri.
+ *	Data types recognized by Colibri. Values are OR-able so that a word can
+ *	match several types (e.g. a custom rope type as returned by 
+ *	<Col_WordType> would be <COL_CUSTOM>|<COL_ROPE>). 
  *
  *  COL_NIL	- Nil.
  *  COL_CUSTOM	- Custom type.

@@ -58,12 +58,12 @@ Internal Section: Word Types
  *
  *  WORD_TYPE_STRTRIEMAP	- String <Trie Map Word>
  *  WORD_TYPE_INTTRIEMAP	- Integer <Trie Map Word>
+ *  WORD_TYPE_TRIENODE		- Immutable <Trie Node Word>
+ *  WORD_TYPE_MTRIENODE		- Mutable <Trie Node Word>
  *  WORD_TYPE_STRTRIENODE	- Immutable <String Trie Node Word>
  *  WORD_TYPE_MSTRTRIENODE	- Mutable <String Trie Node Word>
  *  WORD_TYPE_INTTRIENODE	- Immutable <Integer Trie Node Word>
  *  WORD_TYPE_MINTTRIENODE	- Mutable <Integer Trie Node Word>
- *  WORD_TYPE_TRIENODE	- Immutable <Custom Trie Node Word>
- *  WORD_TYPE_MTRIENODE	- Mutable <Custom Trie Node Word>
  *  WORD_TYPE_TRIELEAF		- Immutable <Trie Leaf Word>
  *  WORD_TYPE_MTRIELEAF		- Mutable <Trie Leaf Word>
  *  WORD_TYPE_INTTRIELEAF	- Immutable Integer <Trie Leaf Word>
@@ -966,8 +966,8 @@ Internal Section: Custom Words
  *	<Col_CustomWordType>
  *---------------------------------------------------------------------------*/
 
-#define WORD_CUSTOM_NEXT(word, typeInfo) (*(Col_Word *)(((char *)(word))+WORD_CUSTOM_HEADER_SIZE(typeInfo)))
-#define WORD_CUSTOM_DATA(word, typeInfo) ((void *)(&WORD_CUSTOM_NEXT((word), (typeInfo))+((typeInfo)->freeProc?1:0)))
+#define WORD_CUSTOM_NEXT(word, typeInfo, headerSize) (*(Col_Word *)(((char *)(word))+headerSize))
+#define WORD_CUSTOM_DATA(word, typeInfo, headerSize) ((void *)(&WORD_CUSTOM_NEXT((word), (typeInfo), (headerSize))+((typeInfo)->freeProc?1:0)))
 
 /*---------------------------------------------------------------------------
  * Internal Constant: CUSTOM_HEADER_SIZE
@@ -981,30 +981,13 @@ Internal Section: Custom Words
 #define CUSTOM_HEADER_SIZE		(sizeof(Col_CustomWordType *)+sizeof(Col_Word *))
 
 /*---------------------------------------------------------------------------
- * Internal Macro: WORD_CUSTOM_HEADER_SIZE
- *
- *	Get number of cells taken by the custom word header.
- *
- * Arguments:
- *	typeInfo	- <WORD_TYPEINFO>
- *
- * Result:
- *	Number of cells taken by word header.
- *
- * See also:
- *	<Custom Word>, <CUSTOM_HEADER_SIZE>, <CUSTOMHASHMAP_HEADER_SIZE>
- *---------------------------------------------------------------------------*/
-
-#define WORD_CUSTOM_HEADER_SIZE(typeInfo) \
-    ((typeInfo)->type&COL_HASHMAP?CUSTOMHASHMAP_HEADER_SIZE:CUSTOM_HEADER_SIZE)
-
-/*---------------------------------------------------------------------------
  * Internal Macro: WORD_CUSTOM_SIZE
  *
  *	Get number of cells taken by the custom word.
  *
  * Arguments:
  *	typeInfo	- <WORD_TYPEINFO>
+ *	headerSize	- Byte size of predefined header.
  *	size		- Byte size of custom word data.
  *
  * Result:
@@ -1014,8 +997,8 @@ Internal Section: Custom Words
  *	<Custom Word>
  *---------------------------------------------------------------------------*/
 
-#define WORD_CUSTOM_SIZE(typeInfo, size) \
-    (NB_CELLS(WORD_CUSTOM_HEADER_SIZE(typeInfo)+((typeInfo)->freeProc?sizeof(Cell *):0)+(size)))
+#define WORD_CUSTOM_SIZE(typeInfo, headerSize, size) \
+    (NB_CELLS((headerSize)+((typeInfo)->freeProc?sizeof(Cell *):0)+(size)))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_CUSTOM_INIT
