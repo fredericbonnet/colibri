@@ -576,8 +576,9 @@ typedef Col_Word (Col_ListConcatProc) (Col_Word left, Col_Word right);
  *			  use the standard procedure.
  *
  * See also:
- *	<Col_CustomWordType>, <Col_ListLengthProc>, <Col_ListElementAtProc>, 
- *	<Col_ListChunkAtProc>, <Col_ListSublistProc>, <Col_ListConcatProc>
+ *	<Col_NewCustomWord>, <Col_CustomWordType>, <Col_ListLengthProc>, 
+ *	<Col_ListElementAtProc>, <Col_ListChunkAtProc>, <Col_ListSublistProc>, 
+ *	<Col_ListConcatProc>
  *---------------------------------------------------------------------------*/
 
 typedef struct Col_CustomListType {

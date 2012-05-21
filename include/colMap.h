@@ -527,10 +527,11 @@ typedef Col_Word (Col_MapIterSetValueProc)(Col_Word map, Col_Word value,
  *	iterSetValueProc	- Called to set iterator value.
  *
  * See also:
- *	<Col_CustomWordType>, <Col_MapSizeProc>, <Col_MapGetProc>, 
- *	<Col_MapSetProc>, <Col_MapUnsetProc>, <Col_MapIterBeginProc>, 
- *	<Col_MapIterFindProc>, <Col_MapIterNextProc>, <Col_MapIterGetKeyProc>, 
- *	<Col_MapIterGetValueProc>, <Col_MapIterSetValueProc>
+ *	<Col_NewCustomWord>, <Col_CustomWordType>, <Col_MapSizeProc>, 
+ *	<Col_MapGetProc>, <Col_MapSetProc>, <Col_MapUnsetProc>, 
+ *	<Col_MapIterBeginProc>, <Col_MapIterFindProc>, <Col_MapIterNextProc>, 
+ *	<Col_MapIterGetKeyProc>, <Col_MapIterGetValueProc>, 
+ *	<Col_MapIterSetValueProc>
  *---------------------------------------------------------------------------*/
 
 typedef struct Col_CustomMapType {
@@ -567,9 +568,9 @@ typedef struct Col_CustomMapType {
  *	iterSetValueProc	- Called to set iterator value.
  *
  * See also:
- *	<Col_CustomWordType>, <Col_MapSizeProc>, <Col_IntMapGetProc>, 
- *	<Col_IntMapSetProc>, <Col_IntMapUnsetProc>, <Col_MapIterBeginProc>, 
- *	<Col_IntMapIterFindProc>, <Col_MapIterNextProc>, 
+ *	<Col_NewCustomWord>, <Col_CustomWordType>, <Col_MapSizeProc>, 
+ *	<Col_IntMapGetProc>, <Col_IntMapSetProc>, <Col_IntMapUnsetProc>, 
+ *	<Col_MapIterBeginProc>, <Col_IntMapIterFindProc>, <Col_MapIterNextProc>,
  *	<Col_IntMapIterGetKeyProc>, <Col_MapIterGetValueProc>, 
  *	<Col_MapIterSetValueProc>
  *---------------------------------------------------------------------------*/
@@ -587,17 +588,5 @@ typedef struct Col_CustomIntMapType {
     Col_MapIterGetValueProc *iterGetValueProc;
     Col_MapIterSetValueProc *iterSetValueProc;
 } Col_CustomIntMapType;
-
-/****************************************************************************
- * Group: Custom Map Creation
- *
- * Declarations:
- *	<Col_NewCustomMap>, <Col_NewCustomIntMap>
- ****************************************************************************/
-
-EXTERN Col_Word		Col_NewCustomMapMap(Col_CustomMapType *type, 
-			    size_t size, void **dataPtr);
-EXTERN Col_Word		Col_NewCustomIntMapMap(Col_CustomIntMapType *type, 
-			    size_t size, void **dataPtr);
 
 #endif /* _COLIBRI_MAP */

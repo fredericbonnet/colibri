@@ -27,8 +27,8 @@ Section: Ropes
  * Group: Rope Creation
  *
  * Declarations:
- *	<Col_EmptyRope>, <Col_NewRopeFromString>, <Col_NewChar>, <Col_NewRope>,
- *	<Col_NormalizeRope>
+ *	<Col_EmptyRope>, <Col_NewRopeFromString>, <Col_NewCharWord>, 
+ *	<Col_NewRope>, <Col_NormalizeRope>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -797,8 +797,9 @@ typedef Col_Word (Col_RopeConcatProc) (Col_Word left, Col_Word right);
  *			  use the standard procedure.
  *
  * See also:
- *	<Col_CustomWordType>, <Col_RopeLengthProc>, <Col_RopeCharAtProc>, 
- *	<Col_RopeChunkAtProc>, <Col_RopeSubropeProc>, <Col_RopeConcatProc>
+ *	<Col_NewCustomWord>, <Col_CustomWordType>, <Col_RopeLengthProc>, 
+ *	<Col_RopeCharAtProc>, <Col_RopeChunkAtProc>, <Col_RopeSubropeProc>, 
+ *	<Col_RopeConcatProc>
  *---------------------------------------------------------------------------*/
 
 typedef struct Col_CustomRopeType {

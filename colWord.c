@@ -309,7 +309,7 @@ Col_WordType(
  *	word	- The word to get value for.
  *
  * Type checking:
- *	TODO
+ *	*word* must be a valid integer word.
  *
  * Result:
  *	The integer value.
@@ -350,7 +350,7 @@ Col_IntWordValue(
  *	word	- The word to get value for.
  *
  * Type checking:
- *	TODO
+ *	*word* must be a valid floating point word.
  *
  * Result:
  *	The floating point value.
@@ -393,11 +393,12 @@ Col_FloatWordValue(
  *	word	- The word to get data for.
  *
  * Type checking:
- *	TODO
+ *	*word* must be a valid custom word.
  *
  * Results:
- *	TODO
- *	dataPtr	- TODO
+ *	The custom word type descriptor. Additionally:
+ *
+ *	dataPtr	- Points to the allocated custom data.
  *
  * See also:
  *	<Col_NewCustomWord>

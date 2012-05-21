@@ -452,7 +452,7 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_RANGECHECK> error when *it* is at end.
  *
  * See also:
- *	<Col_Error>, <Col_listIterEnd>
+ *	<Col_Error>, <Col_ListIterEnd>
  *---------------------------------------------------------------------------*/
 
 #define RANGECHECK_LISTITER(it) \

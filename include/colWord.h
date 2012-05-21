@@ -41,7 +41,7 @@ typedef uintptr_t Col_Word;
  *
  *	Data types recognized by Colibri. Values are OR-able so that a word can
  *	match several types (e.g. a custom rope type as returned by 
- *	<Col_WordType> would be <COL_CUSTOM>|<COL_ROPE>). 
+ *	<Col_WordType> would be <COL_CUSTOM> | <COL_ROPE> ). 
  *
  *  COL_NIL	- Nil.
  *  COL_CUSTOM	- Custom type.
@@ -173,8 +173,9 @@ typedef void (Col_CustomWordChildrenProc) (Col_Word word,
  *			  NULL, do nothing.
  *
  * See also:
- *	<Col_CustomWordSizeProc>, <Col_CustomWordFreeProc>, 
- *	<Col_CustomWordChildrenProc>
+ *	<Col_NewCustomWord>, <Col_CustomWordType>, <Col_CustomWordSizeProc>, 
+ *	<Col_CustomWordFreeProc>, <Col_CustomWordChildrenProc>,
+ *	<Word Type Identifiers>
  *---------------------------------------------------------------------------*/
 
 typedef struct Col_CustomWordType {
@@ -206,7 +207,7 @@ EXTERN Col_Word		Col_NewCustomWord(Col_CustomWordType *type, size_t size,
  *
  * Declarations:
  *	<Col_WordType>, <Col_IntWordValue>, <Col_FloatWordValue>, 
- *	<Col_CustomWordData>, <Col_WordSynonym>, <Col_WordAddSynonym>, 
+ *	<Col_CustomWordInfo>, <Col_WordSynonym>, <Col_WordAddSynonym>, 
  *	<Col_WordClearSynonym>
  ****************************************************************************/
 

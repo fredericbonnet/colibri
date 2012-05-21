@@ -137,7 +137,8 @@ typedef int (Col_KeyDiffProc) (Col_Word key1, Col_Word key2, size_t *diffPtr,
  *	keyDiffProc	- Called to compare keys.
  *
  * See also:
- *	<Col_CustomWordType>, <Col_HashProc>, <Col_KeyDiffProc>
+ *	<Col_NewCustomWord>, <Col_NewCustomTrieMap>, <Col_CustomWordType>, 
+ *	<Col_HashProc>, <Col_KeyDiffProc>
  *---------------------------------------------------------------------------*/
 
 typedef struct Col_CustomTrieMapType {

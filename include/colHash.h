@@ -127,7 +127,8 @@ typedef int (Col_CompareProc) (Col_Word key1, Col_Word key2);
  *	compareProc	- Called to compare keys.
  *
  * See also:
- *	<Col_CustomWordType>, <Col_HashProc>, <Col_CompareProc>
+ *	<Col_NewCustomWord>, <Col_NewCustomHashMap>, <Col_CustomWordType>, 
+ *	<Col_HashProc>, <Col_CompareProc>
  *---------------------------------------------------------------------------*/
 
 typedef struct Col_CustomHashMapType {

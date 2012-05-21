@@ -96,7 +96,7 @@ Col_NewRopeFromString(
 }
 
 /*---------------------------------------------------------------------------
- * Function: Col_NewChar
+ * Function: Col_NewCharWord
  *
  *	Create a new rope from a single character. Use adaptive format.
  *

@@ -39,7 +39,7 @@ Internal Section: Word Types
  *  WORD_TYPE_WRAP		- <Wrap Word>
  *
  *  WORD_TYPE_UCSSTR		- <Fixed-Width UCS String Word>
- *  WORD_TYPE_UTFSTR		- <Variable-Width UTF String Word>
+ *  WORD_TYPE_UTFSTR		- <Variable-Width UTF-8/16 String Word>
  *  WORD_TYPE_SUBROPE		- <Subrope Word>
  *  WORD_TYPE_CONCATROPE	- <Concat Rope Word>
  *

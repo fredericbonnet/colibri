@@ -192,7 +192,24 @@ Col_NewVectorNV(
  * Group: Immutable Vector Accessors
  ****************************************************************************/
 
-/*TODO*/
+/*---------------------------------------------------------------------------
+ * Function: Col_VectorLength
+ *
+ *	Get the length of the vector.
+ *
+ * Argument:
+ *	vector	- Vector to get length for.
+ *
+ * Type checking:
+ *	*vector* must be a valid vector.
+ *
+ * Result:
+ *	The vector length.
+ *
+ * See also:
+ *	<Col_NewVector>, <Col_VectorElements>
+ *---------------------------------------------------------------------------*/
+
 size_t
 Col_VectorLength(
     Col_Word vector)
@@ -222,6 +239,25 @@ Col_VectorLength(
 	return 0;
     }
 }
+
+/*---------------------------------------------------------------------------
+ * Function: Col_VectorElements
+ *
+ *	Get the vector element array.
+ *
+ * Argument:
+ *	vector	- Vector to get elements for.
+ *
+ * Type checking:
+ *	*vector* must be a valid vector.
+ *
+ * Result:
+ *	The vector element array.
+ *
+ * See also:
+ *	<Col_NewVector>, <Col_VectorLength>
+ *---------------------------------------------------------------------------*/
+
 const Col_Word *
 Col_VectorElements(
     Col_Word vector)
@@ -363,7 +399,24 @@ Col_NewMVector(
  * Group: Mutable Vector Accessors
  ****************************************************************************/
 
-/*TODO*/
+/*---------------------------------------------------------------------------
+ * Function: Col_MVectorMaxLength
+ *
+ *	Get the maximum length of the mutable vector.
+ *
+ * Argument:
+ *	mvector	- Mutable vector to get maximum length for.
+ *
+ * Type checking:
+ *	*mvector* must be a valid mutable vector.
+ *
+ * Result:
+ *	The mutable vector maximum length.
+ *
+ * See also:
+ *	<Col_NewMVector>
+ *---------------------------------------------------------------------------*/
+
 size_t
 Col_MVectorMaxLength(
     Col_Word mvector)
@@ -380,6 +433,25 @@ Col_MVectorMaxLength(
 
     return VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(mvector) * CELL_SIZE);
 }
+
+/*---------------------------------------------------------------------------
+ * Function: Col_MVectorElements
+ *
+ *	Get the mutable vector element array.
+ *
+ * Argument:
+ *	mvector	- Mutable ector to get elements for.
+ *
+ * Type checking:
+ *	*mvector* must be a valid mutable vector.
+ *
+ * Result:
+ *	The mutable vector element array.
+ *
+ * See also:
+ *	<Col_VectorLength>
+ *---------------------------------------------------------------------------*/
+
 Col_Word *
 Col_MVectorElements(
     Col_Word mvector)

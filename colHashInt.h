@@ -45,7 +45,7 @@ Internal Section: Hash Maps
  *	Buckets are flat arrays of entries (themselves forming a linked
  *	list). So hash maps must know the location of their bucket container. 
  *	For small sizes, buckets are stored inline within the word cells. For 
- *	larger sizes we use a mutable <Vector Word> for container.
+ *	larger sizes we use a <Mutable Vector Word> for container.
  *
  *	Hash map words use one cell for the header plus several extra cells for
  *	static buckets (see <HASHMAP_STATICBUCKETS_NBCELLS>).
