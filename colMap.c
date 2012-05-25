@@ -468,8 +468,8 @@ Col_IntMapUnset(
  *	the map.
  *
  * Arguments:
- *	map	- Map to iterate over.
  *	it	- Iterator to initialize.
+ *	map	- Map to iterate over.
  *
  * Type checking:
  *	*map* must be a valid map.
@@ -477,33 +477,33 @@ Col_IntMapUnset(
 
 void
 Col_MapIterBegin(
-    Col_Word map,
-    Col_MapIterator *it)
+    Col_MapIterator it,
+    Col_Word map)
 {
     /*
      * Check preconditions.
      */
 
     TYPECHECK_MAP(map) {
-	*it = COL_MAPITER_NULL;
+	Col_MapIterSetNull(it);
 	return;
     }
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_STRHASHMAP:
     case WORD_TYPE_INTHASHMAP:
-	Col_HashMapIterBegin(map, it);
+	Col_HashMapIterBegin(it, map);
 	break;
 
     case WORD_TYPE_STRTRIEMAP:
     case WORD_TYPE_INTTRIEMAP:
-	Col_TrieMapIterFirst(map, it);
+	Col_TrieMapIterFirst(it, map);
 	break;
 
     case WORD_TYPE_CUSTOM: 
 	switch (WORD_TYPEINFO(map)->type) {
-	case COL_HASHMAP: Col_HashMapIterBegin(map, it); return;
-	case COL_TRIEMAP: Col_TrieMapIterFirst(map, it); return;
+	case COL_HASHMAP: Col_HashMapIterBegin(it, map); return;
+	case COL_TRIEMAP: Col_TrieMapIterFirst(it, map); return;
 
 	/*
 	 * Note: for custom maps we set the iterator entry field to a non-nil 
@@ -521,7 +521,7 @@ Col_MapIterBegin(
     default:
 	/* CANTHAPPEN */
 	ASSERT(0);
-	*it = COL_MAPITER_NULL;
+	Col_MapIterSetNull(it);
     }
 }
 
@@ -532,11 +532,11 @@ Col_MapIterBegin(
  *	given key within the map.
  *
  * Arguments:
+ *	it		- Iterator to initialize.
  *	map		- Map to find or create entry into.
  *	key		- Entry key. Can be any word type, including string,
  *			  however it must match the actual type used by the map.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
- *	it		- Iterator to initialize.
  *
  * Type checking:
  *	*map* must be a valid string or custom map.
@@ -547,33 +547,33 @@ Col_MapIterBegin(
 
 void
 Col_MapIterFind(
+    Col_MapIterator it,
     Col_Word map, 
     Col_Word key, 
-    int *createPtr, 
-    Col_MapIterator *it)
+    int *createPtr)
 {
     /*
      * Check preconditions.
      */
 
     TYPECHECK_WORDMAP(map) {
-	*it = COL_MAPITER_NULL;
+	Col_MapIterSetNull(it);
 	return;
     }
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_STRHASHMAP:
-	Col_HashMapIterFind(map, key, createPtr, it);
+	Col_HashMapIterFind(it, map, key, createPtr);
 	break;
 
     case WORD_TYPE_STRTRIEMAP:
-	Col_TrieMapIterFind(map, key, createPtr, it);
+	Col_TrieMapIterFind(it, map, key, createPtr);
 	break;
 
     case WORD_TYPE_CUSTOM: 
 	switch (WORD_TYPEINFO(map)->type) {
-	case COL_HASHMAP: Col_HashMapIterFind(map, key, createPtr, it); return;
-	case COL_TRIEMAP: Col_TrieMapIterFind(map, key, createPtr, it); return;
+	case COL_HASHMAP: Col_HashMapIterFind(it, map, key, createPtr); return;
+	case COL_TRIEMAP: Col_TrieMapIterFind(it, map, key, createPtr); return;
 
 	/*
 	 * Note: for custom maps we set the iterator entry field to a non-nil 
@@ -590,7 +590,7 @@ Col_MapIterFind(
     default:
 	/* CANTHAPPEN */
 	ASSERT(0);
-	*it = COL_MAPITER_NULL;
+	Col_MapIterSetNull(it);
     }
 }
 
@@ -601,10 +601,10 @@ Col_MapIterFind(
  *	given integer key within the map.
  *
  * Arguments:
+ *	it		- Iterator to initialize.
  *	map		- Integer map to find or create entry into.
  *	key		- Integer entry key.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
- *	it		- Iterator to initialize.
  *
  * Type checking:
  *	*map* must be a valid integer map.
@@ -615,27 +615,27 @@ Col_MapIterFind(
 
 void
 Col_IntMapIterFind(
+    Col_MapIterator it,
     Col_Word map, 
     intptr_t key, 
-    int *createPtr, 
-    Col_MapIterator *it)
+    int *createPtr)
 {
     /*
      * Check preconditions.
      */
 
     TYPECHECK_INTMAP(map) {
-	*it = COL_MAPITER_NULL;
+	Col_MapIterSetNull(it);
 	return;
     }
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_INTHASHMAP:
-	Col_IntHashMapIterFind(map, key, createPtr, it);
+	Col_IntHashMapIterFind(it, map, key, createPtr);
 	break;
 
     case WORD_TYPE_INTTRIEMAP:
-	Col_IntTrieMapIterFind(map, key, createPtr, it);
+	Col_IntTrieMapIterFind(it, map, key, createPtr);
 	break;
 
     case WORD_TYPE_CUSTOM: 
@@ -654,7 +654,7 @@ Col_IntMapIterFind(
     default:
 	/* CANTHAPPEN */
 	ASSERT(0);
-	*it = COL_MAPITER_NULL;
+	Col_MapIterSetNull(it);
     }
 }
 
@@ -679,7 +679,7 @@ Col_IntMapIterFind(
 
 void
 Col_MapIterGet(
-    Col_MapIterator *it,
+    Col_MapIterator it,
     Col_Word *keyPtr,
     Col_Word *valuePtr)
 {
@@ -738,7 +738,7 @@ Col_MapIterGet(
 
 void
 Col_IntMapIterGet(
-    Col_MapIterator *it,
+    Col_MapIterator it,
     intptr_t *keyPtr,
     Col_Word *valuePtr)
 {
@@ -789,7 +789,7 @@ Col_IntMapIterGet(
 
 Col_Word
 Col_MapIterGetKey(
-    Col_MapIterator *it)
+    Col_MapIterator it)
 {
     /*
      * Check preconditions.
@@ -838,7 +838,7 @@ Col_MapIterGetKey(
 
 intptr_t
 Col_IntMapIterGetKey(
-    Col_MapIterator *it)
+    Col_MapIterator it)
 {
     /*
      * Check preconditions.
@@ -882,7 +882,7 @@ Col_IntMapIterGetKey(
 
 Col_Word
 Col_MapIterGetValue(
-    Col_MapIterator *it)
+    Col_MapIterator it)
 {
     /*
      * Check preconditions.
@@ -934,7 +934,7 @@ Col_MapIterGetValue(
 
 void
 Col_MapIterSetValue(
-    Col_MapIterator *it,
+    Col_MapIterator it,
     Col_Word value)
 {
     /*
@@ -989,7 +989,7 @@ Col_MapIterSetValue(
 
 void
 Col_MapIterNext(
-    Col_MapIterator *it)
+    Col_MapIterator it)
 {
     /*
      * Check preconditions.

@@ -121,7 +121,7 @@ extern "C" {
  * Integral types.
  */
 
-#if defined(HAVE_STDINT_H)
+#if defined(HAVE_STDINT_H) || (defined(_MSC_VER) && _MSC_VER >= 1600)
     /* C99 types.*/
 #   include <stdint.h>
 #elif defined(_MSC_VER)
@@ -134,10 +134,32 @@ extern "C" {
 #   define uint32_t unsigned __int32
 #   define int64_t __int64
 #   define uint64_t unsigned __int64
-#   define UINT16_MAX (65535)
-#   define INTPTR_MIN (-2147483647-1)
-#   define INTPTR_MAX (2147483647)
-#   define UINTPTR_MAX (4294967295U)
+#   define intmax_t __int64
+#   define uintmax_t unsigned __int64
+#   define INT8_MIN _I8_MIN
+#   define INT8_MAX _I8_MAX
+#   define UINT8_MAX _UI8_MAX
+#   define INT16_MIN _I16_MIN
+#   define INT16_MAX _I16_MAX
+#   define UINT16_MAX _UI16_MAX
+#   define INT32_MIN _I32_MIN
+#   define INT32_MAX _I32_MAX
+#   define UINT32_MAX _UI32_MAX
+#   define INT64_MIN _I64_MIN
+#   define INT64_MAX _I64_MAX
+#   define UINT64_MAX _UI64_MAX
+#   define INTMAX_MIN _IMAX_MIN
+#   define INTMAX_MAX _IMAX_MAX
+#   define UINTMAX_MAX _UIMAX_MAX
+#   ifdef  _WIN64
+#	define INTPTR_MIN _I64_MIN
+#	define INTPTR_MAX _I64_MAX
+#	define UINTPTR_MAX _UI64_MAX
+#   else
+#	define INTPTR_MIN _I32_MIN
+#	define INTPTR_MAX _I32_MAX
+#	define UINTPTR_MAX _UI32_MAX
+#   endif
 #else
     /* Sensible fallback. */
 #   define int8_t char
@@ -148,6 +170,28 @@ extern "C" {
 #   define uint32_t unsigned int
 #   define int64_t long long
 #   define uint64_t unsigned long long
+#   define intmax_t long long
+#   define uintmax_t unsigned long long
+#   define intptr_t int
+#   define uintptr_t unsigned int
+#   define INT8_MIN CHAR_MIN
+#   define INT8_MAX CHAR_MAX
+#   define UINT8_MAX UCHAR_MAX
+#   define INT16_MIN SHRT_MIN
+#   define INT16_MAX SHRT_MAX
+#   define UINT16_MAX USHRT_MAX
+#   define INT32_MIN INT_MIN
+#   define INT32_MAX INT_MAX
+#   define UINT32_MAX UINT_MAX
+#   define INT64_MIN LLONG_MIN
+#   define INT64_MAX LLONG_MAX
+#   define UINT64_MAX ULLONG_MAX
+#   define INTMAX_MIN LLONG_MIN
+#   define INTMAX_MAX LLONG_MAX
+#   define UINTMAX_MAX ULLONG_MAX
+#   define INTPTR_MIN INT_MIN
+#   define INTPTR_MAX INT_MAX
+#   define UINTPTR_MAX UINT_MAX
 #endif
 
 #include <stddef.h> /* For size_t */

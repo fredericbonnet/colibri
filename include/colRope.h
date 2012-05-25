@@ -15,6 +15,7 @@
 
 #include <stddef.h> /* For size_t */
 #include <stdarg.h> /* For variadic procs */
+#include <string.h> /* for memset */
 
 
 /*
@@ -385,8 +386,7 @@ EXTERN int		Col_TraverseRopeChunks(Col_Word rope, size_t start,
  * Declarations: 
  *	<Col_RopeIterBegin>, <Col_RopeIterFirst>, <Col_RopeIterLast>, 
  *	<Col_RopeIterString>, <Col_RopeIterCompare>, <Col_RopeIterMoveTo>,
- *	<Col_RopeIterForward>, <Col_RopeIterBackward>, 
- *	<ColRopeIterUpdateTraversalInfo>, <ColStringIterCharAt>
+ *	<Col_RopeIterForward>, <Col_RopeIterBackward>
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -467,20 +467,15 @@ typedef struct ColRopeIterator {
  *	Datatype is opaque. Fields should not be accessed by client code.
  *
  *	Each iterator takes 10 words on the stack.
+ *
+ *	The type is defined as a single-element array of the internal datatype:
+ *
+ *	- declared variables allocate the right amount of space on the stack,
+ *	- calls use pass-by-reference (i.e. pointer) and not pass-by-value,
+ *	- forbidden as return type.
  *---------------------------------------------------------------------------*/
 
-typedef ColRopeIterator Col_RopeIterator;
-
-/*---------------------------------------------------------------------------
- * Internal Variable: colRopeIterNull
- *
- *	Static variable for rope iterator initialization.
- *
- * See also:
- *	<COL_ROPEITER_NULL>
- *---------------------------------------------------------------------------*/
-
-static const Col_RopeIterator colRopeIterNull = {WORD_NIL,0,0,{NULL}};
+typedef ColRopeIterator Col_RopeIterator[1];
 
 /*---------------------------------------------------------------------------
  * Constant: COL_ROPEITER_NULL
@@ -491,14 +486,14 @@ static const Col_RopeIterator colRopeIterNull = {WORD_NIL,0,0,{NULL}};
  *	<Col_RopeIterator>, <Col_RopeIterNull>
  *---------------------------------------------------------------------------*/
 
-#define COL_ROPEITER_NULL	colRopeIterNull
+#define COL_ROPEITER_NULL	{{WORD_NIL,0,0,{NULL}}}
 
 /*---------------------------------------------------------------------------
  * Macro: Col_RopeIterNull
  *
  *	Test whether iterator is null (e.g. it has been set to 
- *	<COL_ROPEITER_NULL>). This uninitialized states renders it unusable for
- *	any call. Use with caution.
+ *	<COL_ROPEITER_NULL> or <Col_RopeIterSetNull>). This uninitialized state
+ *	renders it unusable for any call. Use with caution.
  *
  * Argument:
  *	it	- The iterator to test. (Caution: evaluated several times during
@@ -508,11 +503,26 @@ static const Col_RopeIterator colRopeIterNull = {WORD_NIL,0,0,{NULL}};
  *	Non-zero if iterator is null.
  *
  * See also: 
- *	<Col_RopeIterator>, <COL_ROPEITER_NULL>
+ *	<Col_RopeIterator>, <COL_ROPEITER_NULL>, <Col_RopeIterSetNull>
  *---------------------------------------------------------------------------*/
 
 #define Col_RopeIterNull(it) \
     ((it)->rope == WORD_NIL && (it)->traversal.str.begin == NULL)
+
+/*---------------------------------------------------------------------------
+ * Macro: Col_RopeIterSetNull
+ *
+ *	Set an iterator to null.
+ *
+ * Argument:
+ *	it	- Iterator to initialize.
+ *
+ * See also: 
+ *	<Col_RopeIterator>
+ *---------------------------------------------------------------------------*/
+
+#define Col_RopeIterSetNull(it) \
+    memset(it, 0, sizeof(it))
 
 /*---------------------------------------------------------------------------
  * Macro: Col_RopeIterRope
@@ -591,7 +601,7 @@ static const Col_RopeIterator colRopeIterNull = {WORD_NIL,0,0,{NULL}};
 
 #define Col_RopeIterAt(it) \
     ((it)->rope \
-	? (!(it)->traversal.rope.leaf?ColRopeIterUpdateTraversalInfo(it),0:0,(it)->traversal.rope.proc((it)->traversal.rope.leaf, (it)->traversal.rope.index)) \
+	? (!(it)->traversal.rope.leaf?ColRopeIterUpdateTraversalInfo((ColRopeIterator*)it),0:0,(it)->traversal.rope.proc((it)->traversal.rope.leaf, (it)->traversal.rope.index)) \
 	: ColStringIterCharAt(it))
 
 /*---------------------------------------------------------------------------
@@ -649,25 +659,41 @@ static const Col_RopeIterator colRopeIterNull = {WORD_NIL,0,0,{NULL}};
 #define Col_RopeIterEnd(it) \
     ((it)->index >= (it)->length)
 
+/*---------------------------------------------------------------------------
+ * Macro: Col_RopeIterSet
+ *
+ *	Initialize an iterator to another one's value.
+ *
+ * Argument:
+ *	it	- Iterator to initialize.
+ *	value	- Value to set.
+ *
+ * See also: 
+ *	<Col_RopeIterator>
+ *---------------------------------------------------------------------------*/
+
+#define Col_RopeIterSet(it, value) \
+    (*(it) = *(value))
+
 /*
  * Remaining declarations.
  */
 
-EXTERN void		Col_RopeIterBegin(Col_Word rope, size_t index, 
-			    Col_RopeIterator *it);
-EXTERN void		Col_RopeIterFirst(Col_Word rope, Col_RopeIterator *it);
-EXTERN void		Col_RopeIterLast(Col_Word rope, Col_RopeIterator *it);
-EXTERN void		Col_RopeIterString(Col_StringFormat format, 
-			    const void *data, size_t length, 
-			    Col_RopeIterator *it);
-EXTERN int		Col_RopeIterCompare(const Col_RopeIterator *it1, 
-			    const Col_RopeIterator *it2);
-EXTERN void		Col_RopeIterMoveTo(Col_RopeIterator *it, size_t index);
-EXTERN void		Col_RopeIterForward(Col_RopeIterator *it, size_t nb);
-EXTERN void		Col_RopeIterBackward(Col_RopeIterator *it, size_t nb);
+EXTERN void		Col_RopeIterBegin(Col_RopeIterator it, Col_Word rope, 
+			    size_t index);
+EXTERN void		Col_RopeIterFirst(Col_RopeIterator it, Col_Word rope);
+EXTERN void		Col_RopeIterLast(Col_RopeIterator it, Col_Word rope);
+EXTERN void		Col_RopeIterString(Col_RopeIterator it, 
+			    Col_StringFormat format, const void *data, 
+			    size_t length);
+EXTERN int		Col_RopeIterCompare(const Col_RopeIterator it1, 
+			    const Col_RopeIterator it2);
+EXTERN void		Col_RopeIterMoveTo(Col_RopeIterator it, size_t index);
+EXTERN void		Col_RopeIterForward(Col_RopeIterator it, size_t nb);
+EXTERN void		Col_RopeIterBackward(Col_RopeIterator it, size_t nb);
 
-EXTERN void		ColRopeIterUpdateTraversalInfo(Col_RopeIterator *it);
-EXTERN Col_Char		ColStringIterCharAt(const Col_RopeIterator *it);
+EXTERN void		ColRopeIterUpdateTraversalInfo(ColRopeIterator *it);
+EXTERN Col_Char		ColStringIterCharAt(const ColRopeIterator *it);
 
 
 /*

@@ -382,7 +382,7 @@ StringTrieMapFindNode(
     int compare;
     Col_Word node, grandParent, parent, left, right;
     Col_Word entryKey;
-    Col_RopeIterator itKey;
+    Col_RopeIterator itKey = COL_ROPEITER_NULL;
     size_t diff;
     Col_Char mask, newMask;
     Col_Char cKey, cEntryKey;
@@ -405,17 +405,17 @@ StringTrieMapFindNode(
     parent = map;
     left = WORD_NIL;
     right = WORD_NIL;
-    Col_RopeIterBegin(key, 0, &itKey);
+    Col_RopeIterFirst(itKey, key);
     while (node) {
 	switch (WORD_TYPE(node)) {
 	case WORD_TYPE_STRTRIENODE:
 	case WORD_TYPE_MSTRTRIENODE:
 	    mask = WORD_STRTRIENODE_MASK(node);
 	    cKey = COL_CHAR_INVALID;
-	    if (!Col_RopeIterEnd(&itKey)) {
-		Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
-		if (!Col_RopeIterEnd(&itKey)) {
-		    cKey = Col_RopeIterAt(&itKey);
+	    if (!Col_RopeIterEnd(itKey)) {
+		Col_RopeIterMoveTo(itKey, WORD_STRTRIENODE_DIFF(node));
+		if (!Col_RopeIterEnd(itKey)) {
+		    cKey = Col_RopeIterAt(itKey);
 		}
 	    }
 
@@ -488,7 +488,7 @@ StringTrieMapFindNode(
     parent = map;
     left = WORD_NIL;
     right = WORD_NIL;
-    Col_RopeIterBegin(key, 0, &itKey);
+    Col_RopeIterFirst(itKey, key);
     while (node) {
 	switch (WORD_TYPE(node)) {
 	case WORD_TYPE_STRTRIENODE:
@@ -504,10 +504,10 @@ StringTrieMapFindNode(
 		break;
 	    }
 	    cKey = COL_CHAR_INVALID;
-	    if (!Col_RopeIterEnd(&itKey)) {
-		Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(node));
-		if (!Col_RopeIterEnd(&itKey)) {
-		    cKey = Col_RopeIterAt(&itKey);
+	    if (!Col_RopeIterEnd(itKey)) {
+		Col_RopeIterMoveTo(itKey, WORD_STRTRIENODE_DIFF(node));
+		if (!Col_RopeIterEnd(itKey)) {
+		    cKey = Col_RopeIterAt(itKey);
 		}
 	    }
 
@@ -535,10 +535,10 @@ StringTrieMapFindNode(
     }
     if (comparePtr) {
 	cKey = COL_CHAR_INVALID;
-	if (!Col_RopeIterEnd(&itKey)) {
-	    Col_RopeIterMoveTo(&itKey, diff);
-	    if (!Col_RopeIterEnd(&itKey)) {
-		cKey = Col_RopeIterAt(&itKey);
+	if (!Col_RopeIterEnd(itKey)) {
+	    Col_RopeIterMoveTo(itKey, diff);
+	    if (!Col_RopeIterEnd(itKey)) {
+		cKey = Col_RopeIterAt(itKey);
 	    }
 	}
 	*comparePtr = ((cKey != COL_CHAR_INVALID && (!newMask 
@@ -1339,13 +1339,13 @@ ConvertStringNodeToMutable(
     Col_Word prefix)
 {
     Col_Word *nodePtr, existing, converted;
-    Col_RopeIterator itKey;
+    Col_RopeIterator itKey = COL_ROPEITER_NULL;
     Col_Char mask;
     Col_Char cKey;
 
     ASSERT(WORD_TYPE(node) == WORD_TYPE_STRTRIENODE || WORD_TYPE(node) == WORD_TYPE_TRIELEAF);
     nodePtr = &WORD_TRIEMAP_ROOT(map);
-    Col_RopeIterBegin(prefix, 0, &itKey);
+    Col_RopeIterFirst(itKey, prefix);
     for (;;) {
 	existing = *nodePtr;
 	switch (WORD_TYPE(existing)) {
@@ -1368,10 +1368,10 @@ ConvertStringNodeToMutable(
 	    ASSERT(existing != node);
 	    mask = WORD_STRTRIENODE_MASK(existing);
 	    cKey = COL_CHAR_INVALID;
-	    if (!Col_RopeIterEnd(&itKey)) {
-		Col_RopeIterMoveTo(&itKey, WORD_STRTRIENODE_DIFF(existing));
-		if (!Col_RopeIterEnd(&itKey)) {
-		    cKey = Col_RopeIterAt(&itKey);
+	    if (!Col_RopeIterEnd(itKey)) {
+		Col_RopeIterMoveTo(itKey, WORD_STRTRIENODE_DIFF(existing));
+		if (!Col_RopeIterEnd(itKey)) {
+		    cKey = Col_RopeIterAt(itKey);
 		}
 	    }
 
@@ -2000,8 +2000,8 @@ Col_IntTrieMapUnset(
  *	within the map.
  *
  * Arguments:
- *	map	- Trie map to iterate over.
  *	it	- Iterator to initialize.
+ *	map	- Trie map to iterate over.
  *
  * Type checking:
  *	*map* must be a valid trie map.
@@ -2009,15 +2009,15 @@ Col_IntTrieMapUnset(
 
 void
 Col_TrieMapIterFirst(
-    Col_Word map,
-    Col_MapIterator *it)
+    Col_MapIterator it,
+    Col_Word map)
 {
     /*
      * Check preconditions.
      */
 
     TYPECHECK_TRIEMAP(map) {
-	*it = COL_MAPITER_NULL;
+	Col_MapIterSetNull(it);
 	return;
     }
 
@@ -2033,8 +2033,8 @@ Col_TrieMapIterFirst(
  *	within the map.
  *
  * Arguments:
- *	map	- Trie map to iterate over.
  *	it	- Iterator to initialize.
+ *	map	- Trie map to iterate over.
  *
  * Type checking:
  *	*map* must be a valid trie map.
@@ -2042,15 +2042,15 @@ Col_TrieMapIterFirst(
 
 void
 Col_TrieMapIterLast(
-    Col_Word map,
-    Col_MapIterator *it)
+    Col_MapIterator it,
+    Col_Word map)
 {
     /*
      * Check preconditions.
      */
 
     TYPECHECK_TRIEMAP(map) {
-	*it = COL_MAPITER_NULL;
+	Col_MapIterSetNull(it);
 	return;
     }
 
@@ -2066,11 +2066,11 @@ Col_TrieMapIterLast(
  *	the given key within the map.
  *
  * Arguments:
+ *	it		- Iterator to initialize.
  *	map		- Trie map to find or create entry into.
  *	key		- Entry key. Can be any word type, including string,
  *			  however it must match the actual type used by the map.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
- *	it		- Iterator to initialize.
  *
  * Type checking:
  *	*map* must be a valid string or custom trie map.
@@ -2081,17 +2081,17 @@ Col_TrieMapIterLast(
 
 void
 Col_TrieMapIterFind(
+    Col_MapIterator it,
     Col_Word map, 
     Col_Word key, 
-    int *createPtr, 
-    Col_MapIterator *it)
+    int *createPtr)
 {
     /*
      * Check preconditions.
      */
 
     TYPECHECK_WORDTRIEMAP(map) {
-	*it = COL_MAPITER_NULL;
+	Col_MapIterSetNull(it);
 	return;
     }
 
@@ -2125,10 +2125,10 @@ Col_TrieMapIterFind(
  *	the given integer key within the map.
  *
  * Arguments:
+ *	it		- Iterator to initialize.
  *	map		- Integer trie map to find or create entry into.
  *	key		- Integer entry key.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
- *	it		- Iterator to initialize.
  *
  * Type checking:
  *	*map* must be a valid integer trie map.
@@ -2139,17 +2139,17 @@ Col_TrieMapIterFind(
 
 void
 Col_IntTrieMapIterFind(
+    Col_MapIterator it,
     Col_Word map, 
     intptr_t key, 
-    int *createPtr, 
-    Col_MapIterator *it)
+    int *createPtr)
 {
     /*
      * Check preconditions.
      */
 
     TYPECHECK_INTTRIEMAP(map) {
-	*it = COL_MAPITER_NULL;
+	Col_MapIterSetNull(it);
 	return;
     }
 
@@ -2178,7 +2178,7 @@ Col_IntTrieMapIterFind(
 
 void
 Col_TrieMapIterSetValue(
-    Col_MapIterator *it,
+    Col_MapIterator it,
     Col_Word value)
 {
     /*
@@ -2271,7 +2271,7 @@ Col_TrieMapIterSetValue(
 
 void
 Col_TrieMapIterNext(
-    Col_MapIterator *it)
+    Col_MapIterator it)
 {
     /*
      * Check preconditions.
@@ -2330,7 +2330,7 @@ Col_TrieMapIterNext(
 
 void
 Col_TrieMapIterPrevious(
-    Col_MapIterator *it)
+    Col_MapIterator it)
 {
     /*
      * Check preconditions.
@@ -2343,7 +2343,7 @@ Col_TrieMapIterPrevious(
 	 * Allow iterators at end to go back.
 	 */
 
-	Col_TrieMapIterLast(it->map, it);
+	Col_TrieMapIterLast(it, it->map);
 	return;
     }
 

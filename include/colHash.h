@@ -64,14 +64,14 @@ EXTERN int		Col_IntHashMapUnset(Col_Word map, intptr_t key);
  *	<Col_HashMapIterSetValue>, <Col_HashMapIterNext>
  ****************************************************************************/
 
-EXTERN void		Col_HashMapIterBegin(Col_Word map, Col_MapIterator *it);
-EXTERN void		Col_HashMapIterFind(Col_Word map, Col_Word key, 
-			    int *createPtr, Col_MapIterator *it);
-EXTERN void		Col_IntHashMapIterFind(Col_Word map, intptr_t key, 
-			    int *createPtr, Col_MapIterator *it);
-EXTERN void		Col_HashMapIterSetValue(Col_MapIterator *it, 
+EXTERN void		Col_HashMapIterBegin(Col_MapIterator it, Col_Word map);
+EXTERN void		Col_HashMapIterFind(Col_MapIterator it, Col_Word map, 
+			    Col_Word key, int *createPtr);
+EXTERN void		Col_IntHashMapIterFind(Col_MapIterator it, Col_Word map,
+			    intptr_t key, int *createPtr);
+EXTERN void		Col_HashMapIterSetValue(Col_MapIterator it, 
 			    Col_Word value);
-EXTERN void		Col_HashMapIterNext(Col_MapIterator *it);
+EXTERN void		Col_HashMapIterNext(Col_MapIterator it);
 
 
 /*

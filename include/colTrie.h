@@ -64,18 +64,16 @@ EXTERN int		Col_IntTrieMapUnset(Col_Word map, intptr_t key);
  *	<Col_TrieMapIterPrevious>
  ****************************************************************************/
 
-EXTERN void		Col_TrieMapIterFirst(Col_Word map, 
-			    Col_MapIterator *it);
-EXTERN void		Col_TrieMapIterLast(Col_Word map, 
-			    Col_MapIterator *it);
-EXTERN void		Col_TrieMapIterFind(Col_Word map, Col_Word key, 
-			    int *createPtr, Col_MapIterator *it);
-EXTERN void		Col_IntTrieMapIterFind(Col_Word map, intptr_t key, 
-			    int *createPtr, Col_MapIterator *it);
-EXTERN void		Col_TrieMapIterSetValue(Col_MapIterator *it, 
+EXTERN void		Col_TrieMapIterFirst(Col_MapIterator it, Col_Word map);
+EXTERN void		Col_TrieMapIterLast(Col_MapIterator it, Col_Word map);
+EXTERN void		Col_TrieMapIterFind(Col_MapIterator it, Col_Word map, 
+			    Col_Word key, int *createPtr);
+EXTERN void		Col_IntTrieMapIterFind(Col_MapIterator it, Col_Word map, 
+			    intptr_t key, int *createPtr);
+EXTERN void		Col_TrieMapIterSetValue(Col_MapIterator it, 
 			    Col_Word value);
-EXTERN void		Col_TrieMapIterNext(Col_MapIterator *it);
-EXTERN void		Col_TrieMapIterPrevious(Col_MapIterator *it);
+EXTERN void		Col_TrieMapIterNext(Col_MapIterator it);
+EXTERN void		Col_TrieMapIterPrevious(Col_MapIterator it);
 
 
 /*

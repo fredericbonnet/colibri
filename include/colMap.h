@@ -102,20 +102,15 @@ typedef struct ColMapIterator {
  *	Datatype is opaque. Fields should not be accessed by client code.
  *
  *	Each iterator takes 4 words on the stack.
+ *
+ *	The type is defined as a single-element array of the internal datatype:
+ *
+ *	- declared variables allocate the right amount of space on the stack,
+ *	- calls use pass-by-reference (i.e. pointer) and not pass-by-value,
+ *	- forbidden as return type.
  *---------------------------------------------------------------------------*/
 
-typedef ColMapIterator Col_MapIterator;
-
-/*---------------------------------------------------------------------------
- * Internal Variable: colMapIterNull
- *
- *	Static variable for map iterator initialization.
- *
- * See also:
- *	<COL_MAPITER_NULL>
- *---------------------------------------------------------------------------*/
-
-static const Col_MapIterator colMapIterNull = {WORD_NIL};
+typedef ColMapIterator Col_MapIterator[1];
 
 /*---------------------------------------------------------------------------
  * Constant: COL_MAPITER_NULL
@@ -126,7 +121,7 @@ static const Col_MapIterator colMapIterNull = {WORD_NIL};
  *	<Col_MapIterator>, <Col_MapIterNull>
  *---------------------------------------------------------------------------*/
 
-#define COL_MAPITER_NULL	colMapIterNull
+#define COL_MAPITER_NULL	{{WORD_NIL}}
 
 /*---------------------------------------------------------------------------
  * Macro: Col_MapIterNull
@@ -147,6 +142,21 @@ static const Col_MapIterator colMapIterNull = {WORD_NIL};
 
 #define Col_MapIterNull(it) \
     ((it)->map == WORD_NIL)
+
+/*---------------------------------------------------------------------------
+ * Macro: Col_MapIterSetNull
+ *
+ *	Set an iterator to null.
+ *
+ * Argument:
+ *	it	- Iterator to initialize.
+ *
+ * See also: 
+ *	<Col_MapIterator>
+ *---------------------------------------------------------------------------*/
+
+#define Col_MapIterSetNull(it) \
+    memset(it, 0, sizeof(it))
 
 /*---------------------------------------------------------------------------
  * Macro: Col_MapIterMap
@@ -184,25 +194,41 @@ static const Col_MapIterator colMapIterNull = {WORD_NIL};
 #define Col_MapIterEnd(it) \
     (!(it)->entry)
 
+/*---------------------------------------------------------------------------
+ * Macro: Col_MapIterSet
+ *
+ *	Initialize an iterator to another one's value.
+ *
+ * Argument:
+ *	it	- Iterator to initialize.
+ *	value	- Value to set.
+ *
+ * See also: 
+ *	<Col_MapIterator>
+ *---------------------------------------------------------------------------*/
+
+#define Col_MapIterSet(it, value) \
+    (*(it) = *(value))
+
 /*
  * Remaining declarations.
  */
 
-EXTERN void		Col_MapIterBegin(Col_Word map, Col_MapIterator *it);
-EXTERN void		Col_MapIterFind(Col_Word map, Col_Word key, 
-			    int *createPtr, Col_MapIterator *it);
-EXTERN void		Col_IntMapIterFind(Col_Word map, intptr_t key, 
-			    int *createPtr, Col_MapIterator *it);
-EXTERN void		Col_MapIterGet(Col_MapIterator *it, Col_Word *keyPtr,
+EXTERN void		Col_MapIterBegin(Col_MapIterator it, Col_Word map);
+EXTERN void		Col_MapIterFind(Col_MapIterator it, Col_Word map, 
+			    Col_Word key, int *createPtr);
+EXTERN void		Col_IntMapIterFind(Col_MapIterator it, Col_Word map,
+			    intptr_t key, int *createPtr);
+EXTERN void		Col_MapIterGet(Col_MapIterator it, Col_Word *keyPtr,
 			    Col_Word *valuePtr);
-EXTERN void		Col_IntMapIterGet(Col_MapIterator *it, intptr_t *keyPtr,
+EXTERN void		Col_IntMapIterGet(Col_MapIterator it, intptr_t *keyPtr,
 			    Col_Word *valuePtr);
-EXTERN Col_Word		Col_MapIterGetKey(Col_MapIterator *it);
-EXTERN intptr_t		Col_IntMapIterGetKey(Col_MapIterator *it);
-EXTERN Col_Word		Col_MapIterGetValue(Col_MapIterator *it);
-EXTERN void		Col_MapIterSetValue(Col_MapIterator *it, 
+EXTERN Col_Word		Col_MapIterGetKey(Col_MapIterator it);
+EXTERN intptr_t		Col_IntMapIterGetKey(Col_MapIterator it);
+EXTERN Col_Word		Col_MapIterGetValue(Col_MapIterator it);
+EXTERN void		Col_MapIterSetValue(Col_MapIterator it, 
 			    Col_Word value);
-EXTERN void		Col_MapIterNext(Col_MapIterator *it);
+EXTERN void		Col_MapIterNext(Col_MapIterator it);
 
 
 /*

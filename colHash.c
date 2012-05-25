@@ -1504,8 +1504,8 @@ Col_IntHashMapUnset(
  *	within the map.
  *
  * Arguments:
- *	map	- Hash map to iterate over.
  *	it	- Iterator to initialize.
+ *	map	- Hash map to iterate over.
  *
  * Type checking:
  *	*map* must be a valid hash map.
@@ -1513,8 +1513,8 @@ Col_IntHashMapUnset(
 
 void
 Col_HashMapIterBegin(
-    Col_Word map,
-    Col_MapIterator *it)
+    Col_MapIterator it,
+    Col_Word map)
 {
     Col_Word *buckets;
     size_t nbBuckets, i;
@@ -1524,7 +1524,7 @@ Col_HashMapIterBegin(
      */
 
     TYPECHECK_HASHMAP(map) {
-	*it = COL_MAPITER_NULL;
+	Col_MapIterSetNull(it);
 	return;
     }
 
@@ -1553,7 +1553,7 @@ Col_HashMapIterBegin(
 
     /* CANTHAPPEN */
     ASSERT(0);
-    *it = COL_MAPITER_NULL;
+    Col_MapIterSetNull(it);
 }
 
 /*---------------------------------------------------------------------------
@@ -1563,11 +1563,11 @@ Col_HashMapIterBegin(
  *	the given key within the map.
  *
  * Arguments:
+ *	it		- Iterator to initialize.
  *	map		- Hash map to find or create entry into.
  *	key		- Entry key. Can be any word type, including string,
  *			  however it must match the actual type used by the map.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
- *	it		- Iterator to initialize.
  *
  * Type checking:
  *	*map* must be a valid string or custom hash map.
@@ -1578,10 +1578,10 @@ Col_HashMapIterBegin(
 
 void
 Col_HashMapIterFind(
+    Col_MapIterator it,
     Col_Word map, 
     Col_Word key, 
-    int *createPtr, 
-    Col_MapIterator *it)
+    int *createPtr)
 {
     Col_HashProc *hashProc;
     Col_CompareProc *compareProc;
@@ -1591,7 +1591,7 @@ Col_HashMapIterFind(
      */
 
     TYPECHECK_WORDHASHMAP(map) {
-	*it = COL_MAPITER_NULL;
+	Col_MapIterSetNull(it);
 	return;
     }
 
@@ -1623,10 +1623,10 @@ Col_HashMapIterFind(
  *	the given integer key within the map.
  *
  * Arguments:
+ *	it		- Iterator to initialize.
  *	map		- Integer hash map to find or create entry into.
  *	key		- Integer entry key.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
- *	it		- Iterator to initialize.
  *
  * Type checking:
  *	*map* must be a valid integer hash map.
@@ -1637,17 +1637,17 @@ Col_HashMapIterFind(
 
 void
 Col_IntHashMapIterFind(
+    Col_MapIterator it,
     Col_Word map, 
     intptr_t key, 
-    int *createPtr, 
-    Col_MapIterator *it)
+    int *createPtr)
 {
     /*
      * Check preconditions.
      */
 
     TYPECHECK_INTHASHMAP(map) {
-	*it = COL_MAPITER_NULL;
+	Col_MapIterSetNull(it);
 	return;
     }
 
@@ -1674,7 +1674,7 @@ Col_IntHashMapIterFind(
 
 void
 Col_HashMapIterSetValue(
-    Col_MapIterator *it,
+    Col_MapIterator it,
     Col_Word value)
 {
     Col_Word *buckets;
@@ -1757,7 +1757,7 @@ Col_HashMapIterSetValue(
 
 void
 Col_HashMapIterNext(
-    Col_MapIterator *it)
+    Col_MapIterator it)
 {
     Col_Word *buckets;
     size_t nbBuckets, i;

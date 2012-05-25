@@ -28,6 +28,7 @@
 
 #include <stddef.h> /* For size_t */
 #include <stdarg.h> /* For variadic procs */
+#include <string.h> /* for memset */
 
 
 /*
@@ -161,8 +162,7 @@ EXTERN int		Col_TraverseListChunks(Col_Word list, size_t start,
  * Declarations: 
  *	<Col_ListIterBegin>, <Col_ListIterFirst>, <Col_ListIterLast>, 
  *	<Col_ListIterArray>, <Col_ListIterCompare>, <Col_ListIterMoveTo>, 
- *	<Col_ListIterForward>, <Col_ListIterBackward>, 
- *	<ColListIterUpdateTraversalInfo>
+ *	<Col_ListIterForward>, <Col_ListIterBackward>
  *
  * Note:
  *	Works with mutable or immutable lists and vectors, however modifying a 
@@ -245,20 +245,15 @@ typedef struct ColListIterator {
  *	Datatype is opaque. Fields should not be accessed by client code.
  *
  *	Each iterator takes 10 words on the stack.
+ *
+ *	The type is defined as a single-element array of the internal datatype:
+ *
+ *	- declared variables allocate the right amount of space on the stack,
+ *	- calls use pass-by-reference (i.e. pointer) and not pass-by-value,
+ *	- forbidden as return type.
  *---------------------------------------------------------------------------*/
 
-typedef ColListIterator Col_ListIterator;
-
-/*---------------------------------------------------------------------------
- * Internal Variable: colListIterNull
- *
- *	Static variable for list iterator initialization.
- *
- * See also:
- *	<COL_LISTITER_NULL>
- *---------------------------------------------------------------------------*/
-
-static const Col_ListIterator colListIterNull = {WORD_NIL,0,0,{NULL}};
+typedef ColListIterator Col_ListIterator[1];
 
 /*---------------------------------------------------------------------------
  * Constant: COL_LISTITER_NULL
@@ -269,14 +264,14 @@ static const Col_ListIterator colListIterNull = {WORD_NIL,0,0,{NULL}};
  *	<Col_ListIterator>, <Col_ListIterNull>
  *---------------------------------------------------------------------------*/
 
-#define COL_LISTITER_NULL	colListIterNull
+#define COL_LISTITER_NULL	{{WORD_NIL,0,0,{NULL}}}
 
 /*---------------------------------------------------------------------------
  * Macro: Col_ListIterNull
  *
  *	Test whether iterator is null (e.g. it has been set to 
- *	<COL_LISTITER_NULL>). This uninitialized states renders it unusable for 
- *	any call. Use with caution.
+ *	<COL_LISTITER_NULL> or <Col_ListIterSetNull>). This uninitialized state
+ *	renders it unusable for any call. Use with caution.
  *
  * Argument:
  *	it	- The iterator to test. (Caution: evaluated several times during
@@ -286,11 +281,26 @@ static const Col_ListIterator colListIterNull = {WORD_NIL,0,0,{NULL}};
  *	Non-zero if iterator is null.
  *
  * See also: 
- *	<Col_ListIterator>, <COL_LISTITER_NULL>
+ *	<Col_ListIterator>, <COL_LISTITER_NULL>, <Col_ListIterSetNull>
  *---------------------------------------------------------------------------*/
 
 #define Col_ListIterNull(it) \
     ((it)->list == WORD_NIL && (it)->traversal.array.begin == NULL)
+
+/*---------------------------------------------------------------------------
+ * Macro: Col_ListIterSetNull
+ *
+ *	Set an iterator to null.
+ *
+ * Argument:
+ *	it	- Iterator to initialize.
+ *
+ * See also: 
+ *	<Col_ListIterator>
+ *---------------------------------------------------------------------------*/
+
+#define Col_ListIterSetNull(it) \
+    memset(it, 0, sizeof(it))
 
 /*---------------------------------------------------------------------------
  * Macro: Col_ListIterList
@@ -369,7 +379,7 @@ static const Col_ListIterator colListIterNull = {WORD_NIL,0,0,{NULL}};
 
 #define Col_ListIterAt(it) \
     ((it)->list \
-	? (!(it)->traversal.list.leaf?ColListIterUpdateTraversalInfo(it),0:0,(it)->traversal.list.proc((it)->traversal.list.leaf, (it)->traversal.list.index)) \
+	? (!(it)->traversal.list.leaf?ColListIterUpdateTraversalInfo((ColListIterator*)it),0:0,(it)->traversal.list.proc((it)->traversal.list.leaf, (it)->traversal.list.index)) \
 	: *(it)->traversal.array.current)
 
 /*---------------------------------------------------------------------------
@@ -430,23 +440,39 @@ static const Col_ListIterator colListIterNull = {WORD_NIL,0,0,{NULL}};
 #define Col_ListIterEnd(it) \
     ((it)->index >= (it)->length)
 
+/*---------------------------------------------------------------------------
+ * Macro: Col_ListIterSet
+ *
+ *	Initialize an iterator to another one's value.
+ *
+ * Argument:
+ *	it	- Iterator to initialize.
+ *	value	- Value to set.
+ *
+ * See also: 
+ *	<Col_ListIterator>
+ *---------------------------------------------------------------------------*/
+
+#define Col_ListIterSet(it, value) \
+    (*(it) = *(value))
+
 /*
  * Remaining declarations.
  */
 
-EXTERN int		Col_ListIterBegin(Col_Word list, size_t index, 
-			    Col_ListIterator *it);
-EXTERN void		Col_ListIterFirst(Col_Word list, Col_ListIterator *it);
-EXTERN void		Col_ListIterLast(Col_Word list, Col_ListIterator *it);
-EXTERN void		Col_ListIterArray(size_t length, 
-			    const Col_Word *elements, Col_ListIterator *it);
-EXTERN int		Col_ListIterCompare(const Col_ListIterator *it1, 
-			    const Col_ListIterator *it2);
-EXTERN int		Col_ListIterMoveTo(Col_ListIterator *it, size_t index);
-EXTERN int		Col_ListIterForward(Col_ListIterator *it, size_t nb);
-EXTERN void		Col_ListIterBackward(Col_ListIterator *it, size_t nb);
+EXTERN int		Col_ListIterBegin(Col_ListIterator it, Col_Word list, 
+			    size_t index);
+EXTERN void		Col_ListIterFirst(Col_ListIterator it, Col_Word list);
+EXTERN void		Col_ListIterLast(Col_ListIterator it, Col_Word list);
+EXTERN void		Col_ListIterArray(Col_ListIterator it, size_t length, 
+			    const Col_Word *elements);
+EXTERN int		Col_ListIterCompare(const Col_ListIterator it1, 
+			    const Col_ListIterator it2);
+EXTERN int		Col_ListIterMoveTo(Col_ListIterator it, size_t index);
+EXTERN int		Col_ListIterForward(Col_ListIterator it, size_t nb);
+EXTERN void		Col_ListIterBackward(Col_ListIterator it, size_t nb);
 
-EXTERN void		ColListIterUpdateTraversalInfo(Col_ListIterator *it);
+EXTERN void		ColListIterUpdateTraversalInfo(ColListIterator *it);
 
 
 /*

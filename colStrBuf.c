@@ -484,10 +484,10 @@ Col_StringBufferAppendRope(
 
 	    Col_RopeIterator it;
 	    int noLoss = 1;
-	    for (Col_RopeIterFirst(rope, &it); !Col_RopeIterEnd(&it);
-		    Col_RopeIterNext(&it)) {
+	    for (Col_RopeIterFirst(it, rope); !Col_RopeIterEnd(it);
+		    Col_RopeIterNext(it)) {
 		noLoss &= Col_StringBufferAppendChar(strbuf, 
-			Col_RopeIterAt(&it));
+			Col_RopeIterAt(it));
 	    }
 	    return noLoss;
 	}
@@ -536,8 +536,8 @@ Col_StringBufferAppendRope(
 int
 Col_StringBufferAppendSequence(
     Col_Word strbuf,
-    const Col_RopeIterator *begin, 
-    const Col_RopeIterator *end)
+    const Col_RopeIterator begin, 
+    const Col_RopeIterator end)
 {
     Col_StringFormat format;
     size_t sequenceLength, endIndex;
@@ -575,10 +575,10 @@ Col_StringBufferAppendSequence(
 
 	Col_RopeIterator it;
 	int noLoss = 1;
-	for (it = *begin; Col_RopeIterCompare(&it, end) < 0;
-		Col_RopeIterNext(&it)) {
+	for (Col_RopeIterSet(it, begin); Col_RopeIterCompare(it, end) < 0;
+		Col_RopeIterNext(it)) {
 	    noLoss &= Col_StringBufferAppendChar(strbuf, 
-		    Col_RopeIterAt(&it));
+		    Col_RopeIterAt(it));
 	}
 	return noLoss;
     }

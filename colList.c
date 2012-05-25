@@ -285,8 +285,8 @@ Col_ListAt(
 
     TYPECHECK_LIST(list) return WORD_NIL;
 
-    Col_ListIterBegin(list, index, &it);
-    return Col_ListIterEnd(&it) ? WORD_NIL : Col_ListIterAt(&it);
+    Col_ListIterBegin(it, list, index);
+    return Col_ListIterEnd(it) ? WORD_NIL : Col_ListIterAt(it);
 }
 
 
@@ -2322,7 +2322,7 @@ IterAtVoid(
 
 void
 ColListIterUpdateTraversalInfo(
-    Col_ListIterator *it)
+    ColListIterator *it)
 {
     Col_Word node;
     size_t first, last, offset;
@@ -2481,9 +2481,9 @@ ColListIterUpdateTraversalInfo(
  *	iterator is initialized to the end iterator.
  *
  * Arguments:
+ *	it	- Iterator to initialize.
  *	list	- List to iterate over.
  *	index	- Index of element.
- *	it	- Iterator to initialize.
  *
  * Type checking:
  *	*list* must be a valid list.
@@ -2494,9 +2494,9 @@ ColListIterUpdateTraversalInfo(
 
 int
 Col_ListIterBegin(
+    Col_ListIterator it,
     Col_Word list,
-    size_t index,
-    Col_ListIterator *it)
+    size_t index)
 {
     int looped=0;
 
@@ -2505,7 +2505,7 @@ Col_ListIterBegin(
      */
 
     TYPECHECK_LIST(list) {
-	*it = COL_LISTITER_NULL;
+	Col_ListIterSetNull(it);
 	return 0;
     }
 
@@ -2548,8 +2548,8 @@ Col_ListIterBegin(
  *	to the end iterator.
  *
  * Arguments:
- *	list	- List to iterate over.
  *	it	- Iterator to initialize.
+ *	list	- List to iterate over.
  *
  * Type checking:
  *	*list* must be a valid list.
@@ -2557,15 +2557,15 @@ Col_ListIterBegin(
 
 void
 Col_ListIterFirst(
-    Col_Word list,
-    Col_ListIterator *it)
+    Col_ListIterator it,
+    Col_Word list)
 {
     /*
      * Check preconditions.
      */
 
     TYPECHECK_LIST(list) {
-	*it = COL_LISTITER_NULL;
+	Col_ListIterSetNull(it);
 	return;
     }
 
@@ -2589,8 +2589,8 @@ Col_ListIterFirst(
  *	to the end iterator.
  *
  * Arguments:
- *	list	- List to iterate over.
  *	it	- Iterator to initialize.
+ *	list	- List to iterate over.
  *
  * Type checking:
  *	*list* must be a valid list.
@@ -2598,15 +2598,15 @@ Col_ListIterFirst(
 
 void
 Col_ListIterLast(
-    Col_Word list,
-    Col_ListIterator *it)
+    Col_ListIterator it,
+    Col_Word list)
 {
     /*
      * Check preconditions.
      */
 
     TYPECHECK_LIST(list) {
-	*it = COL_LISTITER_NULL;
+	Col_ListIterSetNull(it);
 	return;
     }
 
@@ -2637,16 +2637,16 @@ Col_ListIterLast(
  *	in an array.
  *
  * Arguments:
+ *	it		- Iterator to initialize.
  *	length		- Number of elements in array.
  *	elements	- Array of elements.
- *	it		- Iterator to initialize.
  *---------------------------------------------------------------------------*/
 
 void
 Col_ListIterArray(
+    Col_ListIterator it,
     size_t length,
-    const Col_Word * elements, 
-    Col_ListIterator *it)
+    const Col_Word * elements)
 {
     it->list = WORD_NIL;
     it->length = length;
@@ -2675,8 +2675,8 @@ Col_ListIterArray(
 
 int
 Col_ListIterCompare(
-    const Col_ListIterator *it1,
-    const Col_ListIterator *it2)
+    const Col_ListIterator it1,
+    const Col_ListIterator it2)
 {
     /*
      * Check preconditions.
@@ -2713,7 +2713,7 @@ Col_ListIterCompare(
 
 int
 Col_ListIterMoveTo(
-    Col_ListIterator *it,
+    Col_ListIterator it,
     size_t index)
 {
     if (index > it->index) {
@@ -2747,7 +2747,7 @@ Col_ListIterMoveTo(
 
 int
 Col_ListIterForward(
-    Col_ListIterator *it,
+    Col_ListIterator it,
     size_t nb)
 {
     int looped=0;
@@ -2913,7 +2913,7 @@ Col_ListIterForward(
 
 void
 Col_ListIterBackward(
-    Col_ListIterator *it,
+    Col_ListIterator it,
     size_t nb)
 {
     /*

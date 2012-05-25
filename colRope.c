@@ -1461,8 +1461,8 @@ Col_RopeAt(
 
     TYPECHECK_ROPE(rope) return COL_CHAR_INVALID;
 
-    Col_RopeIterBegin(rope, index, &it);
-    return Col_RopeIterEnd(&it) ? COL_CHAR_INVALID : Col_RopeIterAt(&it);
+    Col_RopeIterBegin(it, rope, index);
+    return Col_RopeIterEnd(it) ? COL_CHAR_INVALID : Col_RopeIterAt(it);
 }
 
 
@@ -1686,12 +1686,12 @@ SearchSubropeProc(
 	     */
 
 	    Col_RopeIterator it1, it2;
-	    for (Col_RopeIterBegin(info->rope, index+i, &it1), 
-		    Col_RopeIterFirst(info->subrope, &it2);
-		    !Col_RopeIterEnd(&it1) && !Col_RopeIterEnd(&it2)
-		    && Col_RopeIterAt(&it1) == Col_RopeIterAt(&it2);
-		    Col_RopeIterNext(&it1), Col_RopeIterNext(&it2));
-	    if (Col_RopeIterEnd(&it2)) {
+	    for (Col_RopeIterBegin(it1, info->rope, index+i), 
+		    Col_RopeIterFirst(it2, info->subrope);
+		    !Col_RopeIterEnd(it1) && !Col_RopeIterEnd(it2)
+		    && Col_RopeIterAt(it1) == Col_RopeIterAt(it2);
+		    Col_RopeIterNext(it1), Col_RopeIterNext(it2));
+	    if (Col_RopeIterEnd(it2)) {
 		/*
 		 * Found!
 		 */
@@ -4073,7 +4073,7 @@ static Col_Char IterAtUtf16(
 
 void
 ColRopeIterUpdateTraversalInfo(
-    Col_RopeIterator *it)
+    ColRopeIterator *it)
 {
     Col_Word rope;
     size_t first, last, offset;
@@ -4264,7 +4264,7 @@ ColRopeIterUpdateTraversalInfo(
 
 Col_Char
 ColStringIterCharAt(
-    const Col_RopeIterator *it)
+    const Col_RopeIterator it)
 {
     ASSERT(!it->rope);
     switch (it->traversal.str.format) {
@@ -4288,9 +4288,9 @@ ColStringIterCharAt(
  *	iterator is initialized to the end iterator.
  *
  * Arguments:
+ *	it	- Iterator to initialize.
  *	rope	- Rope to iterate over.
  *	index	- Index of character.
- *	it	- Iterator to initialize.
  *
  * Type checking:
  *	*rope* must be a valid rope.
@@ -4298,16 +4298,16 @@ ColStringIterCharAt(
 
 void
 Col_RopeIterBegin(
+    Col_RopeIterator it,
     Col_Word rope,
-    size_t index,
-    Col_RopeIterator *it)
+    size_t index)
 {
     /*
      * Check preconditions.
      */
 
     TYPECHECK_ROPE(rope) {
-	*it = COL_ROPEITER_NULL;
+	Col_RopeIterSetNull(it);
 	return;
     }
 
@@ -4338,8 +4338,8 @@ Col_RopeIterBegin(
  *	to the end iterator.
  *
  * Arguments:
- *	rope	- Rope to iterate over.
  *	it	- Iterator to initialize.
+ *	rope	- Rope to iterate over.
  *
  * Type checking:
  *	*rope* must be a valid rope.
@@ -4347,15 +4347,15 @@ Col_RopeIterBegin(
 
 void
 Col_RopeIterFirst(
-    Col_Word rope,
-    Col_RopeIterator *it)
+    Col_RopeIterator it,
+    Col_Word rope)
 {
     /*
      * Check preconditions.
      */
 
     TYPECHECK_ROPE(rope) {
-	*it = COL_ROPEITER_NULL;
+	Col_RopeIterSetNull(it);
 	return;
     }
 
@@ -4379,8 +4379,8 @@ Col_RopeIterFirst(
  *	to the end iterator.
  *
  * Arguments:
- *	rope	- Rope to iterate over.
  *	it	- Iterator to initialize.
+ *	rope	- Rope to iterate over.
  *
  * Type checking:
  *	*rope* must be a valid rope.
@@ -4388,15 +4388,15 @@ Col_RopeIterFirst(
 
 void
 Col_RopeIterLast(
-    Col_Word rope,
-    Col_RopeIterator *it)
+    Col_RopeIterator it,
+    Col_Word rope)
 {
     /*
      * Check preconditions.
      */
 
     TYPECHECK_ROPE(rope) {
-	*it = COL_ROPEITER_NULL;
+	Col_RopeIterSetNull(it);
 	return;
     }
 
@@ -4427,18 +4427,18 @@ Col_RopeIterLast(
  *	in a string.
  *
  * Arguments:
+ *	it	- Iterator to initialize.
  *	format	- Format of data in string (see <Col_StringFormat>).
  *	data	- Buffer containing flat data.
  *	length	- Character length of string.
- *	it	- Iterator to initialize.
  *---------------------------------------------------------------------------*/
 
 void
 Col_RopeIterString(
+    Col_RopeIterator it,
     Col_StringFormat format, 
     const void *data, 
-    size_t length,
-    Col_RopeIterator *it)
+    size_t length)
 {
     it->rope = WORD_NIL;
     it->length = length;
@@ -4468,8 +4468,8 @@ Col_RopeIterString(
 
 int
 Col_RopeIterCompare(
-    const Col_RopeIterator *it1,
-    const Col_RopeIterator *it2)
+    const Col_RopeIterator it1,
+    const Col_RopeIterator it2)
 {
     /*
      * Check preconditions.
@@ -4503,7 +4503,7 @@ Col_RopeIterCompare(
 
 void
 Col_RopeIterMoveTo(
-    Col_RopeIterator *it,
+    Col_RopeIterator it,
     size_t index)
 {
     if (index > it->index) {
@@ -4531,7 +4531,7 @@ Col_RopeIterMoveTo(
 
 void
 Col_RopeIterForward(
-    Col_RopeIterator *it,
+    Col_RopeIterator it,
     size_t nb)
 {
     /*
@@ -4725,7 +4725,7 @@ Col_RopeIterForward(
 
 void
 Col_RopeIterBackward(
-    Col_RopeIterator *it,
+    Col_RopeIterator it,
     size_t nb)
 {
     /*
