@@ -361,7 +361,7 @@ typedef struct Col_RopeChunk {
  *			  <Col_TraverseRopeChunks> procedure family.
  *
  * Returns:
- *	If non-zero, interrupts the traversal.
+ *	If nonzero, interrupts the traversal.
  *
  * See also: 
  *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
@@ -500,7 +500,7 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *		  macro expansion)
  *
  * Result:
- *	Non-zero if iterator is null.
+ *	Nonzero if iterator is null.
  *
  * See also: 
  *	<Col_RopeIterator>, <COL_ROPEITER_NULL>, <Col_RopeIterSetNull>
@@ -650,7 +650,7 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *		  during macro expansion)
  *
  * Result:
- *	Non-zero if iterator is at end.
+ *	Nonzero if iterator is at end.
  *
  * See also: 
  *	<Col_RopeIterator>, <Col_RopeIterBegin>

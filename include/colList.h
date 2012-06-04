@@ -124,7 +124,7 @@ EXTERN Col_Word		Col_ListReplace(Col_Word list, size_t first,
  *			  <Col_TraverseListChunks> procedure family.
  *
  * Returns:
- *	If non-zero, interrupts the traversal.
+ *	If nonzero, interrupts the traversal.
  *
  * See also: 
  *	<Col_TraverseListChunksN>, <Col_TraverseListChunks>
@@ -278,7 +278,7 @@ typedef ColListIterator Col_ListIterator[1];
  *		  macro expansion)
  *
  * Result:
- *	Non-zero if iterator is null.
+ *	Nonzero if iterator is null.
  *
  * See also: 
  *	<Col_ListIterator>, <COL_LISTITER_NULL>, <Col_ListIterSetNull>
@@ -431,7 +431,7 @@ typedef ColListIterator Col_ListIterator[1];
  *		  during macro expansion)
  *
  * Result:
- *	Non-zero if iterator is at end.
+ *	Nonzero if iterator is at end.
  *
  * See also: 
  *	<Col_ListIterator>, <Col_ListIterBegin>

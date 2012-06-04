@@ -1921,7 +1921,7 @@ NextChunk(
  *	Iterate over the chunks of a number of lists.
  *
  *	For each traversed chunk, proc is called back with the opaque data as
- *	well as the position within the lists. If it returns a non-zero result 
+ *	well as the position within the lists. If it returns a nonzero result 
  *	then the iteration ends. 
  *
  * Note:
@@ -2084,7 +2084,7 @@ Col_TraverseListChunksN(
  *	Iterate over the chunks of a list.
  *
  *	For each traversed chunk, proc is called back with the opaque data as
- *	well as the position within the list. If it returns a non-zero result 
+ *	well as the position within the list. If it returns a nonzero result 
  *	then the iteration ends. 
  *
  * Note:

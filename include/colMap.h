@@ -134,7 +134,7 @@ typedef ColMapIterator Col_MapIterator[1];
  *	it	- The iterator to test.
  *
  * Result:
- *	Non-zero if iterator is null.
+ *	Nonzero if iterator is null.
  *
  * See also: 
  *	<Col_MapIterator>, <COL_MAPITER_NULL>
@@ -185,7 +185,7 @@ typedef ColMapIterator Col_MapIterator[1];
  *	it	- The iterator to test.
  *
  * Result:
- *	Non-zero if iterator is at end.
+ *	Nonzero if iterator is at end.
  *
  * See also: 
  *	<Col_MapIterator>

@@ -3475,7 +3475,7 @@ NextChunk(
  *	Iterate over the chunks of a number of ropes.
  *
  *	For each traversed chunk, proc is called back with the opaque data as
- *	well as the position within the ropes. If it returns a non-zero result 
+ *	well as the position within the ropes. If it returns a nonzero result 
  *	then the iteration ends. 
  *
  * Note:
@@ -3671,7 +3671,7 @@ Col_TraverseRopeChunksN(
  *	Iterate over the chunks of a rope.
  *
  *	For each traversed chunk, proc is called back with the opaque data as
- *	well as the position within the rope. If it returns a non-zero result 
+ *	well as the position within the rope. If it returns a nonzero result 
  *	then the iteration ends. 
  *
  * Note:

@@ -119,7 +119,7 @@ void			PlatSyncResumeGC(GroupData *data, int schedule);
  *	performGc	- Whether to perform GC eventually.
  *
  * Side effects:
- *	If performGC is non-zero, calls <PerformGC> eventually: synchronously
+ *	If performGC is nonzero, calls <PerformGC> eventually: synchronously
  *	if model is <COL_SINGLE>, else asynchronously.
  *
  * See also:

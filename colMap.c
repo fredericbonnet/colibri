@@ -507,7 +507,7 @@ Col_MapIterBegin(
 
 	/*
 	 * Note: for custom maps we set the iterator entry field to a non-nil 
-	 * value upon success (i.e. when iterBeginProc returns non-zero) so that
+	 * value upon success (i.e. when iterBeginProc returns nonzero) so that
 	 * Col_MapIterEnd() is false.
 	 */
 
@@ -577,7 +577,7 @@ Col_MapIterFind(
 
 	/*
 	 * Note: for custom maps we set the iterator entry field to a non-nil 
-	 * value upon success (i.e. when iterFindProc returns non-zero) so that
+	 * value upon success (i.e. when iterFindProc returns nonzero) so that
 	 * Col_MapIterEnd() is false.
 	 */
 
@@ -642,7 +642,7 @@ Col_IntMapIterFind(
 	ASSERT(WORD_TYPEINFO(map)->type == COL_INTMAP);
 	/*
 	 * Note: for custom maps we set the iterator entry field to a non-nil 
-	 * value upon success (i.e. when iterFindProc returns non-zero) so that
+	 * value upon success (i.e. when iterFindProc returns nonzero) so that
 	 * Col_MapIterEnd() is false.
 	 */
 
@@ -1016,7 +1016,7 @@ Col_MapIterNext(
 
 	/*
 	 * Note: for custom maps we set the iterator entry field to a non-nil 
-	 * value upon success (i.e. when iterNextProc returns non-zero) so that
+	 * value upon success (i.e. when iterNextProc returns nonzero) so that
 	 * Col_MapIterEnd() is false.
 	 */
 

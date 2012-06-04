@@ -54,7 +54,7 @@ extern pthread_mutex_t mutexRange;
  *	We store the recursion counter as an integer just after the <ThreadData>
  *	structure stored in thread-local storage (see allocation in 
  *	<PlatEnter>). This counter prevents calls to pthread_mutex_lock when 
- *	non-zero and to pthread_mutex_unlock when > 1.
+ *	nonzero and to pthread_mutex_unlock when > 1.
  *
  * See also:
  *	<PlatEnter>, <PlatEnterProtectAddressRanges>, 

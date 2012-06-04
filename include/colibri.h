@@ -552,7 +552,7 @@ typedef const char * const * Col_ErrorDomain;
  *	args	- Remaining arguments passed to domain proc.
  *
  * Result:
- *	Non-zero stops further error processing.
+ *	Nonzero stops further error processing.
  *
  * See also: 
  *	<Col_SetErrorProc>, <Col_ErrorLevel>, <Col_ErrorDomain>

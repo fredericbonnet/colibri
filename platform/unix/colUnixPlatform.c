@@ -239,7 +239,7 @@ static pthread_once_t once = PTHREAD_ONCE_INIT;
  *	model	- Threading model.
  *
  * Result:
- *	Non-zero if this is the first nested call, else 0.
+ *	Nonzero if this is the first nested call, else 0.
  *
  * See also:
  *	<Threading Model Constants>, <ThreadData>, <PlatGroupData>, <PlatLeave>,
@@ -335,7 +335,7 @@ PlatEnter(
  *	as well.
  *
  * Result:
- *	Non-zero if this is the last nested call, else 0.
+ *	Nonzero if this is the last nested call, else 0.
  *
  * See also:
  *	<ThreadData>, <PlatGroupData>, <PlatEnter>, <Col_Cleanup>
@@ -485,7 +485,7 @@ PlatSyncPauseGC(
  *	data	- Group-specific data.
  *
  * Result:
- *	Non-zero if successful.
+ *	Nonzero if successful.
  * 
  * See also:
  *	<GcThreadProc>, <TrySyncPauseGC>, <Col_TryPauseGC>
