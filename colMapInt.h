@@ -105,7 +105,7 @@ Internal Section: Type Checking
 
 #define TYPECHECK_MAP(word) \
     if (!(Col_WordType(word) & (COL_MAP | COL_INTMAP))) { \
-	Col_Error(COL_TYPECHECK, "%x is not a map", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_MAP, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -128,7 +128,7 @@ COL_CONCATENATE(FAILED,__LINE__):
 
 #define TYPECHECK_WORDMAP(word) \
     if ((Col_WordType(word) & (COL_MAP | COL_INTMAP)) != COL_MAP) { \
-	Col_Error(COL_TYPECHECK, "%x is not a string or custom map", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_WORDMAP, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -151,7 +151,7 @@ COL_CONCATENATE(FAILED,__LINE__):
 
 #define TYPECHECK_INTMAP(word) \
     if (!(Col_WordType(word) & COL_INTMAP)) { \
-	Col_Error(COL_TYPECHECK, "%x is not an integer map", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_INTMAP, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -174,7 +174,7 @@ COL_CONCATENATE(FAILED,__LINE__):
 
 #define TYPECHECK_MAPITER(it) \
     if (Col_MapIterNull(it)) { \
-	Col_Error(COL_TYPECHECK, "%x is not a map iterator", (it)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_MAPITER, (it)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -205,7 +205,7 @@ Internal Section: Range Checking
 
 #define RANGECHECK_MAPITER(it) \
     if (Col_MapIterEnd(it)) { \
-	Col_Error(COL_RANGECHECK, "Iterator %x is at end", (it)); \
+	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_MAPITER_END, (it)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \

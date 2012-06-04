@@ -522,7 +522,8 @@ SysPageAlloc(
 	     * Fatal error!
 	     */
 
-	    Col_Error(COL_FATAL, "Address range allocation failed");
+	    Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
+		    "Address range allocation failed");
 	    return NULL;
 	}
 
@@ -618,7 +619,8 @@ SysPageAlloc(
 		 * Fatal error!
 		 */
 
-		Col_Error(COL_FATAL, "Address range reservation failed");
+		Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
+			"Address range reservation failed");
 		goto end;
 	    }
 
@@ -650,7 +652,8 @@ SysPageAlloc(
 	     * Fatal error!
 	     */
 
-	    Col_Error(COL_FATAL, "Page allocation failed");
+	    Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
+		    "Page allocation failed");
 	    goto end;
 	}
 
@@ -739,7 +742,8 @@ SysPageFree(
 		 * Not found.
 		 */
 
-		Col_Error(COL_FATAL, "Page not found %p", base);
+		Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
+			"Page not found");
 		goto end;
 	    }
 
@@ -752,7 +756,8 @@ SysPageFree(
 		 * Fatal error!
 		 */
 
-		Col_Error(COL_FATAL, "Address range release failed");
+		Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
+			"Address range release failed");
 		goto end;
 	    }
 
@@ -779,7 +784,8 @@ SysPageFree(
 	     * Fatal error!
 	     */
 
-	    Col_Error(COL_FATAL, "Page deallocation failed");
+	    Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
+		    "Page deallocation failed");
 	    goto end;
 	}
 
@@ -842,7 +848,8 @@ SysPageTrim(
 	     * Not found. Cannot trim dedicated ranges.
 	     */
 
-	    Col_Error(COL_FATAL, "Page not found %p", base);
+	    Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
+		    "Page not found");
 	    goto end;
 	}
 
@@ -868,7 +875,8 @@ SysPageTrim(
 	     * Fatal error!
 	     */
 
-	    Col_Error(COL_FATAL, "Page deallocation failed");
+	    Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
+		    "Page deallocation failed");
 	    goto end;
 	}
 
@@ -944,7 +952,8 @@ SysPageProtect(
 		 * Not found.
 		 */
 
-		Col_Error(COL_FATAL, "Page not found %p", page);
+		Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
+			"Page not found");
 		goto end;
 	    }
 
@@ -1399,7 +1408,8 @@ PoolAllocCells(
 	     * Fatal error!
 	     */
 
-	    Col_Error(COL_FATAL, "Page allocation failed");
+	    Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
+		    "Page allocation failed");
 	    return NULL;
 	}
 
@@ -1460,7 +1470,8 @@ PoolAllocCells(
 	 * Fatal error!
 	 */
 
-	Col_Error(COL_FATAL, "Page allocation failed");
+	Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
+		"Page allocation failed");
 	return NULL;
     }
     cells = PageAllocCells(number, PAGE_CELL(PAGE_NEXT(tail), 0));

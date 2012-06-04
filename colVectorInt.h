@@ -287,7 +287,7 @@ Internal Section: Type Checking
 
 #define TYPECHECK_VECTOR(word) \
     if (!(Col_WordType(word) & COL_VECTOR)) { \
-	Col_Error(COL_TYPECHECK, "%x is not a vector", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_VECTOR, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -310,7 +310,7 @@ COL_CONCATENATE(FAILED,__LINE__):
 
 #define TYPECHECK_MVECTOR(word) \
     if (!(Col_WordType(word) & COL_MVECTOR)) { \
-	Col_Error(COL_TYPECHECK, "%x is not a mutable vector", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_MVECTOR, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -342,8 +342,7 @@ Internal Section: Range Checking
 
 #define RANGECHECK_VECTORLENGTH(length, maxLength) \
     if ((length) > (maxLength)) { \
-	Col_Error(COL_RANGECHECK, \
-		"Length %u exceeds the maximum allowed value %u", \
+	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_VECTORLENGTH, \
 		(length), (maxLength)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \

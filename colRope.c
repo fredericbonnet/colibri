@@ -2665,7 +2665,7 @@ Col_ConcatRopes(
 
     leftLength = Col_RopeLength(left);
     rightLength = Col_RopeLength(right);
-    RANGECHECK_CONCATLENGTH(leftLength, rightLength) return WORD_NIL;
+    RANGECHECK_ROPELENGTH_CONCAT(leftLength, rightLength) return WORD_NIL;
 
     WORD_UNWRAP(left);
     WORD_UNWRAP(right);
@@ -2958,7 +2958,7 @@ Col_RepeatRope(
 
     TYPECHECK_ROPE(rope) return WORD_NIL;
     length = Col_RopeLength(rope);
-    RANGECHECK_REPEATLENGTH(length, count) return WORD_NIL;
+    RANGECHECK_ROPELENGTH_REPEAT(length, count) return WORD_NIL;
 
     /* Quick cases. */
     if (count == 0) {return WORD_SMALLSTR_EMPTY;}

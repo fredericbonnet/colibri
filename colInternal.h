@@ -11,7 +11,7 @@
 
 #ifdef _DEBUG
 #   define DO_TRACE
-#   define REQUIRE(x) {if (!(x)) Col_Error(COL_FATAL, "%s(%d) : assertion failed! (%s)", __FILE__, __LINE__, #x);}
+#   define REQUIRE(x) {if (!(x)) Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_ASSERTION, __FILE__, __LINE__, #x);}
 #   define ASSERT(x) REQUIRE(x)
 #else
 #   define REQUIRE(x) (x)
@@ -62,6 +62,13 @@
 
 #define FORMAT_UTF(format) \
     ((format) & 0x10)
+
+
+/****************************************************************************
+ * Internal Section: Error Handling
+ ***************************************************************************/
+
+extern const char * const ColibriDomain[];
 
 
 /****************************************************************************
@@ -412,6 +419,7 @@ void			GcInitThread(ThreadData *data);
 void			GcInitGroup(GroupData *data);
 void			GcCleanupThread(ThreadData *data);
 void			GcCleanupGroup(GroupData *data);
+
 
 /****************************************************************************
  * Internal Section: Garbage Collection

@@ -325,8 +325,9 @@ Internal Section: Small Floating Points
  * Data Structure: Small Floating Point Word
  *
  *	Small floating point words are floating points whose lower 2 bits of the
- *	mantissa are zero, so that they are free for the tag bits. Other values
- *	are cell-based.
+ *	mantissa are zero, so that they are free for the tag bits. This includes
+ *	IEEE 754 special values such as +/-0, +/-INF and NaN. Other values are 
+ *	cell-based.
  *
  * Requirements:
  *	Small floating point words need to store the floating point value in the

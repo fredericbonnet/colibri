@@ -522,7 +522,7 @@ Internal Section: Type Checking
 
 #define TYPECHECK_CHAR(word) \
     if (!(Col_WordType(word) & COL_CHAR)) { \
-	Col_Error(COL_TYPECHECK, "%x is not a character", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_CHAR, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -545,7 +545,7 @@ COL_CONCATENATE(FAILED,__LINE__):
 
 #define TYPECHECK_STRING(word) \
     if (!(Col_WordType(word) & COL_STRING)) { \
-	Col_Error(COL_TYPECHECK, "%x is not a string", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_STRING, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -568,7 +568,7 @@ COL_CONCATENATE(FAILED,__LINE__):
 
 #define TYPECHECK_ROPE(word) \
     if (!(Col_WordType(word) & COL_ROPE)) { \
-	Col_Error(COL_TYPECHECK, "%x is not a rope", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_ROPE, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -591,7 +591,7 @@ COL_CONCATENATE(FAILED,__LINE__):
 
 #define TYPECHECK_ROPEITER(it) \
     if (Col_RopeIterNull(it)) { \
-	Col_Error(COL_TYPECHECK, "%x is not a rope iterator", (it)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_ROPEITER, (it)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -605,7 +605,7 @@ Internal Section: Range Checking
 */
 
 /*---------------------------------------------------------------------------
- * Internal Macro: RANGECHECK_CONCATLENGTH
+ * Internal Macro: RANGECHECK_ROPELENGTH_CONCAT
  *
  *	Range checking macro for ropes, ensures that combined lengths of two
  *	concatenated ropes don't exceed the maximum value.
@@ -621,10 +621,9 @@ Internal Section: Range Checking
  *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
-#define RANGECHECK_CONCATLENGTH(length1, length2) \
+#define RANGECHECK_ROPELENGTH_CONCAT(length1, length2) \
     if (SIZE_MAX-(length1) < (length2)) { \
-	Col_Error(COL_RANGECHECK, \
-		"Combined length %u+%u exceeds the maximum allowed value %u", \
+	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_ROPELENGTH_CONCAT, \
 		(length1), (length2), SIZE_MAX); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
@@ -632,7 +631,7 @@ Internal Section: Range Checking
 COL_CONCATENATE(FAILED,__LINE__): 
 
 /*---------------------------------------------------------------------------
- * Internal Macro: RANGECHECK_REPEATLENGTH
+ * Internal Macro: RANGECHECK_ROPELENGTH_REPEAT
  *
  *	Range checking macro for ropes, ensures that length of a repeated rope
  *	doesn't exceed the maximum value.
@@ -648,10 +647,9 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
-#define RANGECHECK_REPEATLENGTH(length, count) \
+#define RANGECHECK_ROPELENGTH_REPEAT(length, count) \
     if ((count) > 1 && SIZE_MAX/(count) < (length)) { \
-	Col_Error(COL_RANGECHECK, \
-		"Length %u times %u exceeds the maximum allowed value %u", \
+	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_ROPELENGTH_REPEAT, \
 		(length), (count), SIZE_MAX); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
@@ -676,7 +674,8 @@ COL_CONCATENATE(FAILED,__LINE__):
 
 #define RANGECHECK_ROPEITER(it) \
     if (Col_RopeIterEnd(it)) { \
-	Col_Error(COL_RANGECHECK, "Iterator %x is at end", (it)); \
+	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_ROPEITER_END, \
+		(it)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \

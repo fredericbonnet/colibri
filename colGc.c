@@ -81,7 +81,7 @@ Internal Section: Error Handling
 
 #define PRECONDITION_GCPROTECTED(data) \
     if (!(data)->pauseGC) { \
-	Col_Error(COL_ERROR, "Called outside of a GC-protected section"); \
+	Col_Error(COL_ERROR, ColibriDomain, COL_ERROR_GCPROTECT); \
 	goto PRECONDITION_GCPROTECTED_FAILED; \
     } \
     if (0) \

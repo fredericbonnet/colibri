@@ -521,7 +521,7 @@ Declarations:
  *	<Col_Error>
  *---------------------------------------------------------------------------*/
 
-typedef enum {
+typedef enum Col_ErrorLevel {
     COL_FATAL,
     COL_ERROR,
     COL_TYPECHECK,
@@ -529,25 +529,95 @@ typedef enum {
 } Col_ErrorLevel;
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_ErrorProc
+ * Typedef: Col_ErrorDomain
  *
- *	Function signature of custom error handlers.
- *
- * Arguments:
- *	level	- Error level.
- *	format	- Format string fed to fprintf().
- *	args	- Remaining arguments fed to fprintf().
+ *	Domain into which error codes are defined. Domains are string tables
+ *	indexed by error code.
  *
  * See also: 
  *	<Col_SetErrorProc>, <Col_ErrorLevel>
  *---------------------------------------------------------------------------*/
 
-typedef void (Col_ErrorProc) (Col_ErrorLevel level, const char *format, 
-			     va_list args);
+typedef const char * const * Col_ErrorDomain;
 
-EXTERN void		Col_Error(Col_ErrorLevel level, const char *format, 
-			    ...);
+/*---------------------------------------------------------------------------
+ * Typedef: Col_ErrorProc
+ *
+ *	Function signature of custom error handlers.
+ *
+ * Arguments:
+ *	domain	- Error domain.
+ *	level	- Error level.
+ *	code	- Error code.
+ *	args	- Remaining arguments passed to domain proc.
+ *
+ * Result:
+ *	Non-zero stops further error processing.
+ *
+ * See also: 
+ *	<Col_SetErrorProc>, <Col_ErrorLevel>, <Col_ErrorDomain>
+ *---------------------------------------------------------------------------*/
+
+typedef int (Col_ErrorProc) (Col_ErrorLevel level, Col_ErrorDomain domain, 
+    int code, va_list args);
+
+/*---------------------------------------------------------------------------
+ * Enum: Col_ErrorCode
+ *
+ *	Error codes defined in the Colibri domain.
+ *
+ * See also: 
+ *	<Col_GetErrorDomain>
+ *---------------------------------------------------------------------------*/
+
+typedef enum Col_ErrorCode {
+    COL_ERROR_GENERIC,
+    COL_ERROR_ASSERTION,
+    COL_ERROR_MEMORY,
+    COL_ERROR_GCPROTECT,
+    COL_ERROR_INTWORD,
+    COL_ERROR_FLOATWORD,
+    COL_ERROR_CUSTOMWORD,
+    COL_ERROR_CHAR,
+    COL_ERROR_STRING,
+    COL_ERROR_ROPE,
+    COL_ERROR_ROPEINDEX,
+    COL_ERROR_ROPELENGTH_CONCAT,
+    COL_ERROR_ROPELENGTH_REPEAT,
+    COL_ERROR_ROPEITER,
+    COL_ERROR_ROPEITER_END,
+    COL_ERROR_VECTOR,
+    COL_ERROR_MVECTOR,
+    COL_ERROR_VECTORLENGTH,
+    COL_ERROR_LIST,
+    COL_ERROR_MLIST,
+    COL_ERROR_LISTINDEX,
+    COL_ERROR_LISTLENGTH_CONCAT,
+    COL_ERROR_LISTLENGTH_REPEAT,
+    COL_ERROR_LISTITER,
+    COL_ERROR_LISTITER_END,
+    COL_ERROR_MAP,
+    COL_ERROR_WORDMAP,
+    COL_ERROR_INTMAP,
+    COL_ERROR_HASHMAP,
+    COL_ERROR_WORDHASHMAP,
+    COL_ERROR_INTHASHMAP,
+    COL_ERROR_TRIEMAP,
+    COL_ERROR_WORDTRIEMAP,
+    COL_ERROR_INTTRIEMAP,
+    COL_ERROR_MAPITER,
+    COL_ERROR_MAPITER_END,
+    COL_ERROR_STRBUF,
+} Col_ErrorCode;
+
+/*
+ * Remaining declarations.
+ */
+
+EXTERN void		Col_Error(Col_ErrorLevel level, Col_ErrorDomain domain, 
+			    int code, ...);
 EXTERN void		Col_SetErrorProc(Col_ErrorProc *proc);
+EXTERN Col_ErrorDomain	Col_GetErrorDomain();
 
 
 /*

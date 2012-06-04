@@ -417,7 +417,7 @@ Internal Section: Type Checking
 
 #define TYPECHECK_HASHMAP(word) \
     if (!(Col_WordType(word) & COL_HASHMAP)) { \
-	Col_Error(COL_TYPECHECK, "%x is not a hash map", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_HASHMAP, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -440,7 +440,7 @@ COL_CONCATENATE(FAILED,__LINE__):
 
 #define TYPECHECK_WORDHASHMAP(word) \
     if ((Col_WordType(word) & (COL_HASHMAP | COL_INTMAP)) != COL_HASHMAP) { \
-	Col_Error(COL_TYPECHECK, "%x is not a string or custom hash map", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_WORDHASHMAP, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -464,7 +464,7 @@ COL_CONCATENATE(FAILED,__LINE__):
 #define TYPECHECK_INTHASHMAP(word) \
     if ((Col_WordType(word) & (COL_HASHMAP | COL_INTMAP)) \
 	    != (COL_HASHMAP | COL_INTMAP)) { \
-	Col_Error(COL_TYPECHECK, "%x is not an integer hash map", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_INTHASHMAP, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \

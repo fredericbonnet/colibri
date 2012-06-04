@@ -709,7 +709,7 @@ Internal Section: Type Checking
 
 #define TYPECHECK_TRIEMAP(word) \
     if (!(Col_WordType(word) & COL_TRIEMAP)) { \
-	Col_Error(COL_TYPECHECK, "%x is not a trie map", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_TRIEMAP, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -732,7 +732,8 @@ COL_CONCATENATE(FAILED,__LINE__):
 
 #define TYPECHECK_WORDTRIEMAP(word) \
     if ((Col_WordType(word) & (COL_TRIEMAP | COL_INTMAP)) != COL_TRIEMAP) { \
-	Col_Error(COL_TYPECHECK, "%x is not a string or custom trie map", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_WORDTRIEMAP, \
+		(word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
@@ -756,7 +757,7 @@ COL_CONCATENATE(FAILED,__LINE__):
 #define TYPECHECK_INTTRIEMAP(word) \
     if ((Col_WordType(word) & (COL_TRIEMAP | COL_INTMAP)) \
 	    != (COL_TRIEMAP | COL_INTMAP)) { \
-	Col_Error(COL_TYPECHECK, "%x is not an integer trie map", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_INTTRIEMAP, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \

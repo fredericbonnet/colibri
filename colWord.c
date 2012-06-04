@@ -62,7 +62,7 @@ Col_NewIntWord(
     Col_Word word;		/* Resulting word in the general case. */
 
     /*
-     * Return integer value if possible.
+     * Return immediate value if possible.
      */
 
     if (value <= SMALLINT_MAX && value >= SMALLINT_MIN) {
@@ -85,7 +85,8 @@ Col_NewIntWord(
  *	Create a new floating point word.
  *
  *	If the floating point value fits, return an immediate value instead of 
- *	allocating memory.
+ *	allocating memory. This includes IEEE 754 special values such as +/-0,
+ *	+/-INF and NaN.
  *
  * Argument:
  *	value	- Floating point value of the word to create.
@@ -105,11 +106,12 @@ Col_NewFloatWord(
     FloatConvert c;
 
     /*
-     * Return floating point value if possible.
+     * Return immediate value if possible. The comparison of value against
+     * itself detects NaN, which can also be represented as immediate value.
      */
 
     word = WORD_SMALLFP_NEW(value, c);
-    if (WORD_SMALLFP_GET(word, c) == value) {
+    if (value != value || WORD_SMALLFP_GET(word, c) == value) {
 	return word;
     }
 
@@ -336,7 +338,7 @@ Col_IntWordValue(
 	 * Invalid type.
 	 */
 
-	Col_Error(COL_TYPECHECK, "%x is not an integer word", word);
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_INTWORD, word);
 	return 0;
     }
 }
@@ -379,7 +381,7 @@ Col_FloatWordValue(
 	 * Invalid type.
 	 */
 
-	Col_Error(COL_TYPECHECK, "%x is not a floating point word", word);
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_FLOATWORD, word);
 	return 0.0;
     }
 }
@@ -428,7 +430,7 @@ Col_CustomWordInfo(
 	 * Invalid type.
 	 */
 
-	Col_Error(COL_TYPECHECK, "%x is not a custom word", word);
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_CUSTOMWORD, word);
 	return NULL;
     }
 }

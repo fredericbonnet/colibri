@@ -194,7 +194,7 @@ Internal Section: Type Checking
 
 #define TYPECHECK_STRBUF(word) \
     if (!(Col_WordType(word) & COL_STRBUF)) { \
-	Col_Error(COL_TYPECHECK, "%x is not a string buffer", (word)); \
+	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_STRBUF, (word)); \
 	goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \

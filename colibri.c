@@ -437,73 +437,136 @@ Col_Cleanup()
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
+ * Internal Variable: ColibriDomain
+ *
+ *	Domain for Colibri error codes. Defines a message string for each code.
+ *
+ * See also:
+ *	<Col_ErrorCode>
+ *---------------------------------------------------------------------------*/
+
+const char * const ColibriDomain[] = {
+    "Generic error: %s",			// COL_ERROR_GENERIC (message)
+    "%s(%d) : assertion failed! (%s)",		// COL_ERROR_ASSERTION (file, line, expression)
+    "Memory error: %s",				// COL_ERROR_MEMORY
+    "Called outside of a GC-protected section",	// COL_ERROR_GCPROTECT
+    "%x is not an integer word",		// COL_ERROR_INTWORD (word)
+    "%x is not a floating point word",		// COL_ERROR_FLOATWORD (word)
+    "%x is not a custom word",			// COL_ERROR_CUSTOMWORD (word)
+    "%x is not a character",			// COL_ERROR_CHAR (word)
+    "%x is not a string",			// COL_ERROR_STRING (word)
+    "%x is not a rope",				// COL_ERROR_ROPE (word)
+    "Rope index %u out of bounds (length=%u)",	// COL_ERROR_ROPEINDEX (index, length)
+    "Combined length %u+%u exceeds the maximum"
+	    " allowed value %u",		// COL_ERROR_ROPELENGTH_CONCAT (length1, length2, maxLength)	
+    "Length %u times %u exceeds the maximum"
+	    " allowed value %u",		// COL_ERROR_ROPELENGTH_REPEAT (length, count, maxLength)
+    "Rope iterator %x is not valid",		// COL_ERROR_ROPEITER (iterator)
+    "Rope iterator %x is at end"		// COL_ERROR_ROPEITER_END (iterator)
+    "%x is not a vector",			// COL_ERROR_VECTOR (word)
+    "%x is not a mutable vector",		// COL_ERROR_MVECTOR (word)
+    "Vector length %u exceeds maximum value"
+	    " %u",				// COL_ERROR_VECTORLENGTH (length, maxLength)
+    "%x is not a list",				// COL_ERROR_LIST (word)
+    "%x is not a mutable list",			// COL_ERROR_MLIST (word)
+    "List index %u out of bounds (length=%u)",	// COL_ERROR_LISTINDEX (index, length)
+    "Combined length %u+%u exceeds the maximum"
+	    " allowed value %u",		// COL_ERROR_LISTLENGTH_CONCAT (length1, length2, maxLength)	
+    "Length %u times %u exceeds the maximum"
+	    " allowed value %u",		// COL_ERROR_LISTLENGTH_REPEAT (length, count, maxLength)
+    "List iterator %x is not valid",		// COL_ERROR_LISTITER (iterator)
+    "List iterator %x is at end"		// COL_ERROR_LISTITER_END (iterator)
+    "%x is not a map",				// COL_ERROR_MAP (word)
+    "%x is not a string or custom map",		// COL_ERROR_WORDMAP (word)
+    "%x is not an integer map",			// COL_ERROR_INTMAP (word)
+    "%x is not a hash map",			// COL_ERROR_HASHMAP (word)
+    "%x is not a string or custom hash map",	// COL_ERROR_WORDHASHMAP (word)
+    "%x is not an integer hash map",		// COL_ERROR_INTHASHMAP (word)
+    "%x is not a trie map",			// COL_ERROR_TRIEMAP (word)
+    "%x is not a string or custom trie map",	// COL_ERROR_WORDTRIEMAP (word)
+    "%x is not an integer trie map",		// COL_ERROR_INTTRIEMAP (word)
+    "Map iterator %x is not valid",		// COL_ERROR_MAPITER (iterator)
+    "Map iterator %x is at end",		// COL_ERROR_MAPITER_END (iterator)
+    "%x is not a string buffer",		// COL_ERROR_STRBUF (word)
+};
+
+/*---------------------------------------------------------------------------
  * Function: Col_Error
  *
  *	Signal an error condition.
  *
  * Arguments:
  *	level	- Error level.
- *	format	- Format string fed to fprintf().
- *	...	- Remaining arguments fed to fprintf().
+ *	domain	- Error domain.
+ *	code	- Error code.
+ *	...	- Remaining arguments passed to domain proc.
  *
  * Side effects:
- *	Default implementation exits the processus when level is critical.
+ *	Default implementation exits the processus when level is <COL_FATAL>
+ *	or <COL_ERROR>.
  *
  * See also: 
- *	<Col_SetErrorProc>
+ *	<Col_SetErrorProc>, <Col_ErrorDomain>
  *---------------------------------------------------------------------------*/
 
 void
 Col_Error(
     Col_ErrorLevel level,
-    const char *format,
+    Col_ErrorDomain domain, 
+    int code,
     ...)
 {
     va_list args;
-    int terminate = 1;
     ThreadData *data = PlatGetThreadData();
 
-    va_start(args, format);
+    va_start(args, code);
     if (data->errorProc) {
 	/*
 	 * Call custom proc.
 	 */
 
-	(data->errorProc)(level, format, args);
-	va_end(args);
-	return;
+	if ((data->errorProc)(level, domain, code, args)) {
+	    /*
+	     * Stop processing.
+	     */
+
+	    va_end(args);
+	    return;
+	}
     }
 
     /*
-     * Print message and abort process.
+     * Process error.
+     */
+
+    /*
+     * Prefix with error level.
      */
 
     switch (level) {
-	case COL_FATAL:
-	    fprintf(stderr, "[FATAL] ");
-	    break;
-
-	case COL_ERROR:
-	    fprintf(stderr, "[ERROR] ");
-	    break;
-
-	case COL_TYPECHECK:
-	    fprintf(stderr, "[TYPECHECK] ");
-	    terminate = 0;
-	    break;
-
-	case COL_RANGECHECK:
-	    fprintf(stderr, "[RANGECHECK] ");
-	    terminate = 0;
-	    break;
+    case COL_FATAL:      fprintf(stderr, "[FATAL] ");          break;
+    case COL_ERROR:      fprintf(stderr, "[ERROR] ");          break;
+    case COL_TYPECHECK:  fprintf(stderr, "[TYPECHECK] ");      break;
+    case COL_RANGECHECK: fprintf(stderr, "[RANGECHECK] ");     break;
+    default:             fprintf(stderr, "[LEVEL%d] ", level); break;
     }
-    vfprintf(stderr, format, args);
+
+    /*
+     * Domain-specific error messages.
+     */
+
+    vfprintf(stderr, domain[code], args);
+
     fprintf(stderr, "\n");
     fflush(stderr);
-
     va_end(args);
 
-    if (terminate) abort();
+    switch (level) {
+	case COL_FATAL:
+	case COL_ERROR:
+	    abort();
+	    break;
+    }
 }
 
 /*---------------------------------------------------------------------------
@@ -523,4 +586,22 @@ Col_SetErrorProc(
     Col_ErrorProc *proc)
 {
     PlatGetThreadData()->errorProc = proc;
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_GetErrorDomain
+ *
+ *	Get the domain for Colibri error codes.
+ *
+ * Result:
+ *	The domain.
+ *
+ * See also: 
+ *	<Col_Error>
+ *---------------------------------------------------------------------------*/
+
+Col_ErrorDomain
+Col_GetErrorDomain()
+{
+    return ColibriDomain;
 }

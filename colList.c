@@ -862,7 +862,7 @@ Col_ConcatLists(
 
     leftLength = Col_ListLength(left);
     rightLength = Col_ListLength(right);
-    RANGECHECK_CONCATLENGTH(leftLength, rightLength) return WORD_NIL;
+    RANGECHECK_LISTLENGTH_CONCAT(leftLength, rightLength) return WORD_NIL;
 
     WORD_UNWRAP(left);
     WORD_UNWRAP(right);
@@ -1237,7 +1237,7 @@ Col_RepeatList(
 	count = 1;
     }
     length = Col_ListLength(list);
-    RANGECHECK_REPEATLENGTH(length, count) return WORD_NIL;
+    RANGECHECK_LISTLENGTH_REPEAT(length, count) return WORD_NIL;
 
     /* 
      * Quick cases. 
@@ -3950,7 +3950,7 @@ Col_MListInsert(
 
     length = Col_ListLength(into);
     listLength = Col_ListLength(list);
-    RANGECHECK_CONCATLENGTH(length, listLength) return;
+    RANGECHECK_LISTLENGTH_CONCAT(length, listLength) return;
 
     ASSERT(WORD_TYPE(into) == WORD_TYPE_WRAP);
 
