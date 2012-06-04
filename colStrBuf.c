@@ -540,7 +540,6 @@ Col_StringBufferAppendSequence(
     const Col_RopeIterator end)
 {
     Col_StringFormat format;
-    size_t sequenceLength, endIndex;
     Col_Word rope;
 
     /*
@@ -558,15 +557,9 @@ Col_StringBufferAppendSequence(
     }
 
     rope = Col_RopeIterRope(begin);
-    if (Col_RopeIterEnd(end)) {
-	endIndex = Col_RopeLength(rope);
-    } else {
-	endIndex = Col_RopeIterIndex(end);
-    }
-    sequenceLength = endIndex - Col_RopeIterIndex(begin);
-
     format = (Col_StringFormat) WORD_STRBUF_FORMAT(strbuf);
-    if (!rope || sequenceLength <= STRBUF_MAX_LENGTH(WORD_STRBUF_SIZE(strbuf) 
+    if (!rope || (Col_RopeIterIndex(end) - Col_RopeIterIndex(begin)) 
+	    <= STRBUF_MAX_LENGTH(WORD_STRBUF_SIZE(strbuf) 
 	    * CELL_SIZE, format) - WORD_STRBUF_LENGTH(strbuf)) {
 	/*
 	 * Sequence is in string mode or fits into buffer, append 
@@ -577,8 +570,7 @@ Col_StringBufferAppendSequence(
 	int noLoss = 1;
 	for (Col_RopeIterSet(it, begin); Col_RopeIterCompare(it, end) < 0;
 		Col_RopeIterNext(it)) {
-	    noLoss &= Col_StringBufferAppendChar(strbuf, 
-		    Col_RopeIterAt(it));
+	    noLoss &= Col_StringBufferAppendChar(strbuf, Col_RopeIterAt(it));
 	}
 	return noLoss;
     }
@@ -588,7 +580,7 @@ Col_StringBufferAppendSequence(
      */
 
     return Col_StringBufferAppendRope(strbuf, Col_Subrope(rope, 
-	    Col_RopeIterIndex(begin), endIndex-1));
+	    Col_RopeIterIndex(begin), Col_RopeIterIndex(end)-1));
 }
 
 /*---------------------------------------------------------------------------
