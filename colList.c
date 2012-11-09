@@ -1972,7 +1972,7 @@ Col_TraverseListChunksN(
     }
 
     info = (ListChunkTraverseInfo *) alloca(sizeof(*info) * number);
-    elements = (Col_Word **) alloca(sizeof(*elements) * number);
+    elements = (const Col_Word **) alloca(sizeof(*elements) * number);
 
     for (i=0; i < number; i++) {
 	info[i].list = lists[i];
@@ -2739,7 +2739,7 @@ Col_ListIterMoveTo(
  *	*it* must be a valid list iterator.
  *
  * Range checking:
- *	*it* must not be at end.
+ *	*it* must not be at end, unless *nb* is zero.
  *
  * Result:
  *	Whether the iterator looped or not.
@@ -2757,8 +2757,6 @@ Col_ListIterForward(
      */
 
     TYPECHECK_LISTITER(it) return 0;
-    RANGECHECK_LISTITER(it) return 0;
-
     if (nb == 0) {
 	/*
 	 * No-op.
@@ -2766,6 +2764,7 @@ Col_ListIterForward(
 
 	return 0;
     }
+    RANGECHECK_LISTITER(it) return 0;
 
     if (nb >= it->length - it->index) {
 	size_t loop;
