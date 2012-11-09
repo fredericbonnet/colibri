@@ -106,9 +106,6 @@
     <ClInclude Include="platform\win32\colWin32Platform.h">
       <Filter>Internal Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="colStrBufInt.h">
-      <Filter>Internal Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="colTrieInt.h">
       <Filter>Internal Header Files</Filter>
     </ClInclude>

@@ -140,7 +140,6 @@ if exist $(OutDir) rmdir /S /Q $(OutDir)</NMakeCleanCommandLine>
     <ClInclude Include="colListInt.h" />
     <ClInclude Include="colMapInt.h" />
     <ClInclude Include="colRopeInt.h" />
-    <ClInclude Include="colStrBufInt.h" />
     <ClInclude Include="colTrieInt.h" />
     <ClInclude Include="colVectorInt.h" />
     <ClInclude Include="colWordInt.h" />
