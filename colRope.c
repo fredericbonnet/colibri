@@ -4526,7 +4526,7 @@ Col_RopeIterMoveTo(
  *	*it* must be a valid rope iterator.
  *
  * Range checking:
- *	*it* must not be at end.
+ *	*it* must not be at end, unless *nb* is zero.
  *---------------------------------------------------------------------------*/
 
 void
@@ -4539,8 +4539,6 @@ Col_RopeIterForward(
      */
 
     TYPECHECK_ROPEITER(it) return;
-    RANGECHECK_ROPEITER(it) return;
-
     if (nb == 0) {
 	/*
 	 * No-op.
@@ -4548,6 +4546,7 @@ Col_RopeIterForward(
 
 	return;
     }
+    RANGECHECK_ROPEITER(it) return;
 
     if (nb >= it->length - it->index) {
 	/*
