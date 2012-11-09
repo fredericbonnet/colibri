@@ -397,7 +397,7 @@ typedef union {
  *	<Small Floating Point Word>, <WORD_SMALLFP_NEW>
  *---------------------------------------------------------------------------*/
 
-#define WORD_SMALLFP_GET(word, c)	((c).w = (word), (c).i &= ~2, (c).f)
+#define WORD_SMALLFP_GET(word, c)	((c).w = (word), (c).i &= ~3, (c).f)
 
 /*---------------------------------------------------------------------------
  * Internal Macro: WORD_SMALLFP_NEW
@@ -416,7 +416,7 @@ typedef union {
  *---------------------------------------------------------------------------*/
 
 #define WORD_SMALLFP_NEW(value, c) \
-    ((c).f = (SMALLFP_TYPE)(value), (c).i |= 2, (c).w)
+    ((c).f = (SMALLFP_TYPE)(value), (c).i &= ~3, (c).i |= 2, (c).w)
 
 
 /*
@@ -963,7 +963,7 @@ Internal Section: Custom Words
  *	accessible for both read/write operations).
  *
  * See also:
- *	<WORD_CUSTOM_INIT>, <WORD_CUSTOM_HEADER_SIZE>, <SweepUnreachableCells>,
+ *	<WORD_CUSTOM_INIT>, <CUSTOM_HEADER_SIZE>, <SweepUnreachableCells>,
  *	<Col_CustomWordType>
  *---------------------------------------------------------------------------*/
 
@@ -1151,7 +1151,7 @@ Internal Section: Custom Words
  *	accessible for both read/write operations).
  *
  * See also:
- *	<WORD_WRAP_INIT>, <Col_WordTypeId>
+ *	<WORD_WRAP_INIT>, <Col_WordType>
  *---------------------------------------------------------------------------*/
 
 #define WORD_WRAP_FLAGS(word)	(((uint8_t *)(word))[1])
