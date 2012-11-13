@@ -98,7 +98,7 @@ Section: Custom Hash Maps
 typedef uintptr_t (Col_HashProc) (Col_Word key);
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_CompareProc
+ * Typedef: Col_CompareKeysProc
  *
  *	Function signature of custom hash map's key comparison function.
  *
@@ -113,7 +113,7 @@ typedef uintptr_t (Col_HashProc) (Col_Word key);
  *	<Col_CustomHashMapType>
  *---------------------------------------------------------------------------*/
 
-typedef int (Col_CompareProc) (Col_Word key1, Col_Word key2);
+typedef int (Col_CompareKeysProc) (Col_Word key1, Col_Word key2);
 
 /*---------------------------------------------------------------------------
  * Typedef: Col_CustomHashMapType
@@ -124,17 +124,17 @@ typedef int (Col_CompareProc) (Col_Word key1, Col_Word key2);
  *	type		- Generic word type descriptor. Type field must be equal
  *			  to <COL_HASHMAP>.
  *	hashProc	- Called to compute the hash value of a key.
- *	compareProc	- Called to compare keys.
+ *	compareKeysProc	- Called to compare keys.
  *
  * See also:
  *	<Col_NewCustomWord>, <Col_NewCustomHashMap>, <Col_CustomWordType>, 
- *	<Col_HashProc>, <Col_CompareProc>
+ *	<Col_HashProc>, <Col_CompareKeysProc>
  *---------------------------------------------------------------------------*/
 
 typedef struct Col_CustomHashMapType {
     Col_CustomWordType type;
     Col_HashProc *hashProc;
-    Col_CompareProc *compareProc;
+    Col_CompareKeysProc *compareKeysProc;
 } Col_CustomHashMapType;
 
 /****************************************************************************
