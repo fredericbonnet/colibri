@@ -28,6 +28,14 @@
 #include <limits.h>
 #include <string.h>
 
+/*
+ * Prototypes for functions used only in this file.
+ */
+
+static void		QuickSort(Col_Word *elements, Col_SortCompareProc *proc,
+			    size_t first, size_t last, 
+			    Col_ClientData clientData);
+
 
 /*
 ================================================================================
@@ -484,7 +492,7 @@ Col_MVectorElements(
  *	length	- New length. Must not exceed max length set at creation.
  *
  * Type checking:
- *	*map* must be a valid mutable vector.
+ *	*mvector* must be a valid mutable vector.
  *
  * Range checking:
  *	*length* must not exceed the maximum length given at mutable vector 
@@ -533,7 +541,7 @@ Col_MVectorSetLength(
  *	mvector	- Mutable vector to freeze. 
  *
  * Type checking:
- *	*map* must be a valid vector.
+ *	*mvector* must be a valid vector.
  *---------------------------------------------------------------------------*/
 
 void
@@ -544,7 +552,7 @@ Col_MVectorFreeze(
      * Check preconditions.
      */
 
-    TYPECHECK_MVECTOR(mvector) return;
+    TYPECHECK_VECTOR(mvector) return;
 
     for (;;) {
 	switch (WORD_TYPE(mvector)) {
@@ -552,6 +560,7 @@ Col_MVectorFreeze(
 	    mvector = WORD_WRAP_SOURCE(mvector);
 	    continue;
 
+	case WORD_TYPE_VOIDLIST:
 	case WORD_TYPE_VECTOR:
 	    /*
 	     * No-op.
@@ -579,5 +588,211 @@ Col_MVectorFreeze(
 	    /* CANTHAPPEN */
 	    ASSERT(0);
 	}
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Function: Col_MVectorSort
+ *
+ *	Sort a mutable vector.
+ *
+ *	Uses the quicksort algorithm with 3-way partitioning given in 
+ *	"Quicksort is optimal" by Robert Sedgewick and Jon Bentley (with slight
+ *	adaptations to unsigned indices).
+ *
+ * Argument:
+ *	mvector		- Mutable vector to sort. 
+ *	proc		- <Col_SortCompareProc>.
+ *	first, last	- Range to sort.
+ *	clientData	- Opaque data passed as is to above proc.
+ *
+ * Type checking:
+ *	*mvector* must be a valid mutable vector.
+ *---------------------------------------------------------------------------*/
+
+void
+Col_MVectorSort(
+    Col_Word mvector, 
+    Col_SortCompareProc *proc, 
+    size_t first, 
+    size_t last, 
+    Col_ClientData clientData)
+{
+    Col_Word *elements;
+    size_t length;
+
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MVECTOR(mvector) return;
+
+    for (;;) {
+	switch (WORD_TYPE(mvector)) {
+	case WORD_TYPE_WRAP:
+	    mvector = WORD_WRAP_SOURCE(mvector);
+	    continue;
+
+	case WORD_TYPE_MVECTOR: 
+	    elements = WORD_VECTOR_ELEMENTS(mvector);
+	    break;
+
+	/* WORD_TYPE_UNKNOWN */
+
+	default:
+	    /* CANTHAPPEN */
+	    ASSERT(0);
+	    return;
+	}
+    }
+
+    length = WORD_VECTOR_LENGTH(mvector);
+    if (length <= 1) {
+	/*
+	 * Nothing to do.
+	 */
+
+	return;
+    }
+    if (first >= length || last < first) {
+	/*
+	 * Invalid range.
+	 */
+
+	return;
+    }
+    if (last >= length) {
+	last = length-1;
+    }
+    QuickSort(elements, proc, first, last, clientData);
+}
+
+/*---------------------------------------------------------------------------
+ * Internal Function: QuickSort
+ *
+ *	Sort a mutable vector using the quicksort algorithm with 3-way 
+ *	partitioning given in "Quicksort is optimal" by Robert Sedgewick and 
+ *	Jon Bentley (with slight adaptations to unsigned indices).
+ *
+ * Argument:
+ *	elements	- Array of words to sort.
+ *	proc		- <Col_SortCompareProc>.
+ *	first, last	- Range to sort.
+ *	clientData	- Opaque data passed as is to above proc.
+ *
+ * See also:
+ *	<Col_MVectorSort>
+ *---------------------------------------------------------------------------*/
+
+static void
+QuickSort(
+    Col_Word *elements, 
+    Col_SortCompareProc *proc, 
+    size_t first, 
+    size_t last, 
+    Col_ClientData clientData)
+{
+    size_t i, j, k, p, q;
+    Col_Word v;
+
+#define SWAP(a, b) {Col_Word tmp=b; b=a; a=tmp;}
+
+    /*
+     * Entry point for tail recursive calls.
+     */
+
+#define TAIL_RECURSE(_first, _last) \
+    first = (_first); last = (_last); goto start;
+
+start:
+
+    if (last <= first) return;
+    i = p = first; j = q = last;
+    v = elements[last];
+    for (;;) {
+	/*
+	 * Move from left to find an element that is not less.
+	 */
+
+	while (elements[i] != v && proc(elements[i], v, clientData) < 0) {
+	    i++; 
+	}
+
+	/*
+	 * Move from right to find an element that is not greater.
+	 */
+
+	while (v != elements[--j] && proc(v, elements[j], clientData) < 0) {
+	    if (j == first) break;
+	}
+
+	/*
+	 * Stop if pointers have crossed.
+	 */
+
+	if (i >= j) break;
+
+	/*
+	 * Exchange.
+	 */
+
+	SWAP(elements[i], elements[j]);
+
+	/*
+	 * If left element equal, exchange to left end.
+	 */
+
+	if (elements[i] == v || proc(elements[i], v, clientData) == 0) {
+	    SWAP(elements[p], elements[i]); 
+	    p++; 
+	} 
+
+	/*
+	 * If right element equal, exchange to right end.
+	 */
+
+	if (v == elements[j] || proc(v, elements[j], clientData) == 0) {
+	    q--; 
+	    SWAP(elements[j], elements[q]);
+	}
+    }
+    SWAP(elements[i], elements[last]); 
+    j = i+1; 
+
+    /*
+     * Swap left equals to center.
+     */
+
+    if (p) for (k = first; k < p-1; k++, i--) {
+	SWAP(elements[k], elements[i]);
+    }
+
+    /*
+     * Swap right equals to center.
+     */
+
+    for (k = last-1; k > q; k--, j++) {
+	SWAP(elements[j], elements[k]);
+    }
+
+    /*
+     * Recurse on smallest subrange and tail call on largest to minimize 
+     * recursion depth and ensure O(logn) space.
+     */
+
+    if (i-first < last-j+1) {
+	/*
+	 * Left subrange is shorter.
+	 */
+
+	if (i) QuickSort(elements, proc, first, --i, clientData);
+	TAIL_RECURSE(j, last);
+    } else {
+	/*
+	 * Right subrange is shorter.
+	 */
+
+	QuickSort(elements, proc, j, last, clientData);
+	TAIL_RECURSE(first, --i);
     }
 }
