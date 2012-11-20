@@ -83,11 +83,12 @@ Section: Custom Trie Maps
 */
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_BitSetProc
+ * Typedef: Col_TrieBitSetProc
  *
  *	Function signature of custom trie map's key bit test function.
  *
  * Arguments:
+ *	map	- Trie map the key belongs to.
  *	key	- Key to get bit value for.
  *	index	- Index of key element.
  *	bit	- Position of bit to test.
@@ -99,14 +100,16 @@ Section: Custom Trie Maps
  *	<Col_CustomTrieMapType>
  *---------------------------------------------------------------------------*/
 
-typedef int (Col_BitSetProc) (Col_Word key, size_t index, size_t bit);
+typedef int (Col_TrieBitSetProc) (Col_Word map, Col_Word key, size_t index, 
+    size_t bit);
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_KeyDiffProc
+ * Typedef: Col_TrieKeyDiffProc
  *
  *	Function signature of custom trie map's key comparison function.
  *
  * Arguments:
+ *	map		- Trie map the keys belong to.
  *	key1, key2	- Key words to compare.
  *
  * Result:
@@ -120,8 +123,8 @@ typedef int (Col_BitSetProc) (Col_Word key, size_t index, size_t bit);
  *	<Col_CustomHashMapType>
  *---------------------------------------------------------------------------*/
 
-typedef int (Col_KeyDiffProc) (Col_Word key1, Col_Word key2, size_t *diffPtr, 
-    size_t *bitPtr);
+typedef int (Col_TrieKeyDiffProc) (Col_Word map, Col_Word key1, Col_Word key2, 
+    size_t *diffPtr, size_t *bitPtr);
 
 /*---------------------------------------------------------------------------
  * Typedef: Col_CustomTrieMapType
@@ -136,13 +139,13 @@ typedef int (Col_KeyDiffProc) (Col_Word key1, Col_Word key2, size_t *diffPtr,
  *
  * See also:
  *	<Col_NewCustomWord>, <Col_NewCustomTrieMap>, <Col_CustomWordType>, 
- *	<Col_HashProc>, <Col_KeyDiffProc>
+ *	<Col_TrieBitSetProc>, <Col_TrieKeyDiffProc>
  *---------------------------------------------------------------------------*/
 
 typedef struct Col_CustomTrieMapType {
     Col_CustomWordType type;
-    Col_BitSetProc *bitSetProc;
-    Col_KeyDiffProc *keyDiffProc;
+    Col_TrieBitSetProc *bitSetProc;
+    Col_TrieKeyDiffProc *keyDiffProc;
 } Col_CustomTrieMapType;
 
 /****************************************************************************

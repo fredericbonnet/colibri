@@ -86,6 +86,7 @@ Section: Custom Hash Maps
  *	Function signature of custom hash map's key hashing function.
  *
  * Argument:
+ *	map	- Hash map the key belongs to.
  *	key	- Key word to generate hash value for.
  *
  * Result:
@@ -95,7 +96,7 @@ Section: Custom Hash Maps
  *	<Col_CustomHashMapType>
  *---------------------------------------------------------------------------*/
 
-typedef uintptr_t (Col_HashProc) (Col_Word key);
+typedef uintptr_t (Col_HashProc) (Col_Word map, Col_Word key);
 
 /*---------------------------------------------------------------------------
  * Typedef: Col_CompareKeysProc
@@ -103,17 +104,19 @@ typedef uintptr_t (Col_HashProc) (Col_Word key);
  *	Function signature of custom hash map's key comparison function.
  *
  * Arguments:
+ *	map		- Hash map the keys belong to.
  *	key1, key2	- Key words to compare.
  *
  * Result:
- *	Negative if key1 is less than key2, positive if key2 is greater than
+ *	Negative if key1 is less than key2, positive if key1 is greater than
  *	key2, zero if both keys are equal.
  *
  * See also: 
  *	<Col_CustomHashMapType>
  *---------------------------------------------------------------------------*/
 
-typedef int (Col_CompareKeysProc) (Col_Word key1, Col_Word key2);
+typedef int (Col_HashCompareKeysProc) (Col_Word map, Col_Word key1, 
+    Col_Word key2);
 
 /*---------------------------------------------------------------------------
  * Typedef: Col_CustomHashMapType
@@ -128,13 +131,13 @@ typedef int (Col_CompareKeysProc) (Col_Word key1, Col_Word key2);
  *
  * See also:
  *	<Col_NewCustomWord>, <Col_NewCustomHashMap>, <Col_CustomWordType>, 
- *	<Col_HashProc>, <Col_CompareKeysProc>
+ *	<Col_HashProc>, <Col_HashCompareKeysProc>
  *---------------------------------------------------------------------------*/
 
 typedef struct Col_CustomHashMapType {
     Col_CustomWordType type;
     Col_HashProc *hashProc;
-    Col_CompareKeysProc *compareKeysProc;
+    Col_HashCompareKeysProc *compareKeysProc;
 } Col_CustomHashMapType;
 
 /****************************************************************************

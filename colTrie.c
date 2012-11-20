@@ -241,7 +241,7 @@ TrieMapFindNode(
 
 	    grandParent = parent;
 	    parent = node;
-	    if (typeInfo->bitSetProc(key, diff, bit)) {
+	    if (typeInfo->bitSetProc(map, key, diff, bit)) {
 		left = WORD_TRIENODE_LEFT(node);
 		node = WORD_TRIENODE_RIGHT(node);
 	    } else {
@@ -260,7 +260,7 @@ TrieMapFindNode(
 
     ASSERT(WORD_TYPE(node) == WORD_TYPE_TRIELEAF || WORD_TYPE(node) == WORD_TYPE_MTRIELEAF);
     entryKey = WORD_MAPENTRY_KEY(node);
-    compare = typeInfo->keyDiffProc(key, entryKey, &diff, &bit);
+    compare = typeInfo->keyDiffProc(map, key, entryKey, &diff, &bit);
     if (compare == 0 || !closest) {
 	/*
 	 * Exact match found or required.
@@ -303,7 +303,7 @@ TrieMapFindNode(
 
 	    grandParent = parent;
 	    parent = node;
-	    if (typeInfo->bitSetProc(key, WORD_TRIENODE_DIFF(node), 
+	    if (typeInfo->bitSetProc(map, key, WORD_TRIENODE_DIFF(node), 
 		    WORD_TRIENODE_BIT(node))) {
 		left = WORD_TRIENODE_LEFT(node);
 		node = WORD_TRIENODE_RIGHT(node);
@@ -320,8 +320,8 @@ TrieMapFindNode(
 
 	break;
     }
-    if (comparePtr) *comparePtr = (typeInfo->bitSetProc(key, diff, bit) ? 1 
-	    : -1);
+    if (comparePtr) *comparePtr = (typeInfo->bitSetProc(map, key, diff, bit) 
+	    ? 1 : -1);
     if (grandParentPtr) *grandParentPtr = grandParent;
     if (parentPtr) *parentPtr = parent;
     if (leftPtr) *leftPtr = left;
@@ -1294,7 +1294,7 @@ ConvertNodeToMutable(
 	     * Descend.
 	     */
 
-	    if (typeInfo->bitSetProc(prefix, WORD_TRIENODE_DIFF(existing), 
+	    if (typeInfo->bitSetProc(map, prefix, WORD_TRIENODE_DIFF(existing), 
 		    WORD_TRIENODE_BIT(existing))) {
 		existing = WORD_TRIENODE_RIGHT(existing);
 	    } else {

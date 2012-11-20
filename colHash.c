@@ -30,13 +30,14 @@
 
 static Col_RopeChunksTraverseProc HashChunkProc;
 static Col_HashProc HashString;
-static Col_CompareKeysProc CompareStrings;
+static Col_HashCompareKeysProc CompareStrings;
 static void		AllocBuckets(Col_Word map, size_t capacity);
 static int		GrowHashMap(Col_Word map, Col_HashProc hashProc);
 static int		GrowIntHashMap(Col_Word map);
 static Col_Word		HashMapFindEntry(Col_Word map, Col_HashProc hashProc,
-			    Col_CompareKeysProc compareKeysProc, Col_Word key,
-			    int mutable, int *createPtr, size_t *bucketPtr);
+			    Col_HashCompareKeysProc compareKeysProc, 
+			    Col_Word key, int mutable, int *createPtr, 
+			    size_t *bucketPtr);
 static Col_Word		IntHashMapFindEntry(Col_Word map, intptr_t key,
 			    int mutable, int *createPtr, size_t *bucketPtr);
 static Col_Word		ConvertEntryToMutable(Col_Word entry, 
@@ -80,7 +81,7 @@ Internal Section: Hash Map Internals
  *
  *	Custom keys are hashed using a custom hash proc as well as a custom key 
  *	comparison proc (see <Col_CustomHashMapType>, <Col_HashProc>, 
- *	<Col_CompareKeysProc>) 
+ *	<Col_HashCompareKeysProc>) 
  */
 
 /*---------------------------------------------------------------------------
@@ -162,6 +163,7 @@ HashChunkProc(
  *	traversal proc <HashChunkProc>. Follows <Col_HashProc> signature.
  *
  * Argument:
+ *	map	- Hash map the key belongs to.
  *	key	- Key word to generate hash value for.
  *
  * Result:
@@ -173,6 +175,7 @@ HashChunkProc(
 
 static uintptr_t 
 HashString(
+    Col_Word map,
     Col_Word key)
 {
     uintptr_t hash = 0;
@@ -183,9 +186,10 @@ HashString(
 /*---------------------------------------------------------------------------
  * Internal Function: CompareStrings
  *
- *	Compare string keys. Follows <Col_CompareKeysProc> signature.
+ *	Compare string hash keys. Follows <Col_HashCompareKeysProc> signature.
  *
  * Arguments:
+ *	map		- Hash map the keys belong to.
  *	key1, key2	- Key words to compare.
  *
  * Result:
@@ -195,6 +199,7 @@ HashString(
 
 static int 
 CompareStrings(
+    Col_Word map,
     Col_Word key1,
     Col_Word key2)
 {
@@ -352,14 +357,14 @@ GrowHashMap(
 		 * Recompute full hash.
 		 */
 
-		hash = hashProc(key);
+		hash = hashProc(map, key);
 	    } else {
 	    /*
 		 * Get actual hash by combining entry hash and index.
 		 */
 
 		hash = WORD_HASHENTRY_HASH(entry) | index;
-		ASSERT(hash == hashProc(key));
+		ASSERT(hash == hashProc(map, key));
 	    }
 	    newIndex = hash & (newNbBuckets-1);
 
@@ -519,7 +524,7 @@ GrowIntHashMap(
  * Arguments:
  *	map		- Hash map to find or create entry into.
  *	hashProc	- <Col_HashProc>.
- *	compareKeysProc	- <Col_CompareKeysProc>.
+ *	compareKeysProc	- <Col_HashCompareKeysProc>.
  *	key		- Entry key.
  *	mutable		- If true, ensure that entry is mutable.
  *	createPtr	- (in) If non-NULL, whether to create entry if absent.
@@ -535,7 +540,7 @@ static Col_Word
 HashMapFindEntry(
     Col_Word map,
     Col_HashProc hashProc,
-    Col_CompareKeysProc compareKeysProc, 
+    Col_HashCompareKeysProc compareKeysProc, 
     Col_Word key,
     int mutable,
     int *createPtr,
@@ -554,13 +559,13 @@ start:
 
     GET_BUCKETS(map, 0, nbBuckets, buckets);
     ASSERT(!(nbBuckets & (nbBuckets-1)));
-    hash = hashProc(key);
+    hash = hashProc(map, key);
     index = hash & (nbBuckets-1);
     entry = buckets[index];
     while (entry) {
 	ASSERT(WORD_TYPE(entry) == WORD_TYPE_HASHENTRY || WORD_TYPE(entry) == WORD_TYPE_MHASHENTRY);
 	if (WORD_HASHENTRY_HASH(entry) == (hash & HASHENTRY_HASH_MASK)
-		&& compareKeysProc(WORD_MAPENTRY_KEY(entry), key) == 0) {
+		&& compareKeysProc(map, WORD_MAPENTRY_KEY(entry), key) == 0) {
 	    /*
 	     * Found!
 	     */
@@ -1091,7 +1096,7 @@ Col_HashMapGet(
     Col_Word *valuePtr)
 {
     Col_HashProc *hashProc;
-    Col_CompareKeysProc *compareKeysProc;
+    Col_HashCompareKeysProc *compareKeysProc;
     Col_Word entry;
 
     /*
@@ -1203,7 +1208,7 @@ Col_HashMapSet(
     Col_Word value)
 {
     Col_HashProc *hashProc;
-    Col_CompareKeysProc *compareKeysProc;
+    Col_HashCompareKeysProc *compareKeysProc;
     int create = 1;
     Col_Word entry;
 
@@ -1308,7 +1313,7 @@ Col_HashMapUnset(
     Col_Word key)
 {
     Col_HashProc *hashProc;
-    Col_CompareKeysProc *compareKeysProc;
+    Col_HashCompareKeysProc *compareKeysProc;
     Col_Word *buckets, prev, entry;
     size_t nbBuckets;
     uintptr_t hash, index;
@@ -1349,13 +1354,13 @@ Col_HashMapUnset(
 
     GET_BUCKETS(map, 0, nbBuckets, buckets);
     ASSERT(!(nbBuckets & (nbBuckets-1)));
-    hash = hashProc(key);
+    hash = hashProc(map, key);
     index = hash & (nbBuckets-1);
     prev = WORD_NIL;
     entry = buckets[index];
     while (entry) {
 	if (WORD_HASHENTRY_HASH(entry) == (hash & HASHENTRY_HASH_MASK)
-		&& compareKeysProc(WORD_MAPENTRY_KEY(entry), key) == 0) {
+		&& compareKeysProc(map, WORD_MAPENTRY_KEY(entry), key) == 0) {
 	    /*
 	     * Found! Unlink & remove entry.
 	     */
@@ -1586,7 +1591,7 @@ Col_HashMapIterFind(
     int *createPtr)
 {
     Col_HashProc *hashProc;
-    Col_CompareKeysProc *compareKeysProc;
+    Col_HashCompareKeysProc *compareKeysProc;
 
     /*
      * Check preconditions.
