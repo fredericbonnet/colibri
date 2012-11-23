@@ -517,16 +517,11 @@ Internal Section: Type Checking
  *	Generate <COL_TYPECHECK> error when *word* is not a character.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_CHAR(word) \
-    if (!(Col_WordType(word) & COL_CHAR)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_CHAR, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK((Col_WordType(word) & COL_CHAR), COL_ERROR_CHAR, (word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_STRING
@@ -540,16 +535,11 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a string.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_STRING(word) \
-    if (!(Col_WordType(word) & COL_STRING)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_STRING, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK((Col_WordType(word) & COL_STRING), COL_ERROR_STRING, (word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_ROPE
@@ -563,16 +553,11 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a rope.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_ROPE(word) \
-    if (!(Col_WordType(word) & COL_ROPE)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_ROPE, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK((Col_WordType(word) & COL_ROPE), COL_ERROR_ROPE, (word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_ROPEITER
@@ -586,99 +571,78 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *it* is not a valid rope iterator.
  *
  * See also:
- *	<Col_Error>, <Col_RopeIterNull>
+ *	<TYPECHECK>, <Col_RopeIterNull>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_ROPEITER(it) \
-    if (Col_RopeIterNull(it)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_ROPEITER, (it)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK(!Col_RopeIterNull(it), COL_ERROR_ROPEITER, (it))
 
 
 /*
 ================================================================================
-Internal Section: Range Checking
+Internal Section: Value Checking
 ================================================================================
 */
 
 /*---------------------------------------------------------------------------
- * Internal Macro: RANGECHECK_ROPELENGTH_CONCAT
+ * Internal Macro: VALUECHECK_ROPELENGTH_CONCAT
  *
- *	Range checking macro for ropes, ensures that combined lengths of two
+ *	Value checking macro for ropes, ensures that combined lengths of two
  *	concatenated ropes don't exceed the maximum value.
  *
  * Argument:
  *	length1, length2    - Checked lengths.
  *
  * Side effects:
- *	Generate <COL_RANGECHECK> error when resulting length exceeds the max
+ *	Generate <COL_VALUECHECK> error when resulting length exceeds the max
  *	rope length (SIZE_MAX).
  *
  * See also:
- *	<Col_Error>
+ *	<VALUECHECK>
  *---------------------------------------------------------------------------*/
 
-#define RANGECHECK_ROPELENGTH_CONCAT(length1, length2) \
-    if (SIZE_MAX-(length1) < (length2)) { \
-	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_ROPELENGTH_CONCAT, \
-		(length1), (length2), SIZE_MAX); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+#define VALUECHECK_ROPELENGTH_CONCAT(length1, length2) \
+    VALUECHECK((SIZE_MAX-(length1) >= (length2)), COL_ERROR_ROPELENGTH_CONCAT, \
+		(length1), (length2), SIZE_MAX)
 
 /*---------------------------------------------------------------------------
- * Internal Macro: RANGECHECK_ROPELENGTH_REPEAT
+ * Internal Macro: VALUECHECK_ROPELENGTH_REPEAT
  *
- *	Range checking macro for ropes, ensures that length of a repeated rope
+ *	Value checking macro for ropes, ensures that length of a repeated rope
  *	doesn't exceed the maximum value.
  *
  * Argument:
  *	length, count	- Checked length and repetition factor.
  *
  * Side effects:
- *	Generate <COL_RANGECHECK> error when resulting length exceeds the max
+ *	Generate <COL_VALUECHECK> error when resulting length exceeds the max
  *	rope length (SIZE_MAX).
  *
  * See also:
- *	<Col_Error>
+ *	<VALUECHECK>
  *---------------------------------------------------------------------------*/
 
-#define RANGECHECK_ROPELENGTH_REPEAT(length, count) \
-    if ((count) > 1 && SIZE_MAX/(count) < (length)) { \
-	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_ROPELENGTH_REPEAT, \
-		(length), (count), SIZE_MAX); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+#define VALUECHECK_ROPELENGTH_REPEAT(length, count) \
+    VALUECHECK(((count) <= 1 || SIZE_MAX/(count) >= (length)), \
+		COL_ERROR_ROPELENGTH_REPEAT, (length), (count), SIZE_MAX)
 
 /*---------------------------------------------------------------------------
- * Internal Macro: RANGECHECK_ROPEITER
+ * Internal Macro: VALUECHECK_ROPEITER
  *
- *	Range checking macro for rope iterators, ensures that iterator is not
+ *	Value checking macro for rope iterators, ensures that iterator is not
  *	at end.
  *
  * Argument:
  *	it	- Checked iterator.
  *
  * Side effects:
- *	Generate <COL_RANGECHECK> error when *it* is at end.
+ *	Generate <COL_VALUECHECK> error when *it* is at end.
  *
  * See also:
- *	<Col_Error>, <Col_RopeIterEnd>
+ *	<VALUECHECK>, <Col_RopeIterEnd>
  *---------------------------------------------------------------------------*/
 
-#define RANGECHECK_ROPEITER(it) \
-    if (Col_RopeIterEnd(it)) { \
-	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_ROPEITER_END, \
-		(it)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+#define VALUECHECK_ROPEITER(it) \
+    VALUECHECK(!Col_RopeIterEnd(it), COL_ERROR_ROPEITER_END, (it))
 
 #endif /* _COLIBRI_ROPE_INT */

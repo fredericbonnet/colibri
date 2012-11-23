@@ -509,10 +509,10 @@ Declarations:
  *			  section. Default implementation forces process 
  *			  termination.
  *  COL_TYPECHECK	- Idempotent (i.e. without side effect) type-related 
- *			  error. Typically when passing words of a bad type. 
- *			  Default implementation does not force process 
- *			  termination.
- *  COL_RANGECHECK	- Idempotent (i.e. without side effect) range-related 
+ *			  error. Typically when passing words of a bad type
+ *			  in debug mode. Default implementation does not force 
+ *			  process termination.
+ *  COL_VALUECHECK	- Idempotent (i.e. without side effect) value-related 
  *			  error. Typically when using lengths, indices or 
  *			  iterators outside of their validity range. Default
  *			  implementation does not force process termination.
@@ -525,7 +525,7 @@ typedef enum Col_ErrorLevel {
     COL_FATAL,
     COL_ERROR,
     COL_TYPECHECK,
-    COL_RANGECHECK,
+    COL_VALUECHECK,
 } Col_ErrorLevel;
 
 /*---------------------------------------------------------------------------

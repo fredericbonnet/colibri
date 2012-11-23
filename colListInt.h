@@ -295,16 +295,11 @@ Internal Section: Type Checking
  *	Generate <COL_TYPECHECK> error when *word* is not a list.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_LIST(word) \
-    if (!(Col_WordType(word) & COL_LIST)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_LIST, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK((Col_WordType(word) & COL_LIST), COL_ERROR_LIST, (word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_MLIST
@@ -318,16 +313,11 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a mutable list.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_MLIST(word) \
-    if (!(Col_WordType(word) & COL_MLIST)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_MLIST, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK((Col_WordType(word) & COL_MLIST), COL_ERROR_MLIST, (word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_LISTITER
@@ -341,124 +331,97 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *it* is not a valid list iterator.
  *
  * See also:
- *	<Col_Error>, <Col_ListIterNull>
+ *	<TYPECHECK>, <Col_ListIterNull>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_LISTITER(it) \
-    if (Col_ListIterNull(it)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_LISTITER, (it)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK(!Col_ListIterNull(it), COL_ERROR_LISTITER, (it))
 
 
 /*
 ================================================================================
-Internal Section: Range Checking
+Internal Section: Value Checking
 ================================================================================
 */
 
 /*---------------------------------------------------------------------------
- * Internal Macro: RANGECHECK_BOUNDS
+ * Internal Macro: VALUECHECK_BOUNDS
  *
- *	Range checking macro for lists, ensures that index is within bounds.
+ *	Value checking macro for lists, ensures that index is within bounds.
  *
  * Arguments:
  *	index	- Checked index.
  *	length	- List length.
  *
  * Side effects:
- *	Generate <COL_RANGECHECK> error when index is out of bounds.
+ *	Generate <COL_VALUECHECK> error when index is out of bounds.
  *
  * See also:
- *	<Col_Error>
+ *	<VALUECHECK>
  *---------------------------------------------------------------------------*/
 
-#define RANGECHECK_BOUNDS(index, length) \
-    if ((index) >= (length)) { \
-	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_LISTINDEX, \
-		(index), (length)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+#define VALUECHECK_BOUNDS(index, length) \
+    VALUECHECK(((index) < (length)), COL_ERROR_LISTINDEX, (index), (length))
 
 /*---------------------------------------------------------------------------
- * Internal Macro: RANGECHECK_LISTLENGTH_CONCAT
+ * Internal Macro: VALUECHECK_LISTLENGTH_CONCAT
  *
- *	Range checking macro for lists, ensures that combined lengths of two
+ *	Value checking macro for lists, ensures that combined lengths of two
  *	concatenated lists don't exceed the maximum value.
  *
  * Argument:
  *	length1, length2    - Checked lengths.
  *
  * Side effects:
- *	Generate <COL_RANGECHECK> error when resulting length exceeds the max
+ *	Generate <COL_VALUECHECK> error when resulting length exceeds the max
  *	list length (SIZE_MAX).
  *
  * See also:
- *	<Col_Error>
+ *	<VALUECHECK>
  *---------------------------------------------------------------------------*/
 
-#define RANGECHECK_LISTLENGTH_CONCAT(length1, length2) \
-    if (SIZE_MAX-(length1) < (length2)) { \
-	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_LISTLENGTH_CONCAT, \
-		(length1), (length2), SIZE_MAX); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+#define VALUECHECK_LISTLENGTH_CONCAT(length1, length2) \
+    VALUECHECK((SIZE_MAX-(length1) >= (length2)), COL_ERROR_LISTLENGTH_CONCAT, \
+		(length1), (length2), SIZE_MAX)
 
 /*---------------------------------------------------------------------------
- * Internal Macro: RANGECHECK_LISTLENGTH_REPEAT
+ * Internal Macro: VALUECHECK_LISTLENGTH_REPEAT
  *
- *	Range checking macro for lists, ensures that length of a repeated list
+ *	Value checking macro for lists, ensures that length of a repeated list
  *	doesn't exceed the maximum value.
  *
  * Argument:
  *	length, count	- Checked length and repetition factor.
  *
  * Side effects:
- *	Generate <COL_RANGECHECK> error when resulting length exceeds the max
+ *	Generate <COL_VALUECHECK> error when resulting length exceeds the max
  *	list length (SIZE_MAX).
  *
  * See also:
- *	<Col_Error>
+ *	<VALUECHECK>
  *---------------------------------------------------------------------------*/
 
-#define RANGECHECK_LISTLENGTH_REPEAT(length, count) \
-    if ((count) > 1 && SIZE_MAX/(count) < (length)) { \
-	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_LISTLENGTH_REPEAT, \
-		(length), (count), SIZE_MAX); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+#define VALUECHECK_LISTLENGTH_REPEAT(length, count) \
+    VALUECHECK(((count) <= 1 || SIZE_MAX/(count) >= (length)), \
+	    COL_ERROR_LISTLENGTH_REPEAT, (length), (count), SIZE_MAX)
 
 /*---------------------------------------------------------------------------
- * Internal Macro: RANGECHECK_LISTITER
+ * Internal Macro: VALUECHECK_LISTITER
  *
- *	Range checking macro for list iterators, ensures that iterator is not
+ *	Value checking macro for list iterators, ensures that iterator is not
  *	at end.
  *
  * Argument:
  *	it	- Checked iterator.
  *
  * Side effects:
- *	Generate <COL_RANGECHECK> error when *it* is at end.
+ *	Generate <COL_VALUECHECK> error when *it* is at end.
  *
  * See also:
- *	<Col_Error>, <Col_ListIterEnd>
+ *	<VALUECHECK>, <Col_ListIterEnd>
  *---------------------------------------------------------------------------*/
 
-#define RANGECHECK_LISTITER(it) \
-    if (Col_ListIterEnd(it)) { \
-	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_LISTITER_END, \
-		(it)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+#define VALUECHECK_LISTITER(it) \
+    VALUECHECK(!Col_ListIterEnd(it), COL_ERROR_LISTITER_END, (it))
 
 #endif /* _COLIBRI_LIST_INT */

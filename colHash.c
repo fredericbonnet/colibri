@@ -1675,7 +1675,7 @@ Col_IntHashMapIterFind(
  * Type checking:
  *	*it* must be a valid hash map iterator.
  *
- * Range checking:
+ * Value checking:
  *	*it* must not be at end.
  *---------------------------------------------------------------------------*/
 
@@ -1693,7 +1693,7 @@ Col_HashMapIterSetValue(
      */
 
     TYPECHECK_HASHMAP(it->map) return;
-    RANGECHECK_MAPITER(it) return;
+    VALUECHECK_MAPITER(it) return;
 
     ASSERT(it->entry);
 
@@ -1758,7 +1758,7 @@ Col_HashMapIterSetValue(
  * Type checking:
  *	*it* must be a valid hash map iterator.
  *
- * Range checking:
+ * Value checking:
  *	*it* must not be at end.
  *---------------------------------------------------------------------------*/
 
@@ -1774,7 +1774,7 @@ Col_HashMapIterNext(
      */
 
     TYPECHECK_HASHMAP(it->map) return;
-    RANGECHECK_MAPITER(it) return;
+    VALUECHECK_MAPITER(it) return;
 
     ASSERT(it->entry);
 

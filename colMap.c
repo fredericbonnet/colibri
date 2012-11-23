@@ -669,7 +669,7 @@ Col_IntMapIterFind(
  * Type checking:
  *	*it* must be a valid string or custom map iterator.
  *
- * Range checking:
+ * Value checking:
  *	*it* must not be at end.
  *
  * Results:
@@ -688,7 +688,7 @@ Col_MapIterGet(
      */
 
     TYPECHECK_WORDMAP(it->map) return;
-    RANGECHECK_MAPITER(it) return;
+    VALUECHECK_MAPITER(it) return;
 
     ASSERT(it->entry);
 
@@ -728,7 +728,7 @@ Col_MapIterGet(
  * Type checking:
  *	*it* must be a valid integer map iterator.
  *
- * Range checking:
+ * Value checking:
  *	*it* must not be at end.
  *
  * Results:
@@ -747,7 +747,7 @@ Col_IntMapIterGet(
      */
 
     TYPECHECK_INTMAP(it->map) return;
-    RANGECHECK_MAPITER(it) return;
+    VALUECHECK_MAPITER(it) return;
 
     ASSERT(it->entry);
 
@@ -780,7 +780,7 @@ Col_IntMapIterGet(
  * Type checking:
  *	*it* must be a valid string or custom map iterator.
  *
- * Range checking:
+ * Value checking:
  *	*it* must not be at end.
  *
  * Result:
@@ -796,7 +796,7 @@ Col_MapIterGetKey(
      */
 
     TYPECHECK_WORDMAP(it->map) return WORD_NIL;
-    RANGECHECK_MAPITER(it) return WORD_NIL;
+    VALUECHECK_MAPITER(it) return WORD_NIL;
 
     ASSERT(it->entry);
 
@@ -829,7 +829,7 @@ Col_MapIterGetKey(
  * Type checking:
  *	*it* must be a valid integer map iterator.
  *
- * Range checking:
+ * Value checking:
  *	*it* must not be at end.
  *
  * Result:
@@ -845,7 +845,7 @@ Col_IntMapIterGetKey(
      */
 
     TYPECHECK_INTMAP(it->map) return 0;
-    RANGECHECK_MAPITER(it) return 0;
+    VALUECHECK_MAPITER(it) return 0;
 
     ASSERT(it->entry);
 
@@ -873,7 +873,7 @@ Col_IntMapIterGetKey(
  * Type checking:
  *	*it* must be a valid map iterator.
  *
- * Range checking:
+ * Value checking:
  *	*it* must not be at end.
  *
  * Result:
@@ -889,7 +889,7 @@ Col_MapIterGetValue(
      */
 
     TYPECHECK_MAPITER(it) return WORD_NIL;
-    RANGECHECK_MAPITER(it) return WORD_NIL;
+    VALUECHECK_MAPITER(it) return WORD_NIL;
 
     ASSERT(it->entry);
 
@@ -928,7 +928,7 @@ Col_MapIterGetValue(
  * Type checking:
  *	*it* must be a valid map iterator.
  *
- * Range checking:
+ * Value checking:
  *	*it* must not be at end.
  *---------------------------------------------------------------------------*/
 
@@ -942,7 +942,7 @@ Col_MapIterSetValue(
      */
 
     TYPECHECK_MAPITER(it) return;
-    RANGECHECK_MAPITER(it) return;
+    VALUECHECK_MAPITER(it) return;
 
     switch (WORD_TYPE(it->map)) {
     case WORD_TYPE_STRHASHMAP:
@@ -983,7 +983,7 @@ Col_MapIterSetValue(
  * Type checking:
  *	*it* must be a valid map iterator.
  *
- * Range checking:
+ * Value checking:
  *	*it* must not be at end.
  *---------------------------------------------------------------------------*/
 
@@ -996,7 +996,7 @@ Col_MapIterNext(
      */
 
     TYPECHECK_MAPITER(it) return;
-    RANGECHECK_MAPITER(it) return;
+    VALUECHECK_MAPITER(it) return;
 
     switch (WORD_TYPE(it->map)) {
     case WORD_TYPE_STRHASHMAP:

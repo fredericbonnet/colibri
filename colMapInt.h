@@ -100,16 +100,12 @@ Internal Section: Type Checking
  *	Generate <COL_TYPECHECK> error when *word* is not a map.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_MAP(word) \
-    if (!(Col_WordType(word) & (COL_MAP | COL_INTMAP))) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_MAP, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK((Col_WordType(word) & (COL_MAP | COL_INTMAP)), COL_ERROR_MAP, \
+	    (word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_WORDMAP
@@ -123,16 +119,12 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a word-based map.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_WORDMAP(word) \
-    if ((Col_WordType(word) & (COL_MAP | COL_INTMAP)) != COL_MAP) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_WORDMAP, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK(((Col_WordType(word) & (COL_MAP | COL_INTMAP)) == COL_MAP), \
+	    COL_ERROR_WORDMAP, (word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_INTMAP
@@ -146,16 +138,11 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not an integer map.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_INTMAP(word) \
-    if (!(Col_WordType(word) & COL_INTMAP)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_INTMAP, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK((Col_WordType(word) & COL_INTMAP), COL_ERROR_INTMAP, (word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_MAPITER
@@ -169,46 +156,36 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *it* is not a valid map iterator.
  *
  * See also:
- *	<Col_Error>, <Col_MapIterNull>
+ *	<TYPECHECK>, <Col_MapIterNull>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_MAPITER(it) \
-    if (Col_MapIterNull(it)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_MAPITER, (it)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK(!Col_MapIterNull(it), COL_ERROR_MAPITER, (it))
 
 
 /*
 ================================================================================
-Internal Section: Range Checking
+Internal Section: Value Checking
 ================================================================================
 */
 
 /*---------------------------------------------------------------------------
- * Internal Macro: RANGECHECK_MAPITER
+ * Internal Macro: VALUECHECK_MAPITER
  *
- *	Range checking macro for map iterators, ensures that iterator is not
+ *	Value checking macro for map iterators, ensures that iterator is not
  *	at end.
  *
  * Argument:
  *	it	- Checked iterator.
  *
  * Side effects:
- *	Generate <COL_RANGECHECK> error when *it* is at end.
+ *	Generate <COL_VALUECHECK> error when *it* is at end.
  *
  * See also:
- *	<Col_Error>, <Col_MapIterEnd>
+ *	<VALUECHECK>, <Col_MapIterEnd>
  *---------------------------------------------------------------------------*/
 
-#define RANGECHECK_MAPITER(it) \
-    if (Col_MapIterEnd(it)) { \
-	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_MAPITER_END, (it)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+#define VALUECHECK_MAPITER(it) \
+    VALUECHECK(!Col_MapIterEnd(it), COL_ERROR_MAPITER_END, (it))
 
 #endif /* _COLIBRI_MAP_INT */

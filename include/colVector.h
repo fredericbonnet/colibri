@@ -105,38 +105,10 @@ EXTERN Col_Word *	Col_MVectorElements(Col_Word mvector);
  * Group: Mutable Vector Operations
  *
  * Declarations:
- *	<Col_MVectorSetLength>, <Col_MVectorFreeze>, <Col_MVectorSort>
+ *	<Col_MVectorSetLength>, <Col_MVectorFreeze>
  ****************************************************************************/
-
-/*---------------------------------------------------------------------------
- * Typedef: Col_SortCompareProc
- *
- *	Function signature of word comparison function. Used for sorting.
- *
- * Arguments:
- *	w1, w1		- Words to compare.
- *	clientData	- Opaque client data. Same value as passed to the
- *			  calling proc.
- *
- * Result:
- *	Negative if w1 is less than w2, positive if w1 is greater than w2, zero
- *	if both words are equal.
- *
- * See also: 
- *	<Col_MVectorSort>
- *---------------------------------------------------------------------------*/
-
-typedef int (Col_SortCompareProc) (Col_Word w1, Col_Word w2,
-    Col_ClientData clientData);
-
-/*
- * Remaining declarations.
- */
 
 EXTERN void		Col_MVectorSetLength(Col_Word mvector, size_t length);
 EXTERN void		Col_MVectorFreeze(Col_Word mvector);
-EXTERN void		Col_MVectorSort(Col_Word mvector, 
-			    Col_SortCompareProc *proc, size_t first, 
-			    size_t last, Col_ClientData clientData);
 
 #endif /* _COLIBRI_VECTOR */

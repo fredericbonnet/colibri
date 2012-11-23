@@ -217,4 +217,53 @@
 
 #endif /* _MSC_VER */
 
+/*---------------------------------------------------------------------------
+ * Macro: COL_RUNTIMECHECK
+ *
+ *	Check condition at runtime. If failed, generate an error with the
+ *	given parameters then execute the code block immediately following the 
+ *	statement.
+ *
+ *	For example:
+ *
+ * (start example)
+ *	RUNTIME_CHECK(someCondition, COL_ERROR, ColibriDomain, 
+ *	    COL_ERROR_GENERIC, "some message") return;
+ * (end)
+ *
+ *	This code generates a generic Colibri error then exits the current proc
+ *	if someCondition is false.
+ *
+ * Arguments:
+ *	condition	- Boolean condition.
+ *	level		- Error level.
+ *	domain		- Error domain.
+ *	code		- Error code.
+ *	...		- Remaining arguments passed to <Col_Error>
+ *---------------------------------------------------------------------------*/
+
+#define COL_RUNTIMECHECK(condition, level, domain, code, ...) \
+    if (!(condition)) { \
+	Col_Error((level), (domain), (code), __VA_ARGS__); \
+	goto COL_CONCATENATE(FAILED,__LINE__); \
+    } \
+    if (0) \
+COL_CONCATENATE(FAILED,__LINE__): 
+
+/*---------------------------------------------------------------------------
+ * Macro: COL_DEBUGCHECK
+ *
+ *	In debug mode, same as <COL_RUNTIMECHECK>. Else does nothing (and ignore
+ *	the code block immediately following the statement.
+ *
+ * See also:
+ *	<COL_RUNTIMECHECK>
+ *---------------------------------------------------------------------------*/
+
+#ifdef _DEBUG
+#   define COL_DEBUGCHECK COL_RUNTIMECHECK
+#else
+#   define COL_DEBUGCHECK(...) if (0)
+#endif
+
 #endif /* _COLIBRI_UTILS */

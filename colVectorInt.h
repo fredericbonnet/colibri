@@ -282,16 +282,11 @@ Internal Section: Type Checking
  *	Generate <COL_TYPECHECK> error when *word* is not a vector.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_VECTOR(word) \
-    if (!(Col_WordType(word) & COL_VECTOR)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_VECTOR, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK((Col_WordType(word) & COL_VECTOR), COL_ERROR_VECTOR, (word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_MVECTOR
@@ -305,28 +300,23 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a vector.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_MVECTOR(word) \
-    if (!(Col_WordType(word) & COL_MVECTOR)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_MVECTOR, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK((Col_WordType(word) & COL_MVECTOR), COL_ERROR_MVECTOR, (word))
 
 
 /*
 ================================================================================
-Internal Section: Range Checking
+Internal Section: Value Checking
 ================================================================================
 */
 
 /*---------------------------------------------------------------------------
- * Internal Macro: RANGECHECK_VECTORLENGTH
+ * Internal Macro: VALUECHECK_VECTORLENGTH
  *
- *	Range checking macro for vectors, ensures that length does not exceed 
+ *	Value checking macro for vectors, ensures that length does not exceed 
  *	the maximum value.
  *
  * Argument:
@@ -334,19 +324,14 @@ Internal Section: Range Checking
  *	maxLength	- Maximum allowed value.
  *
  * Side effects:
- *	Generate <COL_RANGECHECK> error when *length* exceeds *maxLength*.
+ *	Generate <COL_VALUECHECK> error when *length* exceeds *maxLength*.
  *
  * See also:
- *	<Col_Error>, <VECTOR_MAX_LENGTH>
+ *	<VALUECHECK>, <VECTOR_MAX_LENGTH>
  *---------------------------------------------------------------------------*/
 
-#define RANGECHECK_VECTORLENGTH(length, maxLength) \
-    if ((length) > (maxLength)) { \
-	Col_Error(COL_RANGECHECK, ColibriDomain, COL_ERROR_VECTORLENGTH, \
-		(length), (maxLength)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+#define VALUECHECK_VECTORLENGTH(length, maxLength) \
+    VALUECHECK(((length) <= (maxLength)), COL_ERROR_VECTORLENGTH, (length), \
+	    (maxLength))
 
 #endif /* _COLIBRI_VECTOR_INT */

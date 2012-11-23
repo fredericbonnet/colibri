@@ -547,7 +547,7 @@ Col_Error(
     case COL_FATAL:      fprintf(stderr, "[FATAL] ");          break;
     case COL_ERROR:      fprintf(stderr, "[ERROR] ");          break;
     case COL_TYPECHECK:  fprintf(stderr, "[TYPECHECK] ");      break;
-    case COL_RANGECHECK: fprintf(stderr, "[RANGECHECK] ");     break;
+    case COL_VALUECHECK: fprintf(stderr, "[VALUECHECK] ");     break;
     default:             fprintf(stderr, "[LEVEL%d] ", level); break;
     }
 

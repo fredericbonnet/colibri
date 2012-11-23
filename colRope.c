@@ -2635,7 +2635,7 @@ Col_Subrope(
  * Type checking:
  *	*left* and *right* must be valid ropes.
  *
- * Range checking:
+ * Value checking:
  *	Resulting length must not exceed the maximum rope length (*SIZE_MAX*).
  *
  * Result:
@@ -2665,7 +2665,7 @@ Col_ConcatRopes(
 
     leftLength = Col_RopeLength(left);
     rightLength = Col_RopeLength(right);
-    RANGECHECK_ROPELENGTH_CONCAT(leftLength, rightLength) return WORD_NIL;
+    VALUECHECK_ROPELENGTH_CONCAT(leftLength, rightLength) return WORD_NIL;
 
     WORD_UNWRAP(left);
     WORD_UNWRAP(right);
@@ -2937,7 +2937,7 @@ Col_ConcatRopesNV(
  * Type checking:
  *	*rope* must be a valid rope.
  *
- * Range checking:
+ * Value checking:
  *	Resulting length must not exceed the maximum rope length (*SIZE_MAX*).
  *
  * Result:
@@ -2958,7 +2958,7 @@ Col_RepeatRope(
 
     TYPECHECK_ROPE(rope) return WORD_NIL;
     length = Col_RopeLength(rope);
-    RANGECHECK_ROPELENGTH_REPEAT(length, count) return WORD_NIL;
+    VALUECHECK_ROPELENGTH_REPEAT(length, count) return WORD_NIL;
 
     /* Quick cases. */
     if (count == 0) {return WORD_SMALLSTR_EMPTY;}
@@ -4525,7 +4525,7 @@ Col_RopeIterMoveTo(
  * Type checking:
  *	*it* must be a valid rope iterator.
  *
- * Range checking:
+ * Value checking:
  *	*it* must not be at end, unless *nb* is zero.
  *---------------------------------------------------------------------------*/
 
@@ -4546,7 +4546,7 @@ Col_RopeIterForward(
 
 	return;
     }
-    RANGECHECK_ROPEITER(it) return;
+    VALUECHECK_ROPEITER(it) return;
 
     if (nb >= it->length - it->index) {
 	/*

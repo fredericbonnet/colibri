@@ -412,16 +412,11 @@ Internal Section: Type Checking
  *	Generate <COL_TYPECHECK> error when *word* is not a hash map.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_HASHMAP(word) \
-    if (!(Col_WordType(word) & COL_HASHMAP)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_HASHMAP, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK((Col_WordType(word) & COL_HASHMAP), COL_ERROR_HASHMAP, (word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_WORDHASHMAP
@@ -435,16 +430,12 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a word-based hash map.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_WORDHASHMAP(word) \
-    if ((Col_WordType(word) & (COL_HASHMAP | COL_INTMAP)) != COL_HASHMAP) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_WORDHASHMAP, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK(((Col_WordType(word) & (COL_HASHMAP | COL_INTMAP)) \
+	    == COL_HASHMAP), COL_ERROR_WORDHASHMAP, (word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_INTHASHMAP
@@ -458,16 +449,11 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not an integer hash map.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_INTHASHMAP(word) \
-    if ((Col_WordType(word) & (COL_HASHMAP | COL_INTMAP)) \
-	    != (COL_HASHMAP | COL_INTMAP)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_INTHASHMAP, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK(((Col_WordType(word) & (COL_HASHMAP | COL_INTMAP)) \
+	    == (COL_HASHMAP | COL_INTMAP)), COL_ERROR_INTHASHMAP, (word))
 
 #endif /* _COLIBRI_HASH_INT */

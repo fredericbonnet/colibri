@@ -9,23 +9,6 @@
 
 #include "colConf.h"
 
-#ifdef _DEBUG
-#   define DO_TRACE
-#   define REQUIRE(x) {if (!(x)) Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_ASSERTION, __FILE__, __LINE__, #x);}
-#   define ASSERT(x) REQUIRE(x)
-#else
-#   define REQUIRE(x) (x)
-#   define ASSERT(x)
-#endif
-
-#ifdef DO_TRACE
-#   include <stdio.h>
-#   define TRACE(format, ...) (fprintf(stderr, format, __VA_ARGS__), fflush(stderr))
-#else
-#   define TRACE(format, ...)
-#endif
-
-
 /*---------------------------------------------------------------------------
  * Internal Macro: CHAR_WIDTH
  *
@@ -64,29 +47,134 @@
     ((format) & 0x10)
 
 
-/****************************************************************************
- * Internal Section: Error Handling
- ***************************************************************************/
+/*
+================================================================================
+Internal Section: Error Handling & Debugging
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * Internal Variable: ColibriDomain
+ *
+ *	Error domain used by Colibri.
+ *
+ * See also:
+ *	<Col_ErrorDomain>, <Col_GetErrorDomain>, <Col_ErrorCode>
+ *---------------------------------------------------------------------------*/
 
 extern const char * const ColibriDomain[];
 
+/*---------------------------------------------------------------------------
+ * Internal Macro: ASSERT
+ *
+ *	Check condition at runtime in debug mode. If failed, generate a fatal
+ *	error.
+ *
+ *	In non-debug mode this macro does nothing.
+ *
+ * Argument:
+ *	condition	- Boolean condition.
+ *
+ * See also:
+ *	<COL_DEBUGCHECK>, <REQUIRE>
+ *
+ * Side effects:
+ *	*condition* is evaluated in debug mode only.
+ *---------------------------------------------------------------------------*/
 
-/****************************************************************************
- * Internal Section: System Page Allocation
- *
- * Declarations:
- *	<SysPageProtect>
- *
- * Description:
- *	Pages are divided into cells. On a 32-bit system with 1024-byte logical 
- *	pages, each page stores 64 16-byte cells. On a 64-bit system with 
- *	4096-byte logical pages, each page stores 128 32-byte cells. 
- *
- *	Each page has reserved cells that store information about the page. The 
- *	remaining cells store word info. 
- ****************************************************************************/
+#define ASSERT(condition) \
+    COL_DEBUGCHECK(condition, COL_FATAL, ColibriDomain, COL_ERROR_ASSERTION, __FILE__, __LINE__, #condition);
 
-void			SysPageProtect(void *page, int protect);
+/*---------------------------------------------------------------------------
+ * Internal Macro: REQUIRE
+ *
+ *	In debug mode, same as <ASSERT>.
+ *
+ *	In non-debug mode, this simply evaluates the given condition.
+ *
+ * Argument:
+ *	condition	- Boolean condition.
+ *
+ * See also:
+ *	<ASSERT>
+ *
+ * Side effects:
+ *	*condition* is always evaluated.
+ *---------------------------------------------------------------------------*/
+
+#ifdef _DEBUG
+#   define REQUIRE ASSERT
+#else
+#   define REQUIRE(condition) (condition);
+#endif
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TYPECHECK
+ *
+ *	Debug-mode runtime type checking.
+ *
+ * Argument:
+ *	condition	- Boolean condition.
+ *
+ * See also:
+ *	<COL_RUNTIMECHECK>, <COL_TYPECHECK>
+ *---------------------------------------------------------------------------*/
+
+#define TYPECHECK(condition, code, ...) \
+    COL_DEBUGCHECK(condition, COL_TYPECHECK, ColibriDomain, code, __VA_ARGS__)
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: VALUECHECK
+ *
+ *	Runtime value checking. Works in both debug and non-debug mode.
+ *
+ * Argument:
+ *	condition	- Boolean condition.
+ *
+ * See also:
+ *	<COL_RUNTIMECHECK>, <COL_VALUECHECK>
+ *---------------------------------------------------------------------------*/
+
+#define VALUECHECK(condition, code, ...) \
+    COL_RUNTIMECHECK(condition, COL_VALUECHECK, ColibriDomain, code, __VA_ARGS__)
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: TRACE
+ *
+ *	Output traces to stderr if macro <DO_TRACE> is defined.
+ *
+ * Arguments:
+ *	format	- *fprintf* format string.
+ *	...	- Remaining arguments passed to *fprintf*.
+ *
+ * See also:
+ *	<DO_TRACE>
+ *---------------------------------------------------------------------------*/
+
+#ifdef DO_TRACE
+#   include <stdio.h>
+#   define TRACE(format, ...) (fprintf(stderr, format, __VA_ARGS__), fflush(stderr))
+#else
+#   define TRACE(format, ...)
+#endif
+
+
+/*
+================================================================================
+Internal Section: System Page Allocation
+
+Declarations:
+	<SysPageProtect>
+
+Description:
+	Pages are divided into cells. On a 32-bit system with 1024-byte logical 
+	pages, each page stores 64 16-byte cells. On a 64-bit system with 
+	4096-byte logical pages, each page stores 128 32-byte cells. 
+
+	Each page has reserved cells that store information about the page. The 
+	remaining cells store word info. 
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Internal Typedef: Page
@@ -264,13 +352,21 @@ typedef char Cell[CELL_SIZE];
 #define CELL_INDEX(cell) \
     (((uintptr_t)(cell) % PAGE_SIZE) / CELL_SIZE)
 
+/*
+ * Remaining declarations.
+ */
 
-/****************************************************************************
- * Internal Section: Memory Pools
- *
- * Declarations:
- *	<PoolInit>, <PoolCleanup>
- ****************************************************************************/
+void			SysPageProtect(void *page, int protect);
+
+
+/*
+================================================================================
+Internal Section: Memory Pools
+
+Declarations:
+	<PoolInit>, <PoolCleanup>
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Internal Typedef: MemoryPool
@@ -305,28 +401,36 @@ typedef struct MemoryPool {
     Col_Word sweepables;
 } MemoryPool;
 
+/*
+ * Remaining declarations.
+ */
+
 void			PoolInit(MemoryPool *pool, unsigned int generation);
 void			PoolCleanup(MemoryPool *pool);
 
 
-/****************************************************************************
- * Internal Section: Page Allocation
- *
- * Declarations:
- *	<PoolAllocPages>, <PoolFreeEmptyPages>
- ****************************************************************************/
+/*
+================================================================================
+Internal Section: Page Allocation
+
+Declarations:
+	<PoolAllocPages>, <PoolFreeEmptyPages>
+================================================================================
+*/
 
 void			PoolAllocPages(MemoryPool *pool, size_t number);
 void			PoolFreeEmptyPages(MemoryPool *pool);
 
 
-/****************************************************************************
- * Internal Section: Cell Allocation
- *
- * Declarations:
- *	<PoolAllocCells>, <SetCells>, <ClearCells>, <ClearAllCells>, <TestCell>,
- *	<NbSetCells>, <AllocCells>
- ****************************************************************************/
+/*
+================================================================================
+Internal Section: Cell Allocation
+
+Declarations:
+	<PoolAllocCells>, <SetCells>, <ClearCells>, <ClearAllCells>, <TestCell>,
+	<NbSetCells>, <AllocCells>
+================================================================================
+*/
 
 Cell *			PoolAllocCells(MemoryPool *pool, size_t number);
 void			SetCells(Page *page, size_t first, size_t number);
@@ -337,12 +441,14 @@ size_t			NbSetCells(Page *page);
 Cell *			AllocCells(size_t number);
 
 
-/****************************************************************************
- * Internal Section: Process & Threads
- *
- * Declarations:
- *	<GcInitThread>, <GcInitGroup>, <GcCleanupThread>, <GcCleanupGroup>
- ****************************************************************************/
+/*
+================================================================================
+Internal Section: Process & Threads
+
+Declarations:
+	<GcInitThread>, <GcInitGroup>, <GcCleanupThread>, <GcCleanupGroup>
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Internal Typedef: GroupData
@@ -415,18 +521,24 @@ typedef struct ThreadData {
     MemoryPool eden;
 } ThreadData;
 
+/*
+ * Remaining declarations.
+ */
+
 void			GcInitThread(ThreadData *data);
 void			GcInitGroup(GroupData *data);
 void			GcCleanupThread(ThreadData *data);
 void			GcCleanupGroup(GroupData *data);
 
 
-/****************************************************************************
- * Internal Section: Garbage Collection
- *
- * Declarations:
- *	<PerformGC>, <RememberSweepable>, <CleanupSweepables>
-****************************************************************************/
+/*
+================================================================================
+Internal Section: Garbage Collection
+
+Declarations:
+	<PerformGC>, <RememberSweepable>, <CleanupSweepables>
+================================================================================
+*/
 
 void			PerformGC(GroupData *data);
 void			RememberSweepable(Col_Word word, 
@@ -434,14 +546,14 @@ void			RememberSweepable(Col_Word word,
 void			CleanupSweepables(MemoryPool *pool);
 
 
-/****************************************************************************
+/*
+================================================================================
  * Internal Section: Roots and Parents
  *
  * Declarations:
  *	<UpdateParents>
- ****************************************************************************/
-
-void			UpdateParents(GroupData *data);
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Internal Macros: ROOT_* Accessors
@@ -634,5 +746,11 @@ void			UpdateParents(GroupData *data);
 #define PARENT_INIT(cell, next, page) \
     PARENT_NEXT(cell) = next; \
     PARENT_PAGE(cell) = page;
+
+/*
+ * Remaining declarations.
+ */
+
+void			UpdateParents(GroupData *data);
 
 #endif /* _COLIBRI_INTERNAL */

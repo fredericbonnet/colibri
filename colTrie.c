@@ -2172,7 +2172,7 @@ Col_IntTrieMapIterFind(
  * Type checking:
  *	*it* must be a valid trie map iterator.
  *
- * Range checking:
+ * Value checking:
  *	*it* must not be at end.
  *---------------------------------------------------------------------------*/
 
@@ -2186,7 +2186,7 @@ Col_TrieMapIterSetValue(
      */
 
     TYPECHECK_TRIEMAP(it->map) return;
-    RANGECHECK_MAPITER(it) return;
+    VALUECHECK_MAPITER(it) return;
 
     switch (WORD_TYPE(it->map)) {
     case WORD_TYPE_STRTRIEMAP:
@@ -2265,7 +2265,7 @@ Col_TrieMapIterSetValue(
  * Type checking:
  *	*it* must be a valid trie map iterator.
  *
- * Range checking:
+ * Value checking:
  *	*it* must not be at end.
  *---------------------------------------------------------------------------*/
 
@@ -2278,7 +2278,7 @@ Col_TrieMapIterNext(
      */
 
     TYPECHECK_TRIEMAP(it->map) return;
-    RANGECHECK_MAPITER(it) return;
+    VALUECHECK_MAPITER(it) return;
 
     ASSERT(it->entry);
 

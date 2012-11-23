@@ -704,16 +704,11 @@ Internal Section: Type Checking
  *	Generate <COL_TYPECHECK> error when *word* is not a trie map.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_TRIEMAP(word) \
-    if (!(Col_WordType(word) & COL_TRIEMAP)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_TRIEMAP, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK((Col_WordType(word) & COL_TRIEMAP), COL_ERROR_TRIEMAP, (word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_WORDTRIEMAP
@@ -727,17 +722,12 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not a word-based trie map.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_WORDTRIEMAP(word) \
-    if ((Col_WordType(word) & (COL_TRIEMAP | COL_INTMAP)) != COL_TRIEMAP) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_WORDTRIEMAP, \
-		(word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK(((Col_WordType(word) & (COL_TRIEMAP | COL_INTMAP)) \
+	    == COL_TRIEMAP), COL_ERROR_WORDTRIEMAP, (word))
 
 /*---------------------------------------------------------------------------
  * Internal Macro: TYPECHECK_INTTRIEMAP
@@ -751,16 +741,11 @@ COL_CONCATENATE(FAILED,__LINE__):
  *	Generate <COL_TYPECHECK> error when *word* is not an integer trie map.
  *
  * See also:
- *	<Col_Error>
+ *	<TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK_INTTRIEMAP(word) \
-    if ((Col_WordType(word) & (COL_TRIEMAP | COL_INTMAP)) \
-	    != (COL_TRIEMAP | COL_INTMAP)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_INTTRIEMAP, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+    TYPECHECK(((Col_WordType(word) & (COL_TRIEMAP | COL_INTMAP)) \
+	    == (COL_TRIEMAP | COL_INTMAP)), COL_ERROR_INTTRIEMAP, (word))
 
 #endif /* _COLIBRI_TRIE_INT */
