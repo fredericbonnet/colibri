@@ -64,7 +64,7 @@ Col_MaxVectorLength()
  *	elements	- Array of words to populate vector with, or NULL. In
  *			  the latter case, elements are initialized to nil.
  *
- * Range checking:
+ * Value checking:
  *	*length* must not exceed the maximum vector length given by 
  *	<Col_MaxVectorLength>.
  *
@@ -87,7 +87,7 @@ Col_NewVector(
      * Check preconditions.
      */
 
-    RANGECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX)) 
+    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX)) 
 	    return WORD_NIL;
 
     if (length == 0) {
@@ -132,7 +132,7 @@ Col_NewVector(
  *	length	- Number of arguments.
  *	...	- Remaining arguments, i.e. words to add in order.
  *
- * Range checking:
+ * Value checking:
  *	*length* must not exceed the maximum vector length given by 
  *	<Col_MaxVectorLength>.
  *
@@ -157,7 +157,7 @@ Col_NewVectorNV(
      * Check preconditions.
      */
 
-    RANGECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX)) 
+    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX)) 
 	    return WORD_NIL;
 
     if (length == 0) {
@@ -329,7 +329,7 @@ Col_MaxMVectorLength()
  *	elements	- Array of words to populate vector with, or NULL. In
  *			  the latter case, elements are initialized to nil.
  *
- * Range checking:
+ * Value checking:
  *	*maxLength* and *length* must not exceed the maximum mutable vector 
  *	length given by <Col_MaxMVectorLength>.
  *
@@ -363,7 +363,7 @@ Col_NewMVector(
      * Check preconditions.
      */
 
-    RANGECHECK_VECTORLENGTH(maxLength, 
+    VALUECHECK_VECTORLENGTH(maxLength, 
 	    VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE)) return WORD_NIL;
 
     /*
@@ -484,9 +484,9 @@ Col_MVectorElements(
  *	length	- New length. Must not exceed max length set at creation.
  *
  * Type checking:
- *	*map* must be a valid mutable vector.
+ *	*mvector* must be a valid mutable vector.
  *
- * Range checking:
+ * Value checking:
  *	*length* must not exceed the maximum length given at mutable vector 
  *	creation time.
  *---------------------------------------------------------------------------*/
@@ -509,7 +509,7 @@ Col_MVectorSetLength(
     }
 
     maxLength = VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(mvector) * CELL_SIZE);
-    RANGECHECK_VECTORLENGTH(length, maxLength) return;
+    VALUECHECK_VECTORLENGTH(length, maxLength) return;
 
     oldLength = WORD_VECTOR_LENGTH(mvector);
     if (length > oldLength) {
@@ -533,7 +533,7 @@ Col_MVectorSetLength(
  *	mvector	- Mutable vector to freeze. 
  *
  * Type checking:
- *	*map* must be a valid vector.
+ *	*mvector* must be a valid vector.
  *---------------------------------------------------------------------------*/
 
 void
@@ -544,7 +544,7 @@ Col_MVectorFreeze(
      * Check preconditions.
      */
 
-    TYPECHECK_MVECTOR(mvector) return;
+    TYPECHECK_VECTOR(mvector) return;
 
     for (;;) {
 	switch (WORD_TYPE(mvector)) {
@@ -552,6 +552,7 @@ Col_MVectorFreeze(
 	    mvector = WORD_WRAP_SOURCE(mvector);
 	    continue;
 
+	case WORD_TYPE_VOIDLIST:
 	case WORD_TYPE_VECTOR:
 	    /*
 	     * No-op.

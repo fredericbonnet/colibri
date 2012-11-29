@@ -13,11 +13,11 @@
 #include <stddef.h> /* For size_t, uintptr_t and the like */
 
 
-//TODO documentation overhaul
-
-/****************************************************************************
- * Section: Word Types
- ****************************************************************************/
+/*
+================================================================================
+Section: Words
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Typedef: Col_Word
@@ -83,8 +83,86 @@ typedef uintptr_t Col_Word;
 
 
 /****************************************************************************
- * Section: Custom Word Types
+ * Group: Word Creation
+ *
+ * Declarations:
+ *	<Col_NewIntWord>, <Col_NewFloatWord>
  ****************************************************************************/
+
+EXTERN Col_Word		Col_NewIntWord(intptr_t value);
+EXTERN Col_Word		Col_NewFloatWord(double value);
+
+
+/****************************************************************************
+ * Group: Word Accessors and Synonyms
+ *
+ * Declarations:
+ *	<Col_WordType>, <Col_IntWordValue>, <Col_FloatWordValue>, 
+ *	<Col_CustomWordInfo>, <Col_WordSynonym>, <Col_WordAddSynonym>, 
+ *	<Col_WordClearSynonym>
+ ****************************************************************************/
+
+EXTERN int		Col_WordType(Col_Word word);
+EXTERN intptr_t		Col_IntWordValue(Col_Word word);
+EXTERN double		Col_FloatWordValue(Col_Word word);
+EXTERN Col_Word		Col_WordSynonym(Col_Word word);
+EXTERN void		Col_WordAddSynonym(Col_Word *wordPtr, Col_Word synonym);
+EXTERN void		Col_WordClearSynonym(Col_Word word);
+
+
+/****************************************************************************
+ * Group: Word Lifetime Management
+ *
+ * Declarations:
+ *	<Col_WordPreserve>, <Col_WordRelease>
+ ****************************************************************************/
+
+EXTERN void		Col_WordPreserve(Col_Word word);
+EXTERN void		Col_WordRelease(Col_Word word);
+
+
+/****************************************************************************
+ * Group: Word Operations
+ *
+ * Declarations:
+ *	<Col_SortWords>
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Typedef: Col_WordCompareProc
+ *
+ *	Function signature of word comparison function. Used for sorting.
+ *
+ * Arguments:
+ *	w1, w1		- Words to compare.
+ *	clientData	- Opaque client data. Typically passed to the calling 
+ *			  proc (e.g. <Col_SortWords>).
+ *
+ * Result:
+ *	Negative if w1 is less than w2, positive if w1 is greater than w2, zero
+ *	if both words are equal.
+ *
+ * See also: 
+ *	<Col_SortWords>
+ *---------------------------------------------------------------------------*/
+
+typedef int (Col_WordCompareProc) (Col_Word w1, Col_Word w2,
+    Col_ClientData clientData);
+
+/*
+ * Remaining declarations.
+ */
+
+EXTERN void		Col_SortWords(Col_Word *first, Col_Word *last, 
+			    Col_WordCompareProc *proc, 
+			    Col_ClientData clientData);
+
+
+/*
+================================================================================
+Section: Custom Words
+================================================================================
+*/
 
 /*---------------------------------------------------------------------------
  * Typedef: Col_CustomWordSizeProc
@@ -187,56 +265,24 @@ typedef struct Col_CustomWordType {
 } Col_CustomWordType;
 
 
-//TODO sort by type and add accessors
-
 /****************************************************************************
- * Section: Word Creation
+ * Group: Custom Word Creation
  *
  * Declarations:
- *	<Col_NewIntWord>, <Col_NewFloatWord>, <Col_NewCustomWord>
+ *	<Col_NewCustomWord>
  ****************************************************************************/
 
-EXTERN Col_Word		Col_NewIntWord(intptr_t value);
-EXTERN Col_Word		Col_NewFloatWord(double value);
 EXTERN Col_Word		Col_NewCustomWord(Col_CustomWordType *type, size_t size, 
 			    void **dataPtr);
 
 
 /****************************************************************************
- * Section: Word Accessors and Synonyms
+ * Group: Custom Word Accessors
  *
  * Declarations:
- *	<Col_WordType>, <Col_IntWordValue>, <Col_FloatWordValue>, 
- *	<Col_CustomWordInfo>, <Col_WordSynonym>, <Col_WordAddSynonym>, 
- *	<Col_WordClearSynonym>
+ *	<Col_CustomWordInfo>
  ****************************************************************************/
 
-EXTERN int		Col_WordType(Col_Word word);
-EXTERN intptr_t		Col_IntWordValue(Col_Word word);
-EXTERN double		Col_FloatWordValue(Col_Word word);
 EXTERN Col_CustomWordType * Col_CustomWordInfo(Col_Word word, void **dataPtr);
-EXTERN Col_Word		Col_WordSynonym(Col_Word word);
-EXTERN void		Col_WordAddSynonym(Col_Word *wordPtr, Col_Word synonym);
-EXTERN void		Col_WordClearSynonym(Col_Word word);
-
-
-/****************************************************************************
- * Section: Word Lifetime Management
- *
- * Declarations:
- *	<Col_WordPreserve>, <Col_WordRelease>
- ****************************************************************************/
-
-EXTERN void		Col_WordPreserve(Col_Word word);
-EXTERN void		Col_WordRelease(Col_Word word);
-
-
-
-
-
-
-
-
-
 
 #endif /* _COLIBRI_WORD */

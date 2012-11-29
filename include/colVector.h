@@ -108,6 +108,10 @@ EXTERN Col_Word *	Col_MVectorElements(Col_Word mvector);
  *	<Col_MVectorSetLength>, <Col_MVectorFreeze>
  ****************************************************************************/
 
+/*
+ * Remaining declarations.
+ */
+
 EXTERN void		Col_MVectorSetLength(Col_Word mvector, size_t length);
 EXTERN void		Col_MVectorFreeze(Col_Word mvector);
 

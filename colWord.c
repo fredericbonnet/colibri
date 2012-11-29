@@ -31,10 +31,14 @@ static int		HasSynonymField(Col_Word word);
 static void		AddSynonymField(Col_Word *wordPtr);
 
 
-//TODO documentation overhaul
+/*
+================================================================================
+Section: Words
+================================================================================
+*/
 
 /****************************************************************************
- * Section: Word Creation
+ * Group: Word Creation
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -125,68 +129,9 @@ Col_NewFloatWord(
     return word;
 }
 
-/*---------------------------------------------------------------------------
- * Function: Col_NewCustomWord
- *
- *	Create a new custom word.
- *
- * Arguments:
- *	type	- The word type.
- *	size	- Size of custom data.
- *
- * Result:
- *	A new word of the given size. Additionally:
- *
- *	dataPtr	- Points to the allocated custom data.
- *
- * Side effects:
- *	Allocates memory cells.
- *---------------------------------------------------------------------------*/
-
-Col_Word
-Col_NewCustomWord(
-    Col_CustomWordType *type,
-    size_t size,
-    void **dataPtr)
-{
-    Col_Word word;
-    
-    switch (type->type) {
-    case COL_HASHMAP:
-	/*
-	 * Custom hash map word. Use default capacity value (0).
-	 */
-
-	word = Col_NewCustomHashMap((Col_CustomHashMapType *) type, 0, size, dataPtr);
-	break;
-
-    case COL_TRIEMAP:
-	/*
-	 * Custom trie map word.
-	 */
-
-	word = Col_NewCustomTrieMap((Col_CustomTrieMapType *) type, size, dataPtr);
-	break;
-
-    default:
-	/*
-	 * Basic custom word.
-	 */
-
-	word = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(type, CUSTOM_HEADER_SIZE,
-		size));
-	WORD_CUSTOM_INIT(word, type);
-	if (dataPtr) *dataPtr = WORD_CUSTOM_DATA(word, type, CUSTOM_HEADER_SIZE);
-    }
-
-    if (type->freeProc) RememberSweepable(word, type);
-
-    return word;
-}
-
 
 /****************************************************************************
- * Section: Word Accessors and Synonyms
+ * Group: Word Accessors and Synonyms
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
@@ -332,15 +277,10 @@ Col_IntWordValue(
 	if (WORD_WRAP_TYPE(word) == COL_INT) {
 	    return WORD_INTWRAP_VALUE(word);
 	}
-	/* continued. */
-    default:
-	/*
-	 * Invalid type.
-	 */
-
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_INTWORD, word);
-	return 0;
     }
+
+    TYPECHECK(0, COL_ERROR_INTWORD, word);
+    return 0;
 }
 
 /*---------------------------------------------------------------------------
@@ -375,64 +315,10 @@ Col_FloatWordValue(
 	if (WORD_WRAP_TYPE(word) == COL_FLOAT) {
 	    return WORD_FPWRAP_VALUE(word);
 	}
-	/* continued. */
-    default:
-	/*
-	 * Invalid type.
-	 */
-
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_FLOATWORD, word);
-	return 0.0;
     }
-}
 
-/*---------------------------------------------------------------------------
- * Function: Col_CustomWordInfo
- *
- *	Get custom word type and data.
- *
- * Argument:
- *	word	- The word to get data for.
- *
- * Type checking:
- *	*word* must be a valid custom word.
- *
- * Results:
- *	The custom word type descriptor. Additionally:
- *
- *	dataPtr	- Points to the allocated custom data.
- *
- * See also:
- *	<Col_NewCustomWord>
- *---------------------------------------------------------------------------*/
-
-Col_CustomWordType *
-Col_CustomWordInfo(
-    Col_Word word,
-    void **dataPtr)
-{
-    Col_CustomWordType *type;
-    size_t headerSize;
-    
-    switch (WORD_TYPE(word)) {
-    case WORD_TYPE_CUSTOM:
-	type = WORD_TYPEINFO(word);
-	switch (type->type) {
-	case COL_HASHMAP: headerSize = CUSTOMHASHMAP_HEADER_SIZE;
-	case COL_TRIEMAP: headerSize = CUSTOMTRIEMAP_HEADER_SIZE;
-	default:          headerSize = CUSTOM_HEADER_SIZE;
-	}
-	*dataPtr = WORD_CUSTOM_DATA(word, type, headerSize);
-	return type;
-
-    default:
-	/*
-	 * Invalid type.
-	 */
-
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_CUSTOMWORD, word);
-	return NULL;
-    }
+    TYPECHECK(0, COL_ERROR_FLOATWORD, word);
+    return 0.0;
 }
 
 /*---------------------------------------------------------------------------
@@ -684,4 +570,239 @@ Col_WordClearSynonym(
     }
     WORD_SYNONYM(synonym) = WORD_SYNONYM(word);
     WORD_SYNONYM(word) = WORD_NIL;
+}
+
+
+/****************************************************************************
+ * Group: Word Operations
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_SortWords
+ *
+ *	Sort an array of words using the quicksort algorithm with 3-way 
+ *	partitioning given in "Quicksort is optimal" by Robert Sedgewick and 
+ *	Jon Bentley.
+ *
+ * Argument:
+ *	first, last	- Range of word array to sort.
+ *	proc		- <Col_SortCompareProc>.
+ *	clientData	- Opaque data passed as is to above proc.
+ *
+ * See also:
+ *	<Col_MVectorSort>
+ *---------------------------------------------------------------------------*/
+
+void
+Col_SortWords(
+    Col_Word *first, 
+    Col_Word *last,
+    Col_WordCompareProc *proc, 
+    Col_ClientData clientData)
+{
+    Col_Word *i, *j, *k, *p, *q;
+    Col_Word v;
+
+#define SWAP(a, b) {Col_Word tmp=b; b=a; a=tmp;}
+
+    /*
+     * Entry point for tail recursive calls.
+     */
+
+#define TAIL_RECURSE(_first, _last) \
+    first = (_first); last = (_last); goto start;
+
+start:
+
+    if (last <= first) return;
+    i = p = first-1; j = q = last;
+    v = *last;
+    for (;;) {
+	/*
+	 * Move from left to find an element that is not less.
+	 */
+
+	while (*++i != v && proc(*i, v, clientData) < 0);
+
+	/*
+	 * Move from right to find an element that is not greater.
+	 */
+
+	while (v != *--j && proc(v, *j, clientData) < 0) if (j == first) break;
+
+	/*
+	 * Stop if pointers have crossed.
+	 */
+
+	if (i >= j) break;
+
+	/*
+	 * Exchange.
+	 */
+
+	SWAP(*i, *j);
+
+	/*
+	 * If left element equal, exchange to left end.
+	 */
+
+	if (*i == v || proc(*i, v, clientData) == 0) { p++; SWAP(*p, *i); }
+
+	/*
+	 * If right element equal, exchange to right end.
+	 */
+
+	if (v == *j || proc(v, *j, clientData) == 0) { q--; SWAP(*j, *q); }
+    }
+    SWAP(*i, *last); j = i-1; i = i+1;
+
+    /*
+     * Swap left equals to center.
+     */
+
+    for (k = first; k < p; k++, j--) SWAP(*k, *j);
+
+    /*
+     * Swap right equals to center.
+     */
+
+    for (k = last-1; k > q; k--, i++) SWAP(*i, *k);
+
+    /*
+     * Recurse on smallest subrange and tail call on largest to minimize 
+     * recursion depth and ensure O(logn) space.
+     */
+
+    if (j-first < last-i) {
+	/*
+	 * Left subrange is shorter.
+	 */
+
+	Col_SortWords(first, j, proc, clientData);
+	TAIL_RECURSE(i, last);
+    } else {
+	/*
+	 * Right subrange is shorter.
+	 */
+
+	Col_SortWords(i, last, proc, clientData);
+	TAIL_RECURSE(first, j);
+    }
+}
+
+
+/*
+================================================================================
+Section: Custom Words
+================================================================================
+*/
+
+/****************************************************************************
+ * Group: Custom Word Creation
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_NewCustomWord
+ *
+ *	Create a new custom word.
+ *
+ * Arguments:
+ *	type	- The word type.
+ *	size	- Size of custom data.
+ *
+ * Result:
+ *	A new word of the given size. Additionally:
+ *
+ *	dataPtr	- Points to the allocated custom data.
+ *
+ * Side effects:
+ *	Allocates memory cells.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_NewCustomWord(
+    Col_CustomWordType *type,
+    size_t size,
+    void **dataPtr)
+{
+    Col_Word word;
+    
+    switch (type->type) {
+    case COL_HASHMAP:
+	/*
+	 * Custom hash map word. Use default capacity value (0).
+	 */
+
+	word = Col_NewCustomHashMap((Col_CustomHashMapType *) type, 0, size, dataPtr);
+	break;
+
+    case COL_TRIEMAP:
+	/*
+	 * Custom trie map word.
+	 */
+
+	word = Col_NewCustomTrieMap((Col_CustomTrieMapType *) type, size, dataPtr);
+	break;
+
+    default:
+	/*
+	 * Basic custom word.
+	 */
+
+	word = (Col_Word) AllocCells(WORD_CUSTOM_SIZE(type, CUSTOM_HEADER_SIZE,
+		size));
+	WORD_CUSTOM_INIT(word, type);
+	if (dataPtr) *dataPtr = WORD_CUSTOM_DATA(word, type, CUSTOM_HEADER_SIZE);
+    }
+
+    if (type->freeProc) RememberSweepable(word, type);
+
+    return word;
+}
+
+
+/****************************************************************************
+ * Group: Custom Word Accessors
+ ****************************************************************************/
+
+/*---------------------------------------------------------------------------
+ * Function: Col_CustomWordInfo
+ *
+ *	Get custom word type and data.
+ *
+ * Argument:
+ *	word	- The word to get data for.
+ *
+ * Type checking:
+ *	*word* must be a valid custom word.
+ *
+ * Results:
+ *	The custom word type descriptor. Additionally:
+ *
+ *	dataPtr	- Points to the allocated custom data.
+ *
+ * See also:
+ *	<Col_NewCustomWord>
+ *---------------------------------------------------------------------------*/
+
+Col_CustomWordType *
+Col_CustomWordInfo(
+    Col_Word word,
+    void **dataPtr)
+{
+    Col_CustomWordType *type;
+    size_t headerSize;
+    
+    TYPECHECK(WORD_TYPE(word) == WORD_TYPE_CUSTOM, COL_ERROR_CUSTOMWORD, word) {
+	return NULL;
+    }
+
+    type = WORD_TYPEINFO(word);
+    switch (type->type) {
+    case COL_HASHMAP: headerSize = CUSTOMHASHMAP_HEADER_SIZE;
+    case COL_TRIEMAP: headerSize = CUSTOMTRIEMAP_HEADER_SIZE;
+    default:          headerSize = CUSTOM_HEADER_SIZE;
+    }
+    *dataPtr = WORD_CUSTOM_DATA(word, type, headerSize);
+    return type;
 }
