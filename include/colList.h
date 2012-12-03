@@ -12,6 +12,9 @@
  *	
  *	- Immutable lists can be composed of immutable vectors and lists. 
  *	  Immutable vectors can themselves be used in place of immutable lists.
+ *	  However mutable vectors, when used in place of immutable lists, may be
+ *	  potentially frozen in the process. To avoid that, they should be 
+ *	  properly duplicated to an immutable vector beforehand.
  *
  *	- Mutable lists can be composed of either mutable or immutable lists and
  *	  vectors. They can be "frozen" and turned into immutable versions.
@@ -66,7 +69,8 @@ EXTERN Col_Word		Col_ListAt(Col_Word list, size_t index);
  * Declarations:
  *	<Col_Sublist>, <Col_ConcatLists>, <Col_ConcatListsA>,
  *	<Col_ConcatListsNV>, <Col_RepeatList>, <Col_CircularList>, 
- *	<Col_ListInsert>, <Col_ListRemove>, <Col_ListReplace>
+ *	<Col_SortList>, <Col_MergeLists>, <Col_ListInsert>, <Col_ListRemove>, 
+ *	<Col_ListReplace>
  *	
  ****************************************************************************/
 
@@ -76,6 +80,11 @@ EXTERN Col_Word		Col_ConcatListsA(size_t number, const Col_Word * words);
 EXTERN Col_Word		Col_ConcatListsNV(size_t number, ...);
 EXTERN Col_Word		Col_RepeatList(Col_Word list, size_t count);
 EXTERN Col_Word		Col_CircularList(Col_Word core);
+/*EXTERN Col_Word		Col_SortList(Col_Word list, Col_SortCompareProc *proc, 
+			    Col_ClientData clientData);
+EXTERN Col_Word		Col_MergeLists(Col_Word list1, Col_Word list2,
+			    Col_SortCompareProc *proc, 
+			    Col_ClientData clientData);*/
 EXTERN Col_Word		Col_ListInsert(Col_Word into, size_t index, 
 			    Col_Word list);
 EXTERN Col_Word		Col_ListRemove(Col_Word list, size_t first, 
@@ -639,7 +648,8 @@ EXTERN Col_Word		Col_CopyMList(Col_Word mlist);
  *
  * Declarations:
  *	<Col_MListSetLength>, <Col_MListLoop>, <Col_MListSetAt>, 
- *	<Col_MListInsert>, <Col_MListRemove>, <Col_MListReplace>
+ *	<Col_MListSort>, <Col_MListInsert>, <Col_MListRemove>, 
+ *	<Col_MListReplace>
  *	
  ****************************************************************************/
 
@@ -647,6 +657,12 @@ EXTERN void		Col_MListSetLength(Col_Word mlist, size_t length);
 EXTERN void		Col_MListLoop(Col_Word mlist);
 EXTERN void		Col_MListSetAt(Col_Word mlist, size_t index, 
 			    Col_Word element);
+/*EXTERN void		Col_MListSort(Col_Word mlist, Col_SortCompareProc *proc,
+			    size_t first, size_t last, 
+			    Col_ClientData clientData);
+EXTERN void		Col_MListMerge(Col_Word into, Col_Word list, 
+			    Col_SortCompareProc *proc, 
+			    Col_ClientData clientData);*/
 EXTERN void		Col_MListInsert(Col_Word into, size_t index, 
 			    Col_Word list);
 EXTERN void		Col_MListRemove(Col_Word mlist, size_t first, 

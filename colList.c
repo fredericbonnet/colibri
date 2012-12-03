@@ -831,7 +831,7 @@ Col_Sublist(
  * Type checking:
  *	*left* and *right* must be valid lists.
  *
- * Range checking:
+ * Value checking:
  *	Resulting length must not exceed the maximum list length (*SIZE_MAX*).
  *
  * Result:
@@ -862,7 +862,7 @@ Col_ConcatLists(
 
     leftLength = Col_ListLength(left);
     rightLength = Col_ListLength(right);
-    RANGECHECK_LISTLENGTH_CONCAT(leftLength, rightLength) return WORD_NIL;
+    VALUECHECK_LISTLENGTH_CONCAT(leftLength, rightLength) return WORD_NIL;
 
     WORD_UNWRAP(left);
     WORD_UNWRAP(right);
@@ -1209,7 +1209,7 @@ Col_ConcatListsNV(
  * Type checking:
  *	*list* must be a valid list.
  *
- * Range checking:
+ * Value checking:
  *	Resulting length must not exceed the maximum list length (*SIZE_MAX*).
  *
  * Result:
@@ -1237,7 +1237,7 @@ Col_RepeatList(
 	count = 1;
     }
     length = Col_ListLength(list);
-    RANGECHECK_LISTLENGTH_REPEAT(length, count) return WORD_NIL;
+    VALUECHECK_LISTLENGTH_REPEAT(length, count) return WORD_NIL;
 
     /* 
      * Quick cases. 
@@ -2738,7 +2738,7 @@ Col_ListIterMoveTo(
  * Type checking:
  *	*it* must be a valid list iterator.
  *
- * Range checking:
+ * Value checking:
  *	*it* must not be at end, unless *nb* is zero.
  *
  * Result:
@@ -2764,7 +2764,7 @@ Col_ListIterForward(
 
 	return 0;
     }
-    RANGECHECK_LISTITER(it) return 0;
+    VALUECHECK_LISTITER(it) return 0;
 
     if (nb >= it->length - it->index) {
 	size_t loop;
@@ -3054,9 +3054,6 @@ Col_NewMList()
  *	Create an immutable list from a mutable list. If an immutable list is 
  *	given, it is simply returned. If a mutable list is given, its content
  *	is frozen and shared with the new one. 
- *
- *	Caution: if a mutable vector is given, it is frozen and turned into an
- *	immutable vector!
  *
  * Argument:
  *	mlist	- The mutable list to copy.
@@ -3359,7 +3356,7 @@ Col_MListLoop(
  * Type checking:
  *	*mlist* must be a valid mutable list.
  *
- * Range checking:
+ * Value checking:
  *	*index* must be within bounds.
  *---------------------------------------------------------------------------*/
 
@@ -3378,7 +3375,7 @@ Col_MListSetAt(
     TYPECHECK_MLIST(mlist) return;
     length = Col_ListLength(mlist);
     loop = Col_ListLoopLength(mlist);
-    if (!loop) RANGECHECK_BOUNDS(index, length) return;
+    if (!loop) VALUECHECK_BOUNDS(index, length) return;
 
     if (loop && index >= length) {
 	/*
@@ -3492,6 +3489,94 @@ start:
 	goto start;
     }
 }
+
+#if 0
+/*---------------------------------------------------------------------------
+ * Function: Col_MListSort
+ *
+ *	Sort a mutable list. Circular lists have their core list sorted.
+ *
+ * Argument:
+ *	mlist		- Mutable list to sort. 
+ *	proc		- <Col_SortCompareProc>.
+ *	first, last	- Range to sort.
+ *	clientData	- Opaque data passed as is to above proc.
+ *
+ * Type checking:
+ *	*mlist* must be a valid mutable list.
+ *
+ * See also:
+ *	<Col_MVectorSort>
+ *---------------------------------------------------------------------------*/
+
+void
+Col_MListSort(
+    Col_Word mlist, 
+    Col_WordCompareProc *proc, 
+    size_t first, 
+    size_t last, 
+    Col_ClientData clientData)
+{
+    Col_Word root;
+
+    /*
+     * Check preconditions.
+     */
+
+    TYPECHECK_MLIST(mlist) return;
+
+    ASSERT(WORD_TYPE(mlist) == WORD_TYPE_WRAP);
+    root = WORD_WRAP_SOURCE(mlist);
+
+    switch (WORD_TYPE(root)) {
+    case WORD_TYPE_CIRCLIST:
+	//TODO
+	return;
+
+    case WORD_TYPE_VOIDLIST:
+	/*
+	 * No-op: all elements are equal.
+	 */
+
+	return;
+
+    case WORD_TYPE_VECTOR:
+	//TODO convert to mutable vector.
+
+    case WORD_TYPE_MVECTOR:
+	Col_MVectorSort(root, proc, first, last, clientData);
+	return;
+
+	/* WORD_TYPE_UNKNOWN */
+    }
+
+    /*
+    quicksort sur mlist
+
+
+- extraction root
+- si root = void list => rien
+
+- transformation totale en mutable
+
+- si root = mvector => sort sur mvector
+- si root = circular list => récursion sur core
+- sinon => quicksort avec itérators jusqu'à ce que le range soit contenu dans 1 seul mvector => sort sur mvector
+
+
+pas d'optimisation particulière sur les void lists concaténées
+
+
+
+transfo totale mutable: 
+
+- si node immutable (y compris void) : flatten jusqu'à limite longueur mvector
+- si mconcat : récurse + rebalance
+*/
+    //TODO
+
+}
+#endif
 
 /*---------------------------------------------------------------------------
  * Internal Function: NewMConcatList
@@ -3928,7 +4013,7 @@ UpdateMConcatNode(
  *	*into* must be a valid mutable list.
  *	*list* must be a valid list.
  *
- * Range checking:
+ * Value checking:
  *	Resulting length must not exceed the maximum list length (*SIZE_MAX*).
  *---------------------------------------------------------------------------*/
 
@@ -3949,7 +4034,7 @@ Col_MListInsert(
 
     length = Col_ListLength(into);
     listLength = Col_ListLength(list);
-    RANGECHECK_LISTLENGTH_CONCAT(length, listLength) return;
+    VALUECHECK_LISTLENGTH_CONCAT(length, listLength) return;
 
     ASSERT(WORD_TYPE(into) == WORD_TYPE_WRAP);
 
