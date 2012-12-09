@@ -44,9 +44,10 @@ Section: Immutable Lists
  * Group: Immutable List Creation
  *
  * Declarations:
- *	<Col_NewList>
+ *	<Col_EmptyList>, <Col_NewList>
  ****************************************************************************/
 
+EXTERN Col_Word		Col_EmptyList();
 EXTERN Col_Word		Col_NewList(size_t length, 
 			    const Col_Word * elements);
 

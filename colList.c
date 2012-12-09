@@ -76,6 +76,21 @@ Section: Immutable Lists
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
+ * Function: Col_EmptyList
+ *
+ *	Create an empty list. The returned word is immediate and takes no space.
+ *
+ * Result:
+ *	A new empty list.
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_EmptyList()
+{
+    return WORD_LIST_EMPTY;
+}
+
+/*---------------------------------------------------------------------------
  * Function: Col_NewList
  *
  *	Create a new list word.
