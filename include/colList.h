@@ -205,21 +205,17 @@ typedef Col_Word (ColListIterLeafAtProc) (Col_Word leaf, size_t index);
  *	list		- List being iterated. If nil, use array iterator mode.
  *	length		- List length.
  *	index		- Current position.
- *	traversal	- Traversal info:
- *	traversal.array	- Traversal info in string mode.
- *	traversal.list	- Traversal info in list mode.
+ *	chunk		- Current chunk info.
  *
- * Array mode fields:
- *	begin	- Beginning of array.
- *	current	- Current position.
- *
- * List mode fields:
- *	subnode		- Traversed subnode.
- *	first, last	- Range of validity.
- *	offset		- Index offset wrt. root.
- *	leaf		- Leaf (deepest) node.
- *	index		- Index within leaf.
- *	proc		- Access proc within leaf.
+ * Chunk fields:
+ *	first, last	- Range of validity for current chunk.
+ *	atProc		- If non-NULL, element access proc.
+ *	current		- Pointer to current element:
+ *	current.address	- If *atProc* is NULL, address of current element.
+ *	current.leaf	- If *atProc* is non-NULL, first argument passed to 
+ *			  *atProc*.
+ *	index		- If *atProc* is non-NULL, second argument passed to 
+ *			  *atProc*.
  *
  * See also:
  *	<Col_ListIterator>
@@ -229,19 +225,15 @@ typedef struct ColListIterator {
     Col_Word list;
     size_t length;
     size_t index;
-    union {
-	struct {
-	    const Col_Word *begin, *current;
-	} array;
-       struct {
-	    Col_Word subnode;
-	    size_t first, last;
-	    size_t offset;
+    struct {
+	size_t first, last;
+	ColListIterLeafAtProc *atProc;
+	union {
+	    const Col_Word *address;
 	    Col_Word leaf;
-	    size_t index;
-	    ColListIterLeafAtProc *proc;
-	} list;
-    } traversal;
+	} current;
+	size_t index;
+    } chunk;
 } ColListIterator;
 
 /*---------------------------------------------------------------------------
@@ -253,7 +245,7 @@ typedef struct ColListIterator {
  * Note:
  *	Datatype is opaque. Fields should not be accessed by client code.
  *
- *	Each iterator takes 10 words on the stack.
+ *	Each iterator takes 7 words on the stack.
  *
  *	The type is defined as a single-element array of the internal datatype:
  *
@@ -273,7 +265,7 @@ typedef ColListIterator Col_ListIterator[1];
  *	<Col_ListIterator>, <Col_ListIterNull>
  *---------------------------------------------------------------------------*/
 
-#define COL_LISTITER_NULL	{{WORD_NIL,0,0,{NULL}}}
+#define COL_LISTITER_NULL	{{WORD_NIL,0,0,{0,0,NULL,NULL}}}
 
 /*---------------------------------------------------------------------------
  * Macro: Col_ListIterNull
@@ -294,7 +286,7 @@ typedef ColListIterator Col_ListIterator[1];
  *---------------------------------------------------------------------------*/
 
 #define Col_ListIterNull(it) \
-    ((it)->list == WORD_NIL && (it)->traversal.array.begin == NULL)
+    ((it)->list == WORD_NIL && (it)->chunk.current.address == NULL)
 
 /*---------------------------------------------------------------------------
  * Macro: Col_ListIterSetNull
@@ -321,7 +313,7 @@ typedef ColListIterator Col_ListIterator[1];
  *
  * Result:
  *	The list, or <WORD_NIL> if iterator was initialized with
- *	<Col_ListIterArray>. Undefined if at end.
+ *	<Col_ListIterArray>.
  *
  * See also: 
  *	<Col_ListIterator>, <Col_ListIterEnd>
@@ -369,14 +361,14 @@ typedef ColListIterator Col_ListIterator[1];
 /*---------------------------------------------------------------------------
  * Macro: Col_ListIterAt
  *
- *	Get current list element for iterator. Undefined if at end.
+ *	Get current list element for iterator.
  *
  * Argument:
  *	it	- The iterator to get element for. (Caution: evaluated several
  *		  times during macro expansion)
  *
  * Result:
- *	Current element. Undefined if at end.
+ *	Current element, or nil if at end.
  *
  * Side effects:
  *	The argument is referenced several times by the macro. Make sure to
@@ -387,9 +379,9 @@ typedef ColListIterator Col_ListIterator[1];
  *---------------------------------------------------------------------------*/
 
 #define Col_ListIterAt(it) \
-    ((it)->list \
-	? (!(it)->traversal.list.leaf?ColListIterUpdateTraversalInfo((ColListIterator*)it),0:0,(it)->traversal.list.proc((it)->traversal.list.leaf, (it)->traversal.list.index)) \
-	: *(it)->traversal.array.current)
+    (  ((it)->index < (it)->chunk.first || (it)->index > (it)->chunk.last) ? ColListIterUpdateTraversalInfo((ColListIterator *)(it)) \
+     : (it)->chunk.atProc ? (it)->chunk.atProc((it)->chunk.current.leaf, (it)->chunk.index) \
+     : (it)->chunk.current.address ? *((it)->chunk.current.address) : COL_NIL)
 
 /*---------------------------------------------------------------------------
  * Macro: Col_ListIterNext
@@ -463,7 +455,7 @@ typedef ColListIterator Col_ListIterator[1];
  *---------------------------------------------------------------------------*/
 
 #define Col_ListIterSet(it, value) \
-    (*(it) = *(value))
+    (*(it) = *(value)) //FIXME current/single
 
 /*
  * Remaining declarations.
@@ -481,7 +473,7 @@ EXTERN int		Col_ListIterMoveTo(Col_ListIterator it, size_t index);
 EXTERN int		Col_ListIterForward(Col_ListIterator it, size_t nb);
 EXTERN void		Col_ListIterBackward(Col_ListIterator it, size_t nb);
 
-EXTERN void		ColListIterUpdateTraversalInfo(ColListIterator *it);
+EXTERN Col_Word		ColListIterUpdateTraversalInfo(ColListIterator *it);
 
 
 /*
@@ -535,22 +527,22 @@ typedef Col_Word (Col_ListElementAtProc) (Col_Word list, size_t index);
  *
  * Arguments:
  *	list		- Custom list to get chunk from.
- *	start		- Start index of chunk.
- *	max		- Maximum length of chunk.
+ *	start		- Index of element to get chunk for.
  *
  * Note:
  *	By construction, indices are guaranteed to be within valid range.
  *
  * Results:
- *	lengthPtr	- Actual length.
- *	chunkPtr	- Chunk. If <COL_LISTCHUNK_VOID>, the chunk is void.
+ *	chunkPtr		- Chunk. If <COL_LISTCHUNK_VOID>, the chunk is
+ *				  void (i.e. all its elements are nil).
+ *	firstPtr, lastPtr	- Chunk range of validity.
  *
  * See also: 
  *	<Col_CustomListType>
  *---------------------------------------------------------------------------*/
 
-typedef void (Col_ListChunkAtProc) (Col_Word list, size_t start, size_t max, 
-    size_t *lengthPtr, const Col_Word **chunkPtr);
+typedef void (Col_ListChunkAtProc) (Col_Word list, size_t start,
+    const Col_Word **chunkPtr, size_t *firstPtr, size_t *lastPtr);
 
 /*---------------------------------------------------------------------------
  * Typedef: Col_ListSublistProc
@@ -601,10 +593,10 @@ typedef Col_Word (Col_ListConcatProc) (Col_Word left, Col_Word right);
  *			  to <COL_LIST>.
  *	lengthProc	- Called to get the length of the list. Must be constant
  *			  during the whole lifetime.
- *	elmentAtProc	- Called to get the element at a given position. Must
+ *	elementAtProc	- Called to get the element at a given position. Must
  *			  be constant during the whole lifetime.
- *	chunkAtProc	- Called during traversal. If NULL, traversal is done 
- *			  per element.
+ *	chunkAtProc	- Called during traversal and iteration. If NULL, use
+ *			  per-element traversal using elementAtProc.
  *	sublistProc	- Called to extract sublist. If NULL, or if it returns 
  *			  nil, use the standard procedure.
  *	concatProc	- Called to concat lists. If NULL, or if it returns nil,

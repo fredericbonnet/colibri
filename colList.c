@@ -60,10 +60,9 @@ static void		MListInsert(Col_Word * nodePtr, size_t index,
 static void		MListRemove(Col_Word * nodePtr, size_t first, 
 			    size_t last);
 static void		GetChunk(struct ListChunkTraverseInfo *info, 
-			    const Col_Word **elements, int reverse);
+			    const Col_Word **chunkPtr, int reverse);
 static void		NextChunk(struct ListChunkTraverseInfo *info, 
 			    size_t nb, int reverse);
-static ColListIterLeafAtProc IterAtVector, IterAtVoid;
 
 
 /*
@@ -1712,7 +1711,7 @@ typedef struct ListChunkTraverseInfo {
  *
  * Arguments:
  *	info		- Traversal info.
- *	elements	- Chunk info for leaf.
+ *	chunkPtr	- Chunk info for leaf.
  *	reverse		- Whether to traverse in reverse order.
  *
  * See also:
@@ -1723,7 +1722,7 @@ typedef struct ListChunkTraverseInfo {
 static void
 GetChunk(
     ListChunkTraverseInfo *info,
-    const Col_Word **elements,
+    const Col_Word **chunkPtr,
     int reverse)
 {
     int type;
@@ -1827,12 +1826,12 @@ GetChunk(
     switch (type) {
     case WORD_TYPE_VECTOR:
     case WORD_TYPE_MVECTOR:
-	*elements = WORD_VECTOR_ELEMENTS(info->list) + info->start
+	*chunkPtr = WORD_VECTOR_ELEMENTS(info->list) + info->start
 		- (reverse ? info->max-1 : 0);
 	break;
 
     case WORD_TYPE_VOIDLIST:
-	*elements = COL_LISTCHUNK_VOID;
+	*chunkPtr = COL_LISTCHUNK_VOID;
 	break;
 
     case WORD_TYPE_CUSTOM: {
@@ -1840,9 +1839,30 @@ GetChunk(
 		= (Col_CustomListType *) WORD_TYPEINFO(info->list);
 	ASSERT(typeInfo->type.type == COL_LIST);
 	if (typeInfo->chunkAtProc) {
-	    typeInfo->chunkAtProc(info->list, info->start 
-		    - (reverse ? info->max-1 : 0), info->max, &info->max, 
-		    elements);
+	    /*
+	     * Get chunk at start index.
+	     */
+
+	    size_t first, last;
+	    typeInfo->chunkAtProc(info->list, info->start, chunkPtr, &first, 
+		    &last);
+
+	    /*
+	     * Restrict to traversed range.
+	     */
+
+	    if (reverse) {
+		if (info->max > info->start-first+1) {
+		    info->max = info->start-first+1;
+		} else {
+		    *chunkPtr += (info->start-first)-(info->max-1);
+		}
+	    } else {
+		*chunkPtr += info->start-first;
+		if (info->max > last-info->start+1) {
+		    info->max = last-info->start+1;
+		}
+	    }
 	} else {
 	    /*
 	     * Traverse elements individually.
@@ -1850,7 +1870,7 @@ GetChunk(
 
 	    info->max = 1;
 	    info->e = typeInfo->elementAtProc(info->list, info->start);
-	    *elements = &info->e;
+	    *chunkPtr = &info->e;
 	}
 	break;
 	}
@@ -2236,91 +2256,23 @@ Col_TraverseListChunks(
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Constant: MAX_ITERATOR_SUBNODE_DEPTH
- *
- *	Max depth of subnodes in iterators.
- *---------------------------------------------------------------------------*/
-
-#define MAX_ITERATOR_SUBNODE_DEPTH	3
-
-/*---------------------------------------------------------------------------
- * Internal Function: IterAtVector
- *
- *	Element access proc for vector leaves from iterators. Follows
- *	<ColListIterLeafAtProc> signature.
- *
- * Arguments:
- *	leaf	- Leaf node.
- *	index	- Leaf-relative index of element.
- *
- * Result:
- *	Element at given index.
- *
- * See also:
- *	<ColListIterLeafAtProc>, <ColListIterator>, 
- *	<ColListIterUpdateTraversalInfo>
- *---------------------------------------------------------------------------*/
-
-static Col_Word 
-IterAtVector(
-    Col_Word leaf, 
-    size_t index)
-{
-    return WORD_VECTOR_ELEMENTS(leaf)[index];
-}
-
-/*---------------------------------------------------------------------------
- * Internal Function: IterAtVoid
- *
- *	Element access proc for void list leaves from iterators. Follows
- *	<ColListIterLeafAtProc> signature.
- *
- * Arguments:
- *	leaf	- Leaf node.
- *	index	- Leaf-relative index of element.
- *
- * Result:
- *	Always nil.
- *
- * See also:
- *	<ColListIterLeafAtProc>, <ColListIterator>, 
- *	<ColListIterUpdateTraversalInfo>
- *---------------------------------------------------------------------------*/
-
-static Col_Word 
-IterAtVoid(
-    Col_Word leaf, 
-    size_t index)
-{
-    return WORD_NIL;
-}
-
-/*---------------------------------------------------------------------------
  * Internal Function: ColListIterUpdateTraversalInfo
  *
- *	Get the deepest subnodes needed to access the current element 
- *	designated by the iterator.
- *
- *	Iterators point to the leaf containing the current element. To avoid 
- *	rescanning the whole tree when leaving this leaf, it also stores a
- *	higher level subnode containing this leaf, so that traversing all this
- *	subnode's children is fast. The subnode is the leaf's highest ancestor
- *	with a maximum depth of MAX_ITERATOR_SUBNODE_DEPTH. Some indices are
- *	stored along with this sublist in a way that traversal can be resumed
- *	quickly: If the current index is withing the sublist's range of 
- *	validity, then traversal starts at the sublist, else it restarts from
- *	the root.
+ *	Get the chunk containing the element at the current iterator position.
  *
  *	Traversal info is updated lazily, each time element data needs to
  *	be retrieved. This means that a blind iteration over an arbitrarily 
- *	complex list is no more computationally intensive than over a flat 
- *	array.
+ *	complex list is on average no more computationally intensive than over 
+ *	a flat array (chunk retrieval is O(log n)).
  *
  * Argument:
  *	it	- The iterator to update.
+ *
+ * Result:
+ *	Current element, or nil if at end.
  *---------------------------------------------------------------------------*/
 
-void
+Col_Word
 ColListIterUpdateTraversalInfo(
     ColListIterator *it)
 {
@@ -2328,37 +2280,20 @@ ColListIterUpdateTraversalInfo(
     size_t first, last, offset;
 
     ASSERT(it->list);
-    if (it->traversal.list.subnode 
-	    && (it->index < it->traversal.list.first 
-		    || it->index > it->traversal.list.last)) {
-	/*
-	 * Out of range.
-	 */
-
-	it->traversal.list.subnode = WORD_NIL;
-    }
+    if (Col_ListIterEnd(it)) return COL_NIL;
+    ASSERT(it->length);
 
     /*
-     * Search for leaf node, remember containing subnode in the process.
+     * Search for leaf node at current index.
      */
 
-    if (it->traversal.list.subnode) {
-	node = it->traversal.list.subnode;
-    } else {
-	node = it->list;
-	WORD_UNWRAP(node);
-	it->traversal.list.first = 0;
-	it->traversal.list.last = SIZE_MAX;
-	it->traversal.list.offset = 0;
-    }
-    first = it->traversal.list.first;
-    last = it->traversal.list.last;
-    offset = it->traversal.list.offset;
-
-    it->traversal.list.leaf = WORD_NIL;
-    while (!it->traversal.list.leaf) {
-	size_t subFirst=first, subLast=last;
-
+    node = it->list;
+    WORD_UNWRAP(node);
+    first = 0;
+    last = it->length-1;
+    offset = 0;
+    for (;;) {
+	ASSERT(last-first < Col_ListLength(node));
 	switch (WORD_TYPE(node)) {
 	case WORD_TYPE_CIRCLIST:
 	    /*
@@ -2369,30 +2304,32 @@ ColListIterUpdateTraversalInfo(
 	    break;
 
 	case WORD_TYPE_VOIDLIST:
-	    it->traversal.list.leaf = node;
-	    it->traversal.list.index = it->index - offset;
-	    it->traversal.list.proc = IterAtVoid;
-	    ASSERT(it->traversal.list.index < WORD_VOIDLIST_LENGTH(node));
-	    break;
+	    /*
+	     * Update chunk interval. Set current element pointer to NULL,
+	     * Col_ListIterAt knows that it means the chunk is void and its 
+	     * elements are nil.
+	     */
+
+	    it->chunk.first = first;
+	    it->chunk.last = last;
+	    it->chunk.atProc = NULL;
+	    it->chunk.current.address = NULL;
+	    return COL_NIL;
 
 	case WORD_TYPE_VECTOR:
 	case WORD_TYPE_MVECTOR:
-	    it->traversal.list.leaf = node;
-	    it->traversal.list.index = it->index - offset;
-	    it->traversal.list.proc = IterAtVector;
-	    ASSERT(it->traversal.list.index < WORD_VECTOR_LENGTH(node));
-	    break;
-
-	case WORD_TYPE_SUBLIST: 
 	    /*
-		* Always remember as subnode.
-		*/
+	     * Update chunk interval and get current element pointer.
+	     */
 
-	    it->traversal.list.subnode = node;
-	    it->traversal.list.first = first;
-	    it->traversal.list.last = last;
-	    it->traversal.list.offset = offset;
+	    it->chunk.first = first;
+	    it->chunk.last = last;
+	    it->chunk.atProc = NULL;
+	    it->chunk.current.address = WORD_VECTOR_ELEMENTS(node) + it->index 
+		    - offset;
+	    return *it->chunk.current.address;
 
+	case WORD_TYPE_SUBLIST:
 	    /*
 	    * Recurse into source.
 	    * Note: offset may become negative (in 2's complement) but it 
@@ -2400,8 +2337,6 @@ ColListIterUpdateTraversalInfo(
 	    */
 
 	    offset -= WORD_SUBLIST_FIRST(node);
-	    subLast = first - WORD_SUBLIST_FIRST(node) 
-		    + WORD_SUBLIST_LAST(node);
 	    node = WORD_SUBLIST_SOURCE(node);
 	    break;
 
@@ -2411,31 +2346,19 @@ ColListIterUpdateTraversalInfo(
 	    if (leftLength == 0) {
 		leftLength = Col_ListLength(WORD_CONCATLIST_LEFT(node));
 	    }
-	    if (WORD_CONCATLIST_DEPTH(node) == MAX_ITERATOR_SUBNODE_DEPTH
-		    || !it->traversal.list.subnode) {
-		/*
-		 * Remember as subnode.
-		 */
-
-		it->traversal.list.subnode = node;
-		it->traversal.list.first = first;
-		it->traversal.list.last = last;
-		it->traversal.list.offset = offset;
-	    }
-
 	    if (it->index - offset < leftLength) {
 		/*
 		 * Recurse into left arm.
 		 */
 
-		subLast = offset + leftLength-1;
+		if (last - offset > leftLength-1) last = leftLength-1 + offset;
 		node = WORD_CONCATLIST_LEFT(node);
 	    } else {
 		/*
 		 * Recurse into right arm.
 		 */
 
-		subFirst = offset + leftLength;
+		if (first - offset < leftLength) first = leftLength + offset;
 		offset += leftLength;
 		node = WORD_CONCATLIST_RIGHT(node);
 	    }
@@ -2446,11 +2369,33 @@ ColListIterUpdateTraversalInfo(
 	    Col_CustomListType *typeInfo 
 		    = (Col_CustomListType *) WORD_TYPEINFO(node);
 	    ASSERT(typeInfo->type.type == COL_LIST);
-	    it->traversal.list.leaf = node;
-	    it->traversal.list.index = it->index - offset;
-	    it->traversal.list.proc = typeInfo->elementAtProc;
-	    ASSERT(it->traversal.list.index < typeInfo->lengthProc(node));
-	    break;
+	    if (typeInfo->chunkAtProc) {
+		/*
+		 * Get chunk at current index.
+		 */
+
+		typeInfo->chunkAtProc(node, it->index - offset, 
+			&it->chunk.current.address, &it->chunk.first, 
+			&it->chunk.last);
+		it->chunk.first += offset;
+		it->chunk.last += offset;
+		it->chunk.atProc = NULL;
+		it->chunk.current.address += it->index - it->chunk.first;
+		return *it->chunk.current.address;
+	    } else {
+		/*
+		 * Iterate over elements individually.
+		 */
+
+		ASSERT(typeInfo->elementAtProc);
+		it->chunk.first = first;
+		it->chunk.last = last;
+		it->chunk.atProc = typeInfo->elementAtProc;
+		it->chunk.current.leaf = node;
+		it->chunk.index = it->index - it->chunk.first;
+		return it->chunk.atProc(it->chunk.current.leaf, 
+			it->chunk.index);
+	    }
 	    }
 
 	/* WORD_TYPE_UNKNOWN */
@@ -2458,18 +2403,8 @@ ColListIterUpdateTraversalInfo(
 	default:
 	    /* CANTHAPPEN */
 	    ASSERT(0);
-	    return;
+	    return COL_NIL;
 	}
-
-	/*
-	 * Shorten validity range.
-	 */
-
-	if (subFirst > first) first = subFirst;
-	if (subLast < last) last = subLast;
-    }
-    if (!it->traversal.list.subnode) {
-	it->traversal.list.subnode = it->traversal.list.leaf;
     }
 }
 
@@ -2534,8 +2469,7 @@ Col_ListIterBegin(
      * Traversal info will be lazily computed.
      */
 
-    it->traversal.list.subnode = WORD_NIL;
-    it->traversal.list.leaf = WORD_NIL;
+    it->chunk.first = SIZE_MAX;
 
     return looped;
 }
@@ -2577,8 +2511,7 @@ Col_ListIterFirst(
      * Traversal info will be lazily computed.
      */
 
-    it->traversal.list.subnode = WORD_NIL;
-    it->traversal.list.leaf = WORD_NIL;
+    it->chunk.first = SIZE_MAX;
 }
 
 /*---------------------------------------------------------------------------
@@ -2626,8 +2559,7 @@ Col_ListIterLast(
      * Traversal info will be lazily computed.
      */
 
-    it->traversal.list.subnode = WORD_NIL;
-    it->traversal.list.leaf = WORD_NIL;
+    it->chunk.first = SIZE_MAX;
 }
 
 /*---------------------------------------------------------------------------
@@ -2651,8 +2583,11 @@ Col_ListIterArray(
     it->list = WORD_NIL;
     it->length = length;
     it->index = 0;
-    it->traversal.array.begin = elements;
-    it->traversal.array.current = elements;
+
+    it->chunk.first = 0;
+    it->chunk.last = length-1;
+    it->chunk.atProc = NULL;
+    it->chunk.current.address = elements;
 }
 
 /*---------------------------------------------------------------------------
@@ -2790,7 +2725,6 @@ Col_ListIterForward(
 	    size_t nb1 = (it->length-loop) - it->index;
 	    ASSERT(nb >= nb1);
 	    nb = nb1 + (nb-nb1) % loop;
-	    it->index += nb;
 	} else {
 	    /*
 	     * Currently within loop.
@@ -2804,96 +2738,20 @@ Col_ListIterForward(
 
 		Col_ListIterBackward(it, loop-nb);
 		return looped;
-	    } else {
-		/* 
-		 * Forward.
-		 */
-
-		it->index += nb;
 	    }
 	}
-    } else {
-	it->index += nb;
     }
 
-    if (!it->list) {
+    it->index += nb;
+    if (it->index >= it->chunk.first && it->index <= it->chunk.last) {
 	/*
-	 * Array iterator.
+	 * Update current chunk pointer.
 	 */
 
-	it->traversal.array.current += nb;
-	return 0;
+	if (it->chunk.atProc) it->chunk.index += nb;
+	else if (it->chunk.current.address) it->chunk.current.address += nb;
     }
 
-    ASSERT(it->list);
-    if (!it->traversal.list.subnode || !it->traversal.list.leaf) {
-	/*
-	 * No traversal info.
-	 */
-
-	return looped;
-    }
-    if (it->index > it->traversal.list.last) {
-	/*
-	 * Traversal info out of range. Discard leaf node info, but not 
-	 * subnode, as it may be used again should the iteration go back.
-	 */
-
-	it->traversal.list.leaf = WORD_NIL;
-	return looped;
-    }
-
-    /*
-     * Update traversal info.
-     */
-
-    switch (WORD_TYPE(it->traversal.list.leaf)) {
-    case WORD_TYPE_VECTOR:
-    case WORD_TYPE_MVECTOR:
-	if (nb >= WORD_VECTOR_LENGTH(it->traversal.list.leaf) 
-		- it->traversal.list.index) {
-	    /*
-	     * Reached end of leaf.
-	     */
-
-	    it->traversal.list.leaf = WORD_NIL;
-	} else {
-	    it->traversal.list.index += nb;
-	}
-	break;
-
-    case WORD_TYPE_VOIDLIST:
-	if (nb >= WORD_VOIDLIST_LENGTH(it->traversal.list.leaf) 
-		- it->traversal.list.index) {
-	    /*
-	     * Reached end of leaf.
-	     */
-
-	    it->traversal.list.leaf = WORD_NIL;
-	} else {
-	    it->traversal.list.index += nb;
-	}
-	break;
-
-    case WORD_TYPE_CUSTOM: {
-	Col_CustomListType *typeInfo 
-		= (Col_CustomListType *) WORD_TYPEINFO(it->traversal.list.leaf);
-	ASSERT(typeInfo->type.type == COL_LIST);
-	if (nb >= typeInfo->lengthProc(it->traversal.list.leaf) 
-		- it->traversal.list.index) {
-	    /*
-	     * Reached end of leaf.
-	     */
-
-	    it->traversal.list.leaf = WORD_NIL;
-	} else {
-	    it->traversal.list.index += nb;
-	}
-	break;
-	}
-
-	/* WORD_TYPE_UNKNOWN */
-    }
     return looped;
 }
 
@@ -2943,75 +2801,25 @@ Col_ListIterBackward(
 	}
 
 	it->index = it->length-nb;
-	if (!it->list) {
-	    /*
-	     * Array iterator.
-	     */
-
-	    it->traversal.array.current = it->traversal.array.begin + it->index;
-	    return;
-	}
-
-	ASSERT(it->list);
-	it->traversal.list.leaf = WORD_NIL;
 	return;
-    }
-
-    if (it->index < nb) {
+    } else if (it->index < nb) {
 	/*
-	 * Beginning of list.
+	 * Beginning of list, set iterator at end.
 	 */
     
 	it->index = it->length;
 	return;
     }
+    
     it->index -= nb;
-
-    if (!it->list) {
+    if (it->index >= it->chunk.first && it->index <= it->chunk.last) {
 	/*
-	 * Array iterator.
+	 * Update current chunk pointer.
 	 */
 
-	it->traversal.array.current -= nb;
-	return;
+	if (it->chunk.atProc) it->chunk.index -= nb;
+	else if (it->chunk.current.address) it->chunk.current.address -= nb;
     }
-
-    ASSERT(it->list);
-    if (!it->traversal.list.subnode || !it->traversal.list.leaf) {
-	/*
-	 * No traversal info.
-	 */
-
-	return;
-    }
-    if (it->index < it->traversal.list.first) {
-	/*
-	 * Traversal info out of range. Discard leaf node info, but not 
-	 * subnode, as it may be used again should the iteration go back.
-	 */
-
-	it->traversal.list.leaf = WORD_NIL;
-	return;
-    }
-
-    /*
-     * Update traversal info.
-     */
-
-    if (it->traversal.list.index < nb) {
-	/*
-	 * Reached beginning of leaf. 
-	 */
-
-	it->traversal.list.leaf = WORD_NIL;
-	return;
-    }
-
-    /*
-     * Go backward.
-     */
-
-    it->traversal.list.index -= nb;
 }
 
 
