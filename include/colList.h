@@ -396,13 +396,19 @@ typedef ColListIterator Col_ListIterator[1];
  *
  * Side effects:
  *	Update the iterator.
+ *	The argument is referenced several times by the macro. Make sure to
+ *	avoid any side effect.
  *
  * See also: 
  *	<Col_ListIterForward>
  *---------------------------------------------------------------------------*/
 
 #define Col_ListIterNext(it) \
-    Col_ListIterForward((it), 1)
+    (  ((it)->index < (it)->chunk.first || (it)->index >= (it)->chunk.last) ? Col_ListIterForward((it), 1) \
+     : ((it)->index++, \
+          (it)->chunk.atProc ? ((it)->chunk.index++, 0) \
+        : (it)->chunk.current.address ? ((it)->chunk.current.address++, 0) \
+        : 0))
 
 /*---------------------------------------------------------------------------
  * Macro: Col_ListIterPrevious
@@ -414,13 +420,19 @@ typedef ColListIterator Col_ListIterator[1];
  *
  * Side effects:
  *	Update the iterator.
+ *	The argument is referenced several times by the macro. Make sure to
+ *	avoid any side effect.
  *
  * See also: 
  *	<Col_ListIterBackward>
  *---------------------------------------------------------------------------*/
 
 #define Col_ListIterPrevious(it) \
-    Col_ListIterBackward((it), 1)
+    (  ((it)->index <= (it)->chunk.first || (it)->index > (it)->chunk.last) ? (Col_ListIterBackward((it), 1), 0) \
+     : ((it)->index--, \
+          (it)->chunk.atProc ? ((it)->chunk.index--, 0) \
+        : (it)->chunk.current.address ? ((it)->chunk.current.address--, 0) \
+        : 0))
 
 /*---------------------------------------------------------------------------
  * Macro: Col_ListIterEnd
