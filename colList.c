@@ -283,7 +283,7 @@ Col_ListLoopLength(
  *	*list* must be a valid list.
  *
  * Result:
- *	If the index is past the end of the list, nil, else the element.
+ *	If the index is past the end of the list, nil, else the current element.
  *---------------------------------------------------------------------------*/
 
 Col_Word
@@ -1873,10 +1873,10 @@ GetChunk(
 		    *chunkPtr += (info->start-first)-(info->max-1);
 		}
 	    } else {
-		*chunkPtr += info->start-first;
 		if (info->max > last-info->start+1) {
 		    info->max = last-info->start+1;
 		}
+		*chunkPtr += info->start-first;
 	    }
 	} else {
 	    /*
@@ -2327,8 +2327,8 @@ ColListIterUpdateTraversalInfo(
 
 	    it->chunk.first = first;
 	    it->chunk.last = last;
-	    it->chunk.atProc = NULL;
-	    it->chunk.current.address = NULL;
+	    it->chunk.accessProc = NULL;
+	    it->chunk.current.direct = NULL;
 	    return COL_NIL;
 
 	case WORD_TYPE_VECTOR:
@@ -2339,10 +2339,10 @@ ColListIterUpdateTraversalInfo(
 
 	    it->chunk.first = first;
 	    it->chunk.last = last;
-	    it->chunk.atProc = NULL;
-	    it->chunk.current.address = WORD_VECTOR_ELEMENTS(node) + it->index 
+	    it->chunk.accessProc = NULL;
+	    it->chunk.current.direct = WORD_VECTOR_ELEMENTS(node) + it->index 
 		    - offset;
-	    return *it->chunk.current.address;
+	    return *it->chunk.current.direct;
 
 	case WORD_TYPE_SUBLIST:
 	    /*
@@ -2390,13 +2390,13 @@ ColListIterUpdateTraversalInfo(
 		 */
 
 		typeInfo->chunkAtProc(node, it->index - offset, 
-			&it->chunk.current.address, &it->chunk.first, 
+			&it->chunk.current.direct, &it->chunk.first, 
 			&it->chunk.last);
 		it->chunk.first += offset;
 		it->chunk.last += offset;
-		it->chunk.atProc = NULL;
-		it->chunk.current.address += it->index - it->chunk.first;
-		return *it->chunk.current.address;
+		it->chunk.accessProc = NULL;
+		it->chunk.current.direct += it->index - it->chunk.first;
+		return *it->chunk.current.direct;
 	    } else {
 		/*
 		 * Iterate over elements individually.
@@ -2405,11 +2405,11 @@ ColListIterUpdateTraversalInfo(
 		ASSERT(typeInfo->elementAtProc);
 		it->chunk.first = first;
 		it->chunk.last = last;
-		it->chunk.atProc = typeInfo->elementAtProc;
-		it->chunk.current.leaf = node;
-		it->chunk.index = it->index - it->chunk.first;
-		return it->chunk.atProc(it->chunk.current.leaf, 
-			it->chunk.index);
+		it->chunk.accessProc = typeInfo->elementAtProc;
+		it->chunk.current.access.leaf = node;
+		it->chunk.current.access.index = it->index - it->chunk.first;
+		return it->chunk.accessProc(it->chunk.current.access.leaf, 
+			it->chunk.current.access.index);
 	    }
 	    }
 
@@ -2601,8 +2601,8 @@ Col_ListIterArray(
 
     it->chunk.first = 0;
     it->chunk.last = length-1;
-    it->chunk.atProc = NULL;
-    it->chunk.current.address = elements;
+    it->chunk.accessProc = NULL;
+    it->chunk.current.direct = elements;
 }
 
 /*---------------------------------------------------------------------------
@@ -2634,10 +2634,6 @@ Col_ListIterCompare(
 
     TYPECHECK_LISTITER(it1) return 1;
     TYPECHECK_LISTITER(it2) return -1;
-
-    /*
-     * Note: iterators at end have their index set to SIZE_MAX.
-     */
 
     if (it1->index < it2->index) {
 	return -1;
@@ -2763,8 +2759,8 @@ Col_ListIterForward(
 	 * Update current chunk pointer.
 	 */
 
-	if (it->chunk.atProc) it->chunk.index += nb;
-	else if (it->chunk.current.address) it->chunk.current.address += nb;
+	if (it->chunk.accessProc) it->chunk.current.access.index += nb;
+	else if (it->chunk.current.direct) it->chunk.current.direct += nb;
     }
 
     return looped;
@@ -2832,8 +2828,8 @@ Col_ListIterBackward(
 	 * Update current chunk pointer.
 	 */
 
-	if (it->chunk.atProc) it->chunk.index -= nb;
-	else if (it->chunk.current.address) it->chunk.current.address -= nb;
+	if (it->chunk.accessProc) it->chunk.current.access.index -= nb;
+	else if (it->chunk.current.direct) it->chunk.current.direct -= nb;
     }
 }
 

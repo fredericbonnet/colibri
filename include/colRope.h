@@ -416,22 +416,23 @@ typedef Col_Char (ColRopeIterLeafAtProc) (Col_Word leaf, size_t index);
  *	rope		- Rope being iterated. If nil, use string iterator mode.
  *	length		- Rope length.
  *	index		- Current position.
- *	traversal	- Traversal info:
- *	traversal.str	- Traversal info in string mode.
- *	traversal.rope	- Traversal info in rope mode.
+ *	chunk		- Current chunk info.
  *
- * String mode fields:
- *	begin	- Beginning of string.
- *	current	- Current position.
+ * Chunk fields:
+ *	first, last	- Range of validity for current chunk.
+ *	accessProc	- If non-NULL, element accessor. Else, use direct
+ *			  address mode.
+ *	current		- Current element information:
+ *	current.direct	- Current element info in direct access mod.
+ *	current.access	- Current element info in accessor mode.
  *
- * Rope mode fields:
- *	subrope		- Traversed subrope.
- *	first, last	- Range of validity.
- *	offset		- Index offset wrt. root.
- *	leaf		- Leaf (deepest) rope.
- *	index		- Index within leaf (byte index for variable width 
- *			  formats).
- *	proc		- Access proc within leaf.
+ * Direct access mode fields:
+ *	format		- Format of current chunk.
+ *	address		- Address of current element.
+ *
+ * Accessor mode fields:
+ *	leaf		- First argument passed to *accessProc*.
+ *	index		- Second argument passed to *accessProc*.
  *
  * See also:
  *	<Col_RopeIterator>
@@ -441,20 +442,20 @@ typedef struct ColRopeIterator {
     Col_Word rope;
     size_t length;
     size_t index;
-    union {
-	struct {
-	    const char *begin, *current;
-	    Col_StringFormat format;
-	} str;
-	struct {
-	    Col_Word subrope;
-	    size_t first, last;
-	    size_t offset;
-	    Col_Word leaf;
-	    size_t index;
-	    ColRopeIterLeafAtProc *proc;
-	} rope;
-    } traversal;
+    struct {
+	size_t first, last;
+	ColRopeIterLeafAtProc *accessProc;
+	union {
+	    struct {
+		Col_StringFormat format;
+		const void *address;
+	    } direct;
+	    struct {
+		Col_Word leaf;
+		size_t index;
+	    } access;
+	} current;
+    } chunk;
 } ColRopeIterator;
 
 /*---------------------------------------------------------------------------
@@ -466,7 +467,7 @@ typedef struct ColRopeIterator {
  * Note:
  *	Datatype is opaque. Fields should not be accessed by client code.
  *
- *	Each iterator takes 10 words on the stack.
+ *	Each iterator takes 8 words on the stack.
  *
  *	The type is defined as a single-element array of the internal datatype:
  *
@@ -486,7 +487,7 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *	<Col_RopeIterator>, <Col_RopeIterNull>
  *---------------------------------------------------------------------------*/
 
-#define COL_ROPEITER_NULL	{{WORD_NIL,0,0,{NULL}}}
+#define COL_ROPEITER_NULL	{{WORD_NIL,0,0,{0,0,NULL,0,NULL}}}
 
 /*---------------------------------------------------------------------------
  * Macro: Col_RopeIterNull
@@ -507,7 +508,7 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *---------------------------------------------------------------------------*/
 
 #define Col_RopeIterNull(it) \
-    ((it)->rope == WORD_NIL && (it)->traversal.str.begin == NULL)
+    ((it)->rope == WORD_NIL && (it)->chunk.current.direct.address == NULL)
 
 /*---------------------------------------------------------------------------
  * Macro: Col_RopeIterSetNull
@@ -582,14 +583,15 @@ typedef ColRopeIterator Col_RopeIterator[1];
 /*---------------------------------------------------------------------------
  * Macro: Col_RopeIterAt
  *
- *	Get current rope character for iterator. Undefined if at end.
+ *	Get current rope character for iterator.
  *
  * Argument:
  *	it	- The iterator to get character for. (Caution: evaluated several
  *		  times during macro expansion)
  *
  * Result:
- *	Current character. Undefined if at end.
+ *	If the index is past the end of the rope, the invalid codepoint
+ *	<COL_CHAR_INVALID>, else the Unicode codepoint of the character.
  *
  * Side effects:
  *	The argument is referenced several times by the macro. Make sure to
@@ -600,9 +602,9 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *---------------------------------------------------------------------------*/
 
 #define Col_RopeIterAt(it) \
-    ((it)->rope \
-	? (!(it)->traversal.rope.leaf?ColRopeIterUpdateTraversalInfo((ColRopeIterator*)it),0:0,(it)->traversal.rope.proc((it)->traversal.rope.leaf, (it)->traversal.rope.index)) \
-	: ColStringIterCharAt(it))
+    (  ((it)->index < (it)->chunk.first || (it)->index > (it)->chunk.last) ? ColRopeIterUpdateTraversalInfo((ColRopeIterator *)(it)) \
+     : (it)->chunk.accessProc ? (it)->chunk.accessProc((it)->chunk.current.access.leaf, (it)->chunk.current.access.index) \
+     : COL_CHAR_GET((it)->chunk.current.direct.format, (it)->chunk.current.direct.address))
 
 /*---------------------------------------------------------------------------
  * Macro: Col_RopeIterNext
@@ -614,13 +616,18 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *
  * Side effects:
  *	Update the iterator.
+ *	The argument is referenced several times by the macro. Make sure to
+ *	avoid any side effect.
  *
  * See also: 
  *	<Col_RopeIterForward>
  *---------------------------------------------------------------------------*/
 
 #define Col_RopeIterNext(it) \
-    Col_RopeIterForward((it), 1)
+    (  ((it)->index < (it)->chunk.first || (it)->index >= (it)->chunk.last) ? (Col_RopeIterForward((it), 1), 0) \
+     : ((it)->index++, \
+          (it)->chunk.accessProc ? ((it)->chunk.current.access.index++, 0) \
+        : (COL_CHAR_NEXT((it)->chunk.current.direct.format, (it)->chunk.current.direct.address), 0)))
 
 /*---------------------------------------------------------------------------
  * Macro: Col_RopeIterPrevious
@@ -632,13 +639,18 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *
  * Side effects:
  *	Update the iterator.
+ *	The argument is referenced several times by the macro. Make sure to
+ *	avoid any side effect.
  *
  * See also: 
  *	<Col_RopeIterBackward>
  *---------------------------------------------------------------------------*/
 
 #define Col_RopeIterPrevious(it) \
-    Col_RopeIterBackward((it), 1)
+    (  ((it)->index <= (it)->chunk.first || (it)->index > (it)->chunk.last) ? (Col_RopeIterBackward((it), 1), 0) \
+     : ((it)->index--, \
+          (it)->chunk.accessProc ? ((it)->chunk.current.access.index--, 0) \
+        : (COL_CHAR_PREVIOUS((it)->chunk.current.direct.format, (it)->chunk.current.direct.address), 0)))
 
 /*---------------------------------------------------------------------------
  * Macro: Col_RopeIterEnd
@@ -692,8 +704,7 @@ EXTERN void		Col_RopeIterMoveTo(Col_RopeIterator it, size_t index);
 EXTERN void		Col_RopeIterForward(Col_RopeIterator it, size_t nb);
 EXTERN void		Col_RopeIterBackward(Col_RopeIterator it, size_t nb);
 
-EXTERN void		ColRopeIterUpdateTraversalInfo(ColRopeIterator *it);
-EXTERN Col_Char		ColStringIterCharAt(const ColRopeIterator *it);
+EXTERN Col_Char		ColRopeIterUpdateTraversalInfo(ColRopeIterator *it);
 
 
 /*
@@ -746,23 +757,22 @@ typedef Col_Char (Col_RopeCharAtProc) (Col_Word rope, size_t index);
  *	Function signature of custom rope chunk access procs.
  *
  * Arguments:
- *	rope		- Custom rope to get chunk from.
- *	start		- Start index of chunk.
- *	max		- Maximum length of chunk.
+ *	rope	- Custom rope to get chunk from.
+ *	index	- Index of character to get chunk for.
  *
  * Note:
  *	By construction, indices are guaranteed to be within valid range.
  *
  * Results:
- *	lengthPtr	- Actual length.
- *	chunkPtr	- Chunk information. See <Col_RopeChunk>.
+ *	chunkPtr		- Chunk information. See <Col_RopeChunk>.
+ *	firstPtr, lastPtr	- Chunk range of validity.
  *
  * See also: 
  *	<Col_CustomRopeType>
  *---------------------------------------------------------------------------*/
 
-typedef void (Col_RopeChunkAtProc) (Col_Word rope, size_t start, size_t max, 
-    size_t *lengthPtr, Col_RopeChunk *chunkPtr);
+typedef void (Col_RopeChunkAtProc) (Col_Word rope, size_t index, 
+    Col_RopeChunk *chunkPtr, size_t *firstPtr, size_t *lastPtr);
 
 /*---------------------------------------------------------------------------
  * Typedef: Col_RopeSubropeProc

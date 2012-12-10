@@ -148,8 +148,8 @@ HashChunkProc(
     const char *data = (const char *) chunks->data;
     Col_Char c;
     ASSERT(number == 1);
-    for (i = 0; i < length; i++) {
-	COL_CHAR_NEXT(chunks->format, data, c);
+    for (i = 0; i < length; i++, COL_CHAR_NEXT(chunks->format, data)) {
+	c = COL_CHAR_GET(chunks->format, data);
 	STRING_HASH(hash, c);
     }
     *(uintptr_t *) clientData = hash;

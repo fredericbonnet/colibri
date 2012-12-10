@@ -358,56 +358,74 @@ typedef enum Col_StringFormat {
      : 			  0 )
 
 /*---------------------------------------------------------------------------
- * Macro: COL_CHAR_NEXT
+ * Macro: COL_CHAR_GET
  *
- *	Get next character in data chunk.
+ *	Get current character in data chunk.
  *
  * Arguments:
  *	format	- Data format.
- *	data	- Pointer to next character.
+ *	data	- Pointer to current character.
  *
  * Result:
  *	c	- Character codepoint.
  *
  * Side effects:
  *	The data pointer is moved just past the character.
+ *	The arguments are referenced several times by the macro. Make sure to
+ *	avoid any side effect.
  *---------------------------------------------------------------------------*/
 
-#define COL_CHAR_NEXT(format, data, c) \
-    switch (format) { \
-	case COL_UCS1:  (c) =            *((const Col_Char1 *) (data)); (data) = (const char *) (data) + 1;                                break; \
-	case COL_UCS2:  (c) =            *((const Col_Char2 *) (data)); (data) = (const char *) (data) + 2;                                break; \
-	case COL_UCS4:  (c) =            *((const Col_Char4 *) (data)); (data) = (const char *) (data) + 4;                                break; \
-	case COL_UTF8:  (c) = Col_Utf8Get ((const Col_Char1 *) data);   (data) = (const char *) Col_Utf8Next ((const Col_Char1 *) (data)); break; \
-	case COL_UTF16: (c) = Col_Utf16Get((const Col_Char2 *) data);   (data) = (const char *) Col_Utf16Next((const Col_Char2 *) (data)); break; \
-	default: (c) = COL_CHAR_INVALID; data = NULL; /* Keep compilers happy. */ \
-    }
+#define COL_CHAR_GET(format, data) \
+    (  (format) == COL_UCS1  ?            *((const Col_Char1 *) (data)) \
+     : (format) == COL_UCS2  ?            *((const Col_Char2 *) (data)) \
+     : (format) == COL_UCS4  ?            *((const Col_Char4 *) (data)) \
+     : (format) == COL_UTF8  ? Col_Utf8Get ((const Col_Char1 *) (data)) \
+     : (format) == COL_UTF16 ? Col_Utf16Get((const Col_Char2 *) (data)) \
+     : COL_CHAR_INVALID)
+
+/*---------------------------------------------------------------------------
+ * Macro: COL_CHAR_NEXT
+ *
+ *	Move to next character in data chunk.
+ *
+ * Arguments:
+ *	format	- Data format.
+ *	data	- Pointer to next character.
+ *
+ * Side effects:
+ *	The data pointer is moved just past the character.
+ *---------------------------------------------------------------------------*/
+
+#define COL_CHAR_NEXT(format, data) \
+    (data) = \
+    (  (format) == COL_UCS1  ? (const char *) (data) + 1 \
+     : (format) == COL_UCS2  ? (const char *) (data) + 2 \
+     : (format) == COL_UCS4  ? (const char *) (data) + 4 \
+     : (format) == COL_UTF8  ? (const char *) Col_Utf8Next ((const Col_Char1 *) (data)) \
+     : (format) == COL_UTF16 ? (const char *) Col_Utf16Next((const Col_Char2 *) (data)) \
+     : NULL)
 
 /*---------------------------------------------------------------------------
  * Macro: COL_CHAR_PREVIOUS
  *
- *	Get previous character in data chunk.
+ *	Move to previous character in data chunk.
  *
  * Arguments:
  *	format	- Data format.
  *	data	- Pointer just past the next character.
  *
- * Result:
- *	c	- Character codepoint.
- *
  * Side effects:
  *	The data pointer is moved to the character.
  *---------------------------------------------------------------------------*/
 
-#define COL_CHAR_PREVIOUS(format, data, c) \
-    switch (format) { \
-	case COL_UCS1:  (data) = (const char *) (data) - 1;                                (c) =            *((const Col_Char1 *) (data)); break; \
-	case COL_UCS2:  (data) = (const char *) (data) - 2;                                (c) =            *((const Col_Char2 *) (data)); break; \
-	case COL_UCS4:  (data) = (const char *) (data) - 4;                                (c) =            *((const Col_Char4 *) (data)); break; \
-	case COL_UTF8:  (data) = (const char *) Col_Utf8Prev ((const Col_Char1 *) (data)); (c) = Col_Utf8Get ((const Col_Char1 *) data);   break; \
-	case COL_UTF16: (data) = (const char *) Col_Utf16Prev((const Col_Char2 *) (data)); (c) = Col_Utf16Get((const Col_Char2 *) data);   break; \
-	default: (c) = COL_CHAR_INVALID; data = NULL; /* Keep compilers happy. */ \
-    }
+#define COL_CHAR_PREVIOUS(format, data) \
+    (data) =  \
+    (  (format) == COL_UCS1  ? (const char *) (data) - 1 \
+     : (format) == COL_UCS2  ? (const char *) (data) - 2 \
+     : (format) == COL_UCS4  ? (const char *) (data) - 4 \
+     : (format) == COL_UTF8  ? (const char *) Col_Utf8Prev ((const Col_Char1 *) (data)) \
+     : (format) == COL_UTF16 ? (const char *) Col_Utf16Prev((const Col_Char2 *) (data)) \
+     : NULL)
 
 /*
  * Remaining declarations.
