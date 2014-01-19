@@ -113,11 +113,13 @@ extern const char * const ColibriDomain[];
  *
  *	Debug-mode runtime type checking.
  *
- * Argument:
+ * Arguments:
  *	condition	- Boolean condition.
+ *	code		- Error code.
+ *	...		- Remaining arguments passed to <COL_DEBUGCHECK>.
  *
  * See also:
- *	<COL_RUNTIMECHECK>, <COL_TYPECHECK>
+ *	<COL_DEBUGCHECK>, <COL_TYPECHECK>
  *---------------------------------------------------------------------------*/
 
 #define TYPECHECK(condition, code, ...) \
@@ -130,6 +132,8 @@ extern const char * const ColibriDomain[];
  *
  * Argument:
  *	condition	- Boolean condition.
+ *	code		- Error code.
+ *	...		- Remaining arguments passed to <COL_RUNTIMECHECK>.
  *
  * See also:
  *	<COL_RUNTIMECHECK>, <COL_VALUECHECK>
