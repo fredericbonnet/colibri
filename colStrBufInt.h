@@ -166,7 +166,7 @@ Internal Section: String Buffers
 #define WORD_STRBUF_INIT(word, size, format) \
     WORD_SET_TYPEID((word), WORD_TYPE_STRBUF); \
     WORD_STRBUF_FORMAT(word) = (format); \
-    WORD_STRBUF_SIZE(word) = (size); \
+    WORD_STRBUF_SIZE(word) = (uint16_t) (size); \
     WORD_STRBUF_ROPE(word) = WORD_SMALLSTR_EMPTY; \
     WORD_STRBUF_LENGTH(word) = 0;
 

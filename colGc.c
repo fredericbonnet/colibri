@@ -306,7 +306,7 @@ Col_WordPreserve(
     case WORD_TYPE_NIL:
     case WORD_TYPE_SMALLINT:
     case WORD_TYPE_SMALLFP:
-    case WORD_TYPE_CHAR:
+    case WORD_TYPE_CHARBOOL:
     case WORD_TYPE_SMALLSTR:
     case WORD_TYPE_VOIDLIST:
 	/* 
@@ -511,7 +511,7 @@ Col_WordRelease(
     case WORD_TYPE_NIL:
     case WORD_TYPE_SMALLINT:
     case WORD_TYPE_SMALLFP:
-    case WORD_TYPE_CHAR:
+    case WORD_TYPE_CHARBOOL:
     case WORD_TYPE_SMALLSTR:
     case WORD_TYPE_VOIDLIST:
 	/* 
@@ -1275,7 +1275,7 @@ start:
     case WORD_TYPE_NIL:
     case WORD_TYPE_SMALLINT:
     case WORD_TYPE_SMALLFP:
-    case WORD_TYPE_CHAR:
+    case WORD_TYPE_CHARBOOL:
     case WORD_TYPE_SMALLSTR:
     case WORD_TYPE_VOIDLIST:
 	/* 

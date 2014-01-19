@@ -42,6 +42,28 @@ Section: Words
  ****************************************************************************/
 
 /*---------------------------------------------------------------------------
+ * Function: Col_NewBoolWord
+ *
+ *	Create a new boolean word.
+ *
+ * Argument:
+ *	value	- Boolean value: zero for false, nonzero for true.
+ *
+ * Result:
+ *	A new boolean value: either WORD_TRUE or WORD_FALSE.
+ *
+ * See also:
+ *	<Col_BoolWordValue>
+ *---------------------------------------------------------------------------*/
+
+Col_Word
+Col_NewBoolWord(
+    int value)
+{
+    return (value ? WORD_TRUE : WORD_FALSE);
+}
+
+/*---------------------------------------------------------------------------
  * Function: Col_NewIntWord
  *
  *	Create a new integer word.
@@ -165,8 +187,9 @@ Col_WordType(
     case WORD_TYPE_SMALLFP:
 	return COL_FLOAT;
 
-    case WORD_TYPE_CHAR:
-	return COL_CHAR | COL_STRING | COL_ROPE;
+    case WORD_TYPE_CHARBOOL:
+	return (WORD_CHAR_WIDTH(word) ? COL_CHAR | COL_STRING | COL_ROPE 
+	    : COL_BOOL);
 
     case WORD_TYPE_SMALLSTR:
 	return COL_STRING | COL_ROPE;
@@ -248,6 +271,35 @@ Col_WordType(
 }
 
 /*---------------------------------------------------------------------------
+ * Function: Col_BoolWordValue
+ *
+ *	Get value of boolean word.
+ *
+ * Argument:
+ *	word	- Boolean word to get value for.
+ *
+ * Type checking:
+ *	*word* must be a valid boolean word.
+ *
+ * Result:
+ *	The boolean value: zero for false, nonzero for true.
+ *
+ * See also:
+ *	<Col_NewBoolWord>
+ *---------------------------------------------------------------------------*/
+
+int
+Col_BoolWordValue(
+    Col_Word word)
+{
+    TYPECHECK((Col_WordType(word) & COL_BOOL), COL_ERROR_BOOL, (word))
+
+    WORD_UNWRAP(word);
+
+    return WORD_BOOL_GET(word);
+}
+
+/*---------------------------------------------------------------------------
  * Function: Col_IntWordValue
  *
  *	Get value of integer word.
@@ -279,7 +331,7 @@ Col_IntWordValue(
 	}
     }
 
-    TYPECHECK(0, COL_ERROR_INTWORD, word);
+    TYPECHECK(0, COL_ERROR_INT, word);
     return 0;
 }
 
@@ -317,7 +369,7 @@ Col_FloatWordValue(
 	}
     }
 
-    TYPECHECK(0, COL_ERROR_FLOATWORD, word);
+    TYPECHECK(0, COL_ERROR_FLOAT, word);
     return 0.0;
 }
 

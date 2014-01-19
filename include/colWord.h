@@ -37,6 +37,27 @@ typedef uintptr_t Col_Word;
     ((Col_Word) 0)
 
 /*---------------------------------------------------------------------------
+ * Constants: Boolean Values
+ *
+ *	Boolean singleton words. Values are immediate and constant, which means
+ *	that they can be safely compared and stored in static storage.
+ *
+ * Note:
+ *	C and Colibri booleans are not interchangeable. More specifically,
+ *	WORD_FALSE is not false in the C sense because it is nonzero. They are
+ *	also distinct from integer words: an integer zero is not a boolean false
+ *	contrary to C. So it is an error to write e.g. "if (WORD_FALSE)".
+ *
+ *  WORD_FALSE	- False boolean word.
+ *  WORD_TRUE	- True boolean word.
+ *---------------------------------------------------------------------------*/
+
+#define WORD_FALSE \
+    ((Col_Word) 0x004)
+#define WORD_TRUE \
+    ((Col_Word) 0x104)
+
+/*---------------------------------------------------------------------------
  * Constants: Word Type Identifiers
  *
  *	Data types recognized by Colibri. Values are OR-able so that a word can
@@ -45,6 +66,7 @@ typedef uintptr_t Col_Word;
  *
  *  COL_NIL	- Nil.
  *  COL_CUSTOM	- Custom type.
+ *  COL_BOOL	- Boolean.
  *  COL_INT	- Integer.
  *  COL_FLOAT	- Floating point.
  *  COL_CHAR	- Single character.
@@ -64,22 +86,23 @@ typedef uintptr_t Col_Word;
  *	<Col_WordType>, <Col_CustomWordType>
  *---------------------------------------------------------------------------*/
 
-#define COL_NIL			0
-#define COL_CUSTOM		1
-#define COL_INT			2
-#define COL_FLOAT		4
-#define COL_CHAR		8
-#define COL_STRING		16
-#define COL_ROPE		32
-#define COL_VECTOR		64
-#define COL_MVECTOR		128
-#define COL_LIST		256
-#define COL_MLIST		512
-#define COL_MAP			1024
-#define COL_INTMAP		2048
-#define COL_HASHMAP		4096
-#define COL_TRIEMAP		8192
-#define COL_STRBUF		16384
+#define COL_NIL			0x0000
+#define COL_CUSTOM		0x0001
+#define COL_BOOL		0x0002
+#define COL_INT			0x0004
+#define COL_FLOAT		0x0008
+#define COL_CHAR		0x0010
+#define COL_STRING		0x0020
+#define COL_ROPE		0x0040
+#define COL_VECTOR		0x0080
+#define COL_MVECTOR		0x0100
+#define COL_LIST		0x0200
+#define COL_MLIST		0x0400
+#define COL_MAP			0x0800
+#define COL_INTMAP		0x1000
+#define COL_HASHMAP		0x2000
+#define COL_TRIEMAP		0x4000
+#define COL_STRBUF		0x8000
 
 
 /****************************************************************************
@@ -89,6 +112,7 @@ typedef uintptr_t Col_Word;
  *	<Col_NewIntWord>, <Col_NewFloatWord>
  ****************************************************************************/
 
+EXTERN Col_Word		Col_NewBoolWord(int value);
 EXTERN Col_Word		Col_NewIntWord(intptr_t value);
 EXTERN Col_Word		Col_NewFloatWord(double value);
 
@@ -97,12 +121,13 @@ EXTERN Col_Word		Col_NewFloatWord(double value);
  * Group: Word Accessors and Synonyms
  *
  * Declarations:
- *	<Col_WordType>, <Col_IntWordValue>, <Col_FloatWordValue>, 
- *	<Col_CustomWordInfo>, <Col_WordSynonym>, <Col_WordAddSynonym>, 
+ *	<Col_WordType>, <Col_BoolWordValue>, <Col_IntWordValue>, 
+ *	<Col_FloatWordValue>, <Col_WordSynonym>, <Col_WordAddSynonym>, 
  *	<Col_WordClearSynonym>
  ****************************************************************************/
 
 EXTERN int		Col_WordType(Col_Word word);
+EXTERN int		Col_BoolWordValue(Col_Word word);
 EXTERN intptr_t		Col_IntWordValue(Col_Word word);
 EXTERN double		Col_FloatWordValue(Col_Word word);
 EXTERN Col_Word		Col_WordSynonym(Col_Word word);

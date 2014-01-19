@@ -31,7 +31,7 @@ Internal Section: Word Types
  *
  *  WORD_TYPE_SMALLINT		- <Small Integer Word>
  *  WORD_TYPE_SMALLFP		- <Small Floating Point Word>
- *  WORD_TYPE_CHAR		- <Character Word>
+ *  WORD_TYPE_CHARBOOL		- <Character Word> or <Boolean Word>
  *  WORD_TYPE_SMALLSTR		- <Small String Word>
  *  WORD_TYPE_CIRCLIST		- <Circular List Word>
  *  WORD_TYPE_VOIDLIST		- <Void List Word>
@@ -71,7 +71,8 @@ Internal Section: Word Types
  *
  *  WORD_TYPE_STRBUF		- <String Buffer Word>
  *
- *  WORD_TYPE_REDIRECT		- Redirects <TODO>
+ *  WORD_TYPE_REDIRECT		- Temporary redirects to words moved during 
+ *				  GC compaction phase (see <PROMOTE_COMPACT>)
  *
  *  WORD_TYPE_UNKNOWN		- Used as a tag in the source code to mark 
  *				  places where predefined type specific code is
@@ -93,7 +94,7 @@ Internal Section: Word Types
 
 #define WORD_TYPE_SMALLINT	-2
 #define WORD_TYPE_SMALLFP	-3
-#define WORD_TYPE_CHAR		-4
+#define WORD_TYPE_CHARBOOL	-4
 #define WORD_TYPE_SMALLSTR	-5
 #define WORD_TYPE_CIRCLIST	-6
 #define WORD_TYPE_VOIDLIST	-7
@@ -199,7 +200,7 @@ static const int immediateWordTypes[32] = {
     WORD_TYPE_SMALLINT,	/* 00001 */
     WORD_TYPE_SMALLFP,	/* 00010 */
     WORD_TYPE_SMALLINT,	/* 00011 */
-    WORD_TYPE_CHAR,	/* 00100 */
+    WORD_TYPE_CHARBOOL,	/* 00100 */
     WORD_TYPE_SMALLINT,	/* 00101 */
     WORD_TYPE_SMALLFP,	/* 00110 */
     WORD_TYPE_SMALLINT,	/* 00111 */
@@ -426,6 +427,68 @@ Internal Section: Characters
 */
 
 /*---------------------------------------------------------------------------
+ * Data Structure: Boolean Word
+ *
+ *	Boolean words are immediate words taking only two values: true or false.
+ *
+ * Requirements:
+ *	Boolean words need only one bit to distinguish between true and false.
+ *
+ * Fields:
+ *	Value	- Zero for false, nonzero for true.
+ *
+ * Layout:
+ *	On all architectures the word layout is as follows:
+ *
+ * (start table)
+ *      0      7 8 9                                                  n
+ *     +--------+-+----------------------------------------------------+
+ *   0 |00100000|V|                       Unused                       |
+ *     +--------+-+----------------------------------------------------+
+ * (end)
+ *
+ * See also:
+ *	<WORD_TYPE>, <immediateWordTypes>
+ *---------------------------------------------------------------------------*/
+
+/*---------------------------------------------------------------------------
+ * Internal Macros: WORD_BOOL_* Accessors
+ *
+ *	Boolean word field accessor macros.
+ *
+ *  WORD_BOOL_GET	- Get value of boolean word: zero for false, nonzero 
+ *			  for true.
+ *
+ * Note:
+ *	Macros are L-values and side effect-free unless specified (i.e. 
+ *	accessible for both read/write operations).
+ *
+ * See also:
+ *	<Boolean Word>, <WORD_BOOL_NEW>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_BOOL_GET(word)	(((uintptr_t)(word))&0x100)
+
+/*---------------------------------------------------------------------------
+ * Internal Macro: WORD_BOOL_NEW
+ *
+ *	Boolean word creation.
+ *
+ * Argument:
+ *	value	- Boolean value: zero for false, nonzero for true.
+ *
+ * Result:
+ *	The new character word.
+ *
+ * See also:
+ *	<Boolean Word>, <WORD_TYPE_CHARBOOL>
+ *---------------------------------------------------------------------------*/
+
+#define WORD_BOOL_NEW(value) \
+    ((value)?WORD_TRUE:WORD_FALSE)
+
+
+/*---------------------------------------------------------------------------
  * Data Structure: Character Word
  *
  *	Character words are immediate words storing one Unicode character 
@@ -438,6 +501,9 @@ Internal Section: Characters
  *	Character words also need to know the character format for string
  *	normalization issues. For that the codepoint width is sufficient
  *	(between 1 and 4, i.e. 3 bits).
+ *
+ *	As character and boolean words share the same tag, we distinguish
+ *	both types with boolean words having a zero width field.
  *
  * Fields:
  *	Codepoint   - Unicode codepoint of character word.
@@ -460,7 +526,7 @@ Internal Section: Characters
 /*---------------------------------------------------------------------------
  * Internal Macros: WORD_CHAR_* Accessors
  *
- *	Small integer word field accessor macros.
+ *	Character word field accessor macros.
  *
  *  WORD_CHAR_GET	- Get Unicode codepoint of char word.
  *  WORD_CHAR_WIDTH	- Get char width used at creation time.
@@ -489,7 +555,7 @@ Internal Section: Characters
  *	The new character word.
  *
  * See also:
- *	<Character Word>, <WORD_TYPE_CHAR>
+ *	<Character Word>, <WORD_TYPE_CHARBOOL>
  *---------------------------------------------------------------------------*/
 
 #define WORD_CHAR_NEW(value, width) \
@@ -604,7 +670,7 @@ Internal Section: Circular Lists
  *
  *      0   4 5                                                       n
  *     +-----+---------------------------------------------------------+
- *   0 |00111|                Core length (void list)                   |
+ *   0 |00111|                Core length (void list)                  |
  *     +-----+---------------------------------------------------------+
  * (end)
  *

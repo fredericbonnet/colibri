@@ -450,8 +450,9 @@ const char * const ColibriDomain[] = {
     "%s(%d) : assertion failed! (%s)",		// COL_ERROR_ASSERTION (file, line, expression)
     "Memory error: %s",				// COL_ERROR_MEMORY
     "Called outside of a GC-protected section",	// COL_ERROR_GCPROTECT
-    "%x is not an integer word",		// COL_ERROR_INTWORD (word)
-    "%x is not a floating point word",		// COL_ERROR_FLOATWORD (word)
+    "%x is not a boolean word",			// COL_ERROR_BOOL (word)
+    "%x is not an integer word",		// COL_ERROR_INT (word)
+    "%x is not a floating point word",		// COL_ERROR_FLOAT (word)
     "%x is not a custom word",			// COL_ERROR_CUSTOMWORD (word)
     "%x is not a character",			// COL_ERROR_CHAR (word)
     "%x is not a string",			// COL_ERROR_STRING (word)

@@ -58,10 +58,12 @@ Section: Ropes
 /*---------------------------------------------------------------------------
  * Function: Col_EmptyRope
  *
- *	Create an empty rope. The returned word is immediate and takes no space.
+ *	Return an empty rope. The returned word is immediate and constant,
+ *	which means that it consumes no memory and its value can be safely
+ *	compared and stored in static storage.
  *
  * Result:
- *	A new empty rope.
+ *	The empty rope.
  *---------------------------------------------------------------------------*/
 
 Col_Word
@@ -106,7 +108,7 @@ Col_NewRopeFromString(
  *	A new rope made of the single character.
  *
  * See also:
- *	<Col_NewRope>
+ *	<Col_NewRope>, <Col_CharWordValue>
  *---------------------------------------------------------------------------*/
 
 Col_Word
@@ -868,7 +870,8 @@ IsCompatible(
     Col_StringFormat format)
 {
     switch (WORD_TYPE(rope)) {
-    case WORD_TYPE_CHAR:
+    case WORD_TYPE_CHARBOOL:
+	ASSERT(WORD_CHAR_WIDTH(rope));
 	return (format == WORD_CHAR_WIDTH(rope) || format == COL_UCS);
 
     case WORD_TYPE_SMALLSTR:
@@ -969,7 +972,8 @@ Col_NormalizeRope(
 
     type = WORD_TYPE(rope);
     switch (type) {
-    case WORD_TYPE_CHAR:
+    case WORD_TYPE_CHARBOOL:
+	ASSERT(WORD_CHAR_WIDTH(rope));
 	flatten = 1;
 	c = WORD_CHAR_GET(rope);
 	switch (format) {
@@ -1347,7 +1351,8 @@ Col_StringWordFormat(
     WORD_UNWRAP(string);
 
     switch (WORD_TYPE(string)) {
-    case WORD_TYPE_CHAR:
+    case WORD_TYPE_CHARBOOL:
+	ASSERT(WORD_CHAR_WIDTH(string));
 	return (Col_StringFormat) WORD_CHAR_WIDTH(string);
 
     case WORD_TYPE_SMALLSTR:
@@ -1396,7 +1401,8 @@ Col_RopeLength(
     WORD_UNWRAP(rope);
 
     switch (WORD_TYPE(rope)) {
-    case WORD_TYPE_CHAR:
+    case WORD_TYPE_CHARBOOL:
+	ASSERT(WORD_CHAR_WIDTH(rope));
 	return 1;
 
     case WORD_TYPE_SMALLSTR:
@@ -2507,11 +2513,12 @@ Col_Subrope(
      * Immediate types.
      */
 
-    case WORD_TYPE_CHAR:
+    case WORD_TYPE_CHARBOOL:
 	/*
 	 * Identity, already done.
 	 */
 
+	ASSERT(WORD_CHAR_WIDTH(rope));
 	ASSERT(0);
 	return rope;
 
@@ -3335,7 +3342,8 @@ GetChunk(
     ASSERT(info->start + (reverse ? info->max-1 : 0) >= 0);
     ASSERT(info->start + (reverse ? 0 : info->max-1) < Col_RopeLength(info->rope));
     switch (type) {
-    case WORD_TYPE_CHAR:
+    case WORD_TYPE_CHARBOOL:
+	ASSERT(WORD_CHAR_WIDTH(info->rope));
 	ASSERT(info->start == 0);
 	ASSERT(info->max == 1);
 	chunkPtr->format = (Col_StringFormat) WORD_CHAR_WIDTH(info->rope);
@@ -4008,12 +4016,13 @@ ColRopeIterUpdateTraversalInfo(
     for (;;) {
 	ASSERT(last-first < Col_RopeLength(node));
 	switch (WORD_TYPE(node)) {
-	case WORD_TYPE_CHAR:
+	case WORD_TYPE_CHARBOOL:
 	    /*
 	     * Update chunk interval. Use access proc instead of direct 
 	     * addressing as the word is immediate and has no address.
 	     */
 
+	    ASSERT(WORD_CHAR_WIDTH(node));
 	    it->chunk.first = first;
 	    it->chunk.last = last;
 	    it->chunk.accessProc = IterAtChar;
