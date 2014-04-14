@@ -1,7 +1,11 @@
-/*
- * Internal Header: colWin32Platform.h
+/*                                                                              *//*!   @cond PRIVATE @file \
+ * colWin32Platform.h
  *
- *	This header file defines Win32-specific features.
+ *  This header file defines Win32-specific primitives.
+ *
+ *  @see colPlatform.h
+ *
+ *  @private
  */
 
 #ifndef _COLIBRI_WIN32PLATFORM
@@ -10,65 +14,76 @@
 #include <windows.h>
 
 
-/****************************************************************************
- * Internal Section: Thread-Local Storage
- *
- * Declarations:
- *	<tlsToken>
- ****************************************************************************/
+/*
+================================================================================*//*!   @addtogroup arch_win32 \
+System and Architecture (Win32-specific)
+                                                                                        @ingroup arch
+  Win32-specific implementation of generic primitives.                          *//*!   @{ *//*
+================================================================================
+*/
 
-extern DWORD tlsToken;
+/********************************************************************************//*!   @name \
+ * Thread-Local Storage                                                         *//*!   @{ *//*
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Internal Macro: PlatGetThreadData
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * PlatGetThreadData
  *
- *	Get pointer to thread-specific data.
+ *  Get pointer to thread-specific data.
  *
- * See also:
- *	<ThreadData>, <tlsToken>
- *---------------------------------------------------------------------------*/
+ *  @see ThreadData
+ *  @see tlsToken
+ *//*-----------------------------------------------------------------------*/
 
 #define PlatGetThreadData() \
     ((ThreadData *) TlsGetValue(tlsToken))
 
+/*
+ * Remaining declarations.
+ */
+                                                                                #       ifndef DOXYGEN
+extern DWORD tlsToken;
+                                                                                #       endif DOXYGEN
+                                                                                /*!     @} */
+/********************************************************************************//*!   @name \
+ * System Page Allocation                                                       *//*!   @{ *//*
+ ******************************************************************************/
 
-/****************************************************************************
- * Internal Section: System Page Allocation
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * PlatEnterProtectAddressRanges
  *
- * Declarations:
- *	<csRange>
- ****************************************************************************/
-
-extern CRITICAL_SECTION csRange;
-
-/*---------------------------------------------------------------------------
- * Internal Macro: PlatEnterProtectAddressRanges
+ *  Enter protected section around address range management structures.
  *
- *	Enter protected section around address range management structures.
+ *  @sideeffect
+ *      Blocks until no thread owns the section.
  *
- * Side effects:
- *	Blocks until no thread owns the section.
- *
- * See also:
- *	<PlatLeaveProtectAddressRanges>
- *---------------------------------------------------------------------------*/
+ *  @see PlatLeaveProtectAddressRanges
+ *//*-----------------------------------------------------------------------*/
 
 #define PlatEnterProtectAddressRanges() \
     EnterCriticalSection(&csRange)
 
-/*---------------------------------------------------------------------------
- * Internal Macro: PlatLeaveProtectAddressRanges
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * PlatLeaveProtectAddressRanges
  *
- *	Leave protected section around address range management structures.
+ *  Leave protected section around address range management structures.
  *
- * Side effects:
- *	May unblock any thread waiting for the section.
+ *  @sideeffect
+ *      May unblock any thread waiting for the section.
  *
- * See also:
- *	<PlatEnterProtectAddressRanges>
- *---------------------------------------------------------------------------*/
+ *  @see PlatEnterProtectAddressRanges
+ *//*-----------------------------------------------------------------------*/
 
 #define PlatLeaveProtectAddressRanges() \
     LeaveCriticalSection(&csRange)
 
+/*
+ * Remaining declarations.
+ */
+                                                                                #       ifndef DOXYGEN
+extern CRITICAL_SECTION csRange;
+                                                                                #       endif DOXYGEN
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 #endif /* _COLIBRI_WIN32PLATFORM */
+                                                                                /*!     @endcond */

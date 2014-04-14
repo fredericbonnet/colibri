@@ -1,15 +1,14 @@
-/*
- * Header: colTrie.h
+/*                                                                              *//*!   @file \
+ * colTrie.h
  *
- *	This header file defines the trie map handling features of Colibri.
+ *  This header file defines the trie map handling features of Colibri.
  *
- *	Trie maps are an implementation of generic maps that use crit-bit trees
- *	for string and integer keys.
+ *  Trie maps are an implementation of generic @ref map_words that use crit-bit
+ *  trees for string, integer and custom keys.
  *
- *	They are always mutable.
+ *  They are always mutable.
  *
- * See also:
- *	<colTrie.c>, <colMap.h>
+ *  @see colMap.h
  */
 
 #ifndef _COLIBRI_TRIE
@@ -17,145 +16,140 @@
 
 
 /*
-================================================================================
-Section: Trie Maps
+================================================================================*//*!   @addtogroup triemap_words \
+Trie Maps
+                                                                                        @ingroup words map_words
+  Trie maps are an implementation of generic @ref map_words that use crit-bit
+  trees for string, integer and custom keys.
+
+  They are always mutable.                                                      *//*!   @{ *//*
 ================================================================================
 */
 
-/****************************************************************************
- * Group: Trie Map Creation
- *
- * Declarations:
- *	<Col_NewStringTrieMap>, <Col_NewIntTrieMap>
- ****************************************************************************/
+/********************************************************************************//*!   @name \
+ * Trie Map Creation                                                            *//*!   @{ *//*
+ ******************************************************************************/
 
-EXTERN Col_Word		Col_NewStringTrieMap();
-EXTERN Col_Word		Col_NewIntTrieMap();
-EXTERN Col_Word		Col_CopyTrieMap(Col_Word map);
+EXTERN Col_Word         Col_NewStringTrieMap();
+EXTERN Col_Word         Col_NewIntTrieMap();
+EXTERN Col_Word         Col_CopyTrieMap(Col_Word map);
+                                                                                /*!     @} */
 
+/********************************************************************************//*!   @name \
+ * Trie Map Accessors                                                           *//*!   @{ *//*
+ ******************************************************************************/
 
-/****************************************************************************
- * Group: Trie Map Accessors
- *
- * Declarations:
- *	<Col_TrieMapGet>, <Col_IntTrieMapGet>, <Col_TrieMapSet>,
- *	<Col_IntTrieMapSet>, <Col_TrieMapUnset>, <Col_IntTrieMapUnset>
- ****************************************************************************/
+EXTERN int              Col_TrieMapGet(Col_Word map, Col_Word key,
+                            Col_Word *valuePtr);
+EXTERN int              Col_IntTrieMapGet(Col_Word map, intptr_t key,
+                            Col_Word *valuePtr);
+EXTERN int              Col_TrieMapSet(Col_Word map, Col_Word key,
+                            Col_Word value);
+EXTERN int              Col_IntTrieMapSet(Col_Word map, intptr_t key,
+                            Col_Word value);
+EXTERN int              Col_TrieMapUnset(Col_Word map, Col_Word key);
+EXTERN int              Col_IntTrieMapUnset(Col_Word map, intptr_t key);
+                                                                                /*!     @} */
 
-EXTERN int		Col_TrieMapGet(Col_Word map, Col_Word key,
-			    Col_Word *valuePtr);
-EXTERN int		Col_IntTrieMapGet(Col_Word map, intptr_t key, 
-			    Col_Word *valuePtr);
-EXTERN int		Col_TrieMapSet(Col_Word map, Col_Word key, 
-			    Col_Word value);
-EXTERN int		Col_IntTrieMapSet(Col_Word map, intptr_t key, 
-			    Col_Word value);
-EXTERN int		Col_TrieMapUnset(Col_Word map, Col_Word key);
-EXTERN int		Col_IntTrieMapUnset(Col_Word map, intptr_t key);
+/********************************************************************************//*!   @name \
+ * Trie Map Iteration                                                           *//*!   @{ *//*
+ ******************************************************************************/
 
-
-/****************************************************************************
- * Group: Trie Map Iteration
- *
- * Declarations:
- *	<Col_TrieMapIterFirst>, <Col_TrieMapIterLast>, 
- *	<Col_TrieMapIterFind>, <Col_IntTrieMapIterFind>, 
- *	<Col_TrieMapIterSetValue>, <Col_TrieMapIterNext>, 
- *	<Col_TrieMapIterPrevious>
- ****************************************************************************/
-
-EXTERN void		Col_TrieMapIterFirst(Col_MapIterator it, Col_Word map);
-EXTERN void		Col_TrieMapIterLast(Col_MapIterator it, Col_Word map);
-EXTERN void		Col_TrieMapIterFind(Col_MapIterator it, Col_Word map, 
-			    Col_Word key, int *createPtr);
-EXTERN void		Col_IntTrieMapIterFind(Col_MapIterator it, Col_Word map, 
-			    intptr_t key, int *createPtr);
-EXTERN void		Col_TrieMapIterSetValue(Col_MapIterator it, 
-			    Col_Word value);
-EXTERN void		Col_TrieMapIterNext(Col_MapIterator it);
-EXTERN void		Col_TrieMapIterPrevious(Col_MapIterator it);
-
-
+EXTERN void             Col_TrieMapIterFirst(Col_MapIterator it, Col_Word map);
+EXTERN void             Col_TrieMapIterLast(Col_MapIterator it, Col_Word map);
+EXTERN void             Col_TrieMapIterFind(Col_MapIterator it, Col_Word map,
+                            Col_Word key, int *createPtr);
+EXTERN void             Col_IntTrieMapIterFind(Col_MapIterator it, Col_Word map,
+                            intptr_t key, int *createPtr);
+EXTERN void             Col_TrieMapIterSetValue(Col_MapIterator it,
+                            Col_Word value);
+EXTERN void             Col_TrieMapIterNext(Col_MapIterator it);
+EXTERN void             Col_TrieMapIterPrevious(Col_MapIterator it);
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 /*
-================================================================================
-Section: Custom Trie Maps
+================================================================================*//*!   @addtogroup customtriemap_words \
+Custom Trie Maps
+                                                                                        @ingroup triemap_words custom_words
+  Custom trie maps are @ref custom_words implementing @ref triemap_words with
+  applicative code.                                                             *//*!   @{ *//*
 ================================================================================
 */
+
+/********************************************************************************//*!   @name \
+ * Custom Trie Map Type Descriptors                                             *//*!   @{ *//*
+ ******************************************************************************/
+
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_TrieBitSetProc
+ * Col_TrieBitTestProc
+ *                                                                              *//*!
+ *  Function signature of custom trie map's key bit test function.
  *
- *	Function signature of custom trie map's key bit test function.
+ *  @param map      Custom trie map the key belongs to.
+ *  @param key      Key to get bit value for.
+ *  @param index    Index of key element.
+ *  @param bit      Position of bit to test.
  *
- * Arguments:
- *	map	- Trie map the key belongs to.
- *	key	- Key to get bit value for.
- *	index	- Index of key element.
- *	bit	- Position of bit to test.
+ *  @return
+ *      The key bit value.
  *
- * Result:
- *	The key bit value.
- *
- * See also: 
- *	<Col_CustomTrieMapType>
- *---------------------------------------------------------------------------*/
+ *  @see Col_CustomTrieMapType
+ *//*-----------------------------------------------------------------------*/
 
-typedef int (Col_TrieBitSetProc) (Col_Word map, Col_Word key, size_t index, 
+typedef int (Col_TrieBitTestProc) (Col_Word map, Col_Word key, size_t index,
     size_t bit);
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_TrieKeyDiffProc
+ * Col_TrieKeyDiffProc
+ *                                                                              *//*!
+ *  Function signature of custom trie map's key comparison function.
  *
- *	Function signature of custom trie map's key comparison function.
+ *  @param map              Custom trie map the key belongs to.
+ *  @param key1, key2       Keys to compare.
  *
- * Arguments:
- *	map		- Trie map the keys belong to.
- *	key1, key2	- Key words to compare.
+ *  @param [out] diffPtr    If non-NULL and keys are different, index of first
+ *                          differing key element.
+ *  @param [out] bitPtr     If non-NULL and keys are different, critical bit
+ *                          where key elements differ.
  *
- * Result:
- *	Negative if key1 is less than key2, positive if key2 is greater than
- *	key2, zero if both keys are equal. Additionally:
+ *  @retval negative        if **key1** is less than **key2**.
+ *  @retval positive        if **key1** is greater than **key2**.
+ *  @retval zero            if both keys are equal.
  *
- *	- diffPtr   - Index of first differing key element.
- *	- bitPtr    - Critical bit where key elements differ.
- *
- * See also: 
- *	<Col_CustomHashMapType>
- *---------------------------------------------------------------------------*/
+ *  @see Col_CustomTrieMapType
+ *//*-----------------------------------------------------------------------*/
 
-typedef int (Col_TrieKeyDiffProc) (Col_Word map, Col_Word key1, Col_Word key2, 
+typedef int (Col_TrieKeyDiffProc) (Col_Word map, Col_Word key1, Col_Word key2,
     size_t *diffPtr, size_t *bitPtr);
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_CustomTrieMapType
+ * Col_CustomTrieMapType
+ *                                                                              *//*!
+ *      Custom trie map type descriptor. Inherits from #Col_CustomWordType.
  *
- *	Custom trie map type descriptor. Inherits from <Col_CustomWordType>.
- *
- * Fields:
- *	type		- Generic word type descriptor. Type field must be equal
- *			  to <COL_TRIEMAP>.
- *	bitSetProc	- Called to test key bits.
- *	keyDiffProc	- Called to compare keys.
- *
- * See also:
- *	<Col_NewCustomWord>, <Col_NewCustomTrieMap>, <Col_CustomWordType>, 
- *	<Col_TrieBitSetProc>, <Col_TrieKeyDiffProc>
- *---------------------------------------------------------------------------*/
+ *  @see Col_NewCustomTrieMap
+ *//*-----------------------------------------------------------------------*/
 
 typedef struct Col_CustomTrieMapType {
+    /*! Generic word type descriptor. Type field must be equal to
+        #COL_TRIEMAP. */
     Col_CustomWordType type;
-    Col_TrieBitSetProc *bitSetProc;
+
+    /*! Called to test key bits. */
+    Col_TrieBitTestProc *bitTestProc;
+
+    /*! Called to compare keys. */
     Col_TrieKeyDiffProc *keyDiffProc;
 } Col_CustomTrieMapType;
+                                                                                /*!     @} */
 
-/****************************************************************************
- * Group: Custom Trie Map Creation
- *
- * Declarations:
- *	<Col_NewCustomTrieMap>
- ****************************************************************************/
+/********************************************************************************//*!   @name \
+ * Custom Trie Map Creation                                                     *//*!   @{ *//*
+ ******************************************************************************/
 
-EXTERN Col_Word		Col_NewCustomTrieMap(Col_CustomTrieMapType *type, 
-			    size_t size, void **dataPtr);
-
+EXTERN Col_Word         Col_NewCustomTrieMap(Col_CustomTrieMapType *type,
+                            size_t size, void **dataPtr);
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 #endif /* _COLIBRI_TRIE */

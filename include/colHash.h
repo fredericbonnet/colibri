@@ -1,15 +1,14 @@
-/*
- * Header: colHash.h
+/*                                                                              *//*!   @file \
+ * colHash.h
  *
- *	This header file defines the hash map handling features of Colibri.
+ *  This header file defines the hash map handling features of Colibri.
  *
- *	Hash maps are an implementation of generic maps that use key hashing 
- *	and flat bucket arrays for string, integer and custom keys.
+ *  Hash maps are an implementation of generic @ref map_words that use key
+ *  hashing and flat bucket arrays for string, integer and custom keys.
  *
- *	They are always mutable.
+ *  They are always mutable.
  *
- * See also:
- *	<colHash.c>, <colMap.h>
+ *  @see colMap.h
  */
 
 #ifndef _COLIBRI_HASH
@@ -19,135 +18,129 @@
 
 
 /*
-================================================================================
-Section: Hash Maps
+================================================================================*//*!   @addtogroup hashmap_words \
+Hash Maps
+                                                                                        @ingroup words map_words
+  Hash maps are an implementation of generic @ref map_words that use key
+  hashing and flat bucket arrays for string, integer and custom keys.
+
+  They are always mutable.                                                      *//*!   @{ *//*
 ================================================================================
 */
 
-/****************************************************************************
- * Group: Hash Map Creation
- *
- * Declarations:
- *	<Col_NewStringHashMap>, <Col_NewIntHashMap>, <Col_CopyHashMap>
- ****************************************************************************/
+/********************************************************************************//*!   @name \
+ * Hash Map Creation                                                            *//*!   @{ *//*
+ ******************************************************************************/
 
-EXTERN Col_Word		Col_NewStringHashMap(size_t capacity);
-EXTERN Col_Word		Col_NewIntHashMap(size_t capacity);
-EXTERN Col_Word		Col_CopyHashMap(Col_Word map);
+EXTERN Col_Word         Col_NewStringHashMap(size_t capacity);
+EXTERN Col_Word         Col_NewIntHashMap(size_t capacity);
+EXTERN Col_Word         Col_CopyHashMap(Col_Word map);
+                                                                                /*!     @} */
 
+/********************************************************************************//*!   @name \
+ * Hash Map Accessors                                                           *//*!   @{ *//*
+ ******************************************************************************/
 
-/****************************************************************************
- * Group: Hash Map Accessors
- *
- * Declarations:
- *	<Col_HashMapGet>, <Col_IntHashMapGet>, <Col_HashMapSet>,
- *	<Col_IntHashMapSet>, <Col_HashMapUnset>, <Col_IntHashMapUnset>
- ****************************************************************************/
+EXTERN int              Col_HashMapGet(Col_Word map, Col_Word key,
+                            Col_Word *valuePtr);
+EXTERN int              Col_IntHashMapGet(Col_Word map, intptr_t key,
+                            Col_Word *valuePtr);
+EXTERN int              Col_HashMapSet(Col_Word map, Col_Word key,
+                            Col_Word value);
+EXTERN int              Col_IntHashMapSet(Col_Word map, intptr_t key,
+                            Col_Word value);
+EXTERN int              Col_HashMapUnset(Col_Word map, Col_Word key);
+EXTERN int              Col_IntHashMapUnset(Col_Word map, intptr_t key);
+                                                                                /*!     @} */
 
-EXTERN int		Col_HashMapGet(Col_Word map, Col_Word key, 
-			    Col_Word *valuePtr);
-EXTERN int		Col_IntHashMapGet(Col_Word map, intptr_t key, 
-			    Col_Word *valuePtr);
-EXTERN int		Col_HashMapSet(Col_Word map, Col_Word key, 
-			    Col_Word value);
-EXTERN int		Col_IntHashMapSet(Col_Word map, intptr_t key, 
-			    Col_Word value);
-EXTERN int		Col_HashMapUnset(Col_Word map, Col_Word key);
-EXTERN int		Col_IntHashMapUnset(Col_Word map, intptr_t key);
+/********************************************************************************//*!   @name \
+ * Hash Map Iteration                                                           *//*!   @{ *//*
+ ******************************************************************************/
 
-
-/****************************************************************************
- * Group: Hash Map Iteration
- *
- * Declarations:
- *	<Col_HashMapIterBegin>, <Col_HashMapIterFind>, <Col_IntHashMapIterFind>,
- *	<Col_HashMapIterSetValue>, <Col_HashMapIterNext>
- ****************************************************************************/
-
-EXTERN void		Col_HashMapIterBegin(Col_MapIterator it, Col_Word map);
-EXTERN void		Col_HashMapIterFind(Col_MapIterator it, Col_Word map, 
-			    Col_Word key, int *createPtr);
-EXTERN void		Col_IntHashMapIterFind(Col_MapIterator it, Col_Word map,
-			    intptr_t key, int *createPtr);
-EXTERN void		Col_HashMapIterSetValue(Col_MapIterator it, 
-			    Col_Word value);
-EXTERN void		Col_HashMapIterNext(Col_MapIterator it);
-
-
+EXTERN void             Col_HashMapIterBegin(Col_MapIterator it, Col_Word map);
+EXTERN void             Col_HashMapIterFind(Col_MapIterator it, Col_Word map,
+                            Col_Word key, int *createPtr);
+EXTERN void             Col_IntHashMapIterFind(Col_MapIterator it, Col_Word map,
+                            intptr_t key, int *createPtr);
+EXTERN void             Col_HashMapIterSetValue(Col_MapIterator it,
+                            Col_Word value);
+EXTERN void             Col_HashMapIterNext(Col_MapIterator it);
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 /*
-================================================================================
-Section: Custom Hash Maps
+================================================================================*//*!   @addtogroup customhashmap_words \
+Custom Hash Maps
+                                                                                        @ingroup hashmap_words custom_words
+  Custom hash maps are @ref custom_words implementing @ref hashmap_words with
+  applicative code.                                                             *//*!   @{ *//*
 ================================================================================
 */
+
+/********************************************************************************//*!   @name \
+ * Custom Hash Map Type Descriptors                                             *//*!   @{ *//*
+ ******************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_HashProc
+ * Col_HashProc
+ *                                                                              *//*!
+ *  Function signature of custom hash map key hashing function.
  *
- *	Function signature of custom hash map's key hashing function.
+ *  @param map      Custom hash map the key belongs to.
+ *  @param key      Key to generate hash value for.
  *
- * Argument:
- *	map	- Hash map the key belongs to.
- *	key	- Key word to generate hash value for.
+ *  @return
+ *      The key hash value.
  *
- * Result:
- *	The key hash value.
- *
- * See also: 
- *	<Col_CustomHashMapType>
- *---------------------------------------------------------------------------*/
+ *  @see Col_CustomHashMapType
+ *//*-----------------------------------------------------------------------*/
 
 typedef uintptr_t (Col_HashProc) (Col_Word map, Col_Word key);
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_CompareKeysProc
+ * Col_HashCompareKeysProc
+ *                                                                              *//*!
+ *  Function signature of custom hash map key comparison function.
  *
- *	Function signature of custom hash map's key comparison function.
+ *  @param map          Custom hash map the keys belong to.
+ *  @param key1, key2   Keys to compare.
  *
- * Arguments:
- *	map		- Hash map the keys belong to.
- *	key1, key2	- Key words to compare.
+ *  @retval negative    if **key1** is less than **key2**.
+ *  @retval positive    if **key1** is greater than **key2**.
+ *  @retval zero        if both keys are equal.
  *
- * Result:
- *	Negative if key1 is less than key2, positive if key1 is greater than
- *	key2, zero if both keys are equal.
- *
- * See also: 
- *	<Col_CustomHashMapType>
- *---------------------------------------------------------------------------*/
+ *  @see Col_CustomHashMapType
+ *//*-----------------------------------------------------------------------*/
 
-typedef int (Col_HashCompareKeysProc) (Col_Word map, Col_Word key1, 
+typedef int (Col_HashCompareKeysProc) (Col_Word map, Col_Word key1,
     Col_Word key2);
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_CustomHashMapType
+ * Col_CustomHashMapType
+ *                                                                              *//*!
+ *  Custom hash map type descriptor. Inherits from #Col_CustomWordType.
  *
- *	Custom hash map type descriptor. Inherits from <Col_CustomWordType>.
- *
- * Fields:
- *	type		- Generic word type descriptor. Type field must be equal
- *			  to <COL_HASHMAP>.
- *	hashProc	- Called to compute the hash value of a key.
- *	compareKeysProc	- Called to compare keys.
- *
- * See also:
- *	<Col_NewCustomWord>, <Col_NewCustomHashMap>, <Col_CustomWordType>, 
- *	<Col_HashProc>, <Col_HashCompareKeysProc>
- *---------------------------------------------------------------------------*/
+ *  @see Col_NewCustomHashMap
+ *//*-----------------------------------------------------------------------*/
 
 typedef struct Col_CustomHashMapType {
+    /*! Generic word type descriptor. Type field must be equal to
+        #COL_HASHMAP. */
     Col_CustomWordType type;
+
+    /*! Called to compute the hash value of a key. */
     Col_HashProc *hashProc;
+
+    /*! Called to compare keys. */
     Col_HashCompareKeysProc *compareKeysProc;
 } Col_CustomHashMapType;
+                                                                                /*!     @} */
 
-/****************************************************************************
- * Group: Custom Hash Map Creation
- *
- * Declarations:
- *	<Col_NewCustomHashMap>
- ****************************************************************************/
+/********************************************************************************//*!   @name \
+ * Custom Hash Map Creation                                                     *//*!   @{ *//*
+ ******************************************************************************/
 
-EXTERN Col_Word		Col_NewCustomHashMap(Col_CustomHashMapType *type, 
-			    size_t capacity, size_t size, void **dataPtr);
-
+EXTERN Col_Word         Col_NewCustomHashMap(Col_CustomHashMapType *type,
+                            size_t capacity, size_t size, void **dataPtr);
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 #endif /* _COLIBRI_HASH */

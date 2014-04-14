@@ -1,13 +1,13 @@
-/*
- * Header: colRope.h
+/*                                                                              *//*!   @file \
+ * colRope.h
  *
- *	This header file defines the rope handling features of Colibri.
+ *  This header file defines the rope handling features of Colibri.
  *
- *	Ropes are a string datatype that allows for fast insertion, extraction
- *	and composition of strings. Internally they use self-balanced binary 
- *	trees.
+ *  Ropes are a string datatype that allows for fast insertion, extraction
+ *  and composition of strings. Internally they use self-balanced binary
+ *  trees.
  *
- *	They are always immutable.
+ *  They are always immutable.
  */
 
 #ifndef _COLIBRI_ROPE
@@ -19,609 +19,547 @@
 
 
 /*
-================================================================================
-Section: Ropes
+================================================================================*//*!   @addtogroup rope_words \
+Ropes
+                                                                                        @ingroup words
+  Ropes are a string datatype that allows for fast insertion, extraction
+  and composition of strings.                                                   *//*!   @{ *//*
 ================================================================================
 */
 
-/****************************************************************************
- * Group: Rope Creation
- *
- * Declarations:
- *	<Col_EmptyRope>, <Col_NewRopeFromString>, <Col_NewCharWord>, 
- *	<Col_NewRope>, <Col_NormalizeRope>
- ****************************************************************************/
+/********************************************************************************//*!   @name \
+ * Rope Creation                                                                *//*!   @{ *//*
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Constant: COL_UCS
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * COL_UCS
  *
- *	When passed to <Col_NewRope> or <Col_NormalizeRope>, use the shortest 
- *	possible fixed-width format. Input format is always <COL_UCS4>.
+ *  When passed to Col_NewRope() or Col_NormalizeRope(), use the shortest
+ *  possible fixed-width format. Input format is always #COL_UCS4.
  *
- * Note:
- *	Numeric value is chosen so that the lower 3 bits give the character
- *	width in the data chunk. 
- *---------------------------------------------------------------------------*/
+ *  @note
+ *      Numeric value is chosen so that the lower 3 bits give the character
+ *      width in the data chunk.
+ *//*-----------------------------------------------------------------------*/
 
-#define COL_UCS			(Col_StringFormat) 0x24
+#define COL_UCS                 (Col_StringFormat) 0x24
 
 /*
  * Remaining declarations.
  */
 
-EXTERN Col_Word		Col_EmptyRope();
-EXTERN Col_Word		Col_NewRopeFromString(const char *string);
-EXTERN Col_Word		Col_NewCharWord(Col_Char c);
-EXTERN Col_Word		Col_NewRope(Col_StringFormat format, const void *data, 
-			    size_t byteLength);
-EXTERN Col_Word		Col_NormalizeRope(Col_Word rope, 
-			    Col_StringFormat format, Col_Char replace,
-			    int flatten);
+EXTERN Col_Word         Col_EmptyRope();
+EXTERN Col_Word         Col_NewRopeFromString(const char *string);
+EXTERN Col_Word         Col_NewCharWord(Col_Char c);
+EXTERN Col_Word         Col_NewRope(Col_StringFormat format, const void *data,
+                            size_t byteLength);
+EXTERN Col_Word         Col_NormalizeRope(Col_Word rope,
+                            Col_StringFormat format, Col_Char replace,
+                            int flatten);
+                                                                                /*!     @} */
 
+/********************************************************************************//*!   @name \
+ * Rope Accessors                                                               *//*!   @{ *//*
+ ******************************************************************************/
 
-/****************************************************************************
- * Group: Rope Accessors
+EXTERN Col_Char         Col_CharWordValue(Col_Word ch);
+EXTERN Col_StringFormat Col_StringWordFormat(Col_Word string);
+EXTERN size_t           Col_RopeLength(Col_Word rope);
+EXTERN Col_Char         Col_RopeAt(Col_Word rope, size_t index);
+                                                                                /*!     @} */
+
+/********************************************************************************//*!   @name \
+ * Rope Search and Comparison                                                   *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeFindFirst
  *
- * Declarations:
- *	<Col_CharWordValue>, <Col_StringWordFormat>, <Col_RopeLength>
- *	<Col_RopeAt>
- ****************************************************************************/
-
-EXTERN Col_Char		Col_CharWordValue(Col_Word ch);
-EXTERN Col_StringFormat	Col_StringWordFormat(Col_Word string);
-EXTERN size_t		Col_RopeLength(Col_Word rope);
-EXTERN Col_Char		Col_RopeAt(Col_Word rope, size_t index);
-
-
-/****************************************************************************
- * Group: Rope Search and Comparison
+ *  Simple version of Col_RopeFind(), find first occurrence of a character
+ *  in whole rope from its beginning. This is the rope counterpart to C's
+ *  **strchr**.
  *
- * Declarations:
- *	<Col_RopeFind>, <Col_RopeSearch>, <Col_CompareRopesL>
- ****************************************************************************/
-
-EXTERN size_t		Col_RopeFind(Col_Word rope, Col_Char c, size_t start, 
-			    size_t max, int reverse);
-EXTERN size_t		Col_RopeSearch(Col_Word rope, Col_Word subrope, 
-			    size_t start, size_t max, int reverse);
-EXTERN int		Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
-			    size_t start, size_t max, size_t *posPtr, 
-			    Col_Char *c1Ptr, Col_Char *c2Ptr);
-
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeFindFirst
+ *  @param rope         Rope to search character into.
+ *  @param c            Character to search for.
  *
- *	Simple version of <Col_RopeFind>, find first occurrence of a character 
- *	in whole rope from its beginning. This is the rope counterpart to C's
- *	strchr.
+ *  @retval SIZE_MAX    if not found (which is an invalid character index since
+ *                      this is the maximum rope length, and indices are
+ *                      zero-based)
+ *  @retval index       position of **subrope** in **rope**.
  *
- * Arguments:
- *	rope	- Rope to search character into.
- *	c	- Character to search for.
- *
- * Result:
- *	If found, returns the position of the character in rope. Else returns
- *	SIZE_MAX (which is an invalid character index since this is the maximum
- *	rope length, and indices are zero-based).
- *
- * See also:
- *	<Col_RopeFind>
- *---------------------------------------------------------------------------*/
+ *  @see Col_RopeFind
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeFindFirst(rope, c) \
-	Col_RopeFind((rope), (c), 0, SIZE_MAX, 0)
+        Col_RopeFind((rope), (c), 0, SIZE_MAX, 0)
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeFindFirstN
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeFindFirstN
  *
- *	Simple version of <Col_RopeFind>, find first occurrence of a character 
- *	in rope from its beginning up to a given number of characters. This is
- *	the rope counterpart to C's strnchr.
+ *  Simple version of Col_RopeFind(), find first occurrence of a character
+ *  in rope from its beginning up to a given number of characters. This is
+ *  the rope counterpart to C's **strnchr**.
  *
- * Arguments:
- *	rope	- Rope to search character into.
- *	c	- Character to search for.
- *	max	- Maximum number of characters to search.
+ *  @param rope         Rope to search character into.
+ *  @param c            Character to search for.
+ *  @param max          Maximum number of characters to search.
  *
- * Result:-
- *	If found, returns the position of the character in rope. Else returns
- *	SIZE_MAX (which is an invalid character index since this is the maximum
- *	rope length, and indices are zero-based).
+ *  @retval SIZE_MAX    if not found (which is an invalid character index since
+ *                      this is the maximum rope length, and indices are
+ *                      zero-based)
+ *  @retval index       position of **c** in **rope**.
  *
- * See also:
- *	<Col_RopeFind>
- *---------------------------------------------------------------------------*/
+ *  @see Col_RopeFind
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeFindFirstN(rope, c, max) \
-	Col_RopeFind((rope), (c), 0, (max), 0)
+        Col_RopeFind((rope), (c), 0, (max), 0)
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeFindLast
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeFindLast
  *
- *	Simple version of <Col_RopeFind>, find last occurrence of a character 
- *	in whole rope from its end. This is the rope counterpart to C's strrchr.
+ *  Simple version of Col_RopeFind(), find last occurrence of a character
+ *  in whole rope from its end. This is the rope counterpart to C's **strrchr**.
  *
- * Arguments:
- *	rope	- Rope to search character into.
- *	c	- Character to search for.
+ *  @param rope         Rope to search character into.
+ *  @param c            Character to search for.
  *
- * Result:
- *	If found, returns the position of the character in rope. Else returns
- *	SIZE_MAX (which is an invalid character index since this is the maximum
- *	rope length, and indices are zero-based).
+ *  @retval SIZE_MAX    if not found (which is an invalid character index since
+ *                      this is the maximum rope length, and indices are
+ *                      zero-based)
+ *  @retval index       position of **c** in **rope**.
  *
- * See also:
- *	<Col_RopeFind>
- *---------------------------------------------------------------------------*/
+ *  @see Col_RopeFind
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeFindLast(rope, c) \
-	Col_RopeFind((rope), (c), SIZE_MAX, SIZE_MAX, 1)
+        Col_RopeFind((rope), (c), SIZE_MAX, SIZE_MAX, 1)
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeFindLastN
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeFindLastN
  *
- *	Simple version of <Col_RopeFind>, find last occurrence of a character 
- *	in rope from its end up to a given number of characters. This function
- *	has no C counterpart and is provided for symmetry.
+ *  Simple version of Col_RopeFind(), find last occurrence of a character
+ *  in rope from its end up to a given number of characters. This function
+ *  has no C counterpart and is provided for symmetry.
  *
- * Arguments:
- *	rope	- Rope to search character into.
- *	c	- Character to search for.
- *	max	- Maximum number of characters to search.
+ *  @param rope         Rope to search character into.
+ *  @param c            Character to search for.
+ *  @param max          Maximum number of characters to search.
  *
- * Result:
- *	If found, returns the position of the character in rope. Else returns
- *	SIZE_MAX (which is an invalid character index since this is the maximum
- *	rope length, and indices are zero-based).
+ *  @retval SIZE_MAX    if not found (which is an invalid character index since
+ *                      this is the maximum rope length, and indices are
+ *                      zero-based)
+ *  @retval index       position of **c** in **rope**.
  *
- * See also:
- *	<Col_RopeFind>
- *---------------------------------------------------------------------------*/
+ *  @see Col_RopeFind
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeFindLastN(rope, c, max) \
-	Col_RopeFind((rope), (c), SIZE_MAX, (max), 1)
+        Col_RopeFind((rope), (c), SIZE_MAX, (max), 1)
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeSearchFirst
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeSearchFirst
  *
- *	Simple version of <Col_RopeSearch>, find first occurrence of a subrope
- *	in whole rope from its beginning. This is the rope counterpart to C's
- *	strstr.
+ *  Simple version of Col_RopeSearch(), find first occurrence of a subrope
+ *  in whole rope from its beginning. This is the rope counterpart to C's
+ *  **strstr**.
  *
- * Arguments:
- *	rope	- Rope to search character into.
- *	subrope	- Subrope to search for.
+ *  @param rope         Rope to search subrope into.
+ *  @param subrope      Subrope to search for.
  *
- * Result:
- *	If found, returns the position of the subrope in rope. Else returns
- *	SIZE_MAX (which is an invalid character index since this is the maximum
- *	rope length, and indices are zero-based).
+ *  @retval SIZE_MAX    if not found (which is an invalid character index since
+ *                      this is the maximum rope length, and indices are
+ *                      zero-based)
+ *  @retval index       position of **subrope** in **rope**.
  *
- * See also:
- *	<Col_RopeSearch>
- *---------------------------------------------------------------------------*/
+ *  @see Col_RopeSearch
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeSearchFirst(rope, subrope) \
-	Col_RopeSearch((rope), (subrope), 0, SIZE_MAX, 0)
+        Col_RopeSearch((rope), (subrope), 0, SIZE_MAX, 0)
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeSearchLast
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeSearchLast
  *
- *	Simple version of <Col_RopeSearch>, find last occurrence of a subrope
- *	in whole rope from its end. This is the rope counterpart to C's
- *	strstr.
+ *  Simple version of Col_RopeSearch(), find last occurrence of a subrope
+ *  in whole rope from its end. This function has no C counterpart and is
+ *  provided for symmetry.
  *
- * Arguments:
- *	rope	- Rope to search character into.
- *	subrope	- Subrope to search for.
+ *  @param rope         Rope to search subrope into.
+ *  @param subrope      Subrope to search for.
  *
- * Result:
- *	If found, returns the position of the subrope in rope. Else returns
- *	SIZE_MAX (which is an invalid character index since this is the maximum
- *	rope length, and indices are zero-based).
+ *  @retval SIZE_MAX    if not found (which is an invalid character index since
+ *                      this is the maximum rope length, and indices are
+ *                      zero-based)
+ *  @retval index       position of **subrope** in **rope**.
  *
- * See also:
- *	<Col_RopeSearch>
- *---------------------------------------------------------------------------*/
+ *  @see Col_RopeSearch
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeSearchLast(rope, subrope) \
-	Col_RopeSearch((rope), (subrope), SIZE_MAX, SIZE_MAX, 1)
+        Col_RopeSearch((rope), (subrope), SIZE_MAX, SIZE_MAX, 1)
 
-/*---------------------------------------------------------------------------
- * Macro: Col_CompareRopes
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_CompareRopes
  *
- *	Simple version of <Col_CompareRopesL>, compare two ropes. This is the 
- *	rope counterpart to C's strcmp.
+ *  Simple version of Col_CompareRopesL(), compare two ropes. This is the
+ *  rope counterpart to C's **strcmp**.
  *
- * Arguments:
- *	rope1, rope2	- Ropes to compare.
+ *  @param rope1        First rope to compare.
+ *  @param rope2        Second rope to compare.
  *
- * Result:
- *	Returns an integral value indicating the relationship between the 
- *	ropes:
- *	    - A zero value indicates that both strings are equal;
- *	    - A value greater than zero indicates that the first character that 
- *	      does not match has a greater value in rope1 than in rope2, or that
- *	      rope1 is longer than rope2; 
- *	    - A value less than zero indicates the opposite.
+ *  @retval zero        if both ropes are identical
+ *  @retval negative    if **rope1** is lexically before **rope2**.
+ *  @retval positive    if **rope1** is lexically after **rope2**.
  *
- * See also:
- *	<Col_CompareRopesL>
- *---------------------------------------------------------------------------*/
+ *  @see Col_CompareRopesL
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_CompareRopes(rope1, rope2) \
-	Col_CompareRopesL((rope1), (rope2), 0, SIZE_MAX, NULL, NULL, NULL)
+        Col_CompareRopesL((rope1), (rope2), 0, SIZE_MAX, NULL, NULL, NULL)
 
-/*---------------------------------------------------------------------------
- * Macro: Col_CompareRopesN
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_CompareRopesN
  *
- *	Simple version of <Col_CompareRopesL>, compare two ropes up to a given
- *	number of characters. This is the rope counterpart to C's strncmp.
+ *  Simple version of Col_CompareRopesL(), compare two ropes up to a given
+ *  number of characters. This is the rope counterpart to C's **strncmp**.
  *
- * Arguments:
- *	rope1, rope2	- Ropes to compare.
- *	max		- Maximum number of characters to compare.
+ *  @param rope1    First rope to compare.
+ *  @param rope2    Second rope to compare.
+ *  @param max      Maximum number of characters to compare.
  *
- * Result:
- *	Returns an integral value indicating the relationship between the 
- *	ropes:
- *	    - A zero value indicates that both strings are equal;
- *	    - A value greater than zero indicates that the first character that 
- *	      does not match has a greater value in rope1 than in rope2, or that
- *	      rope1 is longer than rope2; 
- *	    - A value less than zero indicates the opposite.
+ *  @retval zero        if both ropes are identical
+ *  @retval negative    if **rope1** is lexically before **rope2**.
+ *  @retval positive    if **rope1** is lexically after **rope2**.
  *
- *
- * See also:
- *	<Col_CompareRopesL>
- *---------------------------------------------------------------------------*/
+ *  @see Col_CompareRopesL
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_CompareRopesN(rope1, rope2, max) \
-	Col_CompareRopesL((rope1), (rope2), 0, (max), NULL, NULL, NULL)
+        Col_CompareRopesL((rope1), (rope2), 0, (max), NULL, NULL, NULL)
 
+/*
+ * Remaining declarations.
+ */
 
-/****************************************************************************
- * Group: Rope Operations
- *
- * Declarations:
- *	<Col_Subrope>, <Col_ConcatRopes>, <Col_ConcatRopesA>,
- *	<Col_ConcatRopesNV>, <Col_RepeatRope>, <Col_RopeInsert>, 
- *	<Col_RopeRemove>, <Col_RopeReplace>
- ****************************************************************************/
+EXTERN size_t           Col_RopeFind(Col_Word rope, Col_Char c, size_t start,
+                            size_t max, int reverse);
+EXTERN size_t           Col_RopeSearch(Col_Word rope, Col_Word subrope,
+                            size_t start, size_t max, int reverse);
+EXTERN int              Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
+                            size_t start, size_t max, size_t *posPtr,
+                            Col_Char *c1Ptr, Col_Char *c2Ptr);
+                                                                                /*!     @} */
 
-EXTERN Col_Word		Col_Subrope(Col_Word rope, size_t first, size_t last);
-EXTERN Col_Word		Col_ConcatRopes(Col_Word left, Col_Word right);
-EXTERN Col_Word		Col_ConcatRopesA(size_t number, const Col_Word * ropes);
-EXTERN Col_Word		Col_ConcatRopesNV(size_t number, ...);
-EXTERN Col_Word		Col_RepeatRope(Col_Word rope, size_t count);
-EXTERN Col_Word		Col_RopeInsert(Col_Word into, size_t index, 
-			    Col_Word rope);
-EXTERN Col_Word		Col_RopeRemove(Col_Word rope, size_t first, 
-			    size_t last);
-EXTERN Col_Word		Col_RopeReplace(Col_Word rope, size_t first, 
-			    size_t last, Col_Word with);
+/********************************************************************************//*!   @name \
+ * Rope Operations                                                              *//*!   @{ *//*
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Macro: Col_ConcatRopesV
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_ConcatRopesV
  *
- *	Variadic macro version of <Col_ConcatRopesNV> that deduces its number
- *	of arguments automatically.
+ *  Variadic macro version of Col_ConcatRopesNV() that deduces its number
+ *  of arguments automatically.
  *
- * Arguments:
- *	List of ropes to concatenate.
+ *  @param ...  Variadic list of ropes to concatenate.
  *
- * See also:
- *	<COL_ARGCOUNT>
- *---------------------------------------------------------------------------*/
+ *  @see COL_ARGCOUNT
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_ConcatRopesV(...) \
     Col_ConcatRopesNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
 
+/*
+ * Remaining declarations.
+ */
 
-/****************************************************************************
- * Group: Rope Traversal
- *
- * Declarations:
- *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
- ****************************************************************************/
+EXTERN Col_Word         Col_Subrope(Col_Word rope, size_t first, size_t last);
+EXTERN Col_Word         Col_ConcatRopes(Col_Word left, Col_Word right);
+EXTERN Col_Word         Col_ConcatRopesA(size_t number, const Col_Word * ropes);
+EXTERN Col_Word         Col_ConcatRopesNV(size_t number, ...);
+EXTERN Col_Word         Col_RepeatRope(Col_Word rope, size_t count);
+EXTERN Col_Word         Col_RopeInsert(Col_Word into, size_t index,
+                            Col_Word rope);
+EXTERN Col_Word         Col_RopeRemove(Col_Word rope, size_t first,
+                            size_t last);
+EXTERN Col_Word         Col_RopeReplace(Col_Word rope, size_t first,
+                            size_t last, Col_Word with);
+                                                                                /*!     @} */
+
+/********************************************************************************//*!   @name \
+ * Rope Traversal                                                               *//*!   @{ *//*
+ ******************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_RopeChunk
+ * Col_RopeChunk
+ *                                                                              *//*!
+ *  Describes a rope chunk encountered during traversal. A chunk is a
+ *  contiguous portion of rope with a given format.
  *
- *	Describes a rope chunk encountered during traversal. A chunk is a 
- *	contiguous portion of rope with a given format.
- *
- * Fields:
- *	format		- Format of the traversed chunk. See <Col_StringFormat>.
- *	data		- Pointer to format-specific data.
- *	byteLength	- Data length in bytes.
- *
- * See also: 
- *	<Col_TraverseRopeChunks>, <Col_RopeChunksTraverseProc>
- *---------------------------------------------------------------------------*/
+ *  @see Col_TraverseRopeChunks
+ *  @see Col_RopeChunksTraverseProc
+ *//*-----------------------------------------------------------------------*/
 
 typedef struct Col_RopeChunk {
-    Col_StringFormat format;
-    const void *data;
-    size_t byteLength;
+    Col_StringFormat format;    /*!< Format of the traversed chunk. */
+    const void *data;           /*!< Pointer to format-specific data. */
+    size_t byteLength;          /*!< Data length in bytes. */
 } Col_RopeChunk;
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_RopeChunksTraverseProc
+ * Col_RopeChunksTraverseProc
+ *                                                                              *//*!
+ *  Function signature of rope traversal procs.
  *
- *	Function signature of rope traversal procs.
+ *  @param index        Rope-relative index where chunks begin.
+ *  @param length       Length of chunks.
+ *  @param number       Number of chunks.
+ *  @param chunks       Array of chunks. When chunk is NULL, means the index is
+ *                      past the end of the traversed rope.
+ *  @param clientData   Opaque client data. Same value as passed to
+ *                      Col_TraverseRopeChunks() procedure family.
  *
- * Arguments:
- *	index		- Rope-relative index where chunks begin.
- *	length		- Length of chunks.
- *	number		- Number of chunks.
- *	chunks		- Array of chunks. When chunk is NULL, means the
- *			  index is past the end of the traversed rope.
- *	clientData	- Opaque client data. Same value as passed to 
- *			  <Col_TraverseRopeChunks> procedure family.
- *
- * Returns:
- *	If nonzero, interrupts the traversal.
- *
- * See also: 
- *	<Col_TraverseRopeChunksN>, <Col_TraverseRopeChunks>
- *---------------------------------------------------------------------------*/
+ *  @retval zero        to continue traversal.
+ *  @retval non-zero    to stop traversal. Value is returned as result of
+ *                      Col_TraverseRopeChunks() and related procs.
+ *//*-----------------------------------------------------------------------*/
 
-typedef int (Col_RopeChunksTraverseProc) (size_t index, size_t length, 
-	size_t number, const Col_RopeChunk *chunks, Col_ClientData clientData);
+typedef int (Col_RopeChunksTraverseProc) (size_t index, size_t length,
+        size_t number, const Col_RopeChunk *chunks, Col_ClientData clientData);
 
-EXTERN int		Col_TraverseRopeChunksN(size_t number, Col_Word *ropes, 
-			    size_t start, size_t max, 
-			    Col_RopeChunksTraverseProc *proc, 
-			    Col_ClientData clientData, size_t *lengthPtr);
-EXTERN int		Col_TraverseRopeChunks(Col_Word rope, size_t start, 
-			    size_t max, int reverse, 
-			    Col_RopeChunksTraverseProc *proc, 
-			    Col_ClientData clientData, size_t *lengthPtr);
+/*
+ * Remaining declarations.
+ */
 
+EXTERN int              Col_TraverseRopeChunksN(size_t number, Col_Word *ropes,
+                            size_t start, size_t max,
+                            Col_RopeChunksTraverseProc *proc,
+                            Col_ClientData clientData, size_t *lengthPtr);
+EXTERN int              Col_TraverseRopeChunks(Col_Word rope, size_t start,
+                            size_t max, int reverse,
+                            Col_RopeChunksTraverseProc *proc,
+                            Col_ClientData clientData, size_t *lengthPtr);
+                                                                                /*!     @} */
 
-/****************************************************************************
- * Group: Rope Iteration
- *
- * Declarations: 
- *	<Col_RopeIterBegin>, <Col_RopeIterFirst>, <Col_RopeIterLast>, 
- *	<Col_RopeIterString>, <Col_RopeIterCompare>, <Col_RopeIterMoveTo>,
- *	<Col_RopeIterForward>, <Col_RopeIterBackward>
- ****************************************************************************/
+/********************************************************************************//*!   @name \
+ * Rope Iteration                                                               *//*!   @{ *//*
+ ******************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Typedef: ColRopeIterLeafAtProc
+ * ColRopeIterLeafAtProc
+ *                                                                              *//*!
+ *  Helper for rope iterators to access characters in leaves.
  *
- *	Helper for rope iterators to access characters in leaves.
+ *  @param leaf     Leaf node.
+ *  @param index    Leaf-relative index of character.
  *
- * Arguments:
- *	leaf	- Leaf node.
- *	index	- Leaf-relative index of character.
+ *  @result
+ *      Character at given index.
  *
- * Result:
- *	Character at given index.
+ *  @see ColRopeIterator
  *
- * See also:
- *	<ColRopeIterator>
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
 typedef Col_Char (ColRopeIterLeafAtProc) (Col_Word leaf, size_t index);
-
+                                                                                /*!     @cond PRIVATE */
 /*---------------------------------------------------------------------------
- * Internal Typedef: ColRopeIterator
+ * ColRopeIterator
+ *                                                                              *//*!
+ *  Internal implementation of rope iterators.
  *
- *	Internal implementation of rope iterators.
+ *  @see Col_RopeIterator
  *
- * Fields:
- *	rope		- Rope being iterated. If nil, use string iterator mode.
- *	length		- Rope length.
- *	index		- Current position.
- *	chunk		- Current chunk info.
- *
- * Chunk fields:
- *	first, last	- Range of validity for current chunk.
- *	accessProc	- If non-NULL, element accessor. Else, use direct
- *			  address mode.
- *	current		- Current element information:
- *	current.direct	- Current element info in direct access mod.
- *	current.access	- Current element info in accessor mode.
- *
- * Direct access mode fields:
- *	format		- Format of current chunk.
- *	address		- Address of current element.
- *
- * Accessor mode fields:
- *	leaf		- First argument passed to *accessProc*.
- *	index		- Second argument passed to *accessProc*.
- *
- * See also:
- *	<Col_RopeIterator>
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
 typedef struct ColRopeIterator {
-    Col_Word rope;
-    size_t length;
-    size_t index;
+    Col_Word rope;  /*!< Rope being iterated. If nil, use string iterator
+                         mode. */
+    size_t length;  /*!< Rope length. */
+    size_t index;   /*!< Current position. */
+
+    /*! Current chunk info. */
     struct {
-	size_t first, last;
-	ColRopeIterLeafAtProc *accessProc;
-	union {
-	    struct {
-		Col_StringFormat format;
-		const void *address;
-	    } direct;
-	    struct {
-		Col_Word leaf;
-		size_t index;
-	    } access;
-	} current;
+        size_t first;   /*!< Begining of range of validity for current chunk. */
+        size_t last;    /*!< End of range of validity for current chunk. */
+
+        /*! If non-NULL, element accessor. Else, use direct address mode. */
+        ColRopeIterLeafAtProc *accessProc;
+
+        /*! Current element information. */
+        union {
+            /*! Current element information in direct access mode.*/
+            struct {
+                Col_StringFormat format;    /*!< Format of current chunk. */
+                const void *address;        /*!< Address of current element. */
+            } direct;
+
+            /*! Current element information in accessor mode. */
+            struct {
+                Col_Word leaf;  /*!< First argument passed to **accessProc**. */
+                size_t index;   /*!< Second argument passed to 
+                                     **accessProc**. */
+            } access;
+        } current;
     } chunk;
 } ColRopeIterator;
-
+                                                                                /*!     @endcond */
 /*---------------------------------------------------------------------------
- * Typedef: Col_RopeIterator
+ * Col_RopeIterator
+ *                                                                              *//*!
+ *  Rope iterator. Encapsulates the necessary info to iterate & access rope
+ *  data transparently.
  *
- *	Rope iterator. Encapsulates the necessary info to iterate & access rope
- *	data transparently.
+ *  @note                                                                               @parblock
+ *      Datatype is opaque. Fields should not be accessed by client code.
  *
- * Note:
- *	Datatype is opaque. Fields should not be accessed by client code.
+ *      Each iterator takes 8 words on the stack.
  *
- *	Each iterator takes 8 words on the stack.
+ *      The type is defined as a single-element array of the internal datatype:
  *
- *	The type is defined as a single-element array of the internal datatype:
- *
- *	- declared variables allocate the right amount of space on the stack,
- *	- calls use pass-by-reference (i.e. pointer) and not pass-by-value,
- *	- forbidden as return type.
- *---------------------------------------------------------------------------*/
+ *      - declared variables allocate the right amount of space on the stack,
+ *      - calls use pass-by-reference (i.e. pointer) and not pass-by-value,
+ *      - forbidden as return type.
+ *                                                                                      @endparblock
+ *//*-----------------------------------------------------------------------*/
 
 typedef ColRopeIterator Col_RopeIterator[1];
 
-/*---------------------------------------------------------------------------
- * Constant: COL_ROPEITER_NULL
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * COL_ROPEITER_NULL
+ *                                                                                      @hideinitializer
+ *  Static initializer for null rope iterators.
  *
- *	Static initializer for null rope iterators.
- *
- * See also: 
- *	<Col_RopeIterator>, <Col_RopeIterNull>
- *---------------------------------------------------------------------------*/
+ *  @see Col_RopeIterator
+ *  @see Col_RopeIterNull
+ *//*-----------------------------------------------------------------------*/
 
-#define COL_ROPEITER_NULL	{{WORD_NIL,0,0,{0,0,NULL,0,NULL}}}
+#define COL_ROPEITER_NULL       {{WORD_NIL,0,0,{0,0,NULL,0,NULL}}}
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeIterNull
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeIterNull
+ *                                                                                      @hideinitializer
+ *  Test whether iterator is null (e.g.\ it has been set to #COL_ROPEITER_NULL
+ *  or Col_RopeIterSetNull()).
  *
- *	Test whether iterator is null (e.g. it has been set to 
- *	<COL_ROPEITER_NULL> or <Col_RopeIterSetNull>). This uninitialized state
- *	renders it unusable for any call. Use with caution.
+ *  @warning
+ *      This uninitialized state renders it unusable for any call. Use with
+ *      caution.
  *
- * Argument:
- *	it	- The iterator to test. (Caution: evaluated several times during
- *		  macro expansion)
+ *  @param it           The #Col_RopeIterator to test.
  *
- * Result:
- *	Nonzero if iterator is null.
+ *  @warning
+ *      Argument **it** is referenced several times by the macro. Make sure to
+ *      avoid any side effect.
  *
- * See also: 
- *	<Col_RopeIterator>, <COL_ROPEITER_NULL>, <Col_RopeIterSetNull>
- *---------------------------------------------------------------------------*/
+ *  @retval zero        if iterator if not null.
+ *  @retval non-zero    if iterator is null.
+ *
+ *  @see Col_RopeIterator
+ *  @see COL_ROPEITER_NULL
+ *  @see Col_RopeIterSetNull
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeIterNull(it) \
     ((it)->rope == WORD_NIL && (it)->chunk.current.direct.address == NULL)
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeIterSetNull
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeIterSetNull
  *
- *	Set an iterator to null.
+ *  Set an iterator to null.
  *
- * Argument:
- *	it	- Iterator to initialize.
+ *  @param it       The #Col_RopeIterator to initialize.
  *
- * See also: 
- *	<Col_RopeIterator>
- *---------------------------------------------------------------------------*/
+ *  @warning
+ *      Argument **it** is referenced several times by the macro. Make sure to
+ *      avoid any side effect.
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeIterSetNull(it) \
     memset(it, 0, sizeof(it))
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeIterRope
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeIterRope
  *
- *	Get rope for iterator.
+ *  Get rope for iterator.
  *
- * Argument:
- *	it	- The iterator to get rope for.
+ *  @param it           The #Col_RopeIterator to access.
  *
- * Result:
- *	The rope, or <WORD_NIL> if iterator was initialized with
- *	<Col_RopeIterString>. Undefined if at end.
+ *  @retval WORD_NIL    if iterating over string (see Col_RopeIterString()).
+ *  @retval rope        if iterating over rope.
  *
- * See also: 
- *	<Col_RopeIterator>, <Col_RopeIterEnd>
- *---------------------------------------------------------------------------*/
+ *  @valuecheck{COL_ERROR_ROPEITER_END,it}
+ *//*-----------------------------------------------------------------------*/
 
-#define Col_RopeIterRope(it)	\
+#define Col_RopeIterRope(it)    \
     ((it)->rope)
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeIterLength
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeIterLength
  *
- *	Get length of the iterated sequence.
+ *  Get length of the iterated sequence.
  *
- * Argument:
- *	it	- The iterator to get length for.
+ *  @param it       The #Col_RopeIterator to access.
  *
- * Result:
- *	Length of iterated sequence.
- *
- * See also: 
- *	<Col_RopeIterator>
- *---------------------------------------------------------------------------*/
+ *  @result
+ *      Length of iterated sequence.
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeIterLength(it) \
     ((it)->length)
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeIterIndex
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeIterIndex
  *
- *	Get current index within rope for iterator.
+ *  Get current index within rope for iterator.
  *
- * Argument:
- *	it	- The iterator to get index for.
+ *  @param it       The #Col_RopeIterator to access.
  *
- * Result:
- *	Current index. Undefined if at end.
+ *  @result
+ *      Current index.
  *
- * See also: 
- *	<Col_RopeIterator>
- *---------------------------------------------------------------------------*/
+ *  @valuecheck{COL_ERROR_ROPEITER_END,it}
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeIterIndex(it) \
     ((it)->index)
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeIterAt
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeIterAt
+ *                                                                                      @hideinitializer
+ *  Get current rope character for iterator.
  *
- *	Get current rope character for iterator.
+ *  @param it       The #Col_RopeIterator to access.
  *
- * Argument:
- *	it	- The iterator to get character for. (Caution: evaluated several
- *		  times during macro expansion)
+ *  @warning
+ *      Argument **it** is referenced several times by the macro. Make sure to
+ *      avoid any side effect.
  *
- * Result:
- *	If the index is past the end of the rope, the invalid codepoint
- *	<COL_CHAR_INVALID>, else the Unicode codepoint of the character.
+ *  @result
+ *      Unicode codepoint of current character.
  *
- * Side effects:
- *	The argument is referenced several times by the macro. Make sure to
- *	avoid any side effect.
- *
- * See also: 
- *	<Col_RopeIterator>
- *---------------------------------------------------------------------------*/
+ *  @valuecheck{COL_ERROR_ROPEITER_END,it}
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeIterAt(it) \
     (  ((it)->index < (it)->chunk.first || (it)->index > (it)->chunk.last) ? ColRopeIterUpdateTraversalInfo((ColRopeIterator *)(it)) \
      : (it)->chunk.accessProc ? (it)->chunk.accessProc((it)->chunk.current.access.leaf, (it)->chunk.current.access.index) \
      : COL_CHAR_GET((it)->chunk.current.direct.format, (it)->chunk.current.direct.address))
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeIterNext
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeIterNext
+ *                                                                                      @hideinitializer
+ *  Move the iterator to the next rope character.
  *
- *	Move the iterator to the next character.
+ *  @param it       The #Col_RopeIterator to move.
  *
- * Argument:
- *	it	- The iterator to move.
+ *  @warning
+ *      Argument **it** is referenced several times by the macro. Make sure to
+ *      avoid any side effect.
  *
- * Side effects:
- *	Update the iterator.
- *	The argument is referenced several times by the macro. Make sure to
- *	avoid any side effect.
- *
- * See also: 
- *	<Col_RopeIterForward>
- *---------------------------------------------------------------------------*/
+ *  @see Col_RopeIterForward
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeIterNext(it) \
     (  ((it)->index < (it)->chunk.first || (it)->index >= (it)->chunk.last) ? (Col_RopeIterForward((it), 1), 0) \
@@ -629,22 +567,19 @@ typedef ColRopeIterator Col_RopeIterator[1];
           (it)->chunk.accessProc ? ((it)->chunk.current.access.index++, 0) \
         : (COL_CHAR_NEXT((it)->chunk.current.direct.format, (it)->chunk.current.direct.address), 0)))
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeIterPrevious
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeIterPrevious
+ *                                                                                      @hideinitializer
+ *  Move the iterator to the previous rope character.
  *
- *	Move the iterator to the previous character.
+ *  @param it       The #Col_RopeIterator to move.
  *
- * Argument:
- *	it	- The iterator to move.
+ *  @warning
+ *      Argument **it** is referenced several times by the macro. Make sure to
+ *      avoid any side effect.
  *
- * Side effects:
- *	Update the iterator.
- *	The argument is referenced several times by the macro. Make sure to
- *	avoid any side effect.
- *
- * See also: 
- *	<Col_RopeIterBackward>
- *---------------------------------------------------------------------------*/
+ *  @see Col_RopeIterBackward
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeIterPrevious(it) \
     (  ((it)->index <= (it)->chunk.first || (it)->index > (it)->chunk.last) ? (Col_RopeIterBackward((it), 1), 0) \
@@ -652,37 +587,34 @@ typedef ColRopeIterator Col_RopeIterator[1];
           (it)->chunk.accessProc ? ((it)->chunk.current.access.index--, 0) \
         : (COL_CHAR_PREVIOUS((it)->chunk.current.direct.format, (it)->chunk.current.direct.address), 0)))
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeIterEnd
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeIterEnd
  *
- *	Test whether iterator reached end of rope.
+ *  Test whether iterator reached end of rope.
  *
- * Argument:
- *	it	- The iterator to test. (Caution: evaluated several times 
- *		  during macro expansion)
+ *  @param it           The #Col_RopeIterator to test.
  *
- * Result:
- *	Nonzero if iterator is at end.
+ *  @warning
+ *      Argument **it** is referenced several times by the macro. Make sure to
+ *      avoid any side effect.
  *
- * See also: 
- *	<Col_RopeIterator>, <Col_RopeIterBegin>
- *---------------------------------------------------------------------------*/
+ *  @retval zero        if iterator if not at end.
+ *  @retval non-zero    if iterator is at end.
+ *
+ *  @see Col_RopeIterBegin
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeIterEnd(it) \
     ((it)->index >= (it)->length)
 
-/*---------------------------------------------------------------------------
- * Macro: Col_RopeIterSet
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * Col_RopeIterSet
  *
- *	Initialize an iterator to another one's value.
+ *  Initialize an iterator with another one's value.
  *
- * Argument:
- *	it	- Iterator to initialize.
- *	value	- Value to set.
- *
- * See also: 
- *	<Col_RopeIterator>
- *---------------------------------------------------------------------------*/
+ *  @param it       The #Col_RopeIterator to initialize.
+ *  @param value    The #Col_RopeIterator to copy.
+ *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeIterSet(it, value) \
     (*(it) = *(value))
@@ -691,160 +623,162 @@ typedef ColRopeIterator Col_RopeIterator[1];
  * Remaining declarations.
  */
 
-EXTERN void		Col_RopeIterBegin(Col_RopeIterator it, Col_Word rope, 
-			    size_t index);
-EXTERN void		Col_RopeIterFirst(Col_RopeIterator it, Col_Word rope);
-EXTERN void		Col_RopeIterLast(Col_RopeIterator it, Col_Word rope);
-EXTERN void		Col_RopeIterString(Col_RopeIterator it, 
-			    Col_StringFormat format, const void *data, 
-			    size_t length);
-EXTERN int		Col_RopeIterCompare(const Col_RopeIterator it1, 
-			    const Col_RopeIterator it2);
-EXTERN void		Col_RopeIterMoveTo(Col_RopeIterator it, size_t index);
-EXTERN void		Col_RopeIterForward(Col_RopeIterator it, size_t nb);
-EXTERN void		Col_RopeIterBackward(Col_RopeIterator it, size_t nb);
+EXTERN void             Col_RopeIterBegin(Col_RopeIterator it, Col_Word rope,
+                            size_t index);
+EXTERN void             Col_RopeIterFirst(Col_RopeIterator it, Col_Word rope);
+EXTERN void             Col_RopeIterLast(Col_RopeIterator it, Col_Word rope);
+EXTERN void             Col_RopeIterString(Col_RopeIterator it,
+                            Col_StringFormat format, const void *data,
+                            size_t length);
+EXTERN int              Col_RopeIterCompare(const Col_RopeIterator it1,
+                            const Col_RopeIterator it2);
+EXTERN void             Col_RopeIterMoveTo(Col_RopeIterator it, size_t index);
+EXTERN void             Col_RopeIterForward(Col_RopeIterator it, size_t nb);
+EXTERN void             Col_RopeIterBackward(Col_RopeIterator it, size_t nb);
 
-EXTERN Col_Char		ColRopeIterUpdateTraversalInfo(ColRopeIterator *it);
-
-
+EXTERN Col_Char         ColRopeIterUpdateTraversalInfo(ColRopeIterator *it);
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 /*
-================================================================================
-Section: Custom Ropes
+================================================================================*//*!   @addtogroup customrope_words \
+Custom Ropes
+                                                                                        @ingroup rope_words custom_words
+  Custom ropes are @ref custom_words implementing @ref rope_words with
+  applicative code.                                                             *//*!   @{ *//*
 ================================================================================
 */
 
+/********************************************************************************//*!   @name \
+ * Custom Rope Type Descriptors                                                 *//*!   @{ *//*
+ ******************************************************************************/
+
 /*---------------------------------------------------------------------------
- * Typedef: Col_RopeLengthProc
+ * Col_RopeLengthProc
+ *                                                                              *//*!
+ *  Function signature of custom rope length procs.
  *
- *	Function signature of custom rope length procs.
+ *  @param rope     Custom rope to get length for.
  *
- * Argument:
- *	rope	- Custom rope to get length for.
+ *  @return
+ *      The custom rope length.
  *
- * Result:
- *	The custom rope length.
- *
- * See also: 
- *	<Col_CustomRopeType>
- *---------------------------------------------------------------------------*/
+ *  @see Col_CustomRopeType
+ *  @see Col_RopeLength
+ *//*-----------------------------------------------------------------------*/
 
 typedef size_t (Col_RopeLengthProc) (Col_Word rope);
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_RopeCharAtProc
+ * Col_RopeCharAtProc
+ *                                                                              *//*!
+ *  Function signature of custom rope character access procs.
  *
- *	Function signature of custom rope character access procs.
+ *  @param rope     Custom rope to get character from.
+ *  @param index    Character index.
  *
- * Arguments:
- *	rope	- Custom rope to get character from.
- *	index	- Character index.
+ *  @note
+ *      By construction, **index** is guaranteed to be within valid range, so
+ *      implementations need not bother with validation.
  *
- * Note:
- *	By construction, indices are guaranteed to be within valid range.
+ *  @return
+ *      The Unicode codepoint of the character at the given index.
  *
- * Result:
- *	The Unicode codepoint of the character at the given index.
- *
- * See also: 
- *	<Col_CustomRopeType>
- *---------------------------------------------------------------------------*/
+ *  @see Col_CustomRopeType
+ *  @see Col_RopeAt
+ *//*-----------------------------------------------------------------------*/
 
 typedef Col_Char (Col_RopeCharAtProc) (Col_Word rope, size_t index);
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_RopeChunkAtProc
+ * Col_RopeChunkAtProc
+ *                                                                              *//*!
+ *  Function signature of custom rope chunk access procs.
  *
- *	Function signature of custom rope chunk access procs.
+ *  @param rope             Custom rope to get chunk from.
+ *  @param index            Index of character to get chunk for.
  *
- * Arguments:
- *	rope	- Custom rope to get chunk from.
- *	index	- Index of character to get chunk for.
+ *  @param[out] chunkPtr    Chunk information (see #Col_RopeChunk).
+ *  @param[out] firstPtr,
+ *              lastPtr     Chunk range of validity.
  *
- * Note:
- *	By construction, indices are guaranteed to be within valid range.
+ *  @note
+ *      By construction, **index** is guaranteed to be within valid range, so
+ *      implementations need not bother with validation.
  *
- * Results:
- *	chunkPtr		- Chunk information. See <Col_RopeChunk>.
- *	firstPtr, lastPtr	- Chunk range of validity.
- *
- * See also: 
- *	<Col_CustomRopeType>
- *---------------------------------------------------------------------------*/
+ *  @see Col_CustomRopeType
+ *//*-----------------------------------------------------------------------*/
 
-typedef void (Col_RopeChunkAtProc) (Col_Word rope, size_t index, 
+typedef void (Col_RopeChunkAtProc) (Col_Word rope, size_t index,
     Col_RopeChunk *chunkPtr, size_t *firstPtr, size_t *lastPtr);
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_RopeSubropeProc
+ * Col_RopeSubropeProc
+ *                                                                              *//*!
+ *  Function signature of custom rope subrope extraction.
  *
- *	Function signature of custom rope subrope extraction.
+ *  @param rope             Custom rope to extract subrope from.
+ *  @param first, last      Range of subrope to extract (inclusive).
  *
- * Arguments:
- *	rope		- Custom rope to extract subrope from.
- *	first, last	- Range of subrope to extract (inclusive).
+ *  @note
+ *      By construction, **first** and **last** are guaranteed to be within 
+ *      valid range, so implementations need not bother with validation.
  *
- * Note:
- *	By construction, indices are guaranteed to be within valid range.
+ *  @retval nil     to use the generic representation.
+ *  @retval rope    representing the subrope otherwise.
  *
- * Result:
- *	A rope representing the subrope, or nil.
- *
- * See also: 
- *	<Col_CustomRopeType>
- *---------------------------------------------------------------------------*/
+ *  @see Col_CustomRopeType
+ *  @see Col_Subrope
+ *//*-----------------------------------------------------------------------*/
 
-typedef Col_Word (Col_RopeSubropeProc) (Col_Word rope, size_t first, 
+typedef Col_Word (Col_RopeSubropeProc) (Col_Word rope, size_t first,
     size_t last);
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_RopeConcatProc
+ * Col_RopeConcatProc
+ *                                                                              *//*!
+ *  Function signature of custom rope concatenation.
  *
- *	Function signature of custom rope concatenation.
+ *  @param left, right      Ropes to concatenate.
  *
- * Arguments:
- *	left, right	- Ropes to concatenate.
+ *  @retval nil     to use the generic representation.
+ *  @retval rope    representing the concatenation of both ropes otherwise.
  *
- * Result:
- *	A rope representing the concatenation of both ropes, or nil.
- *
- * See also: 
- *	<Col_CustomRopeType>
- *---------------------------------------------------------------------------*/
+ *  @see Col_CustomRopeType
+ *  @see Col_ConcatRopes
+ *//*-----------------------------------------------------------------------*/
 
 typedef Col_Word (Col_RopeConcatProc) (Col_Word left, Col_Word right);
 
 /*---------------------------------------------------------------------------
- * Typedef: Col_CustomRopeType
- *
- *	Custom rope type descriptor. Inherits from <Col_CustomWordType>.
- *
- * Fields:
- *	type		- Generic word type descriptor. Type field must be equal
- *			  to <COL_ROPE>.
- *	lengthProc	- Called to get the length of the rope. Must be constant
- *			  during the whole lifetime.
- *	charAtProc	- Called to get the character at a given position. Must
- *			  be constant during the whole lifetime.
- *	chunkAtProc	- Called during traversal. If NULL, traversal is done 
- *			  per character.
- *	subropeProc	- Called to extract subrope. If NULL, or if it returns 
- *			  nil, use the standard procedure.
- *	concatProc	- Called to concat ropes. If NULL, or if it returns nil,
- *			  use the standard procedure.
- *
- * See also:
- *	<Col_NewCustomWord>, <Col_CustomWordType>, <Col_RopeLengthProc>, 
- *	<Col_RopeCharAtProc>, <Col_RopeChunkAtProc>, <Col_RopeSubropeProc>, 
- *	<Col_RopeConcatProc>
- *---------------------------------------------------------------------------*/
+ * Col_CustomRopeType
+ *                                                                              *//*!
+ *  Custom rope type descriptor. Inherits from #Col_CustomWordType.
+ *//*-----------------------------------------------------------------------*/
 
 typedef struct Col_CustomRopeType {
+    /*! Generic word type descriptor. Type field must be equal to #COL_ROPE. */
     Col_CustomWordType type;
+
+    /*! Called to get the length of the rope. Must be constant during the whole
+        lifetime. */
     Col_RopeLengthProc *lengthProc;
+
+    /*! Called to get the character at a given position. Must be constant
+        during the whole lifetime. */
     Col_RopeCharAtProc *charAtProc;
+
+    /*! Called during traversal. If NULL, traversal is done per character
+        using #charAtProc. */
     Col_RopeChunkAtProc *chunkAtProc;
+
+    /*! Called to extract subrope. If NULL, or if it returns nil, use the
+        standard procedure. */
     Col_RopeSubropeProc *subropeProc;
+
+    /*! Called to concat ropes. If NULL, or if it returns nil, use the standard
+        procedure. */
     Col_RopeConcatProc *concatProc;
 } Col_CustomRopeType;
-
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 #endif /* _COLIBRI_ROPE */

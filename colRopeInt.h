@@ -1,17 +1,18 @@
-/*
- * Internal Header: colRopeInt.h
+/*                                                                              *//*!   @cond PRIVATE @file \
+ * colRopeInt.h
  *
- *	This header file defines the rope word internals of Colibri.
+ *  This header file defines the rope internals of Colibri.
  *
- *	Ropes are a string datatype that allows for fast insertion, extraction
- *	and composition of strings. Internally they use self-balanced binary 
- *	trees.
+ *  Ropes are a string datatype that allows for fast insertion, extraction
+ *  and composition of strings. Internally they use self-balanced binary
+ *  trees.
  *
- *	They are always immutable.
+ *  They are always immutable.
  *
- * See also:
- *	<colRope.c>, <colRope.h>, <WORD_TYPE_UCSSTR>, <WORD_TYPE_UTFSTR>,
- *	<WORD_TYPE_SUBROPE>, <WORD_TYPE_CONCATROPE>
+ *  @see colRope.c
+ *  @see colRope.h
+ *
+ *  @private
  */
 
 #ifndef _COLIBRI_ROPE_INT
@@ -19,369 +20,464 @@
 
 
 /*
-================================================================================
-Internal Section: Fixed-Width UCS Strings
+================================================================================*//*!   @addtogroup ucsstr_words \
+Fixed-Width UCS Strings
+                                                                                        @ingroup predefined_words rope_words
+  Fixed-width UCS strings are constant arrays of characters that are
+  directly addressable.
+
+  @par Requirements
+  - UCS string words must know their character length as well as their
+    character format (either #COL_UCS1, #COL_UCS2 or #COL_UCS4).
+
+  - Byte length is deduced from character length and format.
+
+  - Characters are stored within the word cells following the header.
+
+  - UCS string words use as much cells as needed to store their characters.
+
+  @param Format     Character format.
+  @param Length     Size of character array.
+  @param Data       Array of character codepoints.
+
+  @par Cell Layout
+    On all architectures the cell layout is as follows:
+
+    @dot
+    digraph {
+        node [fontname="Lucida Console,Courier" fontsize=14];
+        ucsstr_word [shape=none, label=<
+            <table border="0" cellborder="1" cellspacing="0">
+            <tr><td border="0"></td>
+                <td sides="B" width="40" align="left">0</td><td sides="B" width="40" align="right">7</td>
+                <td sides="B" width="40" align="left">8</td><td sides="B" width="40" align="right">15</td>
+                <td sides="B" width="80" align="left">16</td><td sides="B" width="80" align="right">31</td>
+            </tr>
+            <tr><td sides="R">0</td>
+                <td href="@ref WORD_TYPEID" title="WORD_TYPEID" colspan="2">Type</td>
+                <td href="@ref WORD_UCSSTR_FORMAT" title="WORD_UCSSTR_FORMAT" colspan="2">Format</td>
+                <td href="@ref WORD_UCSSTR_LENGTH" title="WORD_UCSSTR_LENGTH" colspan="2">Length</td>
+            </tr>
+            <tr><td sides="R">.</td>
+                <td href="@ref WORD_UCSSTR_DATA" title="WORD_UCSSTR_DATA" colspan="6" rowspan="4">Character data</td>
+            </tr>
+            <tr><td sides="R">.</td></tr>
+            <tr><td sides="R">N</td></tr>
+            </table>
+        >]
+    }
+    @enddot
+                                                                                        @if IGNORE
+           0             7 8            15 16                           31
+          +---------------+---------------+-------------------------------+
+        0 |      Type     |    Format     |            Length             |
+          +---------------+---------------+-------------------------------+
+          .                                                               .
+          .                         Character data                        .
+        N |                                                               |
+          +---------------------------------------------------------------+
+                                                                                        @endif
+  @see WORD_TYPE_UCSSTR                                                         *//*!   @{ *//*
 ================================================================================
 */
 
-/*---------------------------------------------------------------------------
- * Data Structure: Fixed-Width UCS String Word
- *
- *	Fixed-width UCS strings are constant arrays of characters that are 
- *	directly addressable.
- *
- * Requirements:
- *	UCS string words must know their length, i.e. the number of characters
- *	they contain, as well as the character format (either <COL_UCS1>,
- *	<COL_UCS2> or <COL_UCS4>. Both informations give the byte length.
- *
- *	Elements are stored within the word cells following the header.
- *
- *	UCS string words use as much cells as needed to store their characters.
- *
- * Fields:
- *	Format	- Character format.
- *	Length	- Size of character array.
- *	Data	- Array of character codepoints.
- *
- * Layout:
- *	On all architectures the cell layout is as follows:
- *
- * (start table)
- *      0             7 8            15 16                           31
- *     +---------------+---------------+-------------------------------+
- *     |      Type     |    Format     |            Length             |
- *     +---------------+---------------+-------------------------------+
- *     .                                                               .
- *     .                         Character data                        .
- *     .                                                               .
- *     +---------------------------------------------------------------+
- * (end)
- *
- * See also:
- *	<WORD_TYPEINFO>
- *---------------------------------------------------------------------------*/
+/********************************************************************************//*!   @name \
+ * UCS String Word Constants                                                    *//*!   @{ *//*
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Internal Macros: WORD_UCSSTR_* Accessors
- *
- *	Fixed-width UCS string field accessor macros.
- *
- * Layout:
- *	On all architectures the cell layout is as follows:
- *
- *  WORD_UCSSTR_FORMAT	- Character format.
- *  WORD_UCSSTR_LENGTH	- Character length.
- *  WORD_UCSSTR_DATA	- String data.
- *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
- *
- * See also:
- *	<Fixed-Width UCS String Word>, <WORD_UCSSTR_INIT>
- *---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * UCSSTR_HEADER_SIZE
+ *  Byte size of UCS string header.
+ *//*-----------------------------------------------------------------------*/
 
-#define WORD_UCSSTR_FORMAT(word)	(((int8_t *)(word))[1])
-#define WORD_UCSSTR_LENGTH(word)	(((uint16_t *)(word))[1])
-#define WORD_UCSSTR_DATA(word)		((const char *)(word)+UCSSTR_HEADER_SIZE)
+#define UCSSTR_HEADER_SIZE              (sizeof(uint16_t)*2)
 
-/*---------------------------------------------------------------------------
- * Internal Constant: UCSSTR_HEADER_SIZE
- *
- *	Byte size of UCS string header.
- *
- * See also:
- *	<Fixed-Width UCS String Word>
- *---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * UCSSTR_MAX_LENGTH
+ *  Maximum char length of UCS strings.
+ *//*-----------------------------------------------------------------------*/
 
-#define UCSSTR_HEADER_SIZE		(sizeof(uint16_t)*2)
+#define UCSSTR_MAX_LENGTH               UINT16_MAX
+                                                                                /*!     @} */
 
-/*---------------------------------------------------------------------------
- * Internal Constant: UCSSTR_MAX_LENGTH
- *
- *	Maximum char length of UCS strings.
- *
- * See also:
- *	<Fixed-Width UCS String Word>
- *---------------------------------------------------------------------------*/
+/********************************************************************************//*!   @name \
+ * UCS String Word Utilities                                                    *//*!   @{ *//*
+ ******************************************************************************/
 
-#define UCSSTR_MAX_LENGTH		UINT16_MAX
-
-/*---------------------------------------------------------------------------
- * Internal Macro: UCSSTR_SIZE
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * UCSSTR_SIZE
  *
- *	Get number of cells taken by the UCS string.
+ *  Get number of cells taken by an UCS string of the given byte length.
  *
- * Argument:
- *	byteLength	- Byte size of string.
+ *  @param byteLength   Byte size of string.
  *
- * Result:
- *	Number of cells taken by word.
- *
- * See also:
- *	<Fixed-Width UCS String Word>
- *---------------------------------------------------------------------------*/
+ *  @result
+ *      Number of cells taken by word.
+ *//*-----------------------------------------------------------------------*/
 
 #define UCSSTR_SIZE(byteLength) \
     (NB_CELLS(UCSSTR_HEADER_SIZE+(byteLength)))
+                                                                                /*!     @} */
 
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_UCSSTR_INIT
+/********************************************************************************//*!   @name \
+ * UCS String Word Creation                                                     *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_UCSSTR_INIT
  *
- *	UCS string word initializer.
+ *  UCS string word initializer.
  *
- * Arguments:
- *	word	- Word to initialize. (Caution: evaluated several times during 
- *		  macro expansion)
- *	format	- <WORD_UCSSTR_FORMAT>
- *	length	- <WORD_UCSSTR_LENGTH>
+ *  @param word     Word to initialize.
+ *  @param format   #WORD_UCSSTR_FORMAT.
+ *  @param length   #WORD_UCSSTR_LENGTH.
  *
- * See also:
- *	<Fixed-Width UCS String Word>, <WORD_TYPE_UCSSTR>, <Col_NewRope>
- *---------------------------------------------------------------------------*/
+ *  @warning
+ *      Argument **word** is referenced several times by the macro. Make sure to
+ *      avoid any side effect.
+ *
+ *  @see WORD_TYPE_UCSSTR
+ *//*-----------------------------------------------------------------------*/
 
 #define WORD_UCSSTR_INIT(word, format, length) \
     WORD_SET_TYPEID((word), WORD_TYPE_UCSSTR); \
     WORD_UCSSTR_FORMAT(word) = (uint8_t) (format); \
     WORD_UCSSTR_LENGTH(word) = (uint16_t) (length);
+                                                                                /*!     @} */
 
+/********************************************************************************//*!   @name \
+ * UCS String Word Accessors                                                    *//*!   @{ *//*
+ ******************************************************************************/
 
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_UCSSTR_FORMAT
+ *  Get/set character format.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_UCSSTR_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_UCSSTR_LENGTH
+ *  Get/set character length.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_UCSSTR_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_UCSSTR_DATA
+ *  Pointer to beginning of string data.
+ *
+ *  @param word     Word to access.
+ *//*-----------------------------------------------------------------------*/
+
+#define WORD_UCSSTR_FORMAT(word)        (((int8_t *)(word))[1])
+#define WORD_UCSSTR_LENGTH(word)        (((uint16_t *)(word))[1])
+#define WORD_UCSSTR_DATA(word)          ((const char *)(word)+UCSSTR_HEADER_SIZE)
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 /*
-================================================================================
-Internal Section: Variable-Width UTF Strings
+================================================================================*//*!   @addtogroup utfstr_words \
+Variable-Width UTF Strings
+                                                                                        @ingroup predefined_words rope_words
+  Variable-width UTF-8/16 strings are constant arrays of variable-width
+  characters requiring dedicated encoding/decoding procedures for access.
+
+  @par Requirements
+  - UTF-8/16 string words must know both character and byte lengths, as well
+    as their character format (either #COL_UTF8 or #COL_UTF16).
+
+  - Characters are stored within the word cells following the header.
+
+  - UTF-8/16 string words use as much cells as needed to store their
+    characters, up to the page limit. Hence, number of cells is at most
+    #AVAILABLE_CELLS. This is a tradeoff between space and performance: larger
+    strings are split into several smaller chunks that get concatenated, but
+    random access is better compared to flat UTF strings thanks to the binary
+    tree indexation, as opposed to per-character linear scanning of UTF
+    strings.
+
+  @param Format         Character format.
+  @param Length         Number of characters in array.
+  @param Byte Length    Byte length of character array.
+  @param Data           Array of character code units.
+
+  @par Cell Layout
+    On all architectures the cell layout is as follows:
+
+    @dot
+    digraph {
+        node [fontname="Lucida Console,Courier" fontsize=14];
+        utfstr_word [shape=none, label=<
+            <table border="0" cellborder="1" cellspacing="0">
+            <tr><td border="0"></td>
+                <td sides="B" width="40" align="left">0</td><td sides="B" width="40" align="right">7</td>
+                <td sides="B" width="40" align="left">8</td><td sides="B" width="40" align="right">15</td>
+                <td sides="B" width="80" align="left">16</td><td sides="B" width="80" align="right">31</td>
+            </tr>
+            <tr><td sides="R">0</td>
+                <td href="@ref WORD_TYPEID" title="WORD_TYPEID" colspan="2">Type</td>
+                <td href="@ref WORD_UTFSTR_FORMAT" title="WORD_UTFSTR_FORMAT" colspan="2">Format</td>
+                <td href="@ref WORD_UTFSTR_LENGTH" title="WORD_UTFSTR_LENGTH" colspan="2">Length</td>
+            </tr>
+            <tr><td sides="R">1</td>
+                <td href="@ref WORD_UTFSTR_BYTELENGTH" title="WORD_UTFSTR_BYTELENGTH" colspan="4">Byte Length</td>
+                <td href="@ref WORD_UTFSTR_DATA" title="WORD_UTFSTR_DATA" sides="R" colspan="2"></td>
+            </tr>
+            <tr><td sides="R">.</td>
+                <td href="@ref WORD_UTFSTR_DATA" title="WORD_UTFSTR_DATA" colspan="6" rowspan="3" sides="BR" width="320">Character data</td>
+            </tr>
+            <tr><td sides="R">.</td></tr>
+            <tr><td sides="R">N</td></tr>
+            </table>
+        >]
+    }
+    @enddot
+                                                                                        @if IGNORE
+           0             7 8            15 16                           31
+          +---------------+---------------+-------------------------------+
+        0 |      Type     |    Format     |            Length             |
+          +---------------+---------------+-------------------------------+
+        1 |          Byte Length          |                               |
+          +-------------------------------+                               .
+          .                                                               .
+          .                         Character data                        .
+        N |                                                               |
+          +---------------------------------------------------------------+
+   (end)
+                                                                                        @endif
+  @see WORD_TYPE_UTFSTR                                                         *//*!   @{ *//*
 ================================================================================
 */
 
-/*---------------------------------------------------------------------------
- * Data Structure: Variable-Width UTF-8/16 String Word
- *
- *	Variable-width UTF-8/16 strings are constant arrays of variable-width
- *	characters requiring dedicated encoding/decoding procedures for access.
- *
- * Requirements:
- *	UTF-8/16 string words must know their byte length, as well as their 
- *	character format (either <COL_UTF8> or <COL_UTF16>.
- *
- *	Elements are stored within the word cells following the header.
- *
- *	UTF-8/16 string words use as much cells as needed to store their 
- *	characters.
- *
- * Fields:
- *	Format		- Character format.
- *	Length		- Number of characters in array.
- *	Byte Length	- Byte length of character arrays.
- *	Data		- Array of character code units.
- *
- * Layout:
- *	On all architectures the cell layout is as follows:
- *
- * (start table)
- *      0             7 8            15 16                           31
- *     +---------------+---------------+-------------------------------+
- *     |      Type     |    Format     |            Length             |
- *     +---------------+---------------+-------------------------------+
- *     |          Byte Length          |                               |
- *     +-------------------------------+                               +
- *     .                                                               .
- *     .                         Character data                        .
- *     .                                                               .
- *     +---------------------------------------------------------------+
- * (end)
- *
- * See also:
- *	<WORD_TYPEINFO>
- *---------------------------------------------------------------------------*/
+/********************************************************************************//*!   @name \
+ * UTF String Word Constants                                                    *//*!   @{ *//*
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Internal Macros: WORD_UTFSTR_* Accessors
- *
- *	Variable-width UTF-8/16 string field accessor macros.
- *
- *  WORD_UTFSTR_FORMAT		- Character format.
- *  WORD_UTFSTR_LENGTH		- Character length.
- *  WORD_UTFSTR_BYTELENGTH	- Byte length.
- *  WORD_UTFSTR_DATA		- String data.
- *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
- *
- * See also:
- *	<Variable-Width UTF-8/16 String Word>, <WORD_UTFSTR_INIT>
- *---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * UTFSTR_HEADER_SIZE
+ *  Byte size of UTF-8/16 string header.
+ *//*-----------------------------------------------------------------------*/
 
-#define WORD_UTFSTR_FORMAT(word)	(((int8_t *)(word))[1])
-#define WORD_UTFSTR_LENGTH(word)	(((uint16_t *)(word))[1])
-#define WORD_UTFSTR_BYTELENGTH(word)	(((uint16_t *)(word))[2])
-#define WORD_UTFSTR_DATA(word)		((const char *)(word)+UTFSTR_HEADER_SIZE)
+#define UTFSTR_HEADER_SIZE              (sizeof(uint16_t)*3)
 
-/*---------------------------------------------------------------------------
- * Internal Constant: UTFSTR_HEADER_SIZE
- *
- *	Byte size of UTF-8/16 string header.
- *
- * See also:
- *	<Variable-Width UTF-8/16 String Word>
- *---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * UTFSTR_MAX_BYTELENGTH
+ *  Maximum byte length of UTF-8/16 strings.
+ *//*-----------------------------------------------------------------------*/
 
-#define UTFSTR_HEADER_SIZE		(sizeof(uint16_t)*3)
+#define UTFSTR_MAX_BYTELENGTH           (AVAILABLE_CELLS*CELL_SIZE-UTFSTR_HEADER_SIZE)
+                                                                                /*!     @} */
 
-/*---------------------------------------------------------------------------
- * Internal Constant: UTFSTR_MAX_BYTELENGTH
- *
- *	Maximum byte length of UTF-8/16 strings. Contrary to fixed-width 
- *	versions, UTF-8/16 strings are limited in size to one page, so 
- *	that access performances are better. The consequence is that large
- *	UTF-8/16 strings get split into several smaller chunks that get 
- *	concatenated.
- *
- * See also:
- *	<Variable-Width UTF-8/16 String Word>
- *---------------------------------------------------------------------------*/
+/********************************************************************************//*!   @name \
+ * UTF String Word Utilities                                                    *//*!   @{ *//*
+ ******************************************************************************/
 
-#define UTFSTR_MAX_BYTELENGTH		(AVAILABLE_CELLS*CELL_SIZE-UTFSTR_HEADER_SIZE)
-
-/*---------------------------------------------------------------------------
- * Internal Macro: UTFSTR_SIZE
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * UTFSTR_SIZE
  *
- *	Get number of cells taken by the UTF-8/16 string.
+ *    Get number of cells taken by an UTF-8/16 string of the given byte length
  *
- * Argument:
- *	byteLength	- Byte size of string.
+ *  @param byteLength   Byte size of string.
  *
- * Result:
- *	Number of cells taken by word.
- *
- * See also:
- *	<Variable-Width UTF-8/16 String Word>
- *---------------------------------------------------------------------------*/
+ *  @result
+ *      Number of cells taken by word.
+ *//*-----------------------------------------------------------------------*/
 
 #define UTFSTR_SIZE(byteLength) \
     (NB_CELLS(UTFSTR_HEADER_SIZE+(byteLength)))
+                                                                                /*!     @} */
 
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_UTFSTR_INIT
+/********************************************************************************//*!   @name \
+ * UTF String Word Creation                                                     *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_UTFSTR_INIT
  *
- *	UTF-8/16 string word initializer.
+ *  UTF-8/16 string word initializer.
  *
- * Arguments:
- *	word		- Word to initialize. (Caution: evaluated several times 
- *			  during macro expansion)
- *	format		- <WORD_UTFSTR_FORMAT>
- *	length		- <WORD_UTFSTR_LENGTH>
- *	byteLength	- <WORD_UTFSTR_BYTELENGTH>
+ *  @param word         Word to initialize.
+ *  @param format       #WORD_UTFSTR_FORMAT.
+ *  @param length       #WORD_UTFSTR_LENGTH.
+ *  @param byteLength   #WORD_UTFSTR_BYTELENGTH.
  *
- * See also:
- *	<Variable-Width UTF-8/16 String Word>, <WORD_TYPE_UTFSTR>, <Col_NewRope>
- *---------------------------------------------------------------------------*/
+ *  @warning
+ *      Argument **word** is referenced several times by the macro. Make sure to
+ *      avoid any side effect.
+ *
+ *  @see WORD_TYPE_UTFSTR
+ *//*-----------------------------------------------------------------------*/
 
 #define WORD_UTFSTR_INIT(word, format, length, byteLength) \
     WORD_SET_TYPEID((word), WORD_TYPE_UTFSTR); \
     WORD_UTFSTR_FORMAT(word) = (uint8_t) (format); \
     WORD_UTFSTR_LENGTH(word) = (uint16_t) (length); \
-    WORD_UTFSTR_BYTELENGTH(word) = (uint16_t) (byteLength); \
+    WORD_UTFSTR_BYTELENGTH(word) = (uint16_t) (byteLength);
+                                                                                /*!     @} */
 
+/********************************************************************************//*!   @name \
+ * UTF String Word Accessors                                                    *//*!   @{ *//*
+ ******************************************************************************/
 
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_UTFSTR_FORMAT
+ *  Get/set character format.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_UTFSTR_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_UTFSTR_LENGTH
+ *  Get/set character length.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_UTFSTR_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_UTFSTR_BYTELENGTH
+ *  Get/set byte length.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_UTFSTR_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_UTFSTR_DATA
+ *  Pointer to beginning of string data.
+ *
+ *  @param word     Word to access.
+ *//*-----------------------------------------------------------------------*/
+
+#define WORD_UTFSTR_FORMAT(word)        (((int8_t *)(word))[1])
+#define WORD_UTFSTR_LENGTH(word)        (((uint16_t *)(word))[1])
+#define WORD_UTFSTR_BYTELENGTH(word)    (((uint16_t *)(word))[2])
+#define WORD_UTFSTR_DATA(word)          ((const char *)(word)+UTFSTR_HEADER_SIZE)
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 /*
-================================================================================
-Internal Section: Subropes
+================================================================================*//*!   @addtogroup subrope_words \
+Subropes
+                                                                                        @ingroup predefined_words rope_words
+  Subropes are immutable ropes pointing to a slice of a larger rope.
+
+  Extraction of a subrope from a large rope can be expensive. For example,
+  removing one character from a string of several thousands implies
+  copying the whole data minus this element. Likewise, extracting a range
+  of characters from a complex binary tree of rope nodes implies
+  traversing and copying large parts of this subtree.
+
+  To limit the memory and processing costs of rope slicing, the subrope
+  word simply points to the original rope and the index range of
+  characters in the slice. This representation is preferred over raw copy
+  when the source rope is large.
+
+  @par Requirements
+  - Subrope words use one single cell.
+
+  - Subropes must know their source rope word.
+
+  - Subropes must also know the indices of the first and last characters in
+    the source rope that belongs to the slice. These indices are inclusive.
+    Difference plus one gives the subrope length.
+
+  - Last, subropes must know their depth for tree balancing (see
+    @ref rope_tree_balancing "Rope Tree Balancing"). This is the same as the 
+    source depth, but to avoid one pointer dereference we cache the value in 
+    the word.
+
+  @param Depth      Depth of subrope. 8 bits will code up to 255 depth levels,
+                    which is more than sufficient for balanced binary trees.
+  @param Source     Rope of which this one is a subrope.
+  @param First      First character in source.
+  @param Last       Last character in source.
+
+  @par Cell Layout
+    On all architectures the single-cell layout is as follows:
+
+    @dot
+    digraph {
+        node [fontname="Lucida Console,Courier" fontsize=14];
+        subrope_word [shape=none, label=<
+            <table border="0" cellborder="1" cellspacing="0">
+            <tr><td border="0"></td>
+                <td sides="B" width="40" align="left">0</td><td sides="B" width="40" align="right">7</td>
+                <td sides="B" width="40" align="left">8</td><td sides="B" width="40" align="right">15</td>
+                <td sides="B" width="80" align="left">16</td><td sides="B" width="80" align="right">n</td>
+            </tr>
+            <tr><td sides="R">0</td>
+                <td href="@ref WORD_TYPEID" title="WORD_TYPEID" colspan="2">Type</td>
+                <td href="@ref WORD_SUBROPE_DEPTH" title="WORD_SUBROPE_DEPTH" colspan="2">Depth</td>
+                <td colspan="2" bgcolor="grey75">Unused</td>
+            </tr>
+            <tr><td sides="R">1</td>
+                <td href="@ref WORD_SUBROPE_SOURCE" title="WORD_SUBROPE_SOURCE" colspan="6">Source</td>
+            </tr>
+            <tr><td sides="R">2</td>
+                <td href="@ref WORD_SUBROPE_FIRST" title="WORD_SUBROPE_FIRST" colspan="6">First</td>
+            </tr>
+            <tr><td sides="R">3</td>
+                <td href="@ref WORD_SUBROPE_LAST" title="WORD_SUBROPE_LAST" colspan="6">Last</td>
+            </tr>
+            </table>
+        >]
+    }
+    @enddot
+                                                                                        @if IGNORE
+           0     7 8    15                                               n
+          +-------+-------+-----------------------------------------------+
+        0 | Type  | Depth |                    Unused                     |
+          +-------+-------+-----------------------------------------------+
+        1 |                            Source                             |
+          +---------------------------------------------------------------+
+        2 |                             First                             |
+          +---------------------------------------------------------------+
+        3 |                             Last                              |
+          +---------------------------------------------------------------+
+                                                                                        @endif
+  @see WORD_TYPE_SUBROPE                                                        *//*!   @{ *//*
 ================================================================================
 */
 
-/*---------------------------------------------------------------------------
- * Data Structure: Subrope Word
- *
- *	Subropes are immutable ropes pointing to a slice of a larger rope. 
- *
- *	Extraction of a subrope from a large rope can be expensive. For example,
- *	removing one character from a string of several thousands implies 
- *	copying the whole data minus this element. Likewise, extracting a range
- *	of characters from a complex binary tree of rope nodes implies 
- *	traversing and copying large parts of this subtree.
- *
- *	To limit the memory and processing costs of rope slicing, the subrope
- *	word simply points to the original rope and the index range of 
- *	characters in the slice. This representation is preferred over raw copy
- *	when the source rope is large.
- *
- * Requirements:
- *	Subrope words use one single cell.
- *
- *	Subropes must know their source rope word.
- *
- *	Subropes must also know the indices of the first and last characters in
- *	the source rope that belongs to the slice. These indices are inclusive.
- *	Difference plus one gives the subrope length.
- *
- *	Last, subropes must know their depth for tree balancing (see 
- *	<Rope Tree Balancing>). This is the same as the source depth, but to
- *	avoid one pointer dereference we cache the value in the word.
- *
- * Fields:
- *	Depth	- Depth of subrope. 8 bits will code up to 255 depth levels, 
- *		  which is more than sufficient for balanced binary trees. 
- *	Source	- Rope of which this one is a subrope.
- *	First	- First character in source.
- *	Last	- Last character in source.
- *
- * Layout:
- *	On all architectures the cell layout is as follows:
- *
- * (start table)
- *      0     7 8    15                                               n
- *     +-------+-------+-----------------------------------------------+
- *   0 | Type  | Depth |                    Unused                     |
- *     +-------+-------+-----------------------------------------------+
- *   1 |                            Source                             |
- *     +---------------------------------------------------------------+
- *   2 |                             First                             |
- *     +---------------------------------------------------------------+
- *   3 |                             Last                              |
- *     +---------------------------------------------------------------+
- * (end)
- *---------------------------------------------------------------------------*/
+/********************************************************************************//*!   @name \
+ * Subrope Creation                                                             *//*!   @{ *//*
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Internal Macros: WORD_SUBROPE_* Accessors
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_SUBROPE_INIT
  *
- *	Subrope field accessor macros.
+ *  Subrope word initializer.
  *
- *  WORD_SUBROPE_DEPTH	- Depth of subrope.
- *  WORD_SUBROPE_SOURCE	- Rope from which this one is extracted.
- *  WORD_SUBROPE_FIRST	- First character in source.
- *  WORD_SUBROPE_LAST	- Last character in source.
+ *  @param word     Word to initialize.
+ *  @param depth    #WORD_SUBROPE_DEPTH.
+ *  @param source   #WORD_SUBROPE_SOURCE.
+ *  @param first    #WORD_SUBROPE_FIRST.
+ *  @param last     #WORD_SUBROPE_LAST.
  *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
+ *  @warning
+ *      Argument **word** is referenced several times by the macro. Make sure to
+ *      avoid any side effect.
  *
- * See also:
- *	<Subrope Word>, <WORD_SUBROPE_INIT>
- *---------------------------------------------------------------------------*/
-
-#define WORD_SUBROPE_DEPTH(word)	(((uint8_t *)(word))[1])
-#define WORD_SUBROPE_SOURCE(word)	(((Col_Word *)(word))[1])
-#define WORD_SUBROPE_FIRST(word)	(((size_t *)(word))[2])
-#define WORD_SUBROPE_LAST(word)		(((size_t *)(word))[3])
-
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_SUBROPE_INIT
- *
- *	Subrope word initializer.
- *
- * Arguments:
- *	word		- Word to initialize. (Caution: evaluated several times 
- *			  during macro expansion)
- *	depth		- <WORD_SUBROPE_DEPTH>
- *	source		- <WORD_SUBROPE_SOURCE>
- *	first		- <WORD_SUBROPE_FIRST>
- *	last		- <WORD_SUBROPE_LAST>
- *
- * See also:
- *	<Subrope Word>, <WORD_TYPE_SUBROPE>, <Col_Subrope>
- *---------------------------------------------------------------------------*/
+ *  @see WORD_TYPE_SUBROPE
+ *//*-----------------------------------------------------------------------*/
 
 #define WORD_SUBROPE_INIT(word, depth, source, first, last) \
     WORD_SET_TYPEID((word), WORD_TYPE_SUBROPE); \
@@ -389,106 +485,166 @@ Internal Section: Subropes
     WORD_SUBROPE_SOURCE(word) = (source); \
     WORD_SUBROPE_FIRST(word) = (first); \
     WORD_SUBROPE_LAST(word) = (last);
+                                                                                /*!     @} */
 
+/********************************************************************************//*!   @name \
+ * Subrope Accessors                                                            *//*!   @{ *//*
+ ******************************************************************************/
 
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_SUBROPE_DEPTH
+ *  Get/set depth of subrope.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_SUBROPE_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_SUBROPE_SOURCE
+ *  Get/set rope from which this one is extracted.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_SUBROPE_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_SUBROPE_FIRST
+ *  Get/set index of first character in source.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_SUBROPE_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_SUBROPE_LAST
+ *  Get/set index of last character in source.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_SUBROPE_INIT
+ *//*-----------------------------------------------------------------------*/
+
+#define WORD_SUBROPE_DEPTH(word)        (((uint8_t *)(word))[1])
+#define WORD_SUBROPE_SOURCE(word)       (((Col_Word *)(word))[1])
+#define WORD_SUBROPE_FIRST(word)        (((size_t *)(word))[2])
+#define WORD_SUBROPE_LAST(word)         (((size_t *)(word))[3])
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 /*
-================================================================================
-Internal Section: Concat Ropes
+================================================================================*//*!   @addtogroup concatrope_words \
+Concat Ropes
+                                                                                        @ingroup predefined_words rope_words
+  Concat ropes are balanced binary trees concatenating left and right subropes. 
+  The tree is balanced by construction (see @ref rope_tree_balancing
+  "Rope Tree Balancing").
+
+  @par Requirements
+  - Concat rope words use one single cell.
+
+  - Concat ropes must know their left and right subrope words.
+
+  - Concat ropes must know their length, which is the sum of their left and
+    right arms. To save full recursive subtree traversal this length is
+    stored at each level in the concat words. We also cache the left arm's
+    length whenever possible to save a pointer dereference (the right
+    length being the total minus left lengths).
+
+  - Last, concat ropes must know their depth for tree balancing (see
+    @ref rope_tree_balancing "Rope Tree Balancing"). This is the max depth of 
+    their left and right arms, plus one.
+
+  @param Depth      Depth of concat rope. 8 bits will code up to 255 depth
+                    levels, which is more than sufficient for balanced
+                    binary trees.
+  @param Left       Used as shortcut to avoid dereferencing the left arm.
+                    Zero if actual length is too large to fit.
+  @param Length     Rope length, which is the sum of both arms'.
+  @param Left       Left concatenated rope.
+  @param Right      Right concatenated rope.
+
+  @par Cell Layout
+    On all architectures the single-cell layout is as follows:
+
+    @dot
+    digraph {
+        node [fontname="Lucida Console,Courier" fontsize=14];
+        concatrope_word [shape=none, label=<
+            <table border="0" cellborder="1" cellspacing="0">
+            <tr><td border="0"></td>
+                <td sides="B" width="40" align="left">0</td><td sides="B" width="40" align="right">7</td>
+                <td sides="B" width="40" align="left">8</td><td sides="B" width="40" align="right">15</td>
+                <td sides="B" width="80" align="left">16</td><td sides="B" width="80" align="right">31</td>
+                <td sides="B" align="right">n</td>
+            </tr>
+            <tr><td sides="R">0</td>
+                <td href="@ref WORD_TYPEID" title="WORD_TYPEID" colspan="2">Type</td>
+                <td href="@ref WORD_CONCATROPE_DEPTH" title="WORD_CONCATROPE_DEPTH" colspan="2">Depth</td>
+                <td href="@ref WORD_CONCATROPE_LEFT_LENGTH" title="WORD_CONCATROPE_LEFT_LENGTH" colspan="2">Left length</td>
+                <td bgcolor="grey75"> Unused (n &gt; 32) </td>
+            </tr>
+            <tr><td sides="R">1</td>
+                <td href="@ref WORD_CONCATROPE_LENGTH" title="WORD_CONCATROPE_LENGTH" colspan="7">Length</td>
+            </tr>
+            <tr><td sides="R">2</td>
+                <td href="@ref WORD_CONCATROPE_LEFT" title="WORD_CONCATROPE_LEFT" colspan="7">Left</td>
+            </tr>
+            <tr><td sides="R">3</td>
+                <td href="@ref WORD_CONCATROPE_RIGHT" title="WORD_CONCATROPE_RIGHT" colspan="7">Right</td>
+            </tr>
+            </table>
+        >]
+    }
+    @enddot
+                                                                                        @if IGNORE
+           0     7 8    15 16           31                               n
+          +-------+-------+---------------+-------------------------------+
+        0 | Type  | Depth |  Left length  |        Unused (n > 32)        |
+          +-------+-------+---------------+-------------------------------+
+        1 |                            Length                             |
+          +---------------------------------------------------------------+
+        2 |                             Left                              |
+          +---------------------------------------------------------------+
+        3 |                             Right                             |
+          +---------------------------------------------------------------+
+                                                                                        @endif
+  @see WORD_TYPE_CONCATROPE                                                     *//*!   @{ *//*
 ================================================================================
 */
 
-/*---------------------------------------------------------------------------
- * Data Structure: Concat Rope Word
- *
- *	Concat ropes are balanced binary trees concatenating left and right 
- *	subropes. The tree is balanced by construction (see 
- *	<Rope Tree Balancing>).
- *
- * Requirements:
- *	Concat rope words use one single cell.
- *
- *	Concat ropes must know their left and right subrope words.
- *
- *	Concat ropes must know their length, which is the sum of their left and
- *	right arms. To save full recursive subtree traversal this length is
- *	stored at each level in the concat words. We also cache the left arm's
- *	length whenever possible to save a pointer dereference (the right 
- *	length being the total minus left lengths).
- *
- *	Last, concat ropes must know their depth for tree balancing (see 
- *	<Rope Tree Balancing>). This is the max depth of their left and
- *	right arms, plus one.
- *
- * Fields:
- *	Depth		- Depth of concat rope. 8 bits will code up to 255 depth
- *			  levels, which is more than sufficient for balanced 
- *			  binary trees. 
- *	Left length	- Used as shortcut to avoid dereferencing the left arm. 
- *			  Zero if actual length is too large to fit.
- *	Length		- Rope length, which is the sum of both arms'.
- *	Left		- Left concatenated rope.
- *	Right		- Right concatenated rope.
- *
- * Layout:
- *	On all architectures the cell layout is as follows:
- *
- * (start table)
- *      0     7 8    15 16           31                               n
- *     +-------+-------+---------------+-------------------------------+
- *   0 | Type  | Depth |  Left length  |        Unused (n > 32)        |
- *     +-------+-------+---------------+-------------------------------+
- *   1 |                            Length                             |
- *     +---------------------------------------------------------------+
- *   2 |                             Left                              |
- *     +---------------------------------------------------------------+
- *   3 |                             Right                             |
- *     +---------------------------------------------------------------+
- * (end)
- *---------------------------------------------------------------------------*/
+/********************************************************************************//*!   @name \
+ * Concat Rope Creation                                                         *//*!   @{ *//*
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Internal Macros: WORD_CONCATROPE_* Accessors
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_CONCATROPE_INIT
  *
- *	Concat rope field accessor macros.
+ *  Concat rope word initializer.
  *
- *  WORD_CONCATROPE_DEPTH	- Depth of concat rope.
- *  WORD_CONCATROPE_LEFT_LENGTH	- Left arm's length or zero if too large.
- *  WORD_CONCATROPE_LENGTH	- Rope length
- *  WORD_CONCATROPE_LEFT	- Left concatenated rope.
- *  WORD_CONCATROPE_RIGHT	- Right concatenated rope.
+ *  @param word         Word to initialize.
+ *  @param depth        #WORD_CONCATROPE_DEPTH.
+ *  @param length       #WORD_CONCATROPE_LENGTH.
+ *  @param leftLength   #WORD_CONCATROPE_LEFT_LENGTH.
+ *  @param left         #WORD_CONCATROPE_LEFT.
+ *  @param right        #WORD_CONCATROPE_RIGHT.
  *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
+ *  @warning
+ *      Arguments **word** and **leftLength** are referenced several times by
+ *      the macro. Make sure to avoid any side effect.
  *
- * See also:
- *	<Concat Rope Word>, <WORD_CONCATROPE_INIT>
- *---------------------------------------------------------------------------*/
-
-#define WORD_CONCATROPE_DEPTH(word)	(((uint8_t *)(word))[1])
-#define WORD_CONCATROPE_LEFT_LENGTH(word) (((uint16_t *)(word))[1])
-#define WORD_CONCATROPE_LENGTH(word)	(((size_t *)(word))[1])
-#define WORD_CONCATROPE_LEFT(word)	(((Col_Word *)(word))[2])
-#define WORD_CONCATROPE_RIGHT(word)	(((Col_Word *)(word))[3])
-
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_CONCATROPE_INIT
- *
- *	Concat rope word initializer.
- *
- * Arguments:
- *	word		- Word to initialize. (Caution: evaluated several times 
- *			  during macro expansion)
- *	depth		- <WORD_CONCATROPE_DEPTH>
- *	length		- <WORD_CONCATROPE_LENGTH>
- *	leftLength	- <WORD_CONCATROPE_LEFT_LENGTH> (Caution: evaluated 
- *			  several times during macro expansion)
- *	left		- <WORD_CONCATROPE_LEFT>
- *	right		- <WORD_CONCATROPE_RIGHT>
- *
- * See also:
- *	<Concat Rope Word>, <WORD_TYPE_CONCATROPE>, <Col_ConcatRopes>
- *---------------------------------------------------------------------------*/
+ *  @see WORD_TYPE_CONCATROPE
+ *//*-----------------------------------------------------------------------*/
 
 #define WORD_CONCATROPE_INIT(word, depth, length, leftLength, left, right) \
     WORD_SET_TYPEID((word), WORD_TYPE_CONCATROPE); \
@@ -497,152 +653,190 @@ Internal Section: Concat Ropes
     WORD_CONCATROPE_LEFT_LENGTH(word) = (uint16_t) ((leftLength)>UINT16_MAX?0:(leftLength)); \
     WORD_CONCATROPE_LEFT(word) = (left); \
     WORD_CONCATROPE_RIGHT(word) = (right);
+                                                                                /*!     @} */
 
+/********************************************************************************//*!   @name \
+ * Concat Rope Accessors                                                        *//*!   @{ *//*
+ ******************************************************************************/
 
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_CONCATROPE_DEPTH
+ *  Get/set depth of concat rope.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_CONCATROPE_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_CONCATROPE_LEFT_LENGTH
+ *  Get/set left arm's length (zero when too large).
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_CONCATROPE_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_CONCATROPE_LENGTH
+ *  Get/set rope length.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_CONCATROPE_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_CONCATROPE_LEFT
+ *  Get/set left concatenated rope.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_CONCATROPE_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_CONCATROPE_RIGHT
+ *  Get/set right concatenated rope.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_CONCATROPE_INIT
+ *//*-----------------------------------------------------------------------*/
+
+#define WORD_CONCATROPE_DEPTH(word)         (((uint8_t *)(word))[1])
+#define WORD_CONCATROPE_LEFT_LENGTH(word)   (((uint16_t *)(word))[1])
+#define WORD_CONCATROPE_LENGTH(word)        (((size_t *)(word))[1])
+#define WORD_CONCATROPE_LEFT(word)          (((Col_Word *)(word))[2])
+#define WORD_CONCATROPE_RIGHT(word)         (((Col_Word *)(word))[3])
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 /*
-================================================================================
-Internal Section: Type Checking
+================================================================================*//*!   @addtogroup rope_words \
+Ropes                                                                           *//*!   @{ *//*
 ================================================================================
 */
 
-/*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_CHAR
+/********************************************************************************//*!   @name \
+ * Rope Exceptions                                                              *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * TYPECHECK_CHAR
+ *                                                                                      @hideinitializer
+ *  Type checking macro for characters.
  *
- *	Type checking macro for characters.
+ *  @param word     Checked word.
  *
- * Argument:
- *	word	- Checked word.
- *
- * Side effects:
- *	Generate <COL_TYPECHECK> error when *word* is not a character.
- *
- * See also:
- *	<TYPECHECK>
- *---------------------------------------------------------------------------*/
+ *  @typecheck{COL_ERROR_CHAR,word}
+ *//*-----------------------------------------------------------------------*/
 
 #define TYPECHECK_CHAR(word) \
     TYPECHECK((Col_WordType(word) & COL_CHAR), COL_ERROR_CHAR, (word))
 
-/*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_STRING
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * TYPECHECK_STRING
+ *                                                                                      @hideinitializer
+ *  Type checking macro for strings.
  *
- *	Type checking macro for strings.
+ *  @param word     Checked word.
  *
- * Argument:
- *	word	- Checked word.
- *
- * Side effects:
- *	Generate <COL_TYPECHECK> error when *word* is not a string.
- *
- * See also:
- *	<TYPECHECK>
- *---------------------------------------------------------------------------*/
+ *  @typecheck{COL_ERROR_STRING,word}
+ *//*-----------------------------------------------------------------------*/
 
 #define TYPECHECK_STRING(word) \
     TYPECHECK((Col_WordType(word) & COL_STRING), COL_ERROR_STRING, (word))
 
-/*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_ROPE
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * TYPECHECK_ROPE
+ *                                                                                      @hideinitializer
+ *  Type checking macro for ropes.
  *
- *	Type checking macro for ropes.
+ *  @param word     Checked word.
  *
- * Argument:
- *	word	- Checked word.
- *
- * Side effects:
- *	Generate <COL_TYPECHECK> error when *word* is not a rope.
- *
- * See also:
- *	<TYPECHECK>
- *---------------------------------------------------------------------------*/
+ *  @typecheck{COL_ERROR_ROPE,word}
+ *//*-----------------------------------------------------------------------*/
 
 #define TYPECHECK_ROPE(word) \
     TYPECHECK((Col_WordType(word) & COL_ROPE), COL_ERROR_ROPE, (word))
 
-/*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_ROPEITER
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * VALUECHECK_ROPELENGTH_CONCAT
+ *                                                                                      @hideinitializer
+ *  Value checking macro for ropes, ensures that combined lengths of two
+ *  concatenated ropes don't exceed the maximum value.
  *
- *	Type checking macro for rope iterators.
+ *  @param length1, length2     Checked lengths.
  *
- * Argument:
- *	it	- Checked iterator.
+ *  @valuecheck{COL_ERROR_ROPELENGTH_CONCAT,length1+length2}
+ *//*-----------------------------------------------------------------------*/
+
+#define VALUECHECK_ROPELENGTH_CONCAT(length1, length2) \
+    VALUECHECK((SIZE_MAX-(length1) >= (length2)), COL_ERROR_ROPELENGTH_CONCAT, \
+                (length1), (length2), SIZE_MAX)
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * VALUECHECK_ROPELENGTH_REPEAT
+ *                                                                                      @hideinitializer
+ *  Value checking macro for ropes, ensures that length of a repeated rope
+ *  doesn't exceed the maximum value.
  *
- * Side effects:
- *	Generate <COL_TYPECHECK> error when *it* is not a valid rope iterator.
+ *  @param length, count    Checked length and repetition factor.
  *
- * See also:
- *	<TYPECHECK>, <Col_RopeIterNull>
- *---------------------------------------------------------------------------*/
+ *  @valuecheck{COL_ERROR_ROPELENGTH_CONCAT,length*count}
+ *//*-----------------------------------------------------------------------*/
+
+#define VALUECHECK_ROPELENGTH_REPEAT(length, count) \
+    VALUECHECK(((count) <= 1 || SIZE_MAX/(count) >= (length)), \
+                COL_ERROR_ROPELENGTH_REPEAT, (length), (count), SIZE_MAX)
+                                                                                /*!     @} */
+
+/********************************************************************************//*!   @name \
+ * Rope Iterator Exceptions                                                     *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * TYPECHECK_ROPEITER
+ *                                                                                      @hideinitializer
+ *  Type checking macro for rope iterators.
+ *
+ *  @param it   Checked iterator.
+ *
+ *  @typecheck{COL_ERROR_ROPEITER,it}
+ *
+ *  @see Col_RopeIterNull
+ *//*-----------------------------------------------------------------------*/
 
 #define TYPECHECK_ROPEITER(it) \
     TYPECHECK(!Col_RopeIterNull(it), COL_ERROR_ROPEITER, (it))
 
-
-/*
-================================================================================
-Internal Section: Value Checking
-================================================================================
-*/
-
-/*---------------------------------------------------------------------------
- * Internal Macro: VALUECHECK_ROPELENGTH_CONCAT
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * VALUECHECK_ROPEITER
+ *                                                                                      @hideinitializer
+ *  Value checking macro for rope iterators, ensures that iterator is not
+ *  at end.
  *
- *	Value checking macro for ropes, ensures that combined lengths of two
- *	concatenated ropes don't exceed the maximum value.
+ *  @param it   Checked iterator.
  *
- * Argument:
- *	length1, length2    - Checked lengths.
+ *  @valuecheck{COL_ERROR_ROPEITER_END,it}
  *
- * Side effects:
- *	Generate <COL_VALUECHECK> error when resulting length exceeds the max
- *	rope length (SIZE_MAX).
- *
- * See also:
- *	<VALUECHECK>
- *---------------------------------------------------------------------------*/
-
-#define VALUECHECK_ROPELENGTH_CONCAT(length1, length2) \
-    VALUECHECK((SIZE_MAX-(length1) >= (length2)), COL_ERROR_ROPELENGTH_CONCAT, \
-		(length1), (length2), SIZE_MAX)
-
-/*---------------------------------------------------------------------------
- * Internal Macro: VALUECHECK_ROPELENGTH_REPEAT
- *
- *	Value checking macro for ropes, ensures that length of a repeated rope
- *	doesn't exceed the maximum value.
- *
- * Argument:
- *	length, count	- Checked length and repetition factor.
- *
- * Side effects:
- *	Generate <COL_VALUECHECK> error when resulting length exceeds the max
- *	rope length (SIZE_MAX).
- *
- * See also:
- *	<VALUECHECK>
- *---------------------------------------------------------------------------*/
-
-#define VALUECHECK_ROPELENGTH_REPEAT(length, count) \
-    VALUECHECK(((count) <= 1 || SIZE_MAX/(count) >= (length)), \
-		COL_ERROR_ROPELENGTH_REPEAT, (length), (count), SIZE_MAX)
-
-/*---------------------------------------------------------------------------
- * Internal Macro: VALUECHECK_ROPEITER
- *
- *	Value checking macro for rope iterators, ensures that iterator is not
- *	at end.
- *
- * Argument:
- *	it	- Checked iterator.
- *
- * Side effects:
- *	Generate <COL_VALUECHECK> error when *it* is at end.
- *
- * See also:
- *	<VALUECHECK>, <Col_RopeIterEnd>
- *---------------------------------------------------------------------------*/
+ *  @see Col_RopeIterEnd
+ *//*-----------------------------------------------------------------------*/
 
 #define VALUECHECK_ROPEITER(it) \
     VALUECHECK(!Col_RopeIterEnd(it), COL_ERROR_ROPEITER_END, (it))
-
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 #endif /* _COLIBRI_ROPE_INT */
+                                                                                /*!     @endcond */

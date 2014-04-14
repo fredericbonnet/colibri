@@ -1,27 +1,20 @@
-/*
- * Internal Header: colListInt.h
+/*                                                                              *//*!   @cond PRIVATE @file \
+ * colListInt.h
  *
- *	This header file defines the list word internals of Colibri.
+ *  This header file defines the list word internals of Colibri.
  *
- *	Lists are a collection datatype that allows for fast insertion, 
- *	extraction and composition of other lists. Internally they use 
- *	self-balanced binary trees, like ropes, except that they use vectors
- *	as basic containers instead of character arrays.
+ *  Lists are a linear collection datatype that allows for fast insertion,
+ *  extraction and composition of other lists. Internally they use
+ *  self-balanced binary trees, like ropes, except that they use vectors
+ *  as basic containers instead of character arrays.
  *
- *	They come in both immutable and mutable forms :
- *	
- *	- Immutable lists can be composed of immutable vectors and lists. 
- *	Immutable vectors can themselves be used in place of immutable lists. 
+ *  They come in both immutable and mutable forms.
  *
- *	- Mutable lists can be composed of either mutable or immutable lists and
- *	vectors. They can be "frozen" and turned into immutable versions.
- *	Mutable vectors *cannot* be used in place of mutable lists, as the 
- *	latter can grow indefinitely whereas the former have a maximum length 
- *	set at creation time.
+ *  @see colList.c
+ *  @see colList.h
+ *  @see colVectorInt.h
  *
- * See also:
- *	<colList.c>, <colList.h>, <colVectorInt.h>, <WORD_TYPE_SUBLIST>, 
- *	<WORD_TYPE_CONCATLIST>, <WORD_TYPE_MCONCATLIST>
+ *  @private
  */
 
 #ifndef _COLIBRI_LIST_INT
@@ -29,104 +22,110 @@
 
 
 /*
-================================================================================
-Internal Section: Sublists
+================================================================================*//*!   @addtogroup sublist_words \
+Sublists
+                                                                                        @ingroup predefined_words list_words
+  Sublists are immutable lists pointing to a slice of a larger list.
+
+  Extraction of a sublist from a large list can be expensive. For example,
+  removing one element from a string of several thousands implies
+  copying the whole data minus this element. Likewise, extracting a range
+  of elements from a complex binary tree of list nodes implies
+  traversing and copying large parts of this subtree.
+
+  To limit the memory and processing costs of list slicing, the sublist
+  word simply points to the original list and the index range of
+  elements in the slice. This representation is preferred over raw copy
+  when the source list is large.
+
+  @par Requirements
+  - Sublist words use one single cell.
+
+  - Sublists must know their source list word. This source must be immutable.
+
+  - Sublists must also know the indices of the first and last elements in
+    the source list that belongs to the slice. These indices are inclusive.
+    Difference plus one gives the sublist length.
+
+  - Last, sublists must know their depth for tree balancing (see
+    @ref list_tree_balancing "List Tree Balancing"). This is the same as the
+    source depth, but to avoid one pointer dereference we cache the value in
+    the word.
+
+  @param Depth      Depth of sublist. 8 bits will code up to 255 depth levels,
+                    which is more than sufficient for balanced binary trees.
+  @param Source     List of which this one is a sublist.
+  @param First      First element in source.
+  @param Last       Last element in source.
+
+  @par Cell Layout
+    On all architectures the single-cell layout is as follows:
+
+    @dot
+    digraph {
+        node [fontname="Lucida Console,Courier" fontsize=14];
+        sublist_word [shape=none, label=<
+            <table border="0" cellborder="1" cellspacing="0">
+            <tr><td border="0"></td>
+                <td sides="B" width="40" align="left">0</td><td sides="B" width="40" align="right">7</td>
+                <td sides="B" width="40" align="left">8</td><td sides="B" width="40" align="right">15</td>
+                <td sides="B" width="80" align="left">16</td><td sides="B" width="80" align="right">n</td>
+            </tr>
+            <tr><td sides="R">0</td>
+                <td href="@ref WORD_TYPEID" title="WORD_TYPEID" colspan="2">Type</td>
+                <td href="@ref WORD_SUBLIST_DEPTH" title="WORD_SUBLIST_DEPTH" colspan="2">Depth</td>
+                <td colspan="2" bgcolor="grey75">Unused</td>
+            </tr>
+            <tr><td sides="R">1</td>
+                <td href="@ref WORD_SUBLIST_SOURCE" title="WORD_SUBLIST_SOURCE" colspan="6">Source</td>
+            </tr>
+            <tr><td sides="R">2</td>
+                <td href="@ref WORD_SUBLIST_FIRST" title="WORD_SUBLIST_FIRST" colspan="6">First</td>
+            </tr>
+            <tr><td sides="R">3</td>
+                <td href="@ref WORD_SUBLIST_LAST" title="WORD_SUBLIST_LAST" colspan="6">Last</td>
+            </tr>
+            </table>
+        >]
+    }
+    @enddot
+                                                                                        @if IGNORE
+           0     7 8    15                                               n
+          +-------+-------+-----------------------------------------------+
+        0 | Type  | Depth |                    Unused                     |
+          +-------+-------+-----------------------------------------------+
+        1 |                            Source                             |
+          +---------------------------------------------------------------+
+        2 |                             First                             |
+          +---------------------------------------------------------------+
+        3 |                             Last                              |
+          +---------------------------------------------------------------+
+                                                                                        @endif
+  @see WORD_TYPE_SUBLIST                                                        *//*!   @{ *//*
 ================================================================================
 */
 
-/*---------------------------------------------------------------------------
- * Data Structure: Sublist Word
- *
- *	Sublists are immutable lists pointing to a slice of a larger list. 
- *
- *	Extraction of a sublist from a large list can be expensive. For example,
- *	removing one element from a vector of several thousands implies copying
- *	the whole data minus this element. Likewise, extracting a range of 
- *	elements from a complex binary tree of list nodes implies traversing and
- *	copying large parts of this subtree.
- *
- *	To limit the memory and processing costs of list slicing, the sublist
- *	word simply points to the original list and the index range of elements
- *	in the slice. This representation is preferred over raw copy when the
- *	source list is large.
- *
- * Requirements:
- *	Sublist words use one single cell.
- *
- *	Sublists must know their source list word. This source must be 
- *	immutable.
- *
- *	Sublists must also know the indices of the first and last elements in 
- *	the source list that belongs to the slice. These indices are inclusive.
- *	Difference plus one gives the sublist length.
- *
- *	Last, sublists must know their depth for tree balancing (see 
- *	<List Tree Balancing>). This is the same as the source depth, but to
- *	avoid one pointer dereference we cache the value in the word.
- *
- * Fields:
- *	Depth	- Depth of sublist. 8 bits will code up to 255 depth levels, 
- *		  which is more than sufficient for balanced binary trees. 
- *	Source	- List of which this one is a sublist.
- *	First	- First element in source.
- *	Last	- Last element in source.
- *
- * Layout:
- *	On all architectures the cell layout is as follows:
- *
- * (start table)
- *      0     7 8    15                                               n
- *     +-------+-------+-----------------------------------------------+
- *   0 | Type  | Depth |                    Unused                     |
- *     +-------+-------+-----------------------------------------------+
- *   1 |                            Source                             |
- *     +---------------------------------------------------------------+
- *   2 |                             First                             |
- *     +---------------------------------------------------------------+
- *   3 |                             Last                              |
- *     +---------------------------------------------------------------+
- * (end)
- *---------------------------------------------------------------------------*/
+/********************************************************************************//*!   @name \
+ * Sublist Creation                                                             *//*!   @{ *//*
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Internal Macros: WORD_SUBLIST_* Accessors
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_SUBLIST_INIT
  *
- *	Sublist word field accessors.
+ *  Sublist word initializer.
  *
- *  WORD_SUBLIST_DEPTH	- Depth of sublist.
- *  WORD_SUBLIST_SOURCE	- List from which this one is extracted.
- *  WORD_SUBLIST_FIRST	- First element in source.
- *  WORD_SUBLIST_LAST	- Last element in source.
+ *  @param word     Word to initialize.
+ *  @param depth    #WORD_SUBLIST_DEPTH.
+ *  @param source   #WORD_SUBLIST_SOURCE.
+ *  @param first    #WORD_SUBLIST_FIRST.
+ *  @param last     #WORD_SUBLIST_LAST.
  *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
+ *  @warning
+ *      Argument **word** is referenced several times by the macro. Make sure to
+ *      avoid any side effect.
  *
- * See also:
- *	<Sublist Word>, <WORD_SUBLIST_INIT>
- *---------------------------------------------------------------------------*/
-
-#define WORD_SUBLIST_DEPTH(word)	(((uint8_t *)(word))[1])
-#define WORD_SUBLIST_SOURCE(word)	(((Col_Word *)(word))[1])
-#define WORD_SUBLIST_FIRST(word)	(((size_t *)(word))[2])
-#define WORD_SUBLIST_LAST(word)		(((size_t *)(word))[3])
-
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_SUBLIST_INIT
- *
- *	Sublist word initializer.
- *
- * Arguments:
- *	word		- Word to initialize. (Caution: evaluated several times 
- *			  during macro expansion)
- *	depth		- <WORD_SUBLIST_DEPTH>
- *	source		- <WORD_SUBLIST_SOURCE>
- *	first		- <WORD_SUBLIST_FIRST>
- *	last		- <WORD_SUBLIST_LAST>
- *
- * See also:
- *	<Sublist Word>, <WORD_TYPE_SUBLIST>, <Col_Sublist>
- *---------------------------------------------------------------------------*/
+ *  @see WORD_TYPE_SUBLIST
+ *//*-----------------------------------------------------------------------*/
 
 #define WORD_SUBLIST_INIT(word, depth, source, first, last) \
     WORD_SET_TYPEID((word), WORD_TYPE_SUBLIST); \
@@ -134,111 +133,166 @@ Internal Section: Sublists
     WORD_SUBLIST_SOURCE(word) = (source); \
     WORD_SUBLIST_FIRST(word) = (first); \
     WORD_SUBLIST_LAST(word) = (last);
+                                                                                /*!     @} */
 
+/********************************************************************************//*!   @name \
+ * Sublist Accessors                                                            *//*!   @{ *//*
+ ******************************************************************************/
 
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_SUBLIST_DEPTH
+ *  Get/set depth of sublist.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_SUBLIST_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_SUBLIST_SOURCE
+ *  Get/set list from which this one is extracted.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_SUBLIST_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_SUBLIST_FIRST
+ *  Get/set index of first element in source.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_SUBLIST_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_SUBLIST_LAST
+ *  Get/set index of last element in source.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_SUBLIST_INIT
+ *//*-----------------------------------------------------------------------*/
+
+#define WORD_SUBLIST_DEPTH(word)        (((uint8_t *)(word))[1])
+#define WORD_SUBLIST_SOURCE(word)       (((Col_Word *)(word))[1])
+#define WORD_SUBLIST_FIRST(word)        (((size_t *)(word))[2])
+#define WORD_SUBLIST_LAST(word)         (((size_t *)(word))[3])
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 /*
-================================================================================
-Internal Section: Concat Lists
+================================================================================*//*!   @addtogroup concatlist_words \
+Immutable Concat Lists
+                                                                                        @ingroup predefined_words list_words
+  Immutable concat lists are balanced binary trees concatenating left and right
+  sublists. The tree is balanced by construction (see @ref list_tree_balancing
+  "List Tree Balancing").
+
+  @par Requirements
+  - Concat list words use one single cell.
+
+  - Concat lists must know their left and right sublist words.
+
+  - Concat lists must know their length, which is the sum of their left and
+    right arms. To save full recursive subtree traversal this length is
+    stored at each level in the concat words. We also cache the left arm's
+    length whenever possible to save a pointer dereference (the right
+    length being the total minus left lengths).
+
+  - Last, concat lists must know their depth for tree balancing (see
+    @ref list_tree_balancing "List Tree Balancing"). This is the max depth of 
+    their left and right arms, plus one.
+
+  @param Depth          Depth of concat list. 8 bits will code up to 255 depth
+                        levels, which is more than sufficient for balanced
+                        binary trees.
+  @param Left_Length    Used as shortcut to avoid dereferencing the left arm.
+                        Zero if actual length is too large to fit.
+  @param Length         List length, which is the sum of both arms'.
+  @param Left           Left concatenated list.
+  @param Right          Right concatenated list.
+
+  @par Cell Layout
+    On all architectures the single-cell layout is as follows:
+
+    @dot
+    digraph {
+        node [fontname="Lucida Console,Courier" fontsize=14];
+        concatlist_word [shape=none, label=<
+            <table border="0" cellborder="1" cellspacing="0">
+            <tr><td border="0"></td>
+                <td sides="B" width="40" align="left">0</td><td sides="B" width="40" align="right">7</td>
+                <td sides="B" width="40" align="left">8</td><td sides="B" width="40" align="right">15</td>
+                <td sides="B" width="80" align="left">16</td><td sides="B" width="80" align="right">31</td>
+                <td sides="B" align="right">n</td>
+            </tr>
+            <tr><td sides="R">0</td>
+                <td href="@ref WORD_TYPEID" title="WORD_TYPEID" colspan="2">Type</td>
+                <td href="@ref WORD_CONCATLIST_DEPTH" title="WORD_CONCATLIST_DEPTH" colspan="2">Depth</td>
+                <td href="@ref WORD_CONCATLIST_LEFT_LENGTH" title="WORD_CONCATLIST_LEFT_LENGTH" colspan="2">Left length</td>
+                <td bgcolor="grey75"> Unused (n &gt; 32) </td>
+            </tr>
+            <tr><td sides="R">1</td>
+                <td href="@ref WORD_CONCATLIST_LENGTH" title="WORD_CONCATLIST_LENGTH" colspan="7">Length</td>
+            </tr>
+            <tr><td sides="R">2</td>
+                <td href="@ref WORD_CONCATLIST_LEFT" title="WORD_CONCATLIST_LEFT" colspan="7">Left</td>
+            </tr>
+            <tr><td sides="R">3</td>
+                <td href="@ref WORD_CONCATLIST_RIGHT" title="WORD_CONCATLIST_RIGHT" colspan="7">Right</td>
+            </tr>
+            </table>
+        >]
+    }
+    @enddot
+                                                                                        @if IGNORE
+           0     7 8    15 16           31                               n
+          +-------+-------+---------------+-------------------------------+
+        0 | Type  | Depth |  Left length  |        Unused (n > 32)        |
+          +-------+-------+---------------+-------------------------------+
+        1 |                            Length                             |
+          +---------------------------------------------------------------+
+        2 |                             Left                              |
+          +---------------------------------------------------------------+
+        3 |                             Right                             |
+          +---------------------------------------------------------------+
+                                                                                        @endif
+  @see WORD_TYPE_CONCATLIST                                                     *//*!   @{ *//*
 ================================================================================
 */
 
-/*---------------------------------------------------------------------------
- * Data Structure: Concat List Word
- *
- *	Concat lists are balanced binary trees concatenating left and right 
- *	sublists. They can be immutable or mutable. In the former case, the tree
- *	is balanced by construction (see <List Tree Balancing>). In the latter
- *	case, mutable concat nodes can contain both immutable and mutable 
- *	subnodes; immutable ones are converted to mutable using copy-on-write 
- *	semantics during mutable operations; mutable ones are freezed and turned
- *	immutable when they become shared during immutable operations.
- *
- * Requirements:
- *	Concat list words use one single cell.
- *
- *	Concat lists must know their left and right sublist words.
- *
- *	Concat lists must know their length, which is the sum of their left and
- *	right arms. To save full recursive subtree traversal this length is
- *	stored at each level in the concat words. We also cache the left arm's
- *	length whenever possible to save a pointer dereference (the right 
- *	length being the total minus left lengths).
- *
- *	Last, concat lists must know their depth for tree balancing (see 
- *	<List Tree Balancing>). This is the max depth of their left and
- *	right arms, plus one.
- *
- * Fields:
- *	Depth		- Depth of concat list. 8 bits will code up to 255 depth
- *			  levels, which is more than sufficient for balanced 
- *			  binary trees. 
- *	Left length	- Used as shortcut to avoid dereferencing the left arm. 
- *			  Zero if actual length is too large to fit.
- *	Length		- List length, which is the sum of both arms'.
- *	Left		- Left concatenated list.
- *	Right		- Right concatenated list.
- *
- * Layout:
- *	On all architectures the cell layout is as follows:
- *
- * (start table)
- *      0     7 8    15 16           31                               n
- *     +-------+-------+---------------+-------------------------------+
- *   0 | Type  | Depth |  Left length  |        Unused (n > 32)        |
- *     +-------+-------+---------------+-------------------------------+
- *   1 |                            Length                             |
- *     +---------------------------------------------------------------+
- *   2 |                             Left                              |
- *     +---------------------------------------------------------------+
- *   3 |                             Right                             |
- *     +---------------------------------------------------------------+
- * (end)
- *---------------------------------------------------------------------------*/
+/********************************************************************************//*!   @name \
+ * Immutable Concat List Creation                                               *//*!   @{ *//*
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Internal Macros: WORD_CONCATLIST_* Accessors
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_CONCATLIST_INIT
  *
- *	Concat list word field accessor macros. Both immutable and mutable
- *	versions use these fields.
+ *  Immutable concat list word initializer.
  *
- *  WORD_CONCATLIST_DEPTH	- Depth of concat list. 
- *  WORD_CONCATLIST_LEFT_LENGTH	- Left arm's length or zero if too large.
- *  WORD_CONCATLIST_LENGTH	- List length.
- *  WORD_CONCATLIST_LEFT	- Left concatenated list.
- *  WORD_CONCATLIST_RIGHT	- Right concatenated list.
+ *  @param word         Word to initialize.
+ *  @param depth        #WORD_CONCATLIST_DEPTH.
+ *  @param length       #WORD_CONCATLIST_LENGTH.
+ *  @param leftLength   #WORD_CONCATLIST_LEFT_LENGTH.
+ *  @param left         #WORD_CONCATLIST_LEFT.
+ *  @param right        #WORD_CONCATLIST_RIGHT.
  *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
+ *  @warning
+ *      Arguments **word** and **leftLength** are referenced several times by
+ *      the macro. Make sure to avoid any side effect.
  *
- * See also:
- *	<Concat List Word>, <WORD_CONCATLIST_INIT>, <WORD_MCONCATLIST_INIT>
- *---------------------------------------------------------------------------*/
-
-#define WORD_CONCATLIST_DEPTH(word)	(((uint8_t *)(word))[1])
-#define WORD_CONCATLIST_LEFT_LENGTH(word) (((uint16_t *)(word))[1])
-#define WORD_CONCATLIST_LENGTH(word)	(((size_t *)(word))[1])
-#define WORD_CONCATLIST_LEFT(word)	(((Col_Word *)(word))[2])
-#define WORD_CONCATLIST_RIGHT(word)	(((Col_Word *)(word))[3])
-
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_CONCATLIST_INIT
- *
- *	Immutable concat list word initializer.
- *
- * Arguments:
- *	word		- Word to initialize. (Caution: evaluated several times 
- *			  during macro expansion)
- *	depth		- <WORD_CONCATLIST_DEPTH>
- *	length		- <WORD_CONCATLIST_LENGTH>
- *	leftLength	- <WORD_CONCATLIST_LEFT_LENGTH> (Caution: evaluated 
- *			  several times during macro expansion)
- *	left		- <WORD_CONCATLIST_LEFT>
- *	right		- <WORD_CONCATLIST_RIGHT>
- *
- * See also:
- *	<Concat List Word>, <WORD_TYPE_CONCATLIST>, <Col_ConcatLists>
- *---------------------------------------------------------------------------*/
+ *  @see WORD_TYPE_CONCATLIST
+ *//*-----------------------------------------------------------------------*/
 
 #define WORD_CONCATLIST_INIT(word, depth, length, leftLength, left, right) \
     WORD_SET_TYPEID((word), WORD_TYPE_CONCATLIST); \
@@ -247,26 +301,197 @@ Internal Section: Concat Lists
     WORD_CONCATLIST_LEFT_LENGTH(word) = (uint16_t) ((leftLength)>UINT16_MAX?0:(leftLength)); \
     WORD_CONCATLIST_LEFT(word) = (left); \
     WORD_CONCATLIST_RIGHT(word) = (right);
+                                                                                /*!     @} */
 
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_MCONCATLIST_INIT
+/********************************************************************************//*!   @name \
+ * Immutable Concat List Accessors                                              *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_CONCATLIST_DEPTH
+ *  Get/set depth of concat list.
  *
- *	Mutable concat list word initializer. Contrary to the immutable version,
- *	they are never used outside of mutable list words.
+ *  Used by both mutable and immutable versions.
  *
- * Arguments:
- *	word		- Word to initialize. (Caution: evaluated several times 
- *			  during macro expansion)
- *	depth		- <WORD_CONCATLIST_DEPTH>
- *	length		- <WORD_CONCATLIST_LENGTH>
- *	leftLength	- <WORD_CONCATLIST_LEFT_LENGTH> (Caution: evaluated 
- *			  several times during macro expansion)
- *	left		- <WORD_CONCATLIST_LEFT>
- *	right		- <WORD_CONCATLIST_RIGHT>
+ *  @param word     Word to access.
  *
- * See also:
- *	<Concat List Word>, <WORD_TYPE_MCONCATLIST>, <NewMConcatList>, <UpdateMConcatNode>
- *---------------------------------------------------------------------------*/
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_CONCATLIST_INIT
+ *  @see WORD_MCONCATLIST_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_CONCATLIST_LEFT_LENGTH
+ *  Get/set left arm's length (zero when too large).
+ *
+ *  Used by both mutable and immutable versions.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_CONCATLIST_INIT
+ *  @see WORD_MCONCATLIST_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_CONCATLIST_LENGTH
+ *  Get/set list length.
+ *
+ *  Used by both mutable and immutable versions.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_CONCATLIST_INIT
+ *  @see WORD_MCONCATLIST_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_CONCATLIST_LEFT
+ *  Get/set left concatenated list.
+ *
+ *  @param word     Word to access.
+ *
+ *  Used by both mutable and immutable versions.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_CONCATLIST_INIT
+ *  @see WORD_MCONCATLIST_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_CONCATLIST_RIGHT
+ *  Get/set right concatenated list.
+ *
+ *  @param word     Word to access.
+ *
+ *  Used by both mutable and immutable versions.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_CONCATLIST_INIT
+ *  @see WORD_MCONCATLIST_INIT
+ *//*-----------------------------------------------------------------------*/
+
+#define WORD_CONCATLIST_DEPTH(word)     (((uint8_t *)(word))[1])
+#define WORD_CONCATLIST_LEFT_LENGTH(word) (((uint16_t *)(word))[1])
+#define WORD_CONCATLIST_LENGTH(word)    (((size_t *)(word))[1])
+#define WORD_CONCATLIST_LEFT(word)      (((Col_Word *)(word))[2])
+#define WORD_CONCATLIST_RIGHT(word)     (((Col_Word *)(word))[3])
+                                                                                /*!     @} */
+                                                                                /*!     @} */
+/*
+================================================================================*//*!   @addtogroup mconcatlist_words \
+Mutable Concat Lists
+                                                                                        @ingroup predefined_words mlist_words concatlist_words
+  Mutable concat lists are identical to their immutable counterpart with the
+  following exceptions:
+
+  - The content of mutable concat nodes can change over time, whereas immutable
+    ones are fixed at creation time.
+
+  - While immutable concat nodes can only contain immutable subnodes, mutable
+    concat nodes can contain both immutable and mutable subnodes; immutable
+    ones are converted to mutable using copy-on-write semantics during mutable
+    operations; mutable ones are frozen and turned immutable when they become
+    shared during immutable operations.
+
+  - Balancing rules are identical (see @ref list_tree_balancing 
+    "List Tree Balancing") but while immutable concat nodes must be copied, 
+    mutable nodes can be modified in-place.
+
+  @par Requirements
+  - Mutable concat lists use the same basic structure as immutable concat lists
+    so that they can be turned immutable in-place ([frozen](@ref FreezeMList)).
+
+  @param Depth          [Generic immutable concat list depth field]
+                        (@ref WORD_CONCATLIST_DEPTH).
+  @param Left_Length    [Generic immutable concat list left length field]
+                        (@ref WORD_CONCATLIST_LEFT_LENGTH).
+  @param Length         [Generic immutable concat list length field]
+                        (@ref WORD_CONCATLIST_LENGTH).
+  @param Left           [Generic immutable concat list left field]
+                        (@ref WORD_CONCATLIST_LEFT).
+  @param Right          [Generic immutable concat list right field]
+                        (@ref WORD_CONCATLIST_RIGHT).
+
+  @par Cell Layout
+    On all architectures the single-cell layout is as follows:
+
+    @dot
+    digraph {
+        node [fontname="Lucida Console,Courier" fontsize=14];
+        concatlist_word [shape=none, label=<
+            <table border="0" cellborder="1" cellspacing="0">
+            <tr><td border="0"></td>
+                <td sides="B" width="40" align="left">0</td><td sides="B" width="40" align="right">7</td>
+                <td sides="B" width="40" align="left">8</td><td sides="B" width="40" align="right">15</td>
+                <td sides="B" width="80" align="left">16</td><td sides="B" width="80" align="right">31</td>
+                <td sides="B" align="right">n</td>
+            </tr>
+            <tr><td sides="R">0</td>
+                <td href="@ref WORD_TYPEID" title="WORD_TYPEID" colspan="2">Type</td>
+                <td href="@ref WORD_CONCATLIST_DEPTH" title="WORD_CONCATLIST_DEPTH" colspan="2">Depth</td>
+                <td href="@ref WORD_CONCATLIST_LEFT_LENGTH" title="WORD_CONCATLIST_LEFT_LENGTH" colspan="2">Left length</td>
+                <td bgcolor="grey75"> Unused (n &gt; 32) </td>
+            </tr>
+            <tr><td sides="R">1</td>
+                <td href="@ref WORD_CONCATLIST_LENGTH" title="WORD_CONCATLIST_LENGTH" colspan="7">Length</td>
+            </tr>
+            <tr><td sides="R">2</td>
+                <td href="@ref WORD_CONCATLIST_LEFT" title="WORD_CONCATLIST_LEFT" colspan="7">Left</td>
+            </tr>
+            <tr><td sides="R">3</td>
+                <td href="@ref WORD_CONCATLIST_RIGHT" title="WORD_CONCATLIST_RIGHT" colspan="7">Right</td>
+            </tr>
+            </table>
+        >]
+    }
+    @enddot
+                                                                                        @if IGNORE
+           0     7 8    15 16           31                               n
+          +-------+-------+---------------+-------------------------------+
+        0 | Type  | Depth |  Left length  |        Unused (n > 32)        |
+          +-------+-------+---------------+-------------------------------+
+        1 |                            Length                             |
+          +---------------------------------------------------------------+
+        2 |                             Left                              |
+          +---------------------------------------------------------------+
+        3 |                             Right                             |
+          +---------------------------------------------------------------+
+                                                                                        @endif
+  @see @ref concatlist_words
+  @see WORD_TYPE_MCONCATLIST                                                    *//*!   @{ *//*
+================================================================================
+*/
+
+/********************************************************************************//*!   @name \
+ * Mutable Concat List Creation                                                         *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_MCONCATLIST_INIT
+ *
+ *  Mutable concat list word initializer.
+ *
+ *  @param word         Word to initialize.
+ *  @param depth        #WORD_CONCATLIST_DEPTH.
+ *  @param length       #WORD_CONCATLIST_LENGTH.
+ *  @param leftLength   #WORD_CONCATLIST_LEFT_LENGTH.
+ *  @param left         #WORD_CONCATLIST_LEFT.
+ *  @param right        #WORD_CONCATLIST_RIGHT.
+ *
+ *  @warning
+ *      Arguments **word** and **leftLength** are referenced several times by
+ *      the macro. Make sure to avoid any side effect.
+ *
+ *  @see WORD_TYPE_MCONCATLIST
+ *//*-----------------------------------------------------------------------*/
 
 #define WORD_MCONCATLIST_INIT(word, depth, length, leftLength, left, right) \
     WORD_SET_TYPEID((word), WORD_TYPE_MCONCATLIST); \
@@ -275,153 +500,135 @@ Internal Section: Concat Lists
     WORD_CONCATLIST_LEFT_LENGTH(word) = (uint16_t) ((leftLength)>UINT16_MAX?0:(leftLength)); \
     WORD_CONCATLIST_LEFT(word) = (left); \
     WORD_CONCATLIST_RIGHT(word) = (right);
-
-
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 /*
-================================================================================
-Internal Section: Type Checking
+================================================================================*//*!   @addtogroup list_words \
+Immutable Lists                                                                 *//*!   @{ *//*
 ================================================================================
 */
 
-/*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_LIST
+/********************************************************************************//*!   @name \
+ * Immutable List Exceptions                                                              *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * TYPECHECK_LIST
+ *                                                                                      @hideinitializer
+ *  Type checking macro for lists.
  *
- *	Type checking macro for lists.
+ *  @param word     Checked word.
  *
- * Argument:
- *	word	- Checked word.
- *
- * Side effects:
- *	Generate <COL_TYPECHECK> error when *word* is not a list.
- *
- * See also:
- *	<TYPECHECK>
- *---------------------------------------------------------------------------*/
+ *  @typecheck{COL_ERROR_LIST,word}
+ *//*-----------------------------------------------------------------------*/
 
 #define TYPECHECK_LIST(word) \
     TYPECHECK((Col_WordType(word) & COL_LIST), COL_ERROR_LIST, (word))
 
-/*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_MLIST
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * VALUECHECK_BOUNDS
+ *                                                                                      @hideinitializer
+ *  Value checking macro for lists, ensures that index is within bounds.
  *
- *	Type checking macro for mutable lists.
+ *  @param index    Checked index.
+ *  @param length   List length.
  *
- * Arguments:
- *	word	- Checked word.
- *
- * Side effects:
- *	Generate <COL_TYPECHECK> error when *word* is not a mutable list.
- *
- * See also:
- *	<TYPECHECK>
- *---------------------------------------------------------------------------*/
-
-#define TYPECHECK_MLIST(word) \
-    TYPECHECK((Col_WordType(word) & COL_MLIST), COL_ERROR_MLIST, (word))
-
-/*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_LISTITER
- *
- *	Type checking macro for list iterators.
- *
- * Argument:
- *	it	- Checked iterator.
- *
- * Side effects:
- *	Generate <COL_TYPECHECK> error when *it* is not a valid list iterator.
- *
- * See also:
- *	<TYPECHECK>, <Col_ListIterNull>
- *---------------------------------------------------------------------------*/
-
-#define TYPECHECK_LISTITER(it) \
-    TYPECHECK(!Col_ListIterNull(it), COL_ERROR_LISTITER, (it))
-
-
-/*
-================================================================================
-Internal Section: Value Checking
-================================================================================
-*/
-
-/*---------------------------------------------------------------------------
- * Internal Macro: VALUECHECK_BOUNDS
- *
- *	Value checking macro for lists, ensures that index is within bounds.
- *
- * Arguments:
- *	index	- Checked index.
- *	length	- List length.
- *
- * Side effects:
- *	Generate <COL_VALUECHECK> error when index is out of bounds.
- *
- * See also:
- *	<VALUECHECK>
- *---------------------------------------------------------------------------*/
+ *  @valuecheck{COL_ERROR_LISTINDEX,index < length}
+ *//*-----------------------------------------------------------------------*/
 
 #define VALUECHECK_BOUNDS(index, length) \
     VALUECHECK(((index) < (length)), COL_ERROR_LISTINDEX, (index), (length))
 
-/*---------------------------------------------------------------------------
- * Internal Macro: VALUECHECK_LISTLENGTH_CONCAT
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * VALUECHECK_LISTLENGTH_CONCAT
+ *                                                                                      @hideinitializer
+ *  Value checking macro for lists, ensures that combined lengths of two
+ *  concatenated lists don't exceed the maximum value.
  *
- *	Value checking macro for lists, ensures that combined lengths of two
- *	concatenated lists don't exceed the maximum value.
+ *  @param length1, length2     Checked lengths.
  *
- * Argument:
- *	length1, length2    - Checked lengths.
- *
- * Side effects:
- *	Generate <COL_VALUECHECK> error when resulting length exceeds the max
- *	list length (SIZE_MAX).
- *
- * See also:
- *	<VALUECHECK>
- *---------------------------------------------------------------------------*/
+ *  @valuecheck{COL_ERROR_LISTLENGTH_CONCAT,length1+length2}
+ *//*-----------------------------------------------------------------------*/
 
 #define VALUECHECK_LISTLENGTH_CONCAT(length1, length2) \
     VALUECHECK((SIZE_MAX-(length1) >= (length2)), COL_ERROR_LISTLENGTH_CONCAT, \
-		(length1), (length2), SIZE_MAX)
+                (length1), (length2), SIZE_MAX)
 
-/*---------------------------------------------------------------------------
- * Internal Macro: VALUECHECK_LISTLENGTH_REPEAT
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * VALUECHECK_LISTLENGTH_REPEAT
+ *                                                                                      @hideinitializer
+ *  Value checking macro for lists, ensures that length of a repeated list
+ *  doesn't exceed the maximum value.
  *
- *	Value checking macro for lists, ensures that length of a repeated list
- *	doesn't exceed the maximum value.
+ *  @param length, count    Checked length and repetition factor.
  *
- * Argument:
- *	length, count	- Checked length and repetition factor.
- *
- * Side effects:
- *	Generate <COL_VALUECHECK> error when resulting length exceeds the max
- *	list length (SIZE_MAX).
- *
- * See also:
- *	<VALUECHECK>
- *---------------------------------------------------------------------------*/
+ *  @valuecheck{COL_ERROR_LISTLENGTH_CONCAT,length*count}
+ *//*-----------------------------------------------------------------------*/
 
 #define VALUECHECK_LISTLENGTH_REPEAT(length, count) \
     VALUECHECK(((count) <= 1 || SIZE_MAX/(count) >= (length)), \
-	    COL_ERROR_LISTLENGTH_REPEAT, (length), (count), SIZE_MAX)
+                COL_ERROR_LISTLENGTH_REPEAT, (length), (count), SIZE_MAX)
+                                                                                /*!     @} */
 
-/*---------------------------------------------------------------------------
- * Internal Macro: VALUECHECK_LISTITER
+/********************************************************************************//*!   @name \
+ * List Iterator Exceptions                                                     *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * TYPECHECK_LISTITER
+ *                                                                                      @hideinitializer
+ *  Type checking macro for list iterators.
  *
- *	Value checking macro for list iterators, ensures that iterator is not
- *	at end.
+ *  @param it   Checked iterator.
  *
- * Argument:
- *	it	- Checked iterator.
+ *  @typecheck{COL_ERROR_LISTITER,it}
  *
- * Side effects:
- *	Generate <COL_VALUECHECK> error when *it* is at end.
+ *  @see Col_ListIterNull
+ *//*-----------------------------------------------------------------------*/
+
+#define TYPECHECK_LISTITER(it) \
+    TYPECHECK(!Col_ListIterNull(it), COL_ERROR_LISTITER, (it))
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * VALUECHECK_LISTITER
+ *                                                                                      @hideinitializer
+ *  Value checking macro for list iterators, ensures that iterator is not
+ *  at end.
  *
- * See also:
- *	<VALUECHECK>, <Col_ListIterEnd>
- *---------------------------------------------------------------------------*/
+ *  @param it   Checked iterator.
+ *
+ *  @valuecheck{COL_ERROR_LISTITER_END,it}
+ *
+ *  @see Col_ListIterEnd
+ *//*-----------------------------------------------------------------------*/
 
 #define VALUECHECK_LISTITER(it) \
     VALUECHECK(!Col_ListIterEnd(it), COL_ERROR_LISTITER_END, (it))
+                                                                                /*!     @} */
+                                                                                /*!     @} */
+/*
+================================================================================*//*!   @addtogroup mlist_words \
+Mutable Lists                                                                   *//*!   @{ *//*
+================================================================================
+*/
 
+/********************************************************************************//*!   @name \
+ * Mutable List Exceptions                                                      *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * TYPECHECK_MLIST
+ *                                                                                      @hideinitializer
+ *  Type checking macro for mutable lists.
+ *
+ *  @param word     Checked word.
+ *
+ *  @typecheck{COL_ERROR_MLIST,word}
+ *//*-----------------------------------------------------------------------*/
+
+#define TYPECHECK_MLIST(word) \
+    TYPECHECK((Col_WordType(word) & COL_MLIST), COL_ERROR_MLIST, (word))
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 #endif /* _COLIBRI_LIST_INT */
+                                                                                /*!     @endcond */

@@ -1,44 +1,71 @@
-/*
- * Header: colUtils.h
+/*                                                                              *//*!   @file \
+ * colUtils.h
  *
- *	This header file defines various utility macros used throughout Colibri.
+ *  This header file defines various utility macros used throughout Colibri.
  */
 
 #ifndef _COLIBRI_UTILS
 #define _COLIBRI_UTILS
 
-/*---------------------------------------------------------------------------
- * Macro: COL_STRINGIZE
+/*
+================================================================================*//*!   @addtogroup utils \
+Utilities                                                                       *//*!   @{*//*
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * COL_STRINGIZE
  *
- *	Turn argument into a C string.
- *---------------------------------------------------------------------------*/
+ *  Turn argument into a C string.
+ *//*-----------------------------------------------------------------------*/
 
 #define COL_STRINGIZE(arg) \
     #arg
 
-/*---------------------------------------------------------------------------
- * Macro: COL_CONCATENATE
- *
- *	Concatenates both arguments.
- *---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * COL_CONCATENATE
+ *                                                                                      @hideinitializer
+ *  Concatenates both arguments.
+ *//*-----------------------------------------------------------------------*/
 
 #define COL_CONCATENATE(arg1, arg2) \
     COL_CONCATENATE1(arg1, arg2)
+                                                                                #       ifndef DOXYGEN
 #define COL_CONCATENATE1(arg1, arg2) \
     COL_CONCATENATE2(arg1, arg2)
 #define COL_CONCATENATE2(arg1, arg2) \
     arg1##arg2
+                                                                                #       endif DOXYGEN
 
-/*---------------------------------------------------------------------------
- * Macro: COL_ARGCOUNT
+/********************************************************************************//*!   @name \
+ * Variadic Macro Utilities
  *
- *	Macro hackery for getting the number of args in a variadic macro 
- *	(limited to 63) and iterating over these args. 
+ *  Macro hackery for getting accessing args passed to variadic macros.
  *
- * See:
- *	<http://groups.google.com/group/comp.std.c/browse_thread/thread/77ee8c8f92e4a3fb/346fc464319b1ee5?pli=1>
- */
+ *      http://groups.google.com/group/comp.std.c/browse_thread/thread/77ee8c8f92e4a3fb/346fc464319b1ee5?pli=1 *//*! @{ *//*
+ ******************************************************************************/
 
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * COL_ARGCOUNT
+ *  Get the number of args passed to it.
+ *                                                                                      @hideinitializer
+ *  @param ...      Arguments passed to the variadic macro.
+ *
+ *  @warning
+ *      Limited to 63 arguments.
+ *
+ *                                                                              *//*!   @def \
+ * COL_FOR_EACH
+ *  Iterate over the args passed to it.
+ *                                                                                      @hideinitializer
+ *  @param what     Function taking one argument, applied to all remaining
+ *                  arguments.
+ *  @param ...      Arguments passed to the variadic macro.
+ *
+ *  @warning
+ *      Limited to 63 arguments.
+ *//*-----------------------------------------------------------------------*/
+                                                                                #       ifndef DOXYGEN
 #define COL_LASTARG( \
          _1, _2, _3, _4, _5, _6, _7, _8, _9,_10, \
         _11,_12,_13,_14,_15,_16,_17,_18,_19,_20, \
@@ -47,28 +74,28 @@
         _41,_42,_43,_44,_45,_46,_47,_48,_49,_50, \
         _51,_52,_53,_54,_55,_56,_57,_58,_59,_60, \
         _61,_62,_63, \
-	N,...) N
-
+    N,...) N
+                                                                                #       endif DOXYGEN
 #if defined(_MSC_VER)
 /*
  * MSVC is bugged wrt. __VA_ARGS__ handling. The workaround involves the use of
- * macros in place of parentheses. See: 
- *	http://www.gamedev.net/community/forums/topic.asp?topic_id=567686
- */ 
+ * macros in place of parentheses. See:
+ *  http://www.gamedev.net/community/forums/topic.asp?topic_id=567686
+ */
 #   define COL_LEFT_PAREN (
 #   define COL_RIGHT_PAREN )
 
 #   define COL_ARGCOUNT(...) \
-	COL_LASTARG COL_LEFT_PAREN \
-	    __VA_ARGS__, \
-	    63,62,61,60,                   \
-	    59,58,57,56,55,54,53,52,51,50, \
-	    49,48,47,46,45,44,43,42,41,40, \
-	    39,38,37,36,35,34,33,32,31,30, \
-	    29,28,27,26,25,24,23,22,21,20, \
-	    19,18,17,16,15,14,13,12,11,10, \
-	    9,8,7,6,5,4,3,2,1,0 \
-	COL_RIGHT_PAREN
+    COL_LASTARG COL_LEFT_PAREN \
+        __VA_ARGS__, \
+        63,62,61,60,                   \
+        59,58,57,56,55,54,53,52,51,50, \
+        49,48,47,46,45,44,43,42,41,40, \
+        39,38,37,36,35,34,33,32,31,30, \
+        29,28,27,26,25,24,23,22,21,20, \
+        19,18,17,16,15,14,13,12,11,10, \
+        9,8,7,6,5,4,3,2,1,0 \
+    COL_RIGHT_PAREN
 
 #   define COL_FOR_EACH_1(what, x) what(x)
 #   define COL_FOR_EACH_2(what, x, ...) what(x) COL_FOR_EACH_1 COL_LEFT_PAREN what,__VA_ARGS__ COL_RIGHT_PAREN
@@ -138,17 +165,17 @@
 
 #else
 #   define COL_ARGCOUNT(...) \
-	COL_LASTARG( \
-	    __VA_ARGS__, \
-	    63,62,61,60,                   \
-	    59,58,57,56,55,54,53,52,51,50, \
-	    49,48,47,46,45,44,43,42,41,40, \
-	    39,38,37,36,35,34,33,32,31,30, \
-	    29,28,27,26,25,24,23,22,21,20, \
-	    19,18,17,16,15,14,13,12,11,10, \
-	    9,8,7,6,5,4,3,2,1,0 \
-	)
-
+    COL_LASTARG( \
+        __VA_ARGS__, \
+        63,62,61,60,                   \
+        59,58,57,56,55,54,53,52,51,50, \
+        49,48,47,46,45,44,43,42,41,40, \
+        39,38,37,36,35,34,33,32,31,30, \
+        29,28,27,26,25,24,23,22,21,20, \
+        19,18,17,16,15,14,13,12,11,10, \
+        9,8,7,6,5,4,3,2,1,0 \
+    )
+                                                                                #       ifndef DOXYGEN
 #   define COL_FOR_EACH_1(what, x) what(x)
 #   define COL_FOR_EACH_2(what, x, ...) what(x) COL_FOR_EACH_1(what,__VA_ARGS__)
 #   define COL_FOR_EACH_3(what, x, ...) what(x) COL_FOR_EACH_2(what,__VA_ARGS__)
@@ -212,58 +239,70 @@
 #   define COL_FOR_EACH_61(what, x, ...) what(x) COL_FOR_EACH_60(what,__VA_ARGS__)
 #   define COL_FOR_EACH_62(what, x, ...) what(x) COL_FOR_EACH_61(what,__VA_ARGS__)
 #   define COL_FOR_EACH_63(what, x, ...) what(x) COL_FOR_EACH_62(what,__VA_ARGS__)
-
+                                                                                #       endif DOXYGEN
 #   define COL_FOR_EACH(what, ...) COL_CONCATENATE(COL_FOR_EACH_,COL_ARGCOUNT(__VA_ARGS__))(what,__VA_ARGS__)
 
 #endif /* _MSC_VER */
+                                                                                /*!     @} */
+                                                                                /*!     @} */
+/*
+================================================================================*//*!   @addtogroup error \
+Error Handling & Debugging                                                      *//*!   @{*//*
+================================================================================
+*/
 
-/*---------------------------------------------------------------------------
- * Macro: COL_RUNTIMECHECK
+/********************************************************************************//*!   @name \
+ * Runtime Checks                                                               *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * COL_RUNTIMECHECK
+ *                                                                                      @hideinitializer
+ *  Check condition at runtime. If failed, generate an error with the
+ *  given parameters then execute the code block immediately following the
+ *  statement.
  *
- *	Check condition at runtime. If failed, generate an error with the
- *	given parameters then execute the code block immediately following the 
- *	statement.
+ *  For example:
  *
- *	For example:
+ *  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *  COL_RUNTIMECHECK(someCondition, COL_ERROR, ColibriDomain,
+ *      COL_ERROR_GENERIC, "some message") return;
+ *  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  *
- * (start example)
- *	RUNTIME_CHECK(someCondition, COL_ERROR, ColibriDomain, 
- *	    COL_ERROR_GENERIC, "some message") return;
- * (end)
+ *  This code generates a generic Colibri error then exits the current proc
+ *  if someCondition is false.
  *
- *	This code generates a generic Colibri error then exits the current proc
- *	if someCondition is false.
+ *  @param condition    Boolean condition.
+ *  @param level        Error level.
+ *  @param domain       Error domain.
+ *  @param code         Error code
+ *  @param ...          Remaining arguments passed to Col_Error().
  *
- * Arguments:
- *	condition	- Boolean condition.
- *	level		- Error level.
- *	domain		- Error domain.
- *	code		- Error code.
- *	...		- Remaining arguments passed to <Col_Error>
- *---------------------------------------------------------------------------*/
+ *  @see COL_DEBUGCHECK
+ *//*-----------------------------------------------------------------------*/
 
 #define COL_RUNTIMECHECK(condition, level, domain, code, ...) \
     if (!(condition)) { \
-	Col_Error((level), (domain), (code), __VA_ARGS__); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
+        Col_Error((level), (domain), (code), __VA_ARGS__); \
+        goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
+COL_CONCATENATE(FAILED,__LINE__):
 
-/*---------------------------------------------------------------------------
- * Macro: COL_DEBUGCHECK
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * COL_DEBUGCHECK
+ *                                                                                      @hideinitializer
+ *  In debug mode, same as #COL_RUNTIMECHECK. Else does nothing (and ignore
+ *  the code block immediately following the statement).
  *
- *	In debug mode, same as <COL_RUNTIMECHECK>. Else does nothing (and ignore
- *	the code block immediately following the statement.
- *
- * See also:
- *	<COL_RUNTIMECHECK>
- *---------------------------------------------------------------------------*/
+ *  @see COL_RUNTIMECHECK
+ *//*-----------------------------------------------------------------------*/
 
 #ifdef _DEBUG
 #   define COL_DEBUGCHECK COL_RUNTIMECHECK
 #else
 #   define COL_DEBUGCHECK(...) if (0)
 #endif
-
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 #endif /* _COLIBRI_UTILS */

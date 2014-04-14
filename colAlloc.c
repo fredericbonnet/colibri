@@ -1,7 +1,7 @@
-/*
- * Internal File: colAlloc.c
+/*                                                                              *//*!   @file \
+ * colAlloc.c
  *
- *	This file implements the memory allocation features of Colibri.
+ *  This file implements the memory allocation features of Colibri.
  */
 
 #include "include/colibri.h"
@@ -10,255 +10,263 @@
 
 #include <stdlib.h>
 #include <string.h>
-
+                                                                                #       ifndef DOXYGEN
 /*
  * Prototypes for functions used only in this file.
  */
 
 typedef struct AddressRange *pAddressRange;
-static size_t		FindFreePagesInRange(struct AddressRange *range, 
-			    size_t number, size_t index);
-static void *		SysPageAlloc(size_t number, int written);
-static void		SysPageFree(void * base);
-static void		SysPageTrim(void * base);
-static Cell *		PageAllocCells(size_t number, Cell *firstCell);
-static size_t		FindFreeCells(void *page, size_t number, size_t index);
+static size_t           FindFreePagesInRange(struct AddressRange *range,
+                            size_t number, size_t index);
+static void *           SysPageAlloc(size_t number, int written);
+static void             SysPageFree(void * base);
+static void             SysPageTrim(void * base);
+static Cell *           PageAllocCells(size_t number, Cell *firstCell);
+static size_t           FindFreeCells(void *page, size_t number, size_t index);
+                                                                                #       endif DOXYGEN
 
+/*
+================================================================================*//*!   @cond PRIVATE @addtogroup alloc \
+Memory Allocation                                                               *//*!   @endcond @{ *//*
+================================================================================
+*/
 
-/****************************************************************************
- * Internal Section: Bit Handling
- ****************************************************************************/
+/********************************************************************************//*!   @name \
+ * Bit Handling                                                                 *//*!   @{ *//*
+ ******************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Variable: firstZeroBitSequence
+ * firstZeroBitSequence
+ *                                                                              *//*!
+ *  Position of the first zero-bit sequence of a given length in byte.
+ *  First index is length of zero-bit sequence to look for, minus 1. Second
+ *  index is value of byte in which to search. Result is index of the first
+ *  bit in matching zero-bit sequence, or -1 if none.
  *
- *	Position of the first zero-bit sequence of a given length in byte.
- *	First index is length of zero-bit sequence to look for, minus 1. Second 
- *	index is value of byte in which to search. Result is index of the first 
- *	bit in matching zero-bit sequence, or -1 if none.
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
 static const char firstZeroBitSequence[7][256] = {
     { /* single bit */
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  5, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  6, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  5, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  7, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  5, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  6, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  5, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4, 
-	 0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0, -1
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  5,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  6,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  5,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  7,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  5,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  6,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  5,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4,
+         0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0, -1
     },
     { /*  2-bit sequence */
-	 0,  1,  2,  2,  0,  3,  3,  3,  0,  1,  4,  4,  0,  4,  4,  4, 
-	 0,  1,  2,  2,  0,  5,  5,  5,  0,  1,  5,  5,  0,  5,  5,  5, 
-	 0,  1,  2,  2,  0,  3,  3,  3,  0,  1,  6,  6,  0,  6,  6,  6, 
-	 0,  1,  2,  2,  0,  6,  6,  6,  0,  1,  6,  6,  0,  6,  6,  6, 
-	 0,  1,  2,  2,  0,  3,  3,  3,  0,  1,  4,  4,  0,  4,  4,  4, 
-	 0,  1,  2,  2,  0, -1, -1, -1,  0,  1, -1, -1,  0, -1, -1, -1, 
-	 0,  1,  2,  2,  0,  3,  3,  3,  0,  1, -1, -1,  0, -1, -1, -1, 
-	 0,  1,  2,  2,  0, -1, -1, -1,  0,  1, -1, -1,  0, -1, -1, -1, 
-	 0,  1,  2,  2,  0,  3,  3,  3,  0,  1,  4,  4,  0,  4,  4,  4, 
-	 0,  1,  2,  2,  0,  5,  5,  5,  0,  1,  5,  5,  0,  5,  5,  5, 
-	 0,  1,  2,  2,  0,  3,  3,  3,  0,  1, -1, -1,  0, -1, -1, -1, 
-	 0,  1,  2,  2,  0, -1, -1, -1,  0,  1, -1, -1,  0, -1, -1, -1, 
-	 0,  1,  2,  2,  0,  3,  3,  3,  0,  1,  4,  4,  0,  4,  4,  4, 
-	 0,  1,  2,  2,  0, -1, -1, -1,  0,  1, -1, -1,  0, -1, -1, -1, 
-	 0,  1,  2,  2,  0,  3,  3,  3,  0,  1, -1, -1,  0, -1, -1, -1, 
-	 0,  1,  2,  2,  0, -1, -1, -1,  0,  1, -1, -1,  0, -1, -1, -1
+         0,  1,  2,  2,  0,  3,  3,  3,  0,  1,  4,  4,  0,  4,  4,  4,
+         0,  1,  2,  2,  0,  5,  5,  5,  0,  1,  5,  5,  0,  5,  5,  5,
+         0,  1,  2,  2,  0,  3,  3,  3,  0,  1,  6,  6,  0,  6,  6,  6,
+         0,  1,  2,  2,  0,  6,  6,  6,  0,  1,  6,  6,  0,  6,  6,  6,
+         0,  1,  2,  2,  0,  3,  3,  3,  0,  1,  4,  4,  0,  4,  4,  4,
+         0,  1,  2,  2,  0, -1, -1, -1,  0,  1, -1, -1,  0, -1, -1, -1,
+         0,  1,  2,  2,  0,  3,  3,  3,  0,  1, -1, -1,  0, -1, -1, -1,
+         0,  1,  2,  2,  0, -1, -1, -1,  0,  1, -1, -1,  0, -1, -1, -1,
+         0,  1,  2,  2,  0,  3,  3,  3,  0,  1,  4,  4,  0,  4,  4,  4,
+         0,  1,  2,  2,  0,  5,  5,  5,  0,  1,  5,  5,  0,  5,  5,  5,
+         0,  1,  2,  2,  0,  3,  3,  3,  0,  1, -1, -1,  0, -1, -1, -1,
+         0,  1,  2,  2,  0, -1, -1, -1,  0,  1, -1, -1,  0, -1, -1, -1,
+         0,  1,  2,  2,  0,  3,  3,  3,  0,  1,  4,  4,  0,  4,  4,  4,
+         0,  1,  2,  2,  0, -1, -1, -1,  0,  1, -1, -1,  0, -1, -1, -1,
+         0,  1,  2,  2,  0,  3,  3,  3,  0,  1, -1, -1,  0, -1, -1, -1,
+         0,  1,  2,  2,  0, -1, -1, -1,  0,  1, -1, -1,  0, -1, -1, -1
     },
     { /*  3-bit sequence */
-	 0,  1,  2,  2,  3,  3,  3,  3,  0,  4,  4,  4,  4,  4,  4,  4, 
-	 0,  1,  5,  5,  5,  5,  5,  5,  0,  5,  5,  5,  5,  5,  5,  5, 
-	 0,  1,  2,  2, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1,  2,  2,  3,  3,  3,  3,  0, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1,  2,  2, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1,  2,  2,  3,  3,  3,  3,  0,  4,  4,  4,  4,  4,  4,  4, 
-	 0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1,  2,  2, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1,  2,  2,  3,  3,  3,  3,  0, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1,  2,  2, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1
+         0,  1,  2,  2,  3,  3,  3,  3,  0,  4,  4,  4,  4,  4,  4,  4,
+         0,  1,  5,  5,  5,  5,  5,  5,  0,  5,  5,  5,  5,  5,  5,  5,
+         0,  1,  2,  2, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1,
+         0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1,
+         0,  1,  2,  2,  3,  3,  3,  3,  0, -1, -1, -1, -1, -1, -1, -1,
+         0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1,
+         0,  1,  2,  2, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1,
+         0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1,
+         0,  1,  2,  2,  3,  3,  3,  3,  0,  4,  4,  4,  4,  4,  4,  4,
+         0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1,
+         0,  1,  2,  2, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1,
+         0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1,
+         0,  1,  2,  2,  3,  3,  3,  3,  0, -1, -1, -1, -1, -1, -1, -1,
+         0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1,
+         0,  1,  2,  2, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1,
+         0,  1, -1, -1, -1, -1, -1, -1,  0, -1, -1, -1, -1, -1, -1, -1
     },
     { /*  4-bit sequence */
-	 0,  1,  2,  2,  3,  3,  3,  3,  4,  4,  4,  4,  4,  4,  4,  4, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1,  2,  2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1,  2,  2,  3,  3,  3,  3, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1,  2,  2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+         0,  1,  2,  2,  3,  3,  3,  3,  4,  4,  4,  4,  4,  4,  4,  4,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0,  1,  2,  2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0,  1,  2,  2,  3,  3,  3,  3, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0,  1,  2,  2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
     },
     { /*  5-bit sequence */
-	 0,  1,  2,  2,  3,  3,  3,  3, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1,  2,  2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+         0,  1,  2,  2,  3,  3,  3,  3, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0,  1,  2,  2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
     },
     { /*  6-bit sequence */
-	 0,  1,  2,  2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+         0,  1,  2,  2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
     },
     { /*  7-bit sequence */
-	 0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+         0,  1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
     }
     /* 8-bit sequences need no table, just test for zero byte */
 };
 
 /*---------------------------------------------------------------------------
- * Internal Variable: longestLeadingZeroBitSequence
+ * longestLeadingZeroBitSequence
+ *                                                                              *//*!
+ *  Longest leading zero-bit sequence in byte. Index is value of byte.
+ *  Result is number of consecutive cleared bytes starting at MSB.
  *
- *	Longest leading zero-bit sequence in byte. Index is value of byte.
- *	Result is number of consecutive cleared bytes starting at MSB.
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
 static const char longestLeadingZeroBitSequence[256] = {
-    8, 7, 6, 6, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4, 
-    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    8, 7, 6, 6, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4,
+    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
 /*---------------------------------------------------------------------------
- * Internal Variable: nbBitsSet
+ * nbBitsSet
+ *                                                                              *//*!
+ *  Number of bits set in byte. Index is value of byte. Result is number of
+ *  set bits.
  *
- *	Number of bits set in byte. Index is value of byte. Result is number of
- *	set bits.
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
 static const char nbBitsSet[256] = {
-    0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 
-    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 
-    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 
-    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 
-    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 
-    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 
-    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 
-    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 
-    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 
-    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 
-    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 
-    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 
-    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 
-    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 
-    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 
+    0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
     4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8
 };
+                                                                                /*!     @} */
 
-
-/****************************************************************************
- * Internal Section: Memory Pools
- ****************************************************************************/
+/********************************************************************************//*!   @name \
+ * Memory Pools                                                                 *//*!   @{ *//*
+ ******************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Function: PoolInit
+ * PoolInit
+ *                                                                              *//*!
+ *  Initialize memory pool.
  *
- *	Initialize memory pool.
- *
- * Arguments:
- *	pool		- Pool to initialize.
- *	generation	- Generation number; 0 = youngest.
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
 void
 PoolInit(
-    MemoryPool *pool,
-    unsigned int generation)
+    MemoryPool *pool,           /*!< Pool to initialize. */
+    unsigned int generation)    /*!< Generation number; 0 = youngest. */
 {
     memset(pool, 0, sizeof(*pool));
     pool->generation = generation;
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: PoolCleanup
+ * PoolCleanup
+ *                                                                              *//*!
+ *  Cleanup memory pool.
  *
- *	Cleanup memory pool.
+ *  @see SysPageFree
  *
- * Argument:
- *	pool		- Pool to clenup.
- *
- * See also:
- *	<SysPageFree>
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
 void
 PoolCleanup(
-    MemoryPool *pool)
+    MemoryPool *pool)   /*!< Pool to cleanup. */
 {
     Page *base, *next, *page;
 
@@ -268,210 +276,236 @@ PoolCleanup(
 
     CleanupSweepables(pool);
 
-    /* 
+    /*
      * Free all system pages.
      */
 
     for (base = pool->pages; base; base = next) {
-	for (page = base; !PAGE_FLAG(page, PAGE_FLAG_LAST); 
-		page = PAGE_NEXT(page));
-	next = PAGE_NEXT(page);
-	ASSERT(PAGE_FLAG(base, PAGE_FLAG_FIRST));
-	SysPageFree(base);
+        for (page = base; !PAGE_FLAG(page, PAGE_FLAG_LAST);
+                page = PAGE_NEXT(page));
+        next = PAGE_NEXT(page);
+        ASSERT(PAGE_FLAG(base, PAGE_FLAG_FIRST));
+        SysPageFree(base);
     }
 }
+                                                                                /*!     @} */
 
-
-/****************************************************************************
- * Internal Section: System Page Allocation
- * 
- *	Granularity-free system page allocation based on address range 
- *	reservation.
- ****************************************************************************/
-
-/*---------------------------------------------------------------------------
- * Algorithm: Address Reservation And Allocation
+/********************************************************************************//*!   @name \
+ * System Page Allocation
  *
- *	Some systems allow single system page allocations (e.g. POSIX mmap), 
- *	while others require coarser grained schemes (e.g. Windows 
- *	VirtualAlloc). However in both cases we have to keep track of allocated
- *	pages, especially for generational page write monitoring. So address 
- *	ranges are reserved, and individual pages can be allocated and freed 
- *	within these ranges. From a higher level this allows for per-page 
- *	allocation, while at the same time providing enough metadata for memory
- *	introspection.
+ *  Granularity-free system page allocation based on address range
+ *  reservation.
  *
- *	When the number of pages to allocate exceeds a certain size (defined as 
- *	<LARGE_PAGE_SIZE>), a dedicated address range is reserved and allocated, 
- *	which must be freed all at once. Else, pages are allocated within larger 
- *	address ranges using the following scheme: 
- *	
- *	Address ranges are reserved in geometrically increasing sizes up to a 
- *	maximum size (the first being a multiple of the allocation granularity). 
- *	Ranges form a singly-linked list in allocation order (so that search 
- *	times are geometrically increasing too). A descriptor structure is 
- *	malloc'd along with the range and consists of a pointer to the next 
- *	descriptor, the base address of the range, the total and free numbers of 
- *	pages and the index of the first free page in range, and a page alloc
- *	info table indicating:
+ *  ### Address Reservation And Allocation
  *
- *		- For free pages, zero.
- *		- For first page in group, the negated size of the group.
- *		- For remaining pages, the index in group.
+ *  Some systems allow single system page allocations (e.g. POSIX mmap),
+ *  while others require coarser grained schemes (e.g. Windows
+ *  VirtualAlloc). However in both cases we have to keep track of allocated
+ *  pages, especially for generational page write monitoring. So address
+ *  ranges are reserved, and individual pages can be allocated and freed
+ *  within these ranges. From a higher level this allows for per-page
+ *  allocation, while at the same time providing enough metadata for memory
+ *  introspection.
  *
- *	That way, page group info can be known via direct access from the page
- *	index in range:
+ *  When the number of pages to allocate exceeds a certain size (defined as
+ *  #LARGE_PAGE_SIZE), a dedicated address range is reserved and allocated,
+ *  which must be freed all at once. Else, pages are allocated within larger
+ *  address ranges using the following scheme:
  *
- *		- When alloc info is zero, the page is free.
- *		- When negative, the page is the first in a group of the given
- *		  negated size.
- *		- When positive, the page is the n-th in a group whose first 
- *		  page is the n-th previous one.
- *	
- *	To allocate a group of pages in an address range, the alloc info table
- *	is scanned until a large enough group of free pages is found. 
+ *  Address ranges are reserved in geometrically increasing sizes up to a
+ *  maximum size (the first being a multiple of the allocation granularity).
+ *  Ranges form a singly-linked list in allocation order (so that search
+ *  times are geometrically increasing too). A descriptor structure is
+ *  malloc'd along with the range and consists of a pointer to the next
+ *  descriptor, the base address of the range, the total and free numbers of
+ *  pages and the index of the first free page in range, and a page alloc
+ *  info table indicating:
  *
- *	To free a group of pages, the containing address range is found by 
- *	scanning all ranges in order (this is fast, as this only involves 
- *	address comparison and the ranges grow geometrically). In either cases 
- *	the descriptor is updated accordingly. If a containing range is not 
- *	found we assume that it was a dedicated range and we attempt to release
- *	it at once. 
+ *    - For free pages, zero.
+ *    - For first page in group, the negated size of the group.
+ *    - For remaining pages, the index in group.
  *
- *	Just following this alloc info table is a bitmask table used for write
- *	tracking. With our generational GC, pages of older generations are 
- *	write-protected so that references pointing to younger cells can be
- *	tracked during the mark phase: such modified pages contain potential
- *	parent cells that must be followed along with roots. Regular ranges use
- *	a bitmask array, while dedicated ranges only have to store one value 
- *	for the whole range.
- *	
- *	This allocation scheme may not look optimal at first sight (especially 
- *	the alloc info table scanning step), but keep in mind that the typical 
- *	use case only involves single page allocations. Multiple page 
- *	allocations only occur when allocating large, multiple cell-based 
- *	structures, and most structures are single cell sized. And very large 
- *	pages will end up in their own dedicated range with no group management.
- *	Moreover stress tests have shown that this scheme yielded similar or 
- *	better performances than the previous schemes.
- *---------------------------------------------------------------------------*/
+ *  That way, page group info can be known via direct access from the page
+ *  index in range:
+ *
+ *    - When alloc info is zero, the page is free.
+ *    - When negative, the page is the first in a group of the given
+ *      negated size.
+ *    - When positive, the page is the n-th in a group whose first
+ *      page is the n-th previous one.
+ *
+ *  To allocate a group of pages in an address range, the alloc info table
+ *  is scanned until a large enough group of free pages is found.
+ *
+ *  To free a group of pages, the containing address range is found by
+ *  scanning all ranges in order (this is fast, as this only involves
+ *  address comparison and the ranges grow geometrically). In either cases
+ *  the descriptor is updated accordingly. If a containing range is not
+ *  found we assume that it was a dedicated range and we attempt to release
+ *  it at once.
+ *
+ *  Just following this alloc info table is a bitmask table used for write
+ *  tracking. With our generational GC, pages of older generations are
+ *  write-protected so that references pointing to younger cells can be
+ *  tracked during the mark phase: such modified pages contain potential
+ *  parent cells that must be followed along with roots. Regular ranges use
+ *  a bitmask array, while dedicated ranges only have to store one value
+ *  for the whole range.
+ *
+ *  This allocation scheme may not look optimal at first sight (especially
+ *  the alloc info table scanning step), but keep in mind that the typical
+ *  use case only involves single page allocations. Multiple page
+ *  allocations only occur when allocating large, multiple cell-based
+ *  structures, and most structures are single cell sized. And very large
+ *  pages will end up in their own dedicated range with no group management.
+ *  Moreover stress tests have shown that this scheme yielded similar or
+ *  better performances than the previous schemes.                              *//*!   @{ *//*
+ ******************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Variables: System Page Size and Granularity Variables
+ * systemPageSize
+ *                                                                              *//*!
+ *  System page size in bytes.
  *
- *	System-dependent variables.
- *
- *  systemPageSize	- System page size in bytes.
- *  allocGranularity	- Allocation granularity of address ranges.
- *  shiftPage		- Bits to shift to convert between pages and bytes.
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
 size_t systemPageSize;
+
+/*---------------------------------------------------------------------------
+ * allocGranularity
+ *                                                                              *//*!
+ *  Allocation granularity of address ranges.
+ *
+ *  @private
+ *//*-----------------------------------------------------------------------*/
+
 size_t allocGranularity;
+
+/*---------------------------------------------------------------------------
+ * shiftPage
+ *                                                                              *//*!
+ *  Bits to shift to convert between pages and bytes.
+ *
+ *  @private
+ *//*-----------------------------------------------------------------------*/
+
 size_t shiftPage;
 
 /*---------------------------------------------------------------------------
- * Internal Typedef: AddressRange
+ * AddressRange
+ *                                                                              *//*!
+ *  Address range descriptor for allocated system pages.
  *
- *	Address range descriptor for allocated system pages.
+ *  @see SysPageAlloc
+ *  @see SysPageFree
  *
- * Fields:
- *	next		- Next descriptor in list.
- *	base		- Base address.
- *	size		- Size in pages.
- *	free		- Number of free pages in range.
- *	first		- First free page in range.
- *	allocInfo	- Info about allocated pages in range.
- *
- * See also:
- *	<SysPageAlloc>, <SysPageFree>
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
 typedef struct AddressRange {
-    struct AddressRange *next;
-    void *base;
-    size_t size;
-    size_t free;
-    size_t first;
-    char allocInfo[0];
+    struct AddressRange *next;  /*!< Next descriptor in list. */
+    void *base;                 /*!< Base address. */
+    size_t size;                /*!< Size in pages. */
+    size_t free;                /*!< Number of free pages in range. */
+    size_t first;               /*!< First free page in range. */
+    char allocInfo[0];          /*!< Info about allocated pages in range. */
 } AddressRange;
 
 /*---------------------------------------------------------------------------
- * Internal Variables: Address Ranges
+ * ranges
+ *                                                                              *//*!
+ *  Reserved address ranges for general purpose.
  *
- *  ranges		- Reserved address ranges for general purpose.
- *  dedicatedRanges	- Dedicated address ranges for large pages.
+ *  @see SysPageAlloc
+ *  @see SysPageFree
  *
- * See also:
- *	<AddressRange>, <SysPageAlloc>, <SysPageFree>
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
 static AddressRange *ranges = NULL;
+
+/*---------------------------------------------------------------------------
+ * dedicatedRanges
+ *                                                                              *//*!
+ *  Dedicated address ranges for large pages.
+ *
+ *  @see SysPageAlloc
+ *  @see SysPageFree
+ *
+ *  @private
+ *//*-----------------------------------------------------------------------*/
+
 static AddressRange *dedicatedRanges = NULL;
+                                                                                /*!     @cond PRIVATE */
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * FIRST_RANGE_SIZE
+ *
+ *  Size of first reserved range.
+ *
+ *  @private
+ *
+ *                                                                              *//*!   @def \
+ * MAX_RANGE_SIZE
+ *
+ *  Maximum size of ranges.
+ *
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
+#define FIRST_RANGE_SIZE    256     /* 1 MB */
+#define MAX_RANGE_SIZE      32768   /* 128 MB */
+                                                                                /*!     @endcond */
 /*---------------------------------------------------------------------------
- * Internal Constant: Address Range Size Constants
+ * FindFreePagesInRange
+ *                                                                              *//*!
+ *  Find given number of free consecutive pages in alloc info table.
  *
- *  FIRST_RANGE_SIZE	- Size of first reserved range.
- *  MAX_RANGE_SIZE	- Maximum size of ranges.
- *---------------------------------------------------------------------------*/
+ *  @retval index   of first page of sequence if found.
+ *  @retval -1      otherwise.
+ *
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-#define FIRST_RANGE_SIZE	256	/* 1 MB */
-#define MAX_RANGE_SIZE		32768	/* 128 MB */
-
-/*---------------------------------------------------------------------------
- * Internal Function: FindFreePagesInRange
- *
- *	Find given number of free consecutive pages in alloc info table.
- *
- * Argument:
- *	range	- Address range to look into.
- *	number	- Number of free cnsecutive entries to find.
- *	index	- First entry to consider.
- *
- * Result:
- *	Index of first page of sequence, or -1 if none found.
- *---------------------------------------------------------------------------*/
-
-static size_t 
+static size_t
 FindFreePagesInRange(
-    AddressRange *range,
-    size_t number,
-    size_t index)
+    AddressRange *range,    /*!< Address range to look into. */
+    size_t number,          /*!< Number of free consecutive entries to find. */
+    size_t index)           /*!< First entry to consider. */
 {
     size_t i, first = (size_t)-1, remaining;
 
-    /* 
-     * Iterate over alloc info table to find a chain of <number> zero entries. 
+    /*
+     * Iterate over alloc info table to find a chain of <number> zero entries.
      */
 
     remaining = number;
     for (i = index; i < range->size; i++) {
-	if (range->allocInfo[i] == 0) {
-	    if (remaining == number) {
-		/* 
-		 * Beginning of sequence. 
-		 */
+        if (range->allocInfo[i] == 0) {
+            if (remaining == number) {
+                /*
+                 * Beginning of sequence.
+                 */
 
-		first = i;
-	    }
+                first = i;
+            }
 
-	    remaining--;
-	    if (remaining == 0) {
-		/*
-		 * End of sequence reached.
-		 */
+            remaining--;
+            if (remaining == 0) {
+                /*
+                 * End of sequence reached.
+                 */
 
-		return first;
-	    }
+                return first;
+            }
 
-	} else {
-	    /* 
-	     * Sequence interrupted, restart. 
-	     */
+        } else {
+            /*
+             * Sequence interrupted, restart.
+             */
 
-	    remaining = number;
-	}
+            remaining = number;
+        }
     }
 
     /*
@@ -482,69 +516,66 @@ FindFreePagesInRange(
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: SysPageAlloc
+ * SysPageAlloc
+ *                                                                              *//*!
+ *  Allocate system pages.
  *
- *	Allocate system pages.
+ *  @return
+ *      The allocated system pages' base address.
  *
- * Arguments:
- *	number	- Number of system pages to alloc.
- *	written	- Initial write tracking flag value.
+ *  @sideeffect
+ *      May reserve new address ranges.
  *
- * Result:
- *	The allocated system pages' base address.
+ *  @see SysPageFree
  *
- * Side effects:
- *	May reserve new address ranges.
- *
- * See also:
- *	<SysPageFree>
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-static void * 
+static void *
 SysPageAlloc(
-    size_t number,
-    int written)
+    size_t number,  /*!< Number of system pages to alloc. */
+    int written)    /*!< Initial write tracking flag value. */
 {
     void *addr = NULL;
     AddressRange *range, **prevPtr;
     size_t first, size, i;
 
-    if (number > LARGE_PAGE_SIZE || !(number 
-	    & ((allocGranularity >> shiftPage)-1))) {
-	/*
-	 * Length exceeds a certain threshold or is a multiple of the allocation
-	 * granularity, allocate dedicated address range.
-	 */
+    if (number > LARGE_PAGE_SIZE || !(number
+            & ((allocGranularity >> shiftPage)-1))) {
+        /*
+         * Length exceeds a certain threshold or is a multiple of the allocation
+         * granularity, allocate dedicated address range.
+         */
 
-	addr = PlatReserveRange(number, 1);
-	if (!addr) {
-	    /*
-	     * Fatal error!
-	     */
+        addr = PlatReserveRange(number, 1);
+        if (!addr) {
+            /*
+             * Fatal error!
+             */
 
-	    Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
-		    "Address range allocation failed");
-	    return NULL;
-	}
+            Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
+                    "Address range allocation failed");                         /*!     @fatal{COL_ERROR_MEMORY,Address range allocation failed} */
+            return NULL;
+        }
 
-	/*
-	 * Create descriptor without page alloc table and insert at head.
-	 */
+        /*
+         * Create descriptor without page alloc table and insert at head.
+         */
 
-	PlatEnterProtectAddressRanges();
-	{
-	    range = (AddressRange *) (malloc(sizeof(AddressRange)+1));
-	    range->next = dedicatedRanges;
-	    range->base = addr;
-	    range->size = number;
-	    range->free = 0;
-	    range->first = number;
-	    range->allocInfo[0] = written;
-	    dedicatedRanges = range;
-	}
-	PlatLeaveProtectAddressRanges();
+        PlatEnterProtectAddressRanges();
+        {
+            range = (AddressRange *) (malloc(sizeof(AddressRange)+1));
+            range->next = dedicatedRanges;
+            range->base = addr;
+            range->size = number;
+            range->free = 0;
+            range->first = number;
+            range->allocInfo[0] = written;
+            dedicatedRanges = range;
+        }
+        PlatLeaveProtectAddressRanges();
 
-	return addr;
+        return addr;
     }
 
     /*
@@ -553,133 +584,133 @@ SysPageAlloc(
 
     PlatEnterProtectAddressRanges();
     {
-	first = (size_t)-1;
-	prevPtr = &ranges;
-	range = ranges;
-	while (range) {
-	    size = range->size;
-	    if (range->free >= number) {
-		/*
-		 * Range has the required number of pages.
-		 */
+        first = (size_t)-1;
+        prevPtr = &ranges;
+        range = ranges;
+        while (range) {
+            size = range->size;
+            if (range->free >= number) {
+                /*
+                 * Range has the required number of pages.
+                 */
 
-		first = range->first;
+                first = range->first;
 
-		if (number == 1 && !range->allocInfo[first]) {
-		    /*
-		     * Fast-track the most common case: allocate the first free 
-		     * page.
-		     */
+                if (number == 1 && !range->allocInfo[first]) {
+                    /*
+                     * Fast-track the most common case: allocate the first free
+                     * page.
+                     */
 
-		    break;
-		}
-    	    
-		/*
-		 * Find the first available bit sequence.
-		 */
+                    break;
+                }
 
-		first = FindFreePagesInRange(range, number, first);
-		if (first != (size_t)-1) {
-		    break;
-		}
-	    }
+                /*
+                 * Find the first available bit sequence.
+                 */
 
-	    /*
-	     * Not found, try next range.
-	     */
+                first = FindFreePagesInRange(range, number, first);
+                if (first != (size_t)-1) {
+                    break;
+                }
+            }
 
-	    prevPtr = &range->next;
-	    range = range->next;
-	}
+            /*
+             * Not found, try next range.
+             */
 
-	if (!range) {
-	    /*
-	     * No range was found with available pages. Create a new one.
-	     */
+            prevPtr = &range->next;
+            range = range->next;
+        }
 
-	    if (!ranges) {
-		size = FIRST_RANGE_SIZE;
-	    } else {
-		/*
-		 * New range size is double that of the previous one.
-		 */
+        if (!range) {
+            /*
+             * No range was found with available pages. Create a new one.
+             */
 
-		size <<= 1;
-		if (size > MAX_RANGE_SIZE) size = MAX_RANGE_SIZE;
-	    }
-	    ASSERT(number <= size-1);
+            if (!ranges) {
+                size = FIRST_RANGE_SIZE;
+            } else {
+                /*
+                 * New range size is double that of the previous one.
+                 */
 
-	    /*
-	     * Reserve address range.
-	     */
+                size <<= 1;
+                if (size > MAX_RANGE_SIZE) size = MAX_RANGE_SIZE;
+            }
+            ASSERT(number <= size-1);
 
-	    addr = PlatReserveRange(size, 0);
-	    if (!addr) {
-		/*
-		 * Fatal error!
-		 */
+            /*
+             * Reserve address range.
+             */
 
-		Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
-			"Address range reservation failed");
-		goto end;
-	    }
+            addr = PlatReserveRange(size, 0);
+            if (!addr) {
+                /*
+                 * Fatal error!
+                 */
 
-	    /*
-	     * Create descriptor.
-	     */
+                Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
+                        "Address range reservation failed");                    /*!     @fatal{COL_ERROR_MEMORY,Address range reservation failed} */
+                goto end;
+            }
 
-	    range = (AddressRange *) (malloc(sizeof(AddressRange) + size 
-			+ ((size+7)>>3)));
-	    *prevPtr = range;
-	    range->base = addr;
-	    range->next = NULL;
-	    range->size = size;
-	    range->free = size;
-	    range->first = 0;
-	    memset(range->allocInfo, 0, size + ((size+7)>>3));
-	    first = 0;
-	}
+            /*
+             * Create descriptor.
+             */
 
-	/*
-	 * Allocate pages. 
-	 */
+            range = (AddressRange *) (malloc(sizeof(AddressRange) + size
+                        + ((size+7)>>3)));
+            *prevPtr = range;
+            range->base = addr;
+            range->next = NULL;
+            range->size = size;
+            range->free = size;
+            range->first = 0;
+            memset(range->allocInfo, 0, size + ((size+7)>>3));
+            first = 0;
+        }
 
-	ASSERT(first+number <= size);
-	ASSERT(number <= range->free);
-	addr = (char *) range->base + (first << shiftPage);
-	if (!PlatAllocPages(addr, number)) {
-	    /*
-	     * Fatal error!
-	     */
+        /*
+         * Allocate pages.
+         */
 
-	    Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
-		    "Page allocation failed");
-	    goto end;
-	}
+        ASSERT(first+number <= size);
+        ASSERT(number <= range->free);
+        addr = (char *) range->base + (first << shiftPage);
+        if (!PlatAllocPages(addr, number)) {
+            /*
+             * Fatal error!
+             */
 
-	/*
-	 * Update metadata. Only clear first page's written flag.
-	 */
+            Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
+                    "Page allocation failed");                                  /*!     @fatal{COL_ERROR_MEMORY,Page allocation failed} */
+            goto end;
+        }
 
-	ASSERT(number < LARGE_PAGE_SIZE && number-1 <= CHAR_MAX && -(char) number >= CHAR_MIN);
-	range->allocInfo[first] = -(char) number;
-	for (i=1; i < number; i++) {
-	    range->allocInfo[first+i] = (char) i;
-	}
-	if (written) {
-	    range->allocInfo[range->size+(first>>3)] |= (1<<(first&7));
-	} else {
-	    range->allocInfo[range->size+(first>>3)] &= ~(1<<(first&7));
-	}
-	range->free -= number;
-	if (first == range->first) {
-	    /* 
-	     * Simply increase the first free page index, the actual index will be 
-	     * updated on next allocation.
-	     */
+        /*
+         * Update metadata. Only clear first page's written flag.
+         */
 
-	    range->first += number;
-	}
+        ASSERT(number < LARGE_PAGE_SIZE && number-1 <= CHAR_MAX && -(char) number >= CHAR_MIN);
+        range->allocInfo[first] = -(char) number;
+        for (i=1; i < number; i++) {
+            range->allocInfo[first+i] = (char) i;
+        }
+        if (written) {
+            range->allocInfo[range->size+(first>>3)] |= (1<<(first&7));
+        } else {
+            range->allocInfo[range->size+(first>>3)] &= ~(1<<(first&7));
+        }
+        range->free -= number;
+        if (first == range->first) {
+            /*
+             * Simply increase the first free page index, the actual index will
+             * be updated on next allocation.
+             */
+
+            range->first += number;
+        }
     }
 end:
     PlatLeaveProtectAddressRanges();
@@ -687,479 +718,323 @@ end:
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: SysPageFree
+ * SysPageFree
+ *                                                                              *//*!
+ *  Free system pages.
  *
- *	Free system pages.
+ *  @sideeffect
+ *      May release address ranges.
  *
- * Argument:
- *	base	- Base address of the pages to free.
+ *  @see SysPageAlloc
  *
- * Side Effects:
- *	May release address ranges.
- *
- * See also:
- *	<SysPageAlloc>
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-static void 
+static void
 SysPageFree(
-    void * base)
+    void * base)    /*!< Base address of the pages to free. */
 {
     size_t index, size, i;
     AddressRange * range;
 
     PlatEnterProtectAddressRanges();
     {
-	/*
-	 * Get range info for page. 
-	 */
+        /*
+         * Get range info for page.
+         */
 
-	range = ranges;
-	while (range) {
-	    if (base >= range->base && (char *) base < (char *) range->base 
-		    + (range->size << shiftPage)) {
-		break;
-	    }
-	    range = range->next;
-	}
-	if (!range) {
-	    /*
-	     * Likely dedicated address range. 
-	     */
+        range = ranges;
+        while (range) {
+            if (base >= range->base && (char *) base < (char *) range->base
+                    + (range->size << shiftPage)) {
+                break;
+            }
+            range = range->next;
+        }
+        if (!range) {
+            /*
+             * Likely dedicated address range.
+             */
 
-	    AddressRange **prevPtr = &dedicatedRanges;
-	    range = dedicatedRanges;
-	    while (range) {
-		if (base >= range->base && (char *) base < (char *) range->base 
-			+ (range->size << shiftPage)) {
-		    break;
-		}
-		prevPtr = &range->next;
-		range = range->next;
-	    }
-	    if (!range) {
-		/*
-		 * Not found.
-		 */
+            AddressRange **prevPtr = &dedicatedRanges;
+            range = dedicatedRanges;
+            while (range) {
+                if (base >= range->base && (char *) base < (char *) range->base
+                        + (range->size << shiftPage)) {
+                    break;
+                }
+                prevPtr = &range->next;
+                range = range->next;
+            }
+            if (!range) {
+                /*
+                 * Not found.
+                 */
 
-		Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
-			"Page not found");
-		goto end;
-	    }
+                Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
+                        "Page not found");                                      /*!     @fatal{COL_ERROR_MEMORY,Page not found} */
+                goto end;
+            }
 
-	    /*
-	     * Release whole range.
-	     */
+            /*
+             * Release whole range.
+             */
 
-	    if (!PlatReleaseRange(range->base, range->size)) {
-		/*
-		 * Fatal error!
-		 */
+            if (!PlatReleaseRange(range->base, range->size)) {
+                /*
+                 * Fatal error!
+                 */
 
-		Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
-			"Address range release failed");
-		goto end;
-	    }
+                Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
+                        "Address range release failed");                        /*!     @fatal{COL_ERROR_MEMORY,Address range release failed} */
+                goto end;
+            }
 
-	    /*
-	     * Remove from dedicated range list.
-	     */
+            /*
+             * Remove from dedicated range list.
+             */
 
-	    *prevPtr = range->next;
-	    free(range);
-	    goto end;
-	}
+            *prevPtr = range->next;
+            free(range);
+            goto end;
+        }
 
-	index = ((char *) base - (char *) range->base) >> shiftPage;
-	size = -range->allocInfo[index];
-	ASSERT(size > 0);
-	ASSERT(index+size <= range->size);
+        index = ((char *) base - (char *) range->base) >> shiftPage;
+        size = -range->allocInfo[index];
+        ASSERT(size > 0);
+        ASSERT(index+size <= range->size);
 
-	/*
-	 * Free pages.
-	 */
+        /*
+         * Free pages.
+         */
 
-	if (!PlatFreePages(base, size)) {
-	    /*
-	     * Fatal error!
-	     */
+        if (!PlatFreePages(base, size)) {
+            /*
+             * Fatal error!
+             */
 
-	    Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
-		    "Page deallocation failed");
-	    goto end;
-	}
+            Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
+                    "Page deallocation failed");                                /*!     @fatal{COL_ERROR_MEMORY,Page deallocation failed} */
+            goto end;
+        }
 
-	/*
-	 * Update metadata.
-	 */
+        /*
+         * Update metadata.
+         */
 
-	for (i=index; i < index+size; i++) {
-	    range->allocInfo[i] = 0;
-	}
-	range->free += size;
-	ASSERT(range->free <= range->size);
-	if (range->first > index) {
-	    /*
-	     * Old first free page is beyond the one we just freed, update.
-	     */
-    	 
-	    range->first = index;
-	}
+        for (i=index; i < index+size; i++) {
+            range->allocInfo[i] = 0;
+        }
+        range->free += size;
+        ASSERT(range->free <= range->size);
+        if (range->first > index) {
+            /*
+             * Old first free page is beyond the one we just freed, update.
+             */
+
+            range->first = index;
+        }
     }
 end:
     PlatLeaveProtectAddressRanges();
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: SysPageTrim
+ * SysPageTrim
+ *                                                                              *//*!
+ *  Free trailing pages of system page groups, keeping only the first page.
  *
- *	Free trailing pages of system page groups, keeping only the first page.
+ *  @see SysPageFree
  *
- * Argument:
- *	base	- Base address of the pages to free.
- *
- * See also:
- *	<SysPageFree>
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-static void 
+static void
 SysPageTrim(
-    void * base)
+    void * base)    /*!< Base address of the pages to free. */
 {
     size_t index, size, i;
     AddressRange * range;
 
     PlatEnterProtectAddressRanges();
     {
-	/*
-	 * Get range info for page. 
-	 */
+        /*
+         * Get range info for page.
+         */
 
-	range = ranges;
-	while (range) {
-	    if (base >= range->base && (char *) base < (char *) range->base 
-		    + (range->size << shiftPage)) {
-		break;
-	    }
-	    range = range->next;
-	}
-	if (!range) {
-	    /*
-	     * Not found. Cannot trim dedicated ranges.
-	     */
+        range = ranges;
+        while (range) {
+            if (base >= range->base && (char *) base < (char *) range->base
+                    + (range->size << shiftPage)) {
+                break;
+            }
+            range = range->next;
+        }
+        if (!range) {
+            /*
+             * Not found. Cannot trim dedicated ranges.
+             */
 
-	    Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
-		    "Page not found");
-	    goto end;
-	}
+            Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
+                    "Page not found");                                          /*!     @fatal{COL_ERROR_MEMORY,Page not found} */
+            goto end;
+        }
 
-	index = ((char *) base - (char *) range->base) >> shiftPage;
-	size = -range->allocInfo[index];
-	ASSERT(size > 0);
-	ASSERT(index+size <= range->size);
+        index = ((char *) base - (char *) range->base) >> shiftPage;
+        size = -range->allocInfo[index];
+        ASSERT(size > 0);
+        ASSERT(index+size <= range->size);
 
-	if (size == 1) {
-	    /*
-	     * No trailing page.
-	     */
+        if (size == 1) {
+            /*
+             * No trailing page.
+             */
 
-	    goto end;
-	}
+            goto end;
+        }
 
-	/*
-	 * Free trailing pages.
-	 */
+        /*
+         * Free trailing pages.
+         */
 
-	if (!PlatFreePages((char *) base + systemPageSize, size-1)) {
-	    /*
-	     * Fatal error!
-	     */
+        if (!PlatFreePages((char *) base + systemPageSize, size-1)) {
+            /*
+             * Fatal error!
+             */
 
-	    Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
-		    "Page deallocation failed");
-	    goto end;
-	}
+            Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
+                    "Page deallocation failed");                                /*!     @fatal{COL_ERROR_MEMORY,Page deallocation failed} */
+            goto end;
+        }
 
-	/*
-	 * Update metadata.
-	 */
+        /*
+         * Update metadata.
+         */
 
-	range->allocInfo[index] = -1;
-	for (i=index+1; i < index+size; i++) {
-	    range->allocInfo[i] = 0;
-	}
-	range->free += size-1;
-	ASSERT(range->free <= range->size);
-	if (range->first > index) {
-	    /*
-	     * Old first free page is beyond the one we just freed, update.
-	     */
-    	 
-	    range->first = index;
-	}
+        range->allocInfo[index] = -1;
+        for (i=index+1; i < index+size; i++) {
+            range->allocInfo[i] = 0;
+        }
+        range->free += size-1;
+        ASSERT(range->free <= range->size);
+        if (range->first > index) {
+            /*
+             * Old first free page is beyond the one we just freed, update.
+             */
+
+            range->first = index;
+        }
     }
 end:
     PlatLeaveProtectAddressRanges();
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: SysPageProtect
+ * SysPageProtect
+ *                                                                              *//*!
+ *  Write-protect system page group.
  *
- *	Write-protect system page group.
- *
- * Argument:
- *	page	- Page belonging to page group to protect.
- *	protect	- Whether t protect or unprotect page group.
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-void 
+void
 SysPageProtect(
-    void * page,
-    int protect)
+    void * page,    /*!< Page belonging to page group to protect. */
+    int protect)    /*!< Whether to protect or unprotect page group. */
 {
     size_t index, size;
     AddressRange * range;
 
     PlatEnterProtectAddressRanges();
     {
-	/*
-	 * Get range info for page. 
-	 */
+        /*
+         * Get range info for page.
+         */
 
-	range = ranges;
-	while (range) {
-	    if (page >= range->base && (char *) page < (char *) range->base 
-		    + (range->size << shiftPage)) {
-		break;
-	    }
-	    range = range->next;
-	}
-	if (!range) {
-	    /*
-	     * Likely dedicated address range. 
-	     */
+        range = ranges;
+        while (range) {
+            if (page >= range->base && (char *) page < (char *) range->base
+                    + (range->size << shiftPage)) {
+                break;
+            }
+            range = range->next;
+        }
+        if (!range) {
+            /*
+             * Likely dedicated address range.
+             */
 
-	    range = dedicatedRanges;
-	    while (range) {
-		if (page >= range->base && (char *) page < (char *) range->base 
-			+ (range->size << shiftPage)) {
-		    break;
-		}
-		range = range->next;
-	    }
-	    if (!range) {
-		/*
-		 * Not found.
-		 */
+            range = dedicatedRanges;
+            while (range) {
+                if (page >= range->base && (char *) page < (char *) range->base
+                        + (range->size << shiftPage)) {
+                    break;
+                }
+                range = range->next;
+            }
+            if (!range) {
+                /*
+                 * Not found.
+                 */
 
-		Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
-			"Page not found");
-		goto end;
-	    }
+                Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
+                        "Page not found");                                      /*!     @fatal{COL_ERROR_MEMORY,Page not found} */
+                goto end;
+            }
 
-	    /*
-	     * Update protection & write tracking flag for whole range.
-	     */
+            /*
+             * Update protection & write tracking flag for whole range.
+             */
 
-	    PlatProtectPages(range->base, range->size, protect);
-	    range->allocInfo[0] = !protect;
-	    goto end;
-	}
+            PlatProtectPages(range->base, range->size, protect);
+            range->allocInfo[0] = !protect;
+            goto end;
+        }
 
-	index = ((char *) page - (char *) range->base) >> shiftPage;
-	ASSERT(range->allocInfo[index] != 0);
-	if (range->allocInfo[index] > 0) index -= range->allocInfo[index];
-	size = -range->allocInfo[index];
-	ASSERT(size > 0);
-	ASSERT(index+size <= range->size);
+        index = ((char *) page - (char *) range->base) >> shiftPage;
+        ASSERT(range->allocInfo[index] != 0);
+        if (range->allocInfo[index] > 0) index -= range->allocInfo[index];
+        size = -range->allocInfo[index];
+        ASSERT(size > 0);
+        ASSERT(index+size <= range->size);
 
-	/*
-	 * Update protection & write tracking flag for page group (only mark 
-	 * first one in page group).
-	 */
+        /*
+         * Update protection & write tracking flag for page group (only mark
+         * first one in page group).
+         */
 
-	PlatProtectPages((char *) range->base + (index << shiftPage), size, 
-		protect);
-	if (protect) {
-	    range->allocInfo[range->size+(index>>3)] &= ~(1<<(index&7));
-	} else {
-	    range->allocInfo[range->size+(index>>3)] |= (1<<(index&7));
-	}
+        PlatProtectPages((char *) range->base + (index << shiftPage), size,
+                protect);
+        if (protect) {
+            range->allocInfo[range->size+(index>>3)] &= ~(1<<(index&7));
+        } else {
+            range->allocInfo[range->size+(index>>3)] |= (1<<(index&7));
+        }
     }
 end:
     PlatLeaveProtectAddressRanges();
 }
+                                                                                /*!     @} */
 
-
-/****************************************************************************
- * Internal Section: Roots and Parents
- ****************************************************************************/
-
-/*---------------------------------------------------------------------------
- * Internal Function: UpdateParents
- *
- *	Add pages written since the last GC to parent tracking structures. Then 
- *	each page's parent flag is cleared for the mark phase.
- *
- * Argument:
- *	data	- Group-specific data.
- *---------------------------------------------------------------------------*/
-
-void 
-UpdateParents(
-    GroupData *data)
-{
-    Page *page;
-    size_t i, size;
-    AddressRange * range;
-    Cell *cell;
-
-    /*
-     * First clear parent flags for existing parents.
-     */
-
-    for (cell = data->parents; cell; cell = PARENT_NEXT(cell)) {
-	ASSERT(TestCell(CELL_PAGE(cell), CELL_INDEX(cell)));
-	ASSERT(PAGE_FLAG(PARENT_PAGE(cell), PAGE_FLAG_FIRST));
-	for (page = PARENT_PAGE(cell); page; page = PAGE_NEXT(page)) {
-	    PAGE_CLEAR_FLAG(page, PAGE_FLAG_PARENT);
-	    if (PAGE_FLAG(page, PAGE_FLAG_LAST)) break;
-	}
-    }
-
-    /*
-     * Iterate over ranges and find modified page groups belonging to the given
-     * thread group, adding them to its parent list.
-     */
-
-    PlatEnterProtectAddressRanges();
-    {
-	/*
-	 * First iterate over regular ranges.
-	 */
-
-	for (range = ranges; range ; range = range->next) {
-	    /*
-	     * Iterate over modified page groups.
-	     */
-
-	    for (i = 0; i < range->size; /* increment within loop */) {
-		if (!range->allocInfo[i]) {
-		    /*
-		     * Free page.
-		     */
-
-		    i++;
-		    continue;
-		}
-
-		size = -range->allocInfo[i];
-		if (!(range->allocInfo[range->size+(i>>3)] & 1<<(i&7))) {
-		    /*
-		     * Not modified.
-		     */
-
-		    i += size;
-		    continue;
-		}
-
-		page = (Page *) ((char *) range->base + (i << shiftPage));
-		if (PAGE_GROUPDATA(page) != data) {
-		    /*
-		     * Page belongs to another thread group.
-		     */
-
-		    i += size;
-		    continue;
-		}
-
-		/*
-		 * Clear write tracking flag.
-		 */
-
-		range->allocInfo[range->size+(i>>3)] &= ~(1<<(i&7));
-
-		/*
-		 * Add first page to the thread group's parent list.
-		 */
-
-		cell = PoolAllocCells(&data->rootPool, 1);
-		PARENT_INIT(cell, data->parents, page);
-		data->parents = cell;
-		for (; page; page = PAGE_NEXT(page)) {
-		    PAGE_CLEAR_FLAG(page, PAGE_FLAG_PARENT);
-		    if (PAGE_FLAG(page, PAGE_FLAG_LAST)) break;
-		}
-
-		i += size;
-	    }
-	}
-
-	/*
-	 * Now iterate over dedicated ranges.
-	 */
-
-	for (range = dedicatedRanges; range; range= range->next) {
-	    if (!range->allocInfo[0]) {
-		/*
-		 * Not modified.
-		 */
-
-		continue;
-	    }
-
-	    page = (Page *) range->base;
-	    if (PAGE_GROUPDATA(page) != data) {
-		/*
-		 * Page belongs to another thread group.
-		 */
-
-		continue;
-	    }
-
-	    /*
-	     * Clear write tracking flag.
-	     */
-
-	    range->allocInfo[0] = 0;
-
-	    /*
-	     * Add first page to the thread group's parent list.
-	     */
-
-	    cell = PoolAllocCells(&data->rootPool, 1);
-	    PARENT_INIT(cell, data->parents, page);
-	    data->parents = cell;
-	}
-    }
-    PlatLeaveProtectAddressRanges();
-}
-
-
-
-/****************************************************************************
- * Internal Section: Page Allocation
- ****************************************************************************/
+/********************************************************************************//*!   @name \
+ * Page Allocation                                                              *//*!   @{ *//*
+ ******************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Function: PoolAllocPages
+ * PoolAllocPages
+ *                                                                              *//*!
+ *  Allocate pages in pool. Pages are inserted after the given page. This
+ *  guarantees better performances by avoiding the traversal of previous pages.
  *
- *	Allocate pages in pool. Pages are inserted after the given page. This
- *	guarantees better performances by avoiding the traversal of previous
- *	pages.
+ *  @see SysPageAlloc
  *
- * Arguments:
- *	pool	- Pool to allocate pages into.
- *	number	- Number of pages to allocate.
- *
- * See also:
- *	<SysPageAlloc>
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-void 
+void
 PoolAllocPages(
-    MemoryPool *pool,
-    size_t number)
+    MemoryPool *pool,   /*!< Pool to allocate pages into. */
+    size_t number)      /*!< Number of pages to allocate. */
 {
     ThreadData *data = PlatGetThreadData();
     Page *base, *page, *prev;
@@ -1168,29 +1043,29 @@ PoolAllocPages(
     size_t i;
 
     if (number == 1) {
-	/*
-	 * Regular case: allocate one physical page divided into equally sized
-	 * logical pages.
-	 */
+        /*
+         * Regular case: allocate one physical page divided into equally sized
+         * logical pages.
+         */
 
-	nbSysPages = 1;
-	nbPages = nbPagesPerSysPage;
+        nbSysPages = 1;
+        nbPages = nbPagesPerSysPage;
     } else {
-	/*
-	 * Allocate enough physical pages for the given number of logical pages.
-	 */
+        /*
+         * Allocate enough physical pages for the given number of logical pages.
+         */
 
-	div_t d = div((int) number, (int) nbPagesPerSysPage);
-	nbSysPages = d.quot + (d.rem?1:0);
-	if (nbSysPages >= LARGE_PAGE_SIZE) {
-	    /*
-	     * Pages are in their own dedicated range.
-	     */
-	    
-	    nbPages = 1;
-	} else {
-	    nbPages = (nbSysPages * nbPagesPerSysPage) - number + 1;
-	}
+        div_t d = div((int) number, (int) nbPagesPerSysPage);
+        nbSysPages = d.quot + (d.rem?1:0);
+        if (nbSysPages >= LARGE_PAGE_SIZE) {
+            /*
+             * Pages are in their own dedicated range.
+             */
+
+            nbPages = 1;
+        } else {
+            nbPages = (nbSysPages * nbPagesPerSysPage) - number + 1;
+        }
     }
 
     /*
@@ -1201,37 +1076,37 @@ PoolAllocPages(
     base = (Page *) SysPageAlloc(nbSysPages, (pool->generation >= 2));
 
     if (!pool->pages) {
-	pool->pages = base;
-	for (i = 0; i < AVAILABLE_CELLS; i++) {
-	    pool->lastFreeCell[i] = PAGE_CELL(base, 0);
-	}
+        pool->pages = base;
+        for (i = 0; i < AVAILABLE_CELLS; i++) {
+            pool->lastFreeCell[i] = PAGE_CELL(base, 0);
+        }
     }
 
     pool->nbPages += nbPages;
     pool->nbAlloc += nbPages;
     pool->nbSetCells += RESERVED_CELLS*nbPages;
 
-    /* 
-     * Initialize pages. 
+    /*
+     * Initialize pages.
      */
 
     prev = pool->lastPage;
     for (i = 0, page = base; i < nbPages; i++, page++) {
-	/* 
-	 * Pages are linked in order.
-	 */
+        /*
+         * Pages are linked in order.
+         */
 
-	if (prev) {
-	    PAGE_SET_NEXT(prev, page);
-	}
-	prev = page;
+        if (prev) {
+            PAGE_SET_NEXT(prev, page);
+        }
+        prev = page;
 
-	PAGE_SET_GENERATION(page, pool->generation);
-	PAGE_CLEAR_FLAG(page, PAGE_FLAGS_MASK);
-	PAGE_GROUPDATA(page) = data->groupData;
+        PAGE_SET_GENERATION(page, pool->generation);
+        PAGE_CLEAR_FLAG(page, PAGE_FLAGS_MASK);
+        PAGE_GROUPDATA(page) = data->groupData;
 
-	/* Initialize bit mask for allocated cells. */
-	ClearAllCells(page);
+        /* Initialize bit mask for allocated cells. */
+        ClearAllCells(page);
     }
     pool->lastPage = prev;
     PAGE_SET_FLAG(base, PAGE_FLAG_FIRST);
@@ -1240,20 +1115,18 @@ PoolAllocPages(
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: PoolFreeEmptyPages
+ * PoolFreeEmptyPages
+ *                                                                              *//*!
+ *  Free empty system pages in pool. Refresh page count in the process.
  *
- *	Free empty system pages in pool. Refresh page count in the process.
+ *  @see SysPageFree
  *
- * Argument:
- *	pool	- Pool with pages to free.
- *
- * See also:
- *	<SysPageFree>
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-void 
+void
 PoolFreeEmptyPages(
-    MemoryPool *pool)
+    MemoryPool *pool)   /*!< Pool with pages to free. */
 {
     ThreadData *data = PlatGetThreadData();
     Page *page, *base, *prev, *next;
@@ -1263,253 +1136,248 @@ PoolFreeEmptyPages(
     pool->nbPages = 0;
     pool->nbSetCells = 0;
 
-    /* 
-     * Iterate over system pages... 
+    /*
+     * Iterate over system pages...
      */
 
     for (prev = NULL, base = pool->pages; base; base = next) {
-	/* 
-	 * ... then over logical pages within the system page. 
-	 */
+        /*
+         * ... then over logical pages within the system page.
+         */
 
-	nbPages = 0;
-	nbSetCells = 0;
-	ASSERT(PAGE_FLAG(base, PAGE_FLAG_FIRST));
-	for (page = base; ; page = PAGE_NEXT(page)) {
-	    nbPages++;
-	    nbSetCells += NbSetCells(page);
-	    if (PAGE_FLAG(page, PAGE_FLAG_LAST)) break;
-	}
-	next = PAGE_NEXT(page);
-	if (nbSetCells > RESERVED_CELLS * nbPages) {
-	    /*
-	     * At least one page contains allocated cells.
-	     */
+        nbPages = 0;
+        nbSetCells = 0;
+        ASSERT(PAGE_FLAG(base, PAGE_FLAG_FIRST));
+        for (page = base; ; page = PAGE_NEXT(page)) {
+            nbPages++;
+            nbSetCells += NbSetCells(page);
+            if (PAGE_FLAG(page, PAGE_FLAG_LAST)) break;
+        }
+        next = PAGE_NEXT(page);
+        if (nbSetCells > RESERVED_CELLS * nbPages) {
+            /*
+             * At least one page contains allocated cells.
+             */
 
-	    if (!TestCell(page, CELLS_PER_PAGE-1)) {
-		/*
-		 * If there was a trailing large cell group, it is unused now.
-		 */
+            if (!TestCell(page, CELLS_PER_PAGE-1)) {
+                /*
+                 * If there was a trailing large cell group, it is unused now.
+                 */
 
-		SysPageTrim(base);
+                SysPageTrim(base);
 
-		if (nbPages < nbPagesPerSysPage) {
-		    /*
-		     * Rebuild & relink logical pages that were used by the 
-		     * trailing cells.
-		     */
+                if (nbPages < nbPagesPerSysPage) {
+                    /*
+                     * Rebuild & relink logical pages that were used by the
+                     * trailing cells.
+                     */
 
-		    PAGE_CLEAR_FLAG(page, PAGE_FLAG_LAST);
-		    for (i = nbPages; i < nbPagesPerSysPage; i++) {
-			PAGE_SET_NEXT(page, page+1);
-			page++;
+                    PAGE_CLEAR_FLAG(page, PAGE_FLAG_LAST);
+                    for (i = nbPages; i < nbPagesPerSysPage; i++) {
+                        PAGE_SET_NEXT(page, page+1);
+                        page++;
 
-			PAGE_SET_GENERATION(page, pool->generation);
-			PAGE_CLEAR_FLAG(page, PAGE_FLAGS_MASK);
-			PAGE_GROUPDATA(page) = data->groupData;
+                        PAGE_SET_GENERATION(page, pool->generation);
+                        PAGE_CLEAR_FLAG(page, PAGE_FLAGS_MASK);
+                        PAGE_GROUPDATA(page) = data->groupData;
 
-			/* Initialize bit mask for allocated cells. */
-			ClearAllCells(page);
+                        /* Initialize bit mask for allocated cells. */
+                        ClearAllCells(page);
 
-			nbPages++;
-			nbSetCells++;
-		    }
-		    PAGE_SET_FLAG(page, PAGE_FLAG_LAST);
-		    PAGE_SET_NEXT(page, next);
-		}
-	    }
-	    prev = page;
-	    pool->nbPages += nbPages;
-	    pool->nbSetCells += nbSetCells;
-	} else {
-	    /* 
-	     * All logical pages in system page are empty. 
-	     */
+                        nbPages++;
+                        nbSetCells++;
+                    }
+                    PAGE_SET_FLAG(page, PAGE_FLAG_LAST);
+                    PAGE_SET_NEXT(page, next);
+                }
+            }
+            prev = page;
+            pool->nbPages += nbPages;
+            pool->nbSetCells += nbSetCells;
+        } else {
+            /*
+             * All logical pages in system page are empty.
+             */
 
-	    if (prev) {
-		/* 
-		 * Middle of list. 
-		 */
+            if (prev) {
+                /*
+                 * Middle of list.
+                 */
 
-		PAGE_SET_NEXT(prev, next);
-	    } else {
-		/* 
-		 * Head of list. 
-		 */
+                PAGE_SET_NEXT(prev, next);
+            } else {
+                /*
+                 * Head of list.
+                 */
 
-		pool->pages = next;
-	    }
+                pool->pages = next;
+            }
 
-	    /* 
-	     * Free the system page. 
-	     */
+            /*
+             * Free the system page.
+             */
 
-	    SysPageFree(base);
-	}
+            SysPageFree(base);
+        }
     }
     ASSERT(!prev||!PAGE_NEXT(prev));
     pool->lastPage = prev;
 }
+                                                                                /*!     @} */
 
-
-/****************************************************************************
- * Internal Section: Cell Allocation
- ****************************************************************************/
+/********************************************************************************//*!   @name \
+ * Cell Allocation                                                              *//*!   @{ *//*
+ ******************************************************************************/
 
 /*---------------------------------------------------------------------------
- * Internal Function: PoolAllocCells
+ * PoolAllocCells
+ *                                                                              *//*!
+ *  Allocate cells in a pool, allocating new pages if needed. Traverse and
+ *  search all existing pages for a free cell sequence of the given length,
+ *  and if none is found, allocate new pages.
  *
- *	Allocate cells in a pool, allocating new pages if needed. Traverse and
- *	search all existing pages for a free cell sequence of the given length, 
- *	and if none is found, allocate new pages.
+ *  @retval pointer to the first allocated cell if successful
+ *  @retval NULL    otherwise
  *
- * Arguments:
- *	pool	- Pool to allocate cells into.
- *	number	- Number of cells to allocate.
+ *  @sideeffect
+ *    Memory pages may be allocated. This may trigger the GC later once we
+ *    leave the GC-protected section.
  *
- * Result:
- *	If successful, a pointer to the first allocated cell. Else NULL.
- *	
- * Side effects:
- *	Memory pages may be allocated. This may trigger the GC later once we
- *	leave the GC-protected section.
+ *  @see PageAllocCells
+ *  @see PoolAllocPages
  *
- * See also:
- *	<PageAllocCells>, <PoolAllocPages>
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-Cell * 
+Cell *
 PoolAllocCells(
-    MemoryPool *pool,
-    size_t number)
+    MemoryPool *pool,   /*!< Pool to allocate cells into. */
+    size_t number)      /*!< Number of cells to allocate. */
 {
     Cell *cells;
     Page *tail;
     size_t i;
 
     if (number > AVAILABLE_CELLS) {
-	/*
-	 * Cells span several pages. Always allocate new pages, and allocate
-	 * cells in the last page.
-	 */
+        /*
+         * Cells span several pages. Always allocate new pages, and allocate
+         * cells in the last page.
+         */
 
-	div_t d;
-	size_t nbPages, nbFirst, first;
+        div_t d;
+        size_t nbPages, nbFirst, first;
 
-	/*
-	 * Allocate needed pages.
-	 */
+        /*
+         * Allocate needed pages.
+         */
 
-	d = div((int) number-AVAILABLE_CELLS, CELLS_PER_PAGE);
-	nbPages = 1 + d.quot + (d.rem?1:0);
-	PoolAllocPages(pool, nbPages);
-	if (!pool->lastPage) {
-	    /*
-	     * Fatal error!
-	     */
+        d = div((int) number-AVAILABLE_CELLS, CELLS_PER_PAGE);
+        nbPages = 1 + d.quot + (d.rem?1:0);
+        PoolAllocPages(pool, nbPages);
+        if (!pool->lastPage) {
+            /*
+             * Fatal error!
+             */
 
-	    Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
-		    "Page allocation failed");
-	    return NULL;
-	}
+            Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
+                    "Page allocation failed");                                  /*!     @fatal{COL_ERROR_MEMORY,Page allocation failed} */
+            return NULL;
+        }
 
-	if (nbPages >= LARGE_PAGE_SIZE) {
-	    /*
-	     * Allocate cells in their own dedicated range, leaving no free 
-	     * cell, so that freeing this cell group end up in freeing the
-	     * whole page range.
-	     */
+        if (nbPages >= LARGE_PAGE_SIZE) {
+            /*
+             * Allocate cells in their own dedicated range, leaving no free
+             * cell, so that freeing this cell group end up in freeing the
+             * whole page range.
+             */
 
-	    nbFirst = AVAILABLE_CELLS;
-	} else {
-	    /*
-	     * Allocate cells at the end of the last page, leaving first cells
-	     * at the beginning of the first page.
-	     */
+            nbFirst = AVAILABLE_CELLS;
+        } else {
+            /*
+             * Allocate cells at the end of the last page, leaving first cells
+             * at the beginning of the first page.
+             */
 
-	    nbFirst = number - ((nbPages-1) * CELLS_PER_PAGE);
-	    if (nbFirst == 0) {
-		/*
-		 * Allocate at least one cell in the last page.
-		 */
+            nbFirst = number - ((nbPages-1) * CELLS_PER_PAGE);
+            if (nbFirst == 0) {
+                /*
+                 * Allocate at least one cell in the last page.
+                 */
 
-		nbFirst = 1;
-	    }
-	}
-	first = CELLS_PER_PAGE - nbFirst;
-	SetCells(pool->lastPage, first, nbFirst);
-	return (Cell *) pool->lastPage + first;
+                nbFirst = 1;
+            }
+        }
+        first = CELLS_PER_PAGE - nbFirst;
+        SetCells(pool->lastPage, first, nbFirst);
+        return (Cell *) pool->lastPage + first;
     }
-    
-    if (!pool->pages) {
-	/*
-	 * Alloc first pages in pool.
-	 */
 
-	PoolAllocPages(pool, 1);
+    if (!pool->pages) {
+        /*
+         * Alloc first pages in pool.
+         */
+
+        PoolAllocPages(pool, 1);
     }
     cells = PageAllocCells(number, pool->lastFreeCell[number-1]);
     if (cells) {
-	/* 
-	 * Remember the cell page as the last one where a sequence of <number>
-	 * cells was found. This avoids having to search into previous pages. 
-	 */
+        /*
+         * Remember the cell page as the last one where a sequence of <number>
+         * cells was found. This avoids having to search into previous pages.
+         */
 
-	pool->lastFreeCell[number-1] = cells;
-	return cells;
+        pool->lastFreeCell[number-1] = cells;
+        return cells;
     }
 
-    /* 
-     * Allocate new pages then retry. 
+    /*
+     * Allocate new pages then retry.
      */
 
     tail = pool->lastPage;
     PoolAllocPages(pool, 1);
     if (!PAGE_NEXT(tail)) {
-	/*
-	 * Fatal error!
-	 */
+        /*
+         * Fatal error!
+         */
 
-	Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY, 
-		"Page allocation failed");
-	return NULL;
+        Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
+                "Page allocation failed");                                      /*!     @fatal{COL_ERROR_MEMORY,Page allocation failed} */
+        return NULL;
     }
     cells = PageAllocCells(number, PAGE_CELL(PAGE_NEXT(tail), 0));
     ASSERT(cells);
 
-    /* 
-     * Cell sequences equal to or larger than <number> cannot be found before 
-     * this one. 
+    /*
+     * Cell sequences equal to or larger than <number> cannot be found before
+     * this one.
      */
 
     for (i = number-1; i < AVAILABLE_CELLS; i++) {
-	pool->lastFreeCell[i] = cells;
+        pool->lastFreeCell[i] = cells;
     }
 
     return cells;
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: PageAllocCells
+ * PageAllocCells
+ *                                                                              *//*!
+ *  Allocate cells in existing pages. Traverse and search all existing pages
+ *  for a free cell sequence of the given length, and if found, set cells.
  *
- *	Allocate cells in existing pages. Traverse and search all existing pages
- *	for a free cell sequence of the given length, and if found, set cells.
+ *  @retval pointer to the first allocated cell if successful
+ *  @retval NULL    otherwise
  *
- * Arguments:
- *	number		- Number of cells to allocate.
- *	firstCell	- First cell to consider.
+ *  @see FindFreeCells
  *
- * Result:
- *	First allocated cell, or NULL if none found.
- *
- * See also:
- *	<FindFreeCells>
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-static Cell * 
+static Cell *
 PageAllocCells(
-    size_t number,
-    Cell *firstCell)
+    size_t number,      /*!< Number of cells to allocate. */
+    Cell *firstCell)    /*!< First cell to consider. */
 {
     Page *page;
     size_t first;
@@ -1521,154 +1389,151 @@ PageAllocCells(
     page = CELL_PAGE(firstCell);
     first = FindFreeCells(page, number, CELL_INDEX(firstCell));
     if (first == (size_t)-1) {
-	/*
-	 * Not found, search in next pages.
-	 */
+        /*
+         * Not found, search in next pages.
+         */
 
-	for (;;) {
-	    page = PAGE_NEXT(page);
-	    if (!page) {
-		/*
-		 * No room available.
-		 */
+        for (;;) {
+            page = PAGE_NEXT(page);
+            if (!page) {
+                /*
+                 * No room available.
+                 */
 
-		return NULL;
-	    }
-	    first = FindFreeCells(page, number, 0);
-	    if (first != (size_t)-1) {
-		/*
-		 * Found!
-		 */
+                return NULL;
+            }
+            first = FindFreeCells(page, number, 0);
+            if (first != (size_t)-1) {
+                /*
+                 * Found!
+                 */
 
-		break;
-	    }
-	}
+                break;
+            }
+        }
     }
 
-    /* 
-     * Mark cells. 
+    /*
+     * Mark cells.
      */
 
     ASSERT(first != (size_t)-1);
     SetCells(page, first, number);
 
-    /* 
-     * Return address of first cell. 
+    /*
+     * Return address of first cell.
      */
 
     return (Cell *) page + first;
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: FindFreeCells
+ * FindFreeCells
+ *                                                                              *//*!
+ *  Find sequence of free cells in page.
  *
- *	Find sequence of free cells in page. 
+ *  @retval index   of first cell of sequence if found
+ *  @retval -1      if none found
  *
- * Arguments:
- *	page	- Page to look into.
- *	number	- Number of cells to look for.
- *	index	- First cell to consider.
- *
- * Result:
- *	Index of first cell of sequence, or -1 if none found.
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-static size_t 
+static size_t
 FindFreeCells(
-    void *page,
-    size_t number,
-    size_t index)
+    void *page,     /*!< Page to look into. */
+    size_t number,  /*!< Number of cells to look for. */
+    size_t index)   /*!< First cell to consider. */
 {
     size_t i, first = (size_t)-1, remaining;
     char seq;
     unsigned char *mask = PAGE_BITMASK(page);
 
-    /* 
-     * Iterate over bytes of the bitmask to find a chain of <number> zero bits. 
+    /*
+     * Iterate over bytes of the bitmask to find a chain of <number> zero bits.
      */
 
     ASSERT(number <= AVAILABLE_CELLS);
     remaining = number;
     for (i = (index>>3); i < (CELLS_PER_PAGE>>3); i++) {
-	if (remaining <= 7) {
-	    /* 
-	     * End of sequence, or whole sequence for number < 8. 
-	     * Find sequence in byte. 
-	     */
+        if (remaining <= 7) {
+            /*
+             * End of sequence, or whole sequence for number < 8.
+             * Find sequence in byte.
+             */
 
-	    seq = firstZeroBitSequence[remaining-1][mask[i]];
-	    if (seq != -1) {
-		if (remaining == number) {
-		    /* 
-		     * Sequence fits into one byte. 
-		     */
+            seq = firstZeroBitSequence[remaining-1][mask[i]];
+            if (seq != -1) {
+                if (remaining == number) {
+                    /*
+                     * Sequence fits into one byte.
+                     */
 
-		    return (i<<3) + seq;
-		}
+                    return (i<<3) + seq;
+                }
 
-		/* 
-		 * Sequence spans over several bytes. 
-		 */
+                /*
+                 * Sequence spans over several bytes.
+                 */
 
-		if (seq == 0) {
-		    /* 
-		     * Sequence is contiguous. 
-		     */
+                if (seq == 0) {
+                    /*
+                     * Sequence is contiguous.
+                     */
 
-		    return first;
-		}
-	    }
+                    return first;
+                }
+            }
 
-	    /* 
-	     * Sequence interrupted, restart. 
-	     */
+            /*
+             * Sequence interrupted, restart.
+             */
 
-	    remaining = number;
-	}
+            remaining = number;
+        }
 
-	/* 
-	 * Sequence may span over several bytes. 
-	 */
+        /*
+         * Sequence may span over several bytes.
+         */
 
-	if (remaining == number) {
-	    /* 
-	     * Beginning of sequence. 
-	     *
-	     * Note: leading bits actually denote trailing cells: bit 0 (LSB) is
-	     * first cell, bit 7 (MSB) is last.
-	     */
+        if (remaining == number) {
+            /*
+             * Beginning of sequence.
+             *
+             * @note leading bits actually denote trailing cells: bit 0 (LSB) is
+             * first cell, bit 7 (MSB) is last.
+             */
 
-	    seq = longestLeadingZeroBitSequence[mask[i]];
-	    if (seq) {
-		first = (i<<3) + (8-seq);
-		remaining -= seq;
-	    }
-	} else {
-	    /* 
-	     * Middle of sequence, look for 8 bits cleared = zero byte. 
-	     */
+            seq = longestLeadingZeroBitSequence[mask[i]];
+            if (seq) {
+                first = (i<<3) + (8-seq);
+                remaining -= seq;
+            }
+        } else {
+            /*
+             * Middle of sequence, look for 8 bits cleared = zero byte.
+             */
 
-	    if (mask[i] == 0) {
-		/* 
-		 * Continue sequence. 
-		 */
+            if (mask[i] == 0) {
+                /*
+                 * Continue sequence.
+                 */
 
-		remaining -= 8;
-	    } else {
-		/* 
-		 * Sequence interrupted, restart. 
-		 */
+                remaining -= 8;
+            } else {
+                /*
+                 * Sequence interrupted, restart.
+                 */
 
-		remaining = number;
-	    }
-	}
-	if (remaining == 0) {
-	    /*
-	     * End of sequence reached.
-	     */
+                remaining = number;
+            }
+        }
+        if (remaining == 0) {
+            /*
+             * End of sequence reached.
+             */
 
-	    return first;
-	}
+            return first;
+        }
     }
 
     /*
@@ -1679,93 +1544,86 @@ FindFreeCells(
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: SetCells
+ * SetCells
+ *                                                                              *//*!
+ *  Set the page bitmask for a given sequence of cells.
  *
- *	Set the page bitmask for a given sequence of cells.
- *
- * Arguments:
- *	page	- The page.
- *	first	- Index of first cell.
- *	number	- Number of cells in sequence.
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-void 
+void
 SetCells(
-    Page *page,
-    size_t first,
-    size_t number)
+    Page *page,     /*!< The page. */
+    size_t first,   /*!< Index of first cell. */
+    size_t number)  /*!< Number of cells in sequence. */
 {
 #if CELLS_PER_PAGE == 64
 #   ifdef COL_BIGENDIAN
-	*(uint64_t *) PAGE_BITMASK(page) |= (((((uint64_t)1)<<number)-1)<<(64-number-first);
+        *(uint64_t *) PAGE_BITMASK(page) |= (((((uint64_t)1)<<number)-1)<<(64-number-first);
 #   else
-	*(uint64_t *) PAGE_BITMASK(page) |= (((((uint64_t)1)<<number)-1)<<first);
+        *(uint64_t *) PAGE_BITMASK(page) |= (((((uint64_t)1)<<number)-1)<<first);
 #   endif
 #else
     unsigned char *mask = PAGE_BITMASK(page);
     size_t i;
     for (i=first; i < first+number; i++) {
-	mask[i>>3] |= 1<<(i&7);
+        mask[i>>3] |= 1<<(i&7);
     }
 #endif
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: ClearCells
+ * ClearCells
+ *                                                                              *//*!
+ *  Clear the page bitmask for a given sequence of cells.
  *
- *	Clear the page bitmask for a given sequence of cells.
- *
- * Arguments:
- *	page	- The page.
- *	first	- Index of first cell.
- *	number	- Number of cells in sequence.
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-void 
+void
 ClearCells(
-    Page *page,
-    size_t first,
-    size_t number)
+    Page *page,     /*!< The page. */
+    size_t first,   /*!< Index of first cell. */
+    size_t number)  /*!< Number of cells in sequence. */
 {
 #if CELLS_PER_PAGE == 64
 #   ifdef COL_BIGENDIAN
-	*(uint64_t*) PAGE_BITMASK(page) &= ~(((((uint64_t)1)<<number)-1)<<(64-number-first));
+        *(uint64_t*) PAGE_BITMASK(page) &= ~(((((uint64_t)1)<<number)-1)<<(64-number-first));
 #   else
-	*(uint64_t*) PAGE_BITMASK(page) &= ~(((((uint64_t)1)<<number)-1)<<first);
+        *(uint64_t*) PAGE_BITMASK(page) &= ~(((((uint64_t)1)<<number)-1)<<first);
 #   endif
 #else
     unsigned char *mask = PAGE_BITMASK(page);
     size_t i;
     for (i=first; i < first+number; i++) {
-	mask[i>>3] &= ~(1<<(i&7));
+        mask[i>>3] &= ~(1<<(i&7));
     }
 #endif
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: ClearAllCells
+ * ClearAllCells
+ *                                                                              *//*!
+ *  Clear the page bitmask.
  *
- *	Clear the page bitmask.
- *
- * Argument:
- *	page	- The page.
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-void 
+void
 ClearAllCells(
-    Page *page)
+    Page *page) /*!< The page. */
 {
 #if CELLS_PER_PAGE == 64
 #   ifdef COL_BIGENDIAN
-	*(uint64_t*) PAGE_BITMASK(page) = ((((uint64_t)1)<<RESERVED_CELLS)-1)<<(64-RESERVED_CELLS);
+        *(uint64_t*) PAGE_BITMASK(page) = ((((uint64_t)1)<<RESERVED_CELLS)-1)<<(64-RESERVED_CELLS);
 #   else
-	*(uint64_t*) PAGE_BITMASK(page) = (((uint64_t)1)<<RESERVED_CELLS)-1;
+        *(uint64_t*) PAGE_BITMASK(page) = (((uint64_t)1)<<RESERVED_CELLS)-1;
 #   endif
 #else
     unsigned char *mask = PAGE_BITMASK(page);
     size_t i;
     for (i=0; i < (CELLS_PER_PAGE>>3); i++) {
-	mask[i] = 0;
+        mask[i] = 0;
     }
 
     /*
@@ -1777,28 +1635,26 @@ ClearAllCells(
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: TestCell
+ * TestCell
+ *                                                                              *//*!
+ *  Test the page bitmap for a given cell.
  *
- *	Test the page bitmap for a given cell.
+ *  @return
+ *      Whether the cell is set.
  *
- * Arguments:
- *	page	- The page.
- *	index	- Index of cell.
- *
- * Result:
- *	Whether the cell is set.
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
-int 
+int
 TestCell(
-    Page *page,
-    size_t index)
+    Page *page,     /*!< The page. */
+    size_t index)   /*!< Index of cell. */
 {
 #if CELLS_PER_PAGE == 64
 #   ifdef COL_BIGENDIAN
-	return (*(uint64_t*) PAGE_BITMASK(page) & (((uint64_t)1)<<(63-index))?1:0;
+        return (*(uint64_t*) PAGE_BITMASK(page) & (((uint64_t)1)<<(63-index))?1:0;
 #   else
-	return (*(uint64_t*) PAGE_BITMASK(page) & (((uint64_t)1)<<index))?1:0;
+        return (*(uint64_t*) PAGE_BITMASK(page) & (((uint64_t)1)<<index))?1:0;
 #   endif
 #else
     unsigned char *mask = PAGE_BITMASK(page);
@@ -1807,20 +1663,19 @@ TestCell(
 }
 
 /*---------------------------------------------------------------------------
- * Internal Function: NbSetCells
+ * NbSetCells
+ *                                                                              *//*!
+ *  Get the number of cells set in a page.
  *
- *	Get the number of cells set in a page.
+ *  @return
+ *      Number of set cells.
  *
- * Argument:
- *	page	- The page.
- *
- * Result:
- *	Number of set cells.
- *---------------------------------------------------------------------------*/
+ *  @private
+ *//*-----------------------------------------------------------------------*/
 
 size_t
 NbSetCells(
-    Page *page)
+    Page *page) /*!< The page. */
 {
 #if 0 && CELLS_PER_PAGE == 64 //FIXME?
     /*
@@ -1828,7 +1683,7 @@ NbSetCells(
      *
      * See http://en.wikipedia.org/wiki/Hamming_weight
      *
-     * " This uses fewer arithmetic operations than any other known  
+     * " This uses fewer arithmetic operations than any other known
      * implementation on machines with fast multiplication.
      * It uses 12 arithmetic operations, one of which is a multiply. "
      */
@@ -1850,8 +1705,155 @@ NbSetCells(
     unsigned char *mask = PAGE_BITMASK(page);
     size_t i, nb = 0;
     for (i=0; i < (CELLS_PER_PAGE>>3); i++) {
-	nb += nbBitsSet[mask[i]];
+        nb += nbBitsSet[mask[i]];
     }
     return nb;
 #endif
 }
+                                                                                /*!     @} */
+                                                                                /*!     @} */
+/*
+================================================================================*//*!   @cond PRIVATE @addtogroup gc_parents \
+Parents                                                                         *//*!   @endcond @{ *//*
+================================================================================
+*/
+
+/*---------------------------------------------------------------------------
+ * UpdateParents
+ *                                                                              *//*!
+ *  Add pages written since the last GC to parent tracking structures. Then
+ *  each page's parent flag is cleared for the mark phase.
+ *
+ *  @private
+ *//*-----------------------------------------------------------------------*/
+
+void
+UpdateParents(
+    GroupData *data)    /*!< Group-specific data. */
+{
+    Page *page;
+    size_t i, size;
+    AddressRange * range;
+    Cell *cell;
+
+    /*
+     * First clear parent flags for existing parents.
+     */
+
+    for (cell = data->parents; cell; cell = PARENT_NEXT(cell)) {
+        ASSERT(TestCell(CELL_PAGE(cell), CELL_INDEX(cell)));
+        ASSERT(PAGE_FLAG(PARENT_PAGE(cell), PAGE_FLAG_FIRST));
+        for (page = PARENT_PAGE(cell); page; page = PAGE_NEXT(page)) {
+            PAGE_CLEAR_FLAG(page, PAGE_FLAG_PARENT);
+            if (PAGE_FLAG(page, PAGE_FLAG_LAST)) break;
+        }
+    }
+
+    /*
+     * Iterate over ranges and find modified page groups belonging to the given
+     * thread group, adding them to its parent list.
+     */
+
+    PlatEnterProtectAddressRanges();
+    {
+        /*
+         * First iterate over regular ranges.
+         */
+
+        for (range = ranges; range ; range = range->next) {
+            /*
+             * Iterate over modified page groups.
+             */
+
+            for (i = 0; i < range->size; /* increment within loop */) {
+                if (!range->allocInfo[i]) {
+                    /*
+                     * Free page.
+                     */
+
+                    i++;
+                    continue;
+                }
+
+                size = -range->allocInfo[i];
+                if (!(range->allocInfo[range->size+(i>>3)] & 1<<(i&7))) {
+                    /*
+                     * Not modified.
+                     */
+
+                    i += size;
+                    continue;
+                }
+
+                page = (Page *) ((char *) range->base + (i << shiftPage));
+                if (PAGE_GROUPDATA(page) != data) {
+                    /*
+                     * Page belongs to another thread group.
+                     */
+
+                    i += size;
+                    continue;
+                }
+
+                /*
+                 * Clear write tracking flag.
+                 */
+
+                range->allocInfo[range->size+(i>>3)] &= ~(1<<(i&7));
+
+                /*
+                 * Add first page to the thread group's parent list.
+                 */
+
+                cell = PoolAllocCells(&data->rootPool, 1);
+                PARENT_INIT(cell, data->parents, page);
+                data->parents = cell;
+                for (; page; page = PAGE_NEXT(page)) {
+                    PAGE_CLEAR_FLAG(page, PAGE_FLAG_PARENT);
+                    if (PAGE_FLAG(page, PAGE_FLAG_LAST)) break;
+                }
+
+                i += size;
+            }
+        }
+
+        /*
+         * Now iterate over dedicated ranges.
+         */
+
+        for (range = dedicatedRanges; range; range= range->next) {
+            if (!range->allocInfo[0]) {
+                /*
+                 * Not modified.
+                 */
+
+                continue;
+            }
+
+            page = (Page *) range->base;
+            if (PAGE_GROUPDATA(page) != data) {
+                /*
+                 * Page belongs to another thread group.
+                 */
+
+                continue;
+            }
+
+            /*
+             * Clear write tracking flag.
+             */
+
+            range->allocInfo[0] = 0;
+
+            /*
+             * Add first page to the thread group's parent list.
+             */
+
+            cell = PoolAllocCells(&data->rootPool, 1);
+            PARENT_INIT(cell, data->parents, page);
+            data->parents = cell;
+        }
+    }
+    PlatLeaveProtectAddressRanges();
+}
+                                                                                /*!     @} */

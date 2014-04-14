@@ -1,155 +1,162 @@
-/*
- * Internal Header: colPlatform.h
+/*                                                                              *//*!   @cond PRIVATE @file \
+ * colPlatform.h
  *
- *	This header file defines the generic features needing platform-specific 
- *	implementations.
+ *  This header file defines the generic primitives needing platform-specific
+ *  implementations.
+ *
+ *  @see platform/win32/colWin32Platform.h
+ *  @see platform/unix/colUnixPlatform.h
+ *
+ *  @private
  */
 
 #ifndef _COLIBRI_PLATFORM
 #define _COLIBRI_PLATFORM
-
+                                                                                #       ifndef DOXYGEN
 #if defined(__WIN32__)
 #   include "platform/win32/colWin32Platform.h"
 #else /* FIXME */
 #   include "platform/unix/colUnixPlatform.h"
 #endif
+                                                                                #       endif DOXYGEN
+                                                                                
 
+/*
+================================================================================*//*!   @addtogroup arch \
+System and Architecture
 
-/****************************************************************************
- * Internal Section: Process & Threads
- *
- * Declarations:
- *	<PlatEnter>, <PlatLeave>, <PlatEnterProtectRoots>, 
- *	<PlatLeaveProtectRoots>, <PlatSyncPauseGC>, <PlatTrySyncPauseGC>, 
- *	<PlatSyncResumeGC>
- ****************************************************************************/
+  Generic primitives needing platform-specific implementations.                 *//*!   @{ *//*
+================================================================================
+*/
 
-int			PlatEnter(unsigned int model);
-int			PlatLeave(void);
-void			PlatEnterProtectRoots(GroupData *data);
-void			PlatLeaveProtectRoots(GroupData *data);
-void			PlatSyncPauseGC(GroupData *data);
-int			PlatTrySyncPauseGC(GroupData *data);
-void			PlatSyncResumeGC(GroupData *data, int schedule);
+/********************************************************************************//*!   @name \
+ * Process & Threads                                                            *//*!   @{ *//*
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Internal Macro: EnterProtectRoots
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * EnterProtectRoots
  *
- *	Enter protected section around root management structures.
+ *  Enter protected section around root management structures.
  *
- * Argument:
- *	data	- Group-specific data.
+ *  @param data     Group-specific data.
  *
- * Side effects:
- *	When model is <COL_SHARED>, calls <PlatEnterProtectRoots>.
+ *  @sideeffect
+ *      When model is #COL_SHARED, calls PlatEnterProtectRoots().
  *
- * See also:
- *	<PlatEnterProtectRoots>, <LeaveProtectRoots>
- *---------------------------------------------------------------------------*/
+ *  @see PlatEnterProtectRoots
+ *  @see LeaveProtectRoots
+ *//*-----------------------------------------------------------------------*/
 
 #define EnterProtectRoots(data) \
     if ((data)->model >= COL_SHARED) {PlatEnterProtectRoots(data);}
 
-/*---------------------------------------------------------------------------
- * Internal Macro: LeaveProtectRoots
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * LeaveProtectRoots
  *
- *	Leave protected section around root management structures.
+ *  Leave protected section around root management structures.
  *
- * Argument:
- *	data	- Group-specific data.
+ *  @param data     Group-specific data.
  *
- * Side effects:
- *	When model is <COL_SHARED>, calls <PlatLeaveProtectRoots>.
- *
- * See also:
- *	<PlatLeaveProtectRoots>, <EnterProtectRoots>
- *---------------------------------------------------------------------------*/
+ *  @sideeffect
+ *      When model is #COL_SHARED, calls PlatLeaveProtectRoots().
+ *//*-----------------------------------------------------------------------*/
 
 #define LeaveProtectRoots(data) \
     if ((data)->model >= COL_SHARED) {PlatLeaveProtectRoots(data);}
 
-/*---------------------------------------------------------------------------
- * Internal Macro: SyncPauseGC
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * SyncPauseGC
  *
- *	Synchronize calls to <Col_PauseGC>.
+ *  Synchronize calls to Col_PauseGC().
  *
- * Argument:
- *	data	- Group-specific data.
+ *  @param data     Group-specific data.
  *
- * Side effects:
- *	When model isn't <COL_SINGLE>, calls <PlatSyncPauseGC>, which may block
- *	as long as a GC is underway.
+ *  @sideeffect
+ *      When model isn't #COL_SINGLE, calls PlatSyncPauseGC(), which may block
+ *      as long as a GC is underway.
  *
- * See also:
- *	<Col_PauseGC>, <PlatSyncPauseGC>, <SyncResumeGC>
- *---------------------------------------------------------------------------*/
+ *  @see Col_PauseGC
+ *  @see PlatSyncPauseGC
+ *  @see SyncResumeGC
+ *//*-----------------------------------------------------------------------*/
 
 #define SyncPauseGC(data) \
     if ((data)->model != COL_SINGLE) {PlatSyncPauseGC(data);}
 
-/*---------------------------------------------------------------------------
- * Internal Macro: TrySyncPauseGC
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * TrySyncPauseGC
  *
- *	Synchronize calls to <Col_TryPauseGC>.
+ *  Synchronize calls to Col_TryPauseGC().
  *
- * Argument:
- *	data	- Group-specific data.
+ *  @param data     Group-specific data.
  *
- * Result:
- *	1 if successful, 0 if a GC is underway (this implies the threading model
- *	isn't <COL_SINGLE>).
+ *  @retval 1       if successful
+ *  @retval 0       if a GC is underway (this implies the threading model isn't
+ *                  #COL_SINGLE).
  *
- * Side effects:
- *	When model isn't <COL_SINGLE>, calls <PlatTrySyncPauseGC>.
+ *  @sideeffect
+ *      When model isn't #COL_SINGLE, calls PlatTrySyncPauseGC().
  *
- * See also:
- *	<Col_TryPauseGC>, <PlatTrySyncPauseGC>, <SyncResumeGC>
- *---------------------------------------------------------------------------*/
+ *  @see Col_TryPauseGC
+ *  @see PlatTrySyncPauseGC
+ *  @see SyncResumeGC
+ *//*-----------------------------------------------------------------------*/
 
 #define TrySyncPauseGC(data) \
     ((data)->model == COL_SINGLE ? 1 : PlatTrySyncPauseGC(data))
 
-/*---------------------------------------------------------------------------
- * Internal Macro: SyncResumeGC
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * SyncResumeGC
  *
- *	Synchronize calls to <Col_ResumeGC>.
+ *  Synchronize calls to Col_ResumeGC().
  *
- * Arguments:
- *	data		- Group-specific data.
- *	performGc	- Whether to perform GC eventually.
+ *  @param data         Group-specific data.
+ *  @param performGc    Whether to perform GC eventually.
  *
- * Side effects:
- *	If performGC is nonzero, calls <PerformGC> eventually: synchronously
- *	if model is <COL_SINGLE>, else asynchronously.
+ *  @sideeffect
+ *      If **performGC** is nonzero, calls PerformGC() eventually: synchronously
+ *      if model is #COL_SINGLE, else asynchronously.
  *
- * See also:
- *	<Col_ResumeGC>, <PlatSyncResumeGC>, <PerformGC>, <SyncPauseGC>, 
- *	<TrySyncPauseGC>
- *---------------------------------------------------------------------------*/
+ *  @see Col_ResumeGC
+ *  @see PlatSyncResumeGC
+ *  @see PerformGC
+ *  @see SyncPauseGC
+ *  @see TrySyncPauseGC
+ *//*-----------------------------------------------------------------------*/
 
 #define SyncResumeGC(data, performGc) \
     if ((data)->model != COL_SINGLE) {PlatSyncResumeGC((data), (performGc));} \
-    else if (performGc) {PerformGC(data);} \
+    else if (performGc) {PerformGC(data);}
 
-
-/****************************************************************************
- * Internal Section: System Page Allocation
- *
- * Declarations:
- *	<systemPageSize>, <allocGranularity>, <shiftPage>, 
- *	<PlatReserveRange>, <PlatReleaseRange>, <PlatAllocPages>,
- *	<PlatFreePages>
- ****************************************************************************/
-
+/*
+ * Remaining declarations.
+ */
+                                                                                #       ifndef DOXYGEN
+int                     PlatEnter(unsigned int model);
+int                     PlatLeave(void);
+void                    PlatEnterProtectRoots(GroupData *data);
+void                    PlatLeaveProtectRoots(GroupData *data);
+void                    PlatSyncPauseGC(GroupData *data);
+int                     PlatTrySyncPauseGC(GroupData *data);
+void                    PlatSyncResumeGC(GroupData *data, int schedule);
+                                                                                #       endif DOXYGEN
+                                                                                /*!     @} */
+/********************************************************************************//*!   @name \
+ * System Page Allocation                                                       *//*!   @{ *//*
+ ******************************************************************************/
+                                                                                #       ifndef DOXYGEN
 extern size_t systemPageSize;
 extern size_t allocGranularity;
 extern size_t shiftPage;
 
-void *			PlatReserveRange(size_t size, int alloc);
-int			PlatReleaseRange(void *base, size_t size);
-int			PlatAllocPages(void *addr, size_t number);
-int			PlatFreePages(void *addr, size_t number);
-int			PlatProtectPages(void *addr, size_t number, 
-				int protect);
-
+void *                  PlatReserveRange(size_t size, int alloc);
+int                     PlatReleaseRange(void *base, size_t size);
+int                     PlatAllocPages(void *addr, size_t number);
+int                     PlatFreePages(void *addr, size_t number);
+int                     PlatProtectPages(void *addr, size_t number,
+                                int protect);
+                                                                                #       endif DOXYGEN
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 #endif /* _COLIBRI_PLATFORM */
+                                                                                /*!     @endcond */

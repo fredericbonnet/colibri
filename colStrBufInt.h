@@ -1,14 +1,16 @@
-/*
- * Internal Header: colStrBufInt.h
+/*                                                                              *//*!   @cond PRIVATE @file \
+ * colStrBufInt.h
  *
- *	This header file defines the string buffer word internals of Colibri.
+ *  This header file defines the string buffer word internals of Colibri.
  *
- *	String buffers are used to build strings incrementally in an efficient
- *	manner, by appending individual characters or whole ropes. The current
- *	accumulated rope can be retrieved at any time.
+ *  String buffers are used to build strings incrementally in an efficient
+ *  manner, by appending individual characters or whole ropes. The current
+ *  accumulated rope can be retrieved at any time.
  *
- * See Also:
- *	<colStrBuf.c>, <colStrBuf.h>, <WORD_TYPE_STRBUF>
+ *  @see colStrBuf.c
+ *  @see colStrBuf.h
+ *
+ *  @private
  */
 
 #ifndef _COLIBRI_STRBUF_INT
@@ -16,152 +18,162 @@
 
 
 /*
-================================================================================
-Internal Section: String Buffers
+================================================================================*//*!   @addtogroup strbuf_words \
+String Buffers
+                                                                                        @ingroup predefined_words
+  String buffers are used to build strings incrementally in an efficient
+  manner, by appending individual characters or whole ropes. The current
+  accumulated rope can be retrieved at any time.
+
+  @par Requirements
+  - String buffer words can use different character formats for internal
+    storage. So they need to store this information.
+
+  - Characters can be appended individually or in bulks (ropes or sequences
+    as iterator ranges). When adding single or multiple characters, they are
+    appended to an internal buffer stored within the word, up to its maximum
+    capacity. When the buffer is full, a rope is appended, or the
+    accumulated value is retrieved, the buffer content is appended to the
+    accumulated rope so far and the buffer is cleared before performing the
+    operation.
+
+  - String buffers have a buffer length set at creation time. This plus the
+    format determines the byte size of the buffer and thus number of cells
+    the word takes. So we store this cell size and deduce the actual buffer
+    length from the word size in cells minus the header, divided by the
+    character width of the used format.
+
+  @param Format     Preferred format for string building.
+  @param Size       Number of allocated cells.
+  @param Rope       Cumulated rope so far.
+  @param Length     Current length of character buffer.
+  @param Buffer     Character buffer data (array of characters).
+
+  @par Cell Layout
+    On all architectures the cell layout is as follows:
+
+    @dot
+    digraph {
+        node [fontname="Lucida Console,Courier" fontsize=14];
+        strbuf_word [shape=none, label=<
+            <table border="0" cellborder="1" cellspacing="0">
+            <tr><td border="0"></td>
+                <td sides="B" width="40" align="left">0</td><td sides="B" width="40" align="right">7</td>
+                <td sides="B" width="40" align="left">8</td><td sides="B" width="40" align="right">15</td>
+                <td sides="B" width="80" align="left">16</td><td sides="B" width="80" align="right">31</td>
+                <td sides="B" align="right">n</td>
+            </tr>
+            <tr><td sides="R">0</td>
+                <td href="@ref WORD_TYPEID" title="WORD_TYPEID" colspan="2">Type</td>
+                <td href="@ref WORD_STRBUF_FORMAT" title="WORD_STRBUF_FORMAT" colspan="2">Format</td>
+                <td href="@ref WORD_STRBUF_SIZE" title="WORD_STRBUF_SIZE" colspan="2">Size</td>
+                <td bgcolor="grey75"> Unused (n &gt; 32) </td>
+            </tr>
+            <tr><td sides="R">1</td>
+                <td href="@ref WORD_STRBUF_ROPE" title="WORD_STRBUF_ROPE" colspan="7">Rope</td>
+            </tr>
+            <tr><td sides="R">2</td>
+                <td href="@ref WORD_STRBUF_LENGTH" title="WORD_STRBUF_LENGTH" colspan="7">Length</td>
+            </tr>
+            <tr><td sides="R">.</td>
+                <td href="@ref WORD_STRBUF_BUFFER" title="WORD_STRBUF_BUFFER" colspan="7" rowspan="3">Buffer</td>
+            </tr>
+            <tr><td sides="R">.</td></tr>
+            <tr><td sides="R">N</td></tr>
+            </table>
+        >]
+    }
+    @enddot
+                                                                                        @if IGNORE
+        0     7 8     15 16          31                               n
+       +-------+--------+--------------+-------------------------------+
+     0 | Type  | Format |     Size     |        Unused (n > 32)        |
+       +-------+--------+--------------+-------------------------------+
+     1 |                              Rope                             |
+       +---------------------------------------------------------------+
+     2 |                             Length                            |
+       +---------------------------------------------------------------+
+       .                                                               .
+       .                             Buffer                            .
+     N |                                                               |
+       +---------------------------------------------------------------+
+                                                                                        @endif
+  @see WORD_TYPE_STRBUF                                                         *//*!   @{ *//*
 ================================================================================
 */
 
-/*---------------------------------------------------------------------------
- * Data Structure: String Buffer Word
- *
- *	String buffers are used to build strings incrementally in an efficient
- *	manner, by appending individual characters or whole ropes. The current
- *	accumulated rope can be retrieved at any time.
- *
- * Requirements:
- *	String buffer words can use different character formats for internal
- *	storage. So they need to store this information.
- *
- *	Characters can be appended individually or in bulks (ropes or sequences
- *	as iterator ranges). When adding single or multiple characters, they are
- *	appended to an internal buffer stored within the word, up to its maximum
- *	capacity. When the buffer is full, a rope is appended, or the 
- *	accumulated value is retrieved, the buffer content is appended to the 
- *	accumulated rope so far and the buffer is cleared before performing the 
- *	operation.
- *
- *	String buffers have a buffer length set at creation time. This plus the
- *	format determines the byte size of the buffer and thus number of cells 
- *	the word takes. So we store this cell size and deduce the actual buffer 
- *	length from the word size in cells minus the header, divided by the
- *	character width of the used format.
- *
- * Fields:
- *	Format	- Preferred format for string building.
- *	Size	- Number of allocated cells.
- *	Rope	- Cumulated rope so far.
- *	Length	- Current length of character buffer.
- *	Buffer	- Character buffer data (array of characters).
- *
- * Layout:
- *	On all architectures the cell layout is as follows:
- *
- * (start table)
- *      0     7 8     15 16          31                               n
- *     +-------+--------+--------------+-------------------------------+
- *   0 | Type  | Format |     Size     |        Unused (n > 32)        |
- *     +-------+--------+--------------+-------------------------------+
- *   1 |                              Rope                             |
- *     +---------------------------------------------------------------+
- *   2 |                             Length                            |
- *     +---------------------------------------------------------------+
- *     .                                                               .
- *     .                             Buffer                            .
- *     .                                                               .
- *     +---------------------------------------------------------------+
- * (end)
- *---------------------------------------------------------------------------*/
+/********************************************************************************//*!   @name \
+ * String Buffer Constants                                                      *//*!   @{ *//*
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Internal Macros: WORD_STRBUF_* Accessors
- *
- *	String buffer field accessor macros.
- *
- *  WORD_STRBUF_FORMAT	- Preferred format for string building.
- *  WORD_STRBUF_SIZE	- Number of allocated cells.
- *  WORD_STRBUF_ROPE	- Cumulated rope so far.
- *  WORD_STRBUF_LENGTH	- Current length of character buffer.
- *  WORD_STRBUF_BUFFER	- Character buffer data (array of characters).
- *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
- *
- * See also:
- *	<String Buffer Word>, <WORD_STRBUF_INIT>
- *---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * STRBUF_HEADER_SIZE
+ *  Byte size of string buffer header.
+ *//*-----------------------------------------------------------------------*/
 
-#define WORD_STRBUF_FORMAT(word)	(((int8_t *)(word))[1])
-#define WORD_STRBUF_SIZE(word)		(((uint16_t *)(word))[1])
-#define WORD_STRBUF_ROPE(word)		(((Col_Word *)(word))[1])
-#define WORD_STRBUF_LENGTH(word)	(((size_t *)(word))[2])
-#define WORD_STRBUF_BUFFER(word)	((const char *)(word)+STRBUF_HEADER_SIZE)
+#define STRBUF_HEADER_SIZE              (sizeof(size_t)*3)
 
-/*---------------------------------------------------------------------------
- * Internal Constants: WORD_STRBUF_* Constants
- *
- *	String buffer size limit constants.
- *
- *  STRBUF_HEADER_SIZE		- Byte size of string buffer header.
- *  STRBUF_MAX_SIZE		- Maximum cell size taken by string buffers.
- *
- * See also:
- *	<String Buffer Word>
- *---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * STRBUF_MAX_SIZE
+ *  Maximum cell size taken by string buffers.
+ *//*-----------------------------------------------------------------------*/
 
-#define STRBUF_HEADER_SIZE	(sizeof(size_t)*3)
-#define STRBUF_MAX_SIZE		UINT16_MAX
+#define STRBUF_MAX_SIZE                 UINT16_MAX
+                                                                                /*!     @} */
 
-/*---------------------------------------------------------------------------
- * Internal Macro: STRBUF_SIZE
+/********************************************************************************//*!   @name \
+ * String Buffer Utilities                                                      *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * STRBUF_SIZE
  *
- *	Get number of cells for a string buffer of a given length.
+ *  Get number of cells for a string buffer of a given length.
  *
- * Argument:
- *	byteLength	- Buffer length in bytes.
+ *  @param byteLength   Buffer length in bytes.
  *
- * Result:
- *	Number of cells taken by word.
- *
- * See also:
- *	<String Buffer Word>
- *---------------------------------------------------------------------------*/
+ *  @result
+ *      Number of cells taken by word.
+ *//*-----------------------------------------------------------------------*/
 
 #define STRBUF_SIZE(byteLength) \
     (NB_CELLS(STRBUF_HEADER_SIZE+(byteLength)))
 
-/*---------------------------------------------------------------------------
- * Internal Macro: STRBUF_MAX_LENGTH
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * STRBUF_MAX_LENGTH
  *
- *	Get maximum string buffer length for a given byte size.
+ *  Get maximum string buffer length for a given byte size.
  *
- * Argument:
- *	byteSize	- Available size.
+ *  @param byteSize     Available size.
+ *  @param format       Character format.
  *
- * Result:
- *	String buffer length fitting the given size.
- *
- * See also:
- *	<String Buffer Word>
- *---------------------------------------------------------------------------*/
+ *  @result
+ *      String buffer length fitting the given size.
+ *//*-----------------------------------------------------------------------*/
 
 #define STRBUF_MAX_LENGTH(byteSize, format) \
     (((byteSize)-STRBUF_HEADER_SIZE)/CHAR_WIDTH(format))
+                                                                                /*!     @} */
 
-/*---------------------------------------------------------------------------
- * Internal Macro: WORD_STRBUF_INIT
+/********************************************************************************//*!   @name \
+ * String Buffer Creation                                                       *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_STRBUF_INIT
  *
- *	String buffer word initializer.
+ *  String buffer word initializer.
  *
- * Arguments:
- *	word	- Word to initialize. (Caution: evaluated several times during 
- *		  macro expansion)
- *	size	- <WORD_STRBUF_SIZE>
- *	format	- <WORD_STRBUF_FORMAT>
+ *  @param word     Word to initialize.
+ *  @param size     #WORD_STRBUF_SIZE.
+ *  @param format   #WORD_STRBUF_FORMAT.
  *
- * See also:
- *	<String Buffer Word>, <WORD_TYPE_STRBUF>, <Col_NewStringBuffer>
- *---------------------------------------------------------------------------*/
+ *  @warning
+ *      Argument **word** is referenced several times by the macro. Make sure to
+ *      avoid any side effect.
+ *
+ *  @see WORD_TYPE_STRBUF
+ *//*-----------------------------------------------------------------------*/
 
 #define WORD_STRBUF_INIT(word, size, format) \
     WORD_SET_TYPEID((word), WORD_TYPE_STRBUF); \
@@ -169,35 +181,88 @@ Internal Section: String Buffers
     WORD_STRBUF_SIZE(word) = (uint16_t) (size); \
     WORD_STRBUF_ROPE(word) = WORD_SMALLSTR_EMPTY; \
     WORD_STRBUF_LENGTH(word) = 0;
+                                                                                /*!     @} */
 
+/********************************************************************************//*!   @name \
+ * String Buffer Accessors                                                      *//*!   @{ *//*
+ ******************************************************************************/
 
-/*
-================================================================================
-Internal Section: Type Checking
-================================================================================
-*/
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_STRBUF_FORMAT
+ *  Get/set preferred format for string building.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_STRBUF_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_STRBUF_SIZE
+ *  Get/set number of allocated cells.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_STRBUF_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_STRBUF_ROPE
+ *  Get/set cumulated rope so far.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_STRBUF_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_STRBUF_LENGTH
+ *  Get/set current length of character buffer.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *
+ *  @see WORD_STRBUF_INIT
+ *
+ *                                                                              *//*!   @def \
+ * WORD_STRBUF_BUFFER
+ *  Pointer to character buffer data (array of characters in the format given
+ *  by #WORD_STRBUF_FORMAT).
+ *
+ *  @param word     Word to access.
+ *//*-----------------------------------------------------------------------*/
 
-/*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_STRBUF
+#define WORD_STRBUF_FORMAT(word)        (((int8_t *)(word))[1])
+#define WORD_STRBUF_SIZE(word)          (((uint16_t *)(word))[1])
+#define WORD_STRBUF_ROPE(word)          (((Col_Word *)(word))[1])
+#define WORD_STRBUF_LENGTH(word)        (((size_t *)(word))[2])
+#define WORD_STRBUF_BUFFER(word)        ((const char *)(word)+STRBUF_HEADER_SIZE)
+                                                                                /*!     @} */
+
+/********************************************************************************//*!   @name \
+ * String Buffer Exceptions                                                     *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * TYPECHECK_STRBUF
  *
- *	Type checking macro for string buffers.
+ *  Type checking macro for string buffers.
  *
- * Argument:
- *	word	- Checked word.
+ *  @param word     Checked word.
  *
- * Side effects:
- *	Generate <COL_TYPECHECK> error when *word* is not a string buffer
- *
- * See also:
- *	<Col_Error>
- *---------------------------------------------------------------------------*/
+ *  @typecheck{COL_ERROR_STRBUF,word}
+ *//*-----------------------------------------------------------------------*/
 
 #define TYPECHECK_STRBUF(word) \
-    if (!(Col_WordType(word) & COL_STRBUF)) { \
-	Col_Error(COL_TYPECHECK, ColibriDomain, COL_ERROR_STRBUF, (word)); \
-	goto COL_CONCATENATE(FAILED,__LINE__); \
-    } \
-    if (0) \
-COL_CONCATENATE(FAILED,__LINE__): 
-
+    TYPECHECK((Col_WordType(word) & COL_STRBUF), COL_ERROR_STRBUF, (word))
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 #endif /* _COLIBRI_STRBUF_INT */
+                                                                                /*!     @endcond */

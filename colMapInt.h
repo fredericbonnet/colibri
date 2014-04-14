@@ -1,15 +1,18 @@
-/*
- * Internal Header: colMapInt.h
+/*                                                                              *//*!   @cond PRIVATE @file \
+ * colMapInt.h
  *
- *	This header file defines the generic map word internals of Colibri.
+ *  This header file defines the generic map word internals of Colibri.
  *
- *	Maps are a collection datatype that associates keys to values. Keys can
- *	be integers, strings or generic words.
+ *  Maps are an associative collection datatype that associates keys to
+ *  values. Keys can be integers, strings or generic words. Values are
+ *  arbitrary words.
  *
- *	They are always mutable.
+ *  They are always mutable.
  *
- * See also:
- *	<colMap.c>, <colMap.h>
+ *  @see colMap.c
+ *  @see colMap.h
+ *
+ *  @private
  */
 
 #ifndef _COLIBRI_MAP_INT
@@ -17,175 +20,247 @@
 
 
 /*
-================================================================================
-Internal Section: Map Entries
-================================================================================
-*/
+================================================================================*//*!   @addtogroup mapentry_words \
+Map Entries
+                                                                                        @ingroup predefined_words map_words
+  Generic map entries are key-value pairs. Type-specific entries extend this
+  generic type with implementation-dependent data.
 
-/*---------------------------------------------------------------------------
- * Data Structure: Map Entry Word
- *
- *	Generic map entries are key-value pairs. 
- *
- * Requirements:
- *	Map entry words use one single cell.
- *
- *	Map entries must store at least a key and a value.
- *
- * Fields:
- *	Key	- A word in the general case but can be a native integer for 
- *		  integer maps. 
- *	Value	- A word.
- *
- * Layout:
- *	The key and value take the cell's last two machine words. Subtypes
- *	are free to use the remaining data.
- *
- *	On all architectures the cell layout is as follows:
- *
- * (start table)
- *      0     7 8                                                     n
- *     +-------+-------------------------------------------------------+
- *   0 | Type  |                                                       |
- *     +-------+               Type-specific data                      +
- *   1 |                                                               |
- *     +---------------------------------------------------------------+
- *   2 |                              Key                              |
- *     +---------------------------------------------------------------+
- *   3 |                             Value                             |
- *     +---------------------------------------------------------------+
- * (end)
- *
- * See also:
- *	<Hash Entry Word>, <Trie Leaf Word>
- *---------------------------------------------------------------------------*/
+  @par Requirements
+  - Map entry words use one single cell.
 
-/*---------------------------------------------------------------------------
- * Internal Macros: WORD_( MAPENTRY | INTMAPENTRY )_* Accessors
- *
- *	Map entry field accessor macros.
- *
- *  WORD_MAPENTRY_KEY		- Entry key word.
- *  WORD_INTMAPENTRY_KEY	- Integer entry key.
- *  WORD_MAPENTRY_VALUE		- Entry value word.
- *
- * Note:
- *	Macros are L-values and side effect-free unless specified (i.e. 
- *	accessible for both read/write operations).
- *
- * See also:
- *	<Map Entry Word>
- *---------------------------------------------------------------------------*/
+  - Map entries must store at least a key and a value.
 
-#define WORD_MAPENTRY_KEY(word)		(((Col_Word *)(word))[2])
-#define WORD_INTMAPENTRY_KEY(word)	(((intptr_t *)(word))[2])
-#define WORD_MAPENTRY_VALUE(word)	(((Col_Word *)(word))[3])
+  @param Key    A word in the general case but can be a native integer for
+                integer maps.
+  @param Value  A word.
 
+  @par Cell Layout
+    On all architectures the single-cell layout is as follows:
 
-/*
-================================================================================
-Internal Section: Type Checking
+    @dot
+    digraph {
+        node [fontname="Lucida Console,Courier" fontsize=14];
+        mapentry_word [shape=none, label=<
+            <table border="0" cellborder="1" cellspacing="0">
+            <tr><td border="0"></td>
+                <td sides="B" width="40" align="left">0</td><td sides="B" width="40" align="right">7</td>
+                <td sides="B" width="120" align="left">8</td><td sides="B" width="120" align="right">n</td>
+            </tr>
+            <tr><td sides="R">0</td>
+                <td href="@ref WORD_TYPEID" title="WORD_TYPEID" colspan="2">Type</td>
+                <td sides="R" colspan="2"></td>
+            </tr>
+            <tr><td sides="R">1</td>
+                <td colspan="4" sides="BR" width="320">Type-specific data</td>
+            </tr>
+            <tr><td sides="R">2</td>
+                <td href="@ref WORD_MAPENTRY_KEY" title="WORD_MAPENTRY_KEY" colspan="4">Key</td>
+            </tr>
+            <tr><td sides="R">3</td>
+                <td href="@ref WORD_MAPENTRY_VALUE" title="WORD_MAPENTRY_VALUE" colspan="4">Value</td>
+            </tr>
+            </table>
+        >]
+    }
+    @enddot
+                                                                                        @if IGNORE
+           0     7 8                                                     n
+          +-------+-------------------------------------------------------+
+        0 | Type  |                                                       |
+          +-------+               Type-specific data                      +
+        1 |                                                               |
+          +---------------------------------------------------------------+
+        2 |                              Key                              |
+          +---------------------------------------------------------------+
+        3 |                             Value                             |
+          +---------------------------------------------------------------+
+                                                                                        @endif
+                                                                                *//*!   @{ *//*
 ================================================================================
 */
 
-/*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_MAP
+/********************************************************************************//*!   @name \
+ * Map Entry Accessors                                                          *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_MAPENTRY_KEY
+ *  Get/set word key of word-based map entry (string or custom).
  *
- *	Type checking macro for maps.
+ *  @param word     Word to access.
  *
- * Argument:
- *	word	- Checked word.
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
  *
- * Side effects:
- *	Generate <COL_TYPECHECK> error when *word* is not a map.
+ *                                                                              *//*!   @def \
+ * WORD_MAPENTRY_VALUE
+ *  Get/set value of map entry.
  *
- * See also:
- *	<TYPECHECK>
- *---------------------------------------------------------------------------*/
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *//*-----------------------------------------------------------------------*/
+
+#define WORD_MAPENTRY_KEY(word)         (((Col_Word *)(word))[2])
+#define WORD_MAPENTRY_VALUE(word)       (((Col_Word *)(word))[3])
+                                                                                /*!     @} */
+
+/********************************************************************************//*!   @name \
+ * Map Entry Exceptions                                                         *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * TYPECHECK_MAP
+ *                                                                                      @hideinitializer
+ *  Type checking macro for maps.
+ *
+ *  @param word     Checked word.
+ *
+ *  @typecheck{COL_ERROR_MAP,word}
+ *//*-----------------------------------------------------------------------*/
 
 #define TYPECHECK_MAP(word) \
     TYPECHECK((Col_WordType(word) & (COL_MAP | COL_INTMAP)), COL_ERROR_MAP, \
-	    (word))
+            (word))
 
-/*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_WORDMAP
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * TYPECHECK_WORDMAP
+ *                                                                                      @hideinitializer
+ *  Type checking macro for word-based maps (string or custom).
  *
- *	Type checking macro for word-based maps (string or custom).
+ *  @param word     Checked word.
  *
- * Argument:
- *	word	- Checked word.
- *
- * Side effects:
- *	Generate <COL_TYPECHECK> error when *word* is not a word-based map.
- *
- * See also:
- *	<TYPECHECK>
- *---------------------------------------------------------------------------*/
+ *  @typecheck{COL_ERROR_WORDMAP,word}
+ *//*-----------------------------------------------------------------------*/
 
 #define TYPECHECK_WORDMAP(word) \
     TYPECHECK(((Col_WordType(word) & (COL_MAP | COL_INTMAP)) == COL_MAP), \
-	    COL_ERROR_WORDMAP, (word))
+            COL_ERROR_WORDMAP, (word))
 
-/*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_INTMAP
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * TYPECHECK_INTMAP
+ *                                                                                      @hideinitializer
+ *  Type checking macro for integer maps.
  *
- *	Type checking macro for integer maps.
+ *  @param word     Checked word.
  *
- * Argument:
- *	word	- Checked word.
- *
- * Side effects:
- *	Generate <COL_TYPECHECK> error when *word* is not an integer map.
- *
- * See also:
- *	<TYPECHECK>
- *---------------------------------------------------------------------------*/
+ *  @typecheck{COL_ERROR_INTMAP,word}
+ *//*-----------------------------------------------------------------------*/
 
 #define TYPECHECK_INTMAP(word) \
     TYPECHECK((Col_WordType(word) & COL_INTMAP), COL_ERROR_INTMAP, (word))
 
-/*---------------------------------------------------------------------------
- * Internal Macro: TYPECHECK_MAPITER
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * TYPECHECK_MAPITER
+ *                                                                                      @hideinitializer
+ *  Type checking macro for map iterators.
  *
- *	Type checking macro for map iterators.
+ *  @param it   Checked iterator.
  *
- * Argument:
- *	it	- Checked iterator.
+ *  @typecheck{COL_ERROR_MAPITER,it}
  *
- * Side effects:
- *	Generate <COL_TYPECHECK> error when *it* is not a valid map iterator.
- *
- * See also:
- *	<TYPECHECK>, <Col_MapIterNull>
- *---------------------------------------------------------------------------*/
+ *  @see Col_MapIterNull
+ *//*-----------------------------------------------------------------------*/
 
 #define TYPECHECK_MAPITER(it) \
     TYPECHECK(!Col_MapIterNull(it), COL_ERROR_MAPITER, (it))
 
-
-/*
-================================================================================
-Internal Section: Value Checking
-================================================================================
-*/
-
-/*---------------------------------------------------------------------------
- * Internal Macro: VALUECHECK_MAPITER
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * VALUECHECK_MAPITER
+ *                                                                                      @hideinitializer
+ *  Value checking macro for map iterators, ensures that iterator is not
+ *  at end.
  *
- *	Value checking macro for map iterators, ensures that iterator is not
- *	at end.
+ *  @param it   Checked iterator.
  *
- * Argument:
- *	it	- Checked iterator.
+ *  @valuecheck{COL_ERROR_MAPITER_END,it}
  *
- * Side effects:
- *	Generate <COL_VALUECHECK> error when *it* is at end.
- *
- * See also:
- *	<VALUECHECK>, <Col_MapIterEnd>
- *---------------------------------------------------------------------------*/
+ *  @see Col_MapIterEnd
+ *//*-----------------------------------------------------------------------*/
 
 #define VALUECHECK_MAPITER(it) \
     VALUECHECK(!Col_MapIterEnd(it), COL_ERROR_MAPITER_END, (it))
+                                                                                /*!     @} */
+                                                                                /*!     @} */
+/*
+================================================================================*//*!   @addtogroup intmapentry_words \
+Integer Map Entries
+                                                                                        @ingroup predefined_words map_words
+  Generic integer map entries are key-value pairs. Type-specific entries extend 
+  this generic type with implementation-dependent data.
 
+  @par Requirements
+  - Map entry words use one single cell.
+
+  - Map entries must store at least a key and a value.
+
+  @param Key    A word in the general case but can be a native integer for
+                integer maps.
+  @param Value  A word.
+
+  @par Cell Layout
+    On all architectures the single-cell layout is as follows:
+
+    @dot
+    digraph {
+        node [fontname="Lucida Console,Courier" fontsize=14];
+        mapentry_word [shape=none, label=<
+            <table border="0" cellborder="1" cellspacing="0">
+            <tr><td border="0"></td>
+                <td sides="B" width="40" align="left">0</td><td sides="B" width="40" align="right">7</td>
+                <td sides="B" width="120" align="left">8</td><td sides="B" width="120" align="right">n</td>
+            </tr>
+            <tr><td sides="R">0</td>
+                <td href="@ref WORD_TYPEID" title="WORD_TYPEID" colspan="2">Type</td>
+                <td sides="R" colspan="2"></td>
+            </tr>
+            <tr><td sides="R">1</td>
+                <td colspan="4" sides="BR" width="320">Type-specific data</td>
+            </tr>
+            <tr><td sides="R">2</td>
+                <td href="@ref WORD_INTMAPENTRY_KEY" title="WORD_INTMAPENTRY_KEY" colspan="4">Key</td>
+            </tr>
+            <tr><td sides="R">3</td>
+                <td href="@ref WORD_MAPENTRY_VALUE" title="WORD_MAPENTRY_VALUE" colspan="4">Value</td>
+            </tr>
+            </table>
+        >]
+    }
+    @enddot
+                                                                                        @if IGNORE
+           0     7 8                                                     n
+          +-------+-------------------------------------------------------+
+        0 | Type  |                                                       |
+          +-------+               Type-specific data                      +
+        1 |                                                               |
+          +---------------------------------------------------------------+
+        2 |                              Key                              |
+          +---------------------------------------------------------------+
+        3 |                             Value                             |
+          +---------------------------------------------------------------+
+                                                                                        @endif
+                                                                                *//*!   @{ *//*
+================================================================================
+*/
+
+/********************************************************************************//*!   @name \
+ * Integer Map Entry Accessors                                                  *//*!   @{ *//*
+ ******************************************************************************/
+
+/*---------------------------------------------------------------------------   *//*!   @def \
+ * WORD_INTMAPENTRY_KEY
+ *  Get/set key of integer map entry.
+ *
+ *  @param word     Word to access.
+ *
+ *  @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ *//*-----------------------------------------------------------------------*/
+
+#define WORD_INTMAPENTRY_KEY(word)      (((intptr_t *)(word))[2])
+                                                                                /*!     @} */
+                                                                                /*!     @} */
 #endif /* _COLIBRI_MAP_INT */
+                                                                                /*!     @endcond */
