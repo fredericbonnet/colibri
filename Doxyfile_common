@@ -233,7 +233,7 @@ TAB_SIZE               = 8
 # "Side Effects:". You can put \n's in the value part of an alias to insert
 # newlines.
 
-ALIASES                += sideeffect="@par Side Effect\n"
+ALIASES                += sideeffect="@par Side Effect"
 ALIASES                += fatal{1}="@exception #\1 @link COL_FATAL [F]@endlink @copybrief \1 "
 ALIASES                += fatal{2}="@exception #\1 @link COL_FATAL [F]@endlink @copybrief \1 (<em>\2</em>) "
 ALIASES                += error{1}="@exception #\1 @link COL_ERROR [E]@endlink @copybrief \1 "
@@ -1827,7 +1827,7 @@ MAN_LINKS              = NO
 # captures the structure of the code including all documentation.
 # The default value is: NO.
 
-GENERATE_XML           = NO
+GENERATE_XML           = YES
 
 # The XML_OUTPUT tag is used to specify where the XML pages will be put. If a
 # relative path is entered the value of OUTPUT_DIRECTORY will be put in front of
