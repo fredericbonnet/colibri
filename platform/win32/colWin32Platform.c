@@ -189,8 +189,8 @@ FreeGroupData(
          * Destroy synchronization objects.
          */
 
-        DeleteObject(groupData->eventGcScheduled);
-        DeleteObject(groupData->eventGcDone);
+        CloseHandle(groupData->eventGcScheduled);
+        CloseHandle(groupData->eventGcDone);
         DeleteCriticalSection(&groupData->csGc);
 
         DeleteCriticalSection(&groupData->csRoots);
