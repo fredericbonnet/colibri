@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.11)
 
 project(colibri LANGUAGES C)
 
+# Colibri library
 add_library(colibri SHARED)
 target_compile_definitions(colibri
 	PRIVATE BUILD_colibri
@@ -44,3 +45,23 @@ install(TARGETS colibri EXPORT colibri-config
 )
 install(DIRECTORY include/ DESTINATION include/colibri)
 install(EXPORT colibri-config DESTINATION cmake)
+
+
+# Colibri unit tests
+add_executable(test_colibri)
+target_sources(test_colibri
+	PRIVATE
+		tests/testColibri.c
+		tests/testImmediateWords.c
+		tests/testRopes.c
+		tests/testStrBufs.c
+		tests/testLists.c
+		tests/testMaps.c
+)
+target_link_libraries(test_colibri
+	PRIVATE
+		colibri
+)
+install(TARGETS test_colibri EXPORT test_colibri
+	RUNTIME DESTINATION bin/${CMAKE_BUILD_TYPE}
+)
