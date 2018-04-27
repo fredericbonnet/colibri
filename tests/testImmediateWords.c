@@ -4,7 +4,7 @@
 #include <colibri.h>
 
 #include "unitTest.h"
-
+#include "testColibri.h"
 
 /*
  *---------------------------------------------------------------------------
@@ -22,7 +22,7 @@ TEST_FIXTURE_SETUP(testImmediateWords) {
 }
 TEST_FIXTURE_TEARDOWN(testImmediateWords) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -74,13 +74,13 @@ TEST_CASE(testImmediateInts, testImmediateWords) {
     ASSERT(word & 1);
     ASSERT(Col_WordType(word) & COL_INT);
     ASSERT(Col_IntWordValue(word) == -0x3FEDCBA9);
-					
+                                        
     // Non-immediate ints on 32-bit systems, immediate on 64-bit.
     word = Col_NewIntWord(0x87654321);
     ASSERT(Col_IntWordValue(word) == 0x87654321);
     ASSERT(sizeof(intptr_t) == 4
-	? (word & 0xF) == 0	/* 32-bit */
-	: (word & 1)		/* 64-bit */
+        ? (word & 0xF) == 0	/* 32-bit */
+        : (word & 1)		/* 64-bit */
     );
     ASSERT(Col_WordType(word) & COL_INT);
     ASSERT(Col_IntWordValue(word) == 0x87654321);
@@ -116,25 +116,25 @@ TEST_CASE(testImmediateFloats, testImmediateWords) {
     ASSERT(word & 2);
     ASSERT(Col_WordType(word) & COL_FLOAT);
     ASSERT(Col_FloatWordValue(word)  == 1.0);
-					
+                                        
     word = Col_NewFloatWord(4194303 /* = 2^22-1 */);
     ASSERT(Col_FloatWordValue(word) == 4194303);
     ASSERT(word & 2);
     ASSERT(Col_WordType(word) & COL_FLOAT);
     ASSERT(Col_FloatWordValue(word)  == 4194303);
-					
+                                        
     word = Col_NewFloatWord(0.0000002384185791015625 /* = 2^-22 */);
     ASSERT(Col_FloatWordValue(word) == 0.0000002384185791015625);
     ASSERT(word & 2);
     ASSERT(Col_WordType(word) & COL_FLOAT);
     ASSERT(Col_FloatWordValue(word)  == 0.0000002384185791015625);
-					
+                                        
     // Non-immediate floats on 32-bit systems, immediate on 64-bit.
     word = Col_NewFloatWord(8388607 /* = 2^23-1 */);
     ASSERT(Col_FloatWordValue(word) == 8388607);
     ASSERT(sizeof(intptr_t) == 4
-	? (word & 0xF) == 0	/* 32-bit */
-	: (word & 2)		/* 64-bit */
+        ? (word & 0xF) == 0	/* 32-bit */
+        : (word & 2)		/* 64-bit */
     );
     ASSERT(Col_WordType(word) & COL_FLOAT);
     ASSERT(Col_FloatWordValue(word)  == 8388607);
@@ -231,15 +231,15 @@ TEST_CASE(testImmediateStrings, testImmediateWords) {
     // Non-immediate strings on 32-bit systems, immediate on 64-bit.
     word = Col_NewRope(COL_UCS1, str1, 4);
     ASSERT(sizeof(intptr_t) == 4
-	? (word & 0xF) == 0		/* 32-bit */
-	: ((word & 0xFF) == 0x8C)	/* 64-bit */
+        ? (word & 0xF) == 0		/* 32-bit */
+        : ((word & 0xFF) == 0x8C)	/* 64-bit */
     );
     ASSERT(Col_WordType(word) & COL_STRING);
     ASSERT(Col_StringWordFormat(word) == COL_UCS1);
     word = Col_NewRope(COL_UCS, str41, 16);
     ASSERT(sizeof(intptr_t) == 4
-	? (word & 0xF) == 0		/* 32-bit */
-	: ((word & 0xFF) == 0x8C)	/* 64-bit */
+        ? (word & 0xF) == 0		/* 32-bit */
+        : ((word & 0xFF) == 0x8C)	/* 64-bit */
     );
     ASSERT(Col_WordType(word) & COL_STRING);
     ASSERT(Col_StringWordFormat(word) == COL_UCS1);

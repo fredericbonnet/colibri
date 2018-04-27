@@ -4,6 +4,7 @@
 #include <colibri.h>
 
 #include "unitTest.h"
+#include "testColibri.h"
 
 /*
  *---------------------------------------------------------------------------
@@ -42,7 +43,7 @@ TEST_FIXTURE_SETUP(testNewRope) {
 }
 TEST_FIXTURE_TEARDOWN(testNewRope) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -54,24 +55,24 @@ TEST_CASE(testNewSmallRope, testNewRope) {
     Col_Word rope;
 
     for (index=0; index < l; index++) {
-	c[index] = (Col_Char1) index;
+        c[index] = (Col_Char1) index;
     }
 
     rope = Col_NewRope(COL_UCS1, c, sizeof(c));
     ASSERT(Col_RopeLength(rope) == l);
     ropeAccess(rope);
     for (Col_RopeIterFirst(it, rope); !Col_RopeIterEnd(it); Col_RopeIterNext(it)) {
-	Col_Char c = Col_RopeIterAt(it);
-	index = Col_RopeIterIndex(it);
-	ASSERT_MSG(c == (Col_Char) index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindFirst(rope, (Col_Char) index) == index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindLast(rope, (Col_Char) index) == index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindFirstN(rope, (Col_Char) index, index) == SIZE_MAX, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindFirstN(rope, (Col_Char) index, index+1) == index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindLastN(rope, (Col_Char) index, l-index-1) == SIZE_MAX, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindLastN(rope, (Col_Char) index, l-index) == index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFind(rope, (Col_Char) index, index+1, SIZE_MAX, 0) == SIZE_MAX, "index=%u", index);
-	if (index > 0) ASSERT_MSG(Col_RopeFind(rope, (Col_Char) index, index-1, SIZE_MAX, 1) == SIZE_MAX, "index=%u", index);
+        Col_Char c = Col_RopeIterAt(it);
+        index = Col_RopeIterIndex(it);
+        ASSERT(c == (Col_Char) index, "index=%u", index);
+        ASSERT(Col_RopeFindFirst(rope, (Col_Char) index) == index, "index=%u", index);
+        ASSERT(Col_RopeFindLast(rope, (Col_Char) index) == index, "index=%u", index);
+        ASSERT(Col_RopeFindFirstN(rope, (Col_Char) index, index) == SIZE_MAX, "index=%u", index);
+        ASSERT(Col_RopeFindFirstN(rope, (Col_Char) index, index+1) == index, "index=%u", index);
+        ASSERT(Col_RopeFindLastN(rope, (Col_Char) index, l-index-1) == SIZE_MAX, "index=%u", index);
+        ASSERT(Col_RopeFindLastN(rope, (Col_Char) index, l-index) == index, "index=%u", index);
+        ASSERT(Col_RopeFind(rope, (Col_Char) index, index+1, SIZE_MAX, 0) == SIZE_MAX, "index=%u", index);
+        if (index > 0) ASSERT(Col_RopeFind(rope, (Col_Char) index, index-1, SIZE_MAX, 1) == SIZE_MAX, "index=%u", index);
     }
 }
 TEST_CASE(testNewLargeRope, testNewRope) {
@@ -82,24 +83,24 @@ TEST_CASE(testNewLargeRope, testNewRope) {
     Col_Word rope;
 
     for (index=0; index < l; index++) {
-	c[index] = (Col_Char2) index;
+        c[index] = (Col_Char2) index;
     }
 
     rope = Col_NewRope(COL_UCS2, c, sizeof(c));
     ASSERT(Col_RopeLength(rope) == l);
     ropeAccess(rope);
     for (Col_RopeIterFirst(it, rope); !Col_RopeIterEnd(it); Col_RopeIterNext(it)) {
-	Col_Char c = Col_RopeIterAt(it);
-	index = Col_RopeIterIndex(it);
-	ASSERT_MSG(c == (Col_Char) index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindFirst(rope, c) == index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindLast(rope, c) == index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindFirstN(rope, c, index) == SIZE_MAX, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindFirstN(rope, c, index+1) == index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindLastN(rope, c, l-index-1) == SIZE_MAX, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindLastN(rope, c, l-index) == index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFind(rope, c, index+1, SIZE_MAX, 0) == SIZE_MAX, "index=%u", index);
-	if (index > 0) ASSERT_MSG(Col_RopeFind(rope, c, index-1, SIZE_MAX, 1) == SIZE_MAX, "index=%u", index);
+        Col_Char c = Col_RopeIterAt(it);
+        index = Col_RopeIterIndex(it);
+        ASSERT(c == (Col_Char) index, "index=%u", index);
+        ASSERT(Col_RopeFindFirst(rope, c) == index, "index=%u", index);
+        ASSERT(Col_RopeFindLast(rope, c) == index, "index=%u", index);
+        ASSERT(Col_RopeFindFirstN(rope, c, index) == SIZE_MAX, "index=%u", index);
+        ASSERT(Col_RopeFindFirstN(rope, c, index+1) == index, "index=%u", index);
+        ASSERT(Col_RopeFindLastN(rope, c, l-index-1) == SIZE_MAX, "index=%u", index);
+        ASSERT(Col_RopeFindLastN(rope, c, l-index) == index, "index=%u", index);
+        ASSERT(Col_RopeFind(rope, c, index+1, SIZE_MAX, 0) == SIZE_MAX, "index=%u", index);
+        if (index > 0) ASSERT(Col_RopeFind(rope, c, index-1, SIZE_MAX, 1) == SIZE_MAX, "index=%u", index);
     }
 }
 
@@ -127,14 +128,14 @@ TEST_FIXTURE_SETUP(testSubropes, context) {
     Col_PauseGC();
 
     for (index=0; index < l; index++) {
-	c[index] = (Col_Char2) index;
+        c[index] = (Col_Char2) index;
     }
 
     context->rope = Col_NewRope(COL_UCS2, c, sizeof(c));
 }
 TEST_FIXTURE_TEARDOWN(testSubropes) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -146,32 +147,32 @@ TEST_CASE(testSmallSubropes, testSubropes, context) {
     Col_RopeIterator it;
 
     for (offset=0; offset < length; offset++) {
-	size_t l = (offset<=length-sublength?sublength:length-offset);
-	subrope = Col_Subrope(context->rope, offset, offset+sublength-1);
-	ASSERT(Col_RopeLength(subrope) == l);
+        size_t l = (offset<=length-sublength?sublength:length-offset);
+        subrope = Col_Subrope(context->rope, offset, offset+sublength-1);
+        ASSERT(Col_RopeLength(subrope) == l);
 
-	ropeAccess(subrope);
+        ropeAccess(subrope);
 
-	for (Col_RopeIterFirst(it, subrope); !Col_RopeIterEnd(it); Col_RopeIterNext(it)) {
-	    Col_Char c = Col_RopeIterAt(it);
-	    index = Col_RopeIterIndex(it);
-	    ASSERT_MSG(c == (Col_Char) index+offset, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFindFirst(subrope, c) == index, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFindLast(subrope, c) == index, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFindFirstN(subrope, c, index) == SIZE_MAX, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFindFirstN(subrope, c, index+1) == index, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFindLastN(subrope, c, l-index-1) == SIZE_MAX, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFindLastN(subrope, c, l-index) == index, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFind(subrope, c, index+1, SIZE_MAX, 0) == SIZE_MAX, "index=%u", index);
-	    if (index > 0) ASSERT_MSG(Col_RopeFind(subrope, c, index-1, SIZE_MAX, 1) == SIZE_MAX, "index=%u", index);
-	}
+        for (Col_RopeIterFirst(it, subrope); !Col_RopeIterEnd(it); Col_RopeIterNext(it)) {
+            Col_Char c = Col_RopeIterAt(it);
+            index = Col_RopeIterIndex(it);
+            ASSERT(c == (Col_Char) index+offset, "index=%u", index);
+            ASSERT(Col_RopeFindFirst(subrope, c) == index, "index=%u", index);
+            ASSERT(Col_RopeFindLast(subrope, c) == index, "index=%u", index);
+            ASSERT(Col_RopeFindFirstN(subrope, c, index) == SIZE_MAX, "index=%u", index);
+            ASSERT(Col_RopeFindFirstN(subrope, c, index+1) == index, "index=%u", index);
+            ASSERT(Col_RopeFindLastN(subrope, c, l-index-1) == SIZE_MAX, "index=%u", index);
+            ASSERT(Col_RopeFindLastN(subrope, c, l-index) == index, "index=%u", index);
+            ASSERT(Col_RopeFind(subrope, c, index+1, SIZE_MAX, 0) == SIZE_MAX, "index=%u", index);
+            if (index > 0) ASSERT(Col_RopeFind(subrope, c, index-1, SIZE_MAX, 1) == SIZE_MAX, "index=%u", index);
+        }
 
-	ASSERT_MSG(Col_RopeSearchFirst(context->rope, subrope) == offset, "offset=%u", offset);
-	ASSERT_MSG(Col_RopeSearchLast(context->rope, subrope) == offset, "offset=%u", offset);
-	ASSERT_MSG(Col_RopeSearch(context->rope, subrope, offset, SIZE_MAX, 0) == offset, "offset=%u", offset);
-	ASSERT_MSG(Col_RopeSearch(context->rope, subrope, offset+1, SIZE_MAX, 0) == SIZE_MAX, "offset=%u", offset);
-	ASSERT_MSG(Col_RopeSearch(context->rope, subrope, offset, SIZE_MAX, 1) == offset, "offset=%u", offset);
-	if (offset > 0) ASSERT_MSG(Col_RopeSearch(context->rope, subrope, offset-1, SIZE_MAX, 1) == SIZE_MAX, "offset=%u", offset);
+        ASSERT(Col_RopeSearchFirst(context->rope, subrope) == offset, "offset=%u", offset);
+        ASSERT(Col_RopeSearchLast(context->rope, subrope) == offset, "offset=%u", offset);
+        ASSERT(Col_RopeSearch(context->rope, subrope, offset, SIZE_MAX, 0) == offset, "offset=%u", offset);
+        ASSERT(Col_RopeSearch(context->rope, subrope, offset+1, SIZE_MAX, 0) == SIZE_MAX, "offset=%u", offset);
+        ASSERT(Col_RopeSearch(context->rope, subrope, offset, SIZE_MAX, 1) == offset, "offset=%u", offset);
+        if (offset > 0) ASSERT(Col_RopeSearch(context->rope, subrope, offset-1, SIZE_MAX, 1) == SIZE_MAX, "offset=%u", offset);
     }
 }
 TEST_CASE(testLargeSubropes, testSubropes, context) {
@@ -182,32 +183,32 @@ TEST_CASE(testLargeSubropes, testSubropes, context) {
     Col_RopeIterator it;
 
     for (offset=0; offset < length; offset++) {
-	size_t l = (offset<=length-sublength?sublength:length-offset);
-	subrope = Col_Subrope(context->rope, offset, offset+sublength-1);
-	ASSERT(Col_RopeLength(subrope) == l);
+        size_t l = (offset<=length-sublength?sublength:length-offset);
+        subrope = Col_Subrope(context->rope, offset, offset+sublength-1);
+        ASSERT(Col_RopeLength(subrope) == l);
 
-	ropeAccess(subrope);
+        ropeAccess(subrope);
 
-	for (Col_RopeIterFirst(it, subrope); !Col_RopeIterEnd(it); Col_RopeIterNext(it)) {
-	    Col_Char c = Col_RopeIterAt(it);
-	    index = Col_RopeIterIndex(it);
-	    ASSERT_MSG(c == (Col_Char) index+offset, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFindFirst(subrope, c) == index, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFindLast(subrope, c) == index, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFindFirstN(subrope, c, index) == SIZE_MAX, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFindFirstN(subrope, c, index+1) == index, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFindLastN(subrope, c, l-index-1) == SIZE_MAX, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFindLastN(subrope, c, l-index) == index, "index=%u", index);
-	    ASSERT_MSG(Col_RopeFind(subrope, c, index+1, SIZE_MAX, 0) == SIZE_MAX, "index=%u", index);
-	    if (index > 0) ASSERT_MSG(Col_RopeFind(subrope, c, index-1, SIZE_MAX, 1) == SIZE_MAX, "index=%u", index);
-	}
+        for (Col_RopeIterFirst(it, subrope); !Col_RopeIterEnd(it); Col_RopeIterNext(it)) {
+            Col_Char c = Col_RopeIterAt(it);
+            index = Col_RopeIterIndex(it);
+            ASSERT(c == (Col_Char) index+offset, "index=%u", index);
+            ASSERT(Col_RopeFindFirst(subrope, c) == index, "index=%u", index);
+            ASSERT(Col_RopeFindLast(subrope, c) == index, "index=%u", index);
+            ASSERT(Col_RopeFindFirstN(subrope, c, index) == SIZE_MAX, "index=%u", index);
+            ASSERT(Col_RopeFindFirstN(subrope, c, index+1) == index, "index=%u", index);
+            ASSERT(Col_RopeFindLastN(subrope, c, l-index-1) == SIZE_MAX, "index=%u", index);
+            ASSERT(Col_RopeFindLastN(subrope, c, l-index) == index, "index=%u", index);
+            ASSERT(Col_RopeFind(subrope, c, index+1, SIZE_MAX, 0) == SIZE_MAX, "index=%u", index);
+            if (index > 0) ASSERT(Col_RopeFind(subrope, c, index-1, SIZE_MAX, 1) == SIZE_MAX, "index=%u", index);
+        }
 
-	ASSERT_MSG(Col_RopeSearchFirst(context->rope, subrope) == offset, "offset=%u", offset);
-	ASSERT_MSG(Col_RopeSearchLast(context->rope, subrope) == offset, "offset=%u", offset);
-	ASSERT_MSG(Col_RopeSearch(context->rope, subrope, offset, SIZE_MAX, 0) == offset, "offset=%u", offset);
-	ASSERT_MSG(Col_RopeSearch(context->rope, subrope, offset+1, SIZE_MAX, 0) == SIZE_MAX, "offset=%u", offset);
-	ASSERT_MSG(Col_RopeSearch(context->rope, subrope, offset, SIZE_MAX, 1) == offset, "offset=%u", offset);
-	if (offset > 0) ASSERT_MSG(Col_RopeSearch(context->rope, subrope, offset-1, SIZE_MAX, 1) == SIZE_MAX, "offset=%u", offset);
+        ASSERT(Col_RopeSearchFirst(context->rope, subrope) == offset, "offset=%u", offset);
+        ASSERT(Col_RopeSearchLast(context->rope, subrope) == offset, "offset=%u", offset);
+        ASSERT(Col_RopeSearch(context->rope, subrope, offset, SIZE_MAX, 0) == offset, "offset=%u", offset);
+        ASSERT(Col_RopeSearch(context->rope, subrope, offset+1, SIZE_MAX, 0) == SIZE_MAX, "offset=%u", offset);
+        ASSERT(Col_RopeSearch(context->rope, subrope, offset, SIZE_MAX, 1) == offset, "offset=%u", offset);
+        if (offset > 0) ASSERT(Col_RopeSearch(context->rope, subrope, offset-1, SIZE_MAX, 1) == SIZE_MAX, "offset=%u", offset);
     }
 }
 TEST_CASE(testNestedSubropes, testSubropes, context) {
@@ -225,11 +226,11 @@ TEST_CASE(testNestedSubropes, testSubropes, context) {
     size_t level;
 
     Col_Word rope = Col_Subrope(
-	Col_ConcatRopes(
-	    Col_Subrope(context->rope, 50, half-51),
-	    Col_Subrope(context->rope, half+50, length-51)
-	),
-	50, length-251
+        Col_ConcatRopes(
+            Col_Subrope(context->rope, 50, half-51),
+            Col_Subrope(context->rope, half+50, length-51)
+        ),
+        50, length-251
     );
 
     l = length-300;
@@ -238,17 +239,17 @@ TEST_CASE(testNestedSubropes, testSubropes, context) {
     ropeAccess(rope);
 
     for (index=0, offset=100; index < l; index++) {
-	Col_Char c = Col_RopeAt(rope, index);
-	if (index == half-150) offset=200;
-	ASSERT_MSG(c == (Col_Char) index+offset, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindFirst(rope, c) == index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindLast(rope, c) == index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindFirstN(rope, c, index) == SIZE_MAX, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindFirstN(rope, c, index+1) == index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindLastN(rope, c, l-index-1) == SIZE_MAX, "index=%u", index);
-	ASSERT_MSG(Col_RopeFindLastN(rope, c, l-index) == index, "index=%u", index);
-	ASSERT_MSG(Col_RopeFind(rope, c, index+1, SIZE_MAX, 0) == SIZE_MAX, "index=%u", index);
-	if (index > 0) ASSERT_MSG(Col_RopeFind(rope, c, index-1, SIZE_MAX, 1) == SIZE_MAX, "index=%u", index);
+        Col_Char c = Col_RopeAt(rope, index);
+        if (index == half-150) offset=200;
+        ASSERT(c == (Col_Char) index+offset, "index=%u", index);
+        ASSERT(Col_RopeFindFirst(rope, c) == index, "index=%u", index);
+        ASSERT(Col_RopeFindLast(rope, c) == index, "index=%u", index);
+        ASSERT(Col_RopeFindFirstN(rope, c, index) == SIZE_MAX, "index=%u", index);
+        ASSERT(Col_RopeFindFirstN(rope, c, index+1) == index, "index=%u", index);
+        ASSERT(Col_RopeFindLastN(rope, c, l-index-1) == SIZE_MAX, "index=%u", index);
+        ASSERT(Col_RopeFindLastN(rope, c, l-index) == index, "index=%u", index);
+        ASSERT(Col_RopeFind(rope, c, index+1, SIZE_MAX, 0) == SIZE_MAX, "index=%u", index);
+        if (index > 0) ASSERT(Col_RopeFind(rope, c, index-1, SIZE_MAX, 1) == SIZE_MAX, "index=%u", index);
     }
 
     /* 
@@ -257,10 +258,10 @@ TEST_CASE(testNestedSubropes, testSubropes, context) {
 
     rope = context->rope;
     for (level = 0; level < 5; level++) {
-	rope = Col_ConcatRopes(rope, rope);
-	rope = Col_Subrope(rope, 1, Col_RopeLength(rope)-2);
+        rope = Col_ConcatRopes(rope, rope);
+        rope = Col_Subrope(rope, 1, Col_RopeLength(rope)-2);
 
-	ropeAccess(rope);
+        ropeAccess(rope);
     }
 }
 
@@ -291,28 +292,28 @@ TEST_FIXTURE_SETUP(testRopeOps, context) {
     Col_PauseGC();
 
     for (i=0; i < 10; i++) {
-	c1[i] = (Col_Char1) i;
+        c1[i] = (Col_Char1) i;
     }
     context->small1 = Col_NewRope(COL_UCS1, c1, 10*sizeof(*c1));
 
     for (i=0; i < 5; i++) {
-	c1[i] = (Col_Char1) (i+100);
+        c1[i] = (Col_Char1) (i+100);
     }
     context->small2 = Col_NewRope(COL_UCS1, c1, 5*sizeof(*c1));
 
     for (i=0; i < 1000; i++) {
-	c2[i] = (Col_Char2) (i+1000);
+        c2[i] = (Col_Char2) (i+1000);
     }
     context->large1 = Col_NewRope(COL_UCS2, c2, 1000*sizeof(*c2));
 
     for (i=0; i < 500; i++) {
-	c2[i] = (Col_Char2) (i+2000);
+        c2[i] = (Col_Char2) (i+2000);
     }
     context->large2 = Col_NewRope(COL_UCS2, c2, 500*sizeof(*c2));
 }
 TEST_FIXTURE_TEARDOWN(testRopeOps) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -377,20 +378,20 @@ TEST_FIXTURE_SETUP(testRopeIterators, context) {
     context->length = COL_CHAR2_MAX+1;
     context->data = (Col_Char2 *) malloc(context->length  * sizeof(Col_Char2));
     for (i = 0; i < context->length; i++) {
-	context->data[i] = (Col_Char2) i;
+        context->data[i] = (Col_Char2) i;
     }
     //context->data[16] = 0; // To generate an error.
 
     context->rope = Col_NewRope(COL_UCS2, context->data, 
-	    context->length  * sizeof(Col_Char2));
+            context->length  * sizeof(Col_Char2));
 
     context->subropeOffset = 13;
     context->subrope = Col_Subrope(context->rope, 
-	    context->subropeOffset, context->length-41);
+            context->subropeOffset, context->length-41);
 }
 TEST_FIXTURE_TEARDOWN(testRopeIterators, context) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
     free(context->data);
@@ -401,32 +402,32 @@ TEST_CASE(testRopeIteratorDirect, testRopeIterators, context) {
 
     length = Col_RopeLength(context->rope);
     for (i = 0; i < length; i++) {
-	Col_Char c = (Col_RopeIterBegin(it, context->rope, i), Col_RopeIterAt(it));
-	size_t index = Col_RopeIterIndex(it);
+        Col_Char c = (Col_RopeIterBegin(it, context->rope, i), Col_RopeIterAt(it));
+        size_t index = Col_RopeIterIndex(it);
 
-	ASSERT_MSG(index == i, "index=%u", index);
-	ASSERT_MSG(c == (Col_Char) index, "index=%u", index);
-	ASSERT_MSG(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
+        ASSERT(index == i, "index=%u", index);
+        ASSERT(c == (Col_Char) index, "index=%u", index);
+        ASSERT(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
     }
 
     length = Col_RopeLength(context->subrope);
     for (i = 0; i < length; i++) {
-	Col_Char c = (Col_RopeIterBegin(it, context->subrope, i), Col_RopeIterAt(it));
-	size_t index = Col_RopeIterIndex(it);
+        Col_Char c = (Col_RopeIterBegin(it, context->subrope, i), Col_RopeIterAt(it));
+        size_t index = Col_RopeIterIndex(it);
 
-	ASSERT_MSG(index == i, "index=%u", index);
-	ASSERT_MSG(c == (Col_Char) (index+context->subropeOffset), "index=%u", index);
-	ASSERT_MSG(Col_RopeIterAt(it) == Col_RopeAt(context->subrope, index), "index=%u", index);
+        ASSERT(index == i, "index=%u", index);
+        ASSERT(c == (Col_Char) (index+context->subropeOffset), "index=%u", index);
+        ASSERT(Col_RopeIterAt(it) == Col_RopeAt(context->subrope, index), "index=%u", index);
     }
 
     length = context->length;
     for (i = 0; i < length; i++) {
-	Col_Char c = (Col_RopeIterString(it, COL_UCS2, context->data, context->length), Col_RopeIterMoveTo(it, i), Col_RopeIterAt(it));
-	size_t index = Col_RopeIterIndex(it);
+        Col_Char c = (Col_RopeIterString(it, COL_UCS2, context->data, context->length), Col_RopeIterMoveTo(it, i), Col_RopeIterAt(it));
+        size_t index = Col_RopeIterIndex(it);
 
-	ASSERT_MSG(index == i, "index=%u", index);
-	ASSERT_MSG(c == (Col_Char) index, "index=%u", index);
-	ASSERT_MSG(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
+        ASSERT(index == i, "index=%u", index);
+        ASSERT(c == (Col_Char) index, "index=%u", index);
+        ASSERT(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
     }
 }
 
@@ -434,33 +435,33 @@ TEST_CASE(testRopeIteratorForward, testRopeIterators, context) {
     Col_RopeIterator it;
 
     for (Col_RopeIterFirst(it, context->rope); 
-	    !Col_RopeIterEnd(it); 
-	    Col_RopeIterNext(it)) {
-	Col_Char c = Col_RopeIterAt(it);
-	size_t index = Col_RopeIterIndex(it);
+            !Col_RopeIterEnd(it); 
+            Col_RopeIterNext(it)) {
+        Col_Char c = Col_RopeIterAt(it);
+        size_t index = Col_RopeIterIndex(it);
 
-	ASSERT_MSG(c == (Col_Char) index, "index=%u", index);
-	ASSERT_MSG(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
+        ASSERT(c == (Col_Char) index, "index=%u", index);
+        ASSERT(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
     }
 
     for (Col_RopeIterFirst(it, context->subrope); 
-	    !Col_RopeIterEnd(it); 
-	    Col_RopeIterNext(it)) {
-	Col_Char c = Col_RopeIterAt(it);
-	size_t index = Col_RopeIterIndex(it);
+            !Col_RopeIterEnd(it); 
+            Col_RopeIterNext(it)) {
+        Col_Char c = Col_RopeIterAt(it);
+        size_t index = Col_RopeIterIndex(it);
 
-	ASSERT_MSG(c == (Col_Char) (index+context->subropeOffset), "index=%u", index);
-	ASSERT_MSG(Col_RopeIterAt(it) == Col_RopeAt(context->subrope, index), "index=%u", index);
+        ASSERT(c == (Col_Char) (index+context->subropeOffset), "index=%u", index);
+        ASSERT(Col_RopeIterAt(it) == Col_RopeAt(context->subrope, index), "index=%u", index);
     }
 
     for (Col_RopeIterString(it, COL_UCS2, context->data, context->length);
-	    !Col_RopeIterEnd(it); 
-	    Col_RopeIterNext(it)) {
-	Col_Char c = Col_RopeIterAt(it);
-	size_t index = Col_RopeIterIndex(it);
+            !Col_RopeIterEnd(it); 
+            Col_RopeIterNext(it)) {
+        Col_Char c = Col_RopeIterAt(it);
+        size_t index = Col_RopeIterIndex(it);
 
-	ASSERT_MSG(c == (Col_Char) index, "index=%u", index);
-	ASSERT_MSG(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
+        ASSERT(c == (Col_Char) index, "index=%u", index);
+        ASSERT(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
     }
 
 }
@@ -469,34 +470,34 @@ TEST_CASE(testRopeIteratorBackward, testRopeIterators, context) {
     Col_RopeIterator it;
 
     for (Col_RopeIterLast(it, context->rope); 
-	    !Col_RopeIterEnd(it);
-	    Col_RopeIterPrevious(it)) {
-	Col_Char c = Col_RopeIterAt(it);
-	size_t index = Col_RopeIterIndex(it);
+            !Col_RopeIterEnd(it);
+            Col_RopeIterPrevious(it)) {
+        Col_Char c = Col_RopeIterAt(it);
+        size_t index = Col_RopeIterIndex(it);
 
-	ASSERT_MSG(c == (Col_Char) index, "index=%u", index);
-	ASSERT_MSG(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
+        ASSERT(c == (Col_Char) index, "index=%u", index);
+        ASSERT(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
     }
 
     for (Col_RopeIterLast(it, context->subrope); 
-	    !Col_RopeIterEnd(it); 
-	    Col_RopeIterPrevious(it)) {
-	Col_Char c = Col_RopeIterAt(it);
-	size_t index = Col_RopeIterIndex(it);
+            !Col_RopeIterEnd(it); 
+            Col_RopeIterPrevious(it)) {
+        Col_Char c = Col_RopeIterAt(it);
+        size_t index = Col_RopeIterIndex(it);
 
-	ASSERT_MSG(c == (Col_Char) (index+context->subropeOffset), "index=%u", index);
-	ASSERT_MSG(Col_RopeIterAt(it) == Col_RopeAt(context->subrope, index), "index=%u", index);
+        ASSERT(c == (Col_Char) (index+context->subropeOffset), "index=%u", index);
+        ASSERT(Col_RopeIterAt(it) == Col_RopeAt(context->subrope, index), "index=%u", index);
     }
 
     for (Col_RopeIterString(it, COL_UCS2, context->data, context->length),
-	    Col_RopeIterMoveTo(it, context->length-1);
-	    !Col_RopeIterEnd(it);
-	    Col_RopeIterPrevious(it)) {
-	Col_Char c = Col_RopeIterAt(it);
-	size_t index = Col_RopeIterIndex(it);
+            Col_RopeIterMoveTo(it, context->length-1);
+            !Col_RopeIterEnd(it);
+            Col_RopeIterPrevious(it)) {
+        Col_Char c = Col_RopeIterAt(it);
+        size_t index = Col_RopeIterIndex(it);
 
-	ASSERT_MSG(c == (Col_Char) index, "index=%u", index);
-	ASSERT_MSG(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
+        ASSERT(c == (Col_Char) index, "index=%u", index);
+        ASSERT(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
     }
 }
 
@@ -506,44 +507,44 @@ TEST_CASE(testRopeIteratorStride, testRopeIterators, context) {
 
     /* Forward. */
     for (Col_RopeIterFirst(it, context->rope); 
-	    !Col_RopeIterEnd(it); 
-	    Col_RopeIterForward(it, stride)) {
-	Col_Char c = Col_RopeIterAt(it);
-	size_t index = Col_RopeIterIndex(it);
+            !Col_RopeIterEnd(it); 
+            Col_RopeIterForward(it, stride)) {
+        Col_Char c = Col_RopeIterAt(it);
+        size_t index = Col_RopeIterIndex(it);
 
-	ASSERT_MSG(c == (Col_Char) index, "index=%u", index);
-	ASSERT_MSG(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
+        ASSERT(c == (Col_Char) index, "index=%u", index);
+        ASSERT(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
     }
 
     for (Col_RopeIterFirst(it, context->subrope); 
-	    !Col_RopeIterEnd(it); 
-	    Col_RopeIterForward(it, stride)) {
-	Col_Char c = Col_RopeIterAt(it);
-	size_t index = Col_RopeIterIndex(it);
+            !Col_RopeIterEnd(it); 
+            Col_RopeIterForward(it, stride)) {
+        Col_Char c = Col_RopeIterAt(it);
+        size_t index = Col_RopeIterIndex(it);
 
-	ASSERT_MSG(c == (Col_Char) (index+context->subropeOffset), "index=%u", index);
-	ASSERT_MSG(Col_RopeIterAt(it) == Col_RopeAt(context->subrope, index), "index=%u", index);
+        ASSERT(c == (Col_Char) (index+context->subropeOffset), "index=%u", index);
+        ASSERT(Col_RopeIterAt(it) == Col_RopeAt(context->subrope, index), "index=%u", index);
     }
 
     /* Backward. */
     for (Col_RopeIterLast(it, context->rope); 
-	    !Col_RopeIterEnd(it);
-	    Col_RopeIterBackward(it, stride)) {
-	Col_Char c = Col_RopeIterAt(it);
-	size_t index = Col_RopeIterIndex(it);
+            !Col_RopeIterEnd(it);
+            Col_RopeIterBackward(it, stride)) {
+        Col_Char c = Col_RopeIterAt(it);
+        size_t index = Col_RopeIterIndex(it);
 
-	ASSERT_MSG(c == (Col_Char) index, "index=%u", index);
-	ASSERT_MSG(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
+        ASSERT(c == (Col_Char) index, "index=%u", index);
+        ASSERT(Col_RopeIterAt(it) == Col_RopeAt(context->rope, index), "index=%u", index);
     }
 
     for (Col_RopeIterLast(it, context->subrope); 
-	    !Col_RopeIterEnd(it); 
-	    Col_RopeIterBackward(it, stride)) {
-	Col_Char c = Col_RopeIterAt(it);
-	size_t index = Col_RopeIterIndex(it);
+            !Col_RopeIterEnd(it); 
+            Col_RopeIterBackward(it, stride)) {
+        Col_Char c = Col_RopeIterAt(it);
+        size_t index = Col_RopeIterIndex(it);
 
-	ASSERT_MSG(c == (Col_Char) (index+context->subropeOffset), "index=%u", index);
-	ASSERT_MSG(Col_RopeIterAt(it) == Col_RopeAt(context->subrope, index), "index=%u", index);
+        ASSERT(c == (Col_Char) (index+context->subropeOffset), "index=%u", index);
+        ASSERT(Col_RopeIterAt(it) == Col_RopeAt(context->subrope, index), "index=%u", index);
     }
 }
 
@@ -571,18 +572,18 @@ TEST_CASE(testRopeUtf8Data) {
     const Col_Char1 *p;
     Col_Char c, c2;
     for (c=0; c <= COL_CHAR_MAX+1000; c++) {
-	size_t width = COL_UTF8_WIDTH(c);
-	ASSERT_MSG(width <= COL_UTF8_MAX_WIDTH, "c=U+%x", c);
-	p = Col_Utf8Set(data, c);
-	ASSERT_MSG(p == data + width, "c=U+%x", c);
-	if (c <= 0xD700 || (c >= 0xE000 && c <= COL_CHAR_MAX)) {
-	    c2 = Col_Utf8Get(data);
-	    ASSERT_MSG(c2 == c, "c=U+%x, c2=U+%x", c, c2);
-	    p = Col_Utf8Next(data);
-	    ASSERT_MSG(p == data + width, "c=U+%x", c);
-	    p = Col_Utf8Prev(p);
-	    ASSERT_MSG(p == data, "c=U+%x", c);
-	}
+        size_t width = COL_UTF8_WIDTH(c);
+        ASSERT(width <= COL_UTF8_MAX_WIDTH, "c=U+%x", c);
+        p = Col_Utf8Set(data, c);
+        ASSERT(p == data + width, "c=U+%x", c);
+        if (c <= 0xD700 || (c >= 0xE000 && c <= COL_CHAR_MAX)) {
+            c2 = Col_Utf8Get(data);
+            ASSERT(c2 == c, "c=U+%x, c2=U+%x", c, c2);
+            p = Col_Utf8Next(data);
+            ASSERT(p == data + width, "c=U+%x", c);
+            p = Col_Utf8Prev(p);
+            ASSERT(p == data, "c=U+%x", c);
+        }
     }
 }
 
@@ -604,36 +605,36 @@ TEST_FIXTURE_SETUP(testRopeUtf8, context) {
 
     context->length = (0xD7FF-0x00+1) + (0x10FFFF-0xE000+1);
     context->byteLength = (
-	    (0x7F-0x00+1)		/* 1-char sequences. */
-	+ 2*(0x7FF-0x80+1)		/* 2-char sequences. */
-	+ 3*(  0xD7FF-0x800+1		/* 3-char sequences. */
-	       /* surrogate halves */
-	     + 0xFFFF-0xE000+1)
-	+ 4*(0x10FFFF-0x10000+1)	/* 4-char sequences. */
+            (0x7F-0x00+1)		/* 1-char sequences. */
+        + 2*(0x7FF-0x80+1)		/* 2-char sequences. */
+        + 3*(  0xD7FF-0x800+1		/* 3-char sequences. */
+               /* surrogate halves */
+             + 0xFFFF-0xE000+1)
+        + 4*(0x10FFFF-0x10000+1)	/* 4-char sequences. */
     );
     context->data = (Col_Char1 *) malloc(context->byteLength);
 
     /* 1-char sequences. */
     for (c=0, i=0, p=context->data; c <= 0x7F; c++, i++) {
-	*p++ = (Col_Char1) c;
+        *p++ = (Col_Char1) c;
     }
     /* 2-char sequences. */
     for (; c <= 0x7FF; c++, i++) {
-	*p++ = (Col_Char1) (((c>>6)&0x1F)|0xC0);
-	*p++ = (Col_Char1) (( c    &0x3F)|0x80);
+        *p++ = (Col_Char1) (((c>>6)&0x1F)|0xC0);
+        *p++ = (Col_Char1) (( c    &0x3F)|0x80);
     }
     /* 3-char sequences. */
     for (; c <= 0xFFFF; (c == 0xD7FF ? c = 0xE000 : c++), i++) {
-	*p++ = (Col_Char1) (((c>>12)&0x1F)|0xE0);
-	*p++ = (Col_Char1) (((c>> 6)&0x3F)|0x80);
-	*p++ = (Col_Char1) (( c     &0x3F)|0x80);
+        *p++ = (Col_Char1) (((c>>12)&0x1F)|0xE0);
+        *p++ = (Col_Char1) (((c>> 6)&0x3F)|0x80);
+        *p++ = (Col_Char1) (( c     &0x3F)|0x80);
     }
     /* 4-char sequences. */
     for (; c <= 0x10FFFF; c++, i++) {
-	*p++ = (Col_Char1) (((c>>18)&0x1F)|0xF0);
-	*p++ = (Col_Char1) (((c>>12)&0x3F)|0x80);
-	*p++ = (Col_Char1) (((c>> 6)&0x3F)|0x80);
-	*p++ = (Col_Char1) (( c     &0x3F)|0x80);
+        *p++ = (Col_Char1) (((c>>18)&0x1F)|0xF0);
+        *p++ = (Col_Char1) (((c>>12)&0x3F)|0x80);
+        *p++ = (Col_Char1) (((c>> 6)&0x3F)|0x80);
+        *p++ = (Col_Char1) (( c     &0x3F)|0x80);
     }
 
     ASSERT(p == context->data+context->byteLength);
@@ -645,7 +646,7 @@ TEST_FIXTURE_SETUP(testRopeUtf8, context) {
 }
 TEST_FIXTURE_TEARDOWN(testRopeUtf8, context) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
     free(context->data);
@@ -696,20 +697,20 @@ TEST_CASE(testRopeUtf8IterateForward, testRopeUtf8, context) {
     Col_Word rope = Col_NewRope(COL_UTF8, context->data, context->byteLength);
 
     for (c1=0, Col_RopeIterFirst(it, rope); !Col_RopeIterEnd(it); (c1 == 0xD7FF ? c1 = 0xE000 : c1++), Col_RopeIterNext(it)) {
-	index = Col_RopeIterIndex(it);
-	c2 = Col_RopeIterAt(it);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
-	c2 = Col_RopeAt(rope, index);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
+        index = Col_RopeIterIndex(it);
+        c2 = Col_RopeIterAt(it);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
+        c2 = Col_RopeAt(rope, index);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
     }
     ASSERT(c1 == 0x10FFFF+1);
 
     for (c1=0, Col_RopeIterString(it, COL_UTF8, context->data, context->length); !Col_RopeIterEnd(it); (c1 == 0xD7FF ? c1 = 0xE000 : c1++), Col_RopeIterNext(it)) {
-	index = Col_RopeIterIndex(it);
-	c2 = Col_RopeIterAt(it);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
-	c2 = Col_RopeAt(rope, index);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
+        index = Col_RopeIterIndex(it);
+        c2 = Col_RopeIterAt(it);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
+        c2 = Col_RopeAt(rope, index);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
     }
     ASSERT(c1 == 0x10FFFF+1);
 }
@@ -720,11 +721,11 @@ TEST_CASE(testRopeUtf8IterateBackward, testRopeUtf8, context) {
     Col_Word rope = Col_NewRope(COL_UTF8, context->data, context->byteLength);
 
     for (c1=0x10FFFF, Col_RopeIterLast(it, rope); !Col_RopeIterEnd(it); (c1 == 0xE000 ? c1 = 0xD7FF : c1--), Col_RopeIterPrevious(it)) {
-	index = Col_RopeIterIndex(it);
-	c2 = Col_RopeIterAt(it);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
-	c2 = Col_RopeAt(rope, index);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
+        index = Col_RopeIterIndex(it);
+        c2 = Col_RopeIterAt(it);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
+        c2 = Col_RopeAt(rope, index);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
     }
     ASSERT(c1 == -1);
 }
@@ -744,18 +745,18 @@ TEST_CASE(testRopeUtf16Data) {
     const Col_Char2 *p;
     Col_Char c, c2;
     for (c=0; c <= COL_CHAR_MAX+1000; c++) {
-	size_t width = COL_UTF16_WIDTH(c);
-	ASSERT_MSG(width <= COL_UTF16_MAX_WIDTH, "c=U+%x", c);
-	p = Col_Utf16Set(data, c);
-	ASSERT_MSG(p == data + width, "c=U+%x", c);
-	if (c <= 0xD700 || (c >= 0xE000 && c <= COL_CHAR_MAX)) {
-	    c2 = Col_Utf16Get(data);
-	    ASSERT_MSG(c2 == c, "c=U+%x, c2=U+%x", c, c2);
-	    p = Col_Utf16Next(data);
-	    ASSERT_MSG(p == data + width, "c=U+%x", c);
-	    p = Col_Utf16Prev(p);
-	    ASSERT_MSG(p == data, "c=U+%x", c);
-	}
+        size_t width = COL_UTF16_WIDTH(c);
+        ASSERT(width <= COL_UTF16_MAX_WIDTH, "c=U+%x", c);
+        p = Col_Utf16Set(data, c);
+        ASSERT(p == data + width, "c=U+%x", c);
+        if (c <= 0xD700 || (c >= 0xE000 && c <= COL_CHAR_MAX)) {
+            c2 = Col_Utf16Get(data);
+            ASSERT(c2 == c, "c=U+%x, c2=U+%x", c, c2);
+            p = Col_Utf16Next(data);
+            ASSERT(p == data + width, "c=U+%x", c);
+            p = Col_Utf16Prev(p);
+            ASSERT(p == data, "c=U+%x", c);
+        }
     }
 }
 
@@ -775,21 +776,21 @@ TEST_FIXTURE_SETUP(testRopeUtf16, context) {
 
     context->length = (0xD7FF-0x00+1) + (0x10FFFF-0xE000+1);
     context->byteLength = (
-	  2*(  0xD7FF-0x00+1		/* 1-char/2-byte sequences. */
-	       /* surrogate halves */
-	     + 0xFFFF-0xE000+1)
-	+ 4*(0x10FFFF-0x10000+1)	/* 2-char/4-byte sequences. */
+          2*(  0xD7FF-0x00+1		/* 1-char/2-byte sequences. */
+               /* surrogate halves */
+             + 0xFFFF-0xE000+1)
+        + 4*(0x10FFFF-0x10000+1)	/* 2-char/4-byte sequences. */
     );
     context->data = (Col_Char2 *) malloc(context->byteLength);
 
     /* 1-char sequences. */
     for (c=0, i=0, p=context->data; c <= 0xFFFF; (c == 0xD7FF ? c = 0xE000 : c++), i++) {
-	*p++ = (Col_Char2) c;
+        *p++ = (Col_Char2) c;
     }
     /* 2-char sequences. */
     for (; c <= 0x10FFFF; c++, i++) {
-	*p++ = (Col_Char2) ((((c-0x10000)>>10)&0x3FF)+0xD800);
-	*p++ = (Col_Char2) (( (c-0x10000)     &0x3FF)+0xDC00);
+        *p++ = (Col_Char2) ((((c-0x10000)>>10)&0x3FF)+0xD800);
+        *p++ = (Col_Char2) (( (c-0x10000)     &0x3FF)+0xDC00);
     }
 
     ASSERT(p == context->data+(context->byteLength/2));
@@ -801,7 +802,7 @@ TEST_FIXTURE_SETUP(testRopeUtf16, context) {
 }
 TEST_FIXTURE_TEARDOWN(testRopeUtf16, context) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
     free(context->data);
@@ -842,20 +843,20 @@ TEST_CASE(testRopeUtf16IterateForward, testRopeUtf16, context) {
     Col_Word rope = Col_NewRope(COL_UTF16, context->data, context->byteLength);
 
     for (c1=0, Col_RopeIterFirst(it, rope); !Col_RopeIterEnd(it); (c1 == 0xD7FF ? c1 = 0xE000 : c1++), Col_RopeIterNext(it)) {
-	index = Col_RopeIterIndex(it);
-	c2 = Col_RopeIterAt(it);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
-	c2 = Col_RopeAt(rope, index);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
+        index = Col_RopeIterIndex(it);
+        c2 = Col_RopeIterAt(it);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
+        c2 = Col_RopeAt(rope, index);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
     }
     ASSERT(c1 == 0x10FFFF+1);
 
     for (c1=0, Col_RopeIterString(it, COL_UTF16, context->data, context->length); !Col_RopeIterEnd(it); (c1 == 0xD7FF ? c1 = 0xE000 : c1++), Col_RopeIterNext(it)) {
-	index = Col_RopeIterIndex(it);
-	c2 = Col_RopeIterAt(it);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
-	c2 = Col_RopeAt(rope, index);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
+        index = Col_RopeIterIndex(it);
+        c2 = Col_RopeIterAt(it);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
+        c2 = Col_RopeAt(rope, index);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
     }
     ASSERT(c1 == 0x10FFFF+1);
 }
@@ -866,11 +867,11 @@ TEST_CASE(testRopeUtf16IterateBackward, testRopeUtf16, context) {
     Col_Word rope = Col_NewRope(COL_UTF16, context->data, context->byteLength);
 
     for (c1=0x10FFFF, Col_RopeIterLast(it, rope); !Col_RopeIterEnd(it); (c1 == 0xE000 ? c1 = 0xD7FF : c1--), Col_RopeIterPrevious(it)) {
-	index = Col_RopeIterIndex(it);
-	c2 = Col_RopeIterAt(it);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
-	c2 = Col_RopeAt(rope, index);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
+        index = Col_RopeIterIndex(it);
+        c2 = Col_RopeIterAt(it);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
+        c2 = Col_RopeAt(rope, index);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", index, c1, c2);
     }
     ASSERT(c1 == -1);
 }
@@ -929,31 +930,31 @@ TEST_FIXTURE_SETUP(testRopeNormalize, context) {
     p2 = ucs2;
     p4 = ucs4;
     for (c=0; c <= 0xFF; c++) {
-	*p1++ = (Col_Char1) c;
-	*p2++ = (Col_Char2) c;
-	*p4++ = (Col_Char4) c;
+        *p1++ = (Col_Char1) c;
+        *p2++ = (Col_Char2) c;
+        *p4++ = (Col_Char4) c;
     }
     for (c=0x100; c <= 0x1FF; c++) {
-	*p2++ = (Col_Char2) c;
-	*p4++ = (Col_Char4) c;
+        *p2++ = (Col_Char2) c;
+        *p4++ = (Col_Char4) c;
     }
     for (c=0x10000; c <= 0x100FF; c++) {
-	*p4++ = (Col_Char4) c;
+        *p4++ = (Col_Char4) c;
     }
 
     p1 = utf8;
     p2 = utf16;
     for (c=0; c <= 0xFF; c++) {
-	p1 = Col_Utf8Set(p1, c);
-	p2 = Col_Utf16Set(p2, c);
+        p1 = Col_Utf8Set(p1, c);
+        p2 = Col_Utf16Set(p2, c);
     }
     for (c=0x100; c <= 0x1FF; c++) {
-	p1 = Col_Utf8Set(p1, c);
-	p2 = Col_Utf16Set(p2, c);
+        p1 = Col_Utf8Set(p1, c);
+        p2 = Col_Utf16Set(p2, c);
     }
     for (c=0x10000; c <= 0x100FF; c++) {
-	p1 = Col_Utf8Set(p1, c);
-	p2 = Col_Utf16Set(p2, c);
+        p1 = Col_Utf8Set(p1, c);
+        p2 = Col_Utf16Set(p2, c);
     }
 
     context->char1_1 = Col_NewRope(COL_UCS1, ucs1, 1);
@@ -984,7 +985,7 @@ TEST_FIXTURE_SETUP(testRopeNormalize, context) {
 }
 TEST_FIXTURE_TEARDOWN(testRopeNormalize, context) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -1144,25 +1145,25 @@ TEST_CASE(testRopeNormalizeSmallChar, testRopeNormalize, context) {
 
 TEST_CASE(testRopeNormalizeSmallString, testRopeNormalize, context) {
     static const Col_StringFormat formats[] = {COL_UCS1, COL_UCS2, COL_UCS4, 
-	    COL_UCS, COL_UTF8, COL_UTF16};
+            COL_UCS, COL_UTF8, COL_UTF16};
     int i, flatten;
     Col_Word normalized;
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->smallstr, formats[i], 
-		    COL_CHAR_INVALID, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		case COL_UCS:
-		    ASSERT(normalized == context->smallstr);
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->smallstr, formats[i], 
+                    COL_CHAR_INVALID, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                case COL_UCS:
+                    ASSERT(normalized == context->smallstr);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->smallstr);
-		    ropesEqual(normalized, context->smallstr);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->smallstr);
+                    ropesEqual(normalized, context->smallstr);
+            }
+        }
     }
 }
 
@@ -1173,419 +1174,419 @@ TEST_SUITE(testRopeNormalizeString,
 
 TEST_CASE(testRopeNormalizeStringLossless, testRopeNormalize, context) {
     static const Col_StringFormat formats[] = {COL_UCS1, COL_UCS2, COL_UCS4, 
-	    COL_UCS, COL_UTF8, COL_UTF16};
+            COL_UCS, COL_UTF8, COL_UTF16};
     int i, flatten;
     Col_Word normalized;
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->ucs1_1, formats[i], 
-		    COL_CHAR_INVALID, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		case COL_UCS:
-		    ASSERT(normalized == context->ucs1_1);
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->ucs1_1, formats[i], 
+                    COL_CHAR_INVALID, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                case COL_UCS:
+                    ASSERT(normalized == context->ucs1_1);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->ucs1_1);
-		    ropesEqual(normalized, context->ucs1_1);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->ucs1_1);
+                    ropesEqual(normalized, context->ucs1_1);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->ucs2_1, formats[i], 
-		    COL_CHAR_INVALID, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS2:
-		case COL_UCS:
-		    ASSERT(normalized == context->ucs2_1);
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->ucs2_1, formats[i], 
+                    COL_CHAR_INVALID, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS2:
+                case COL_UCS:
+                    ASSERT(normalized == context->ucs2_1);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->ucs2_1);
-		    ropesEqual(normalized, context->ucs2_1);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->ucs2_1);
+                    ropesEqual(normalized, context->ucs2_1);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->ucs4_1, formats[i], 
-		    COL_CHAR_INVALID, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS4:
-		case COL_UCS:
-		    ASSERT(normalized == context->ucs4_1);
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->ucs4_1, formats[i], 
+                    COL_CHAR_INVALID, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS4:
+                case COL_UCS:
+                    ASSERT(normalized == context->ucs4_1);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->ucs4_1);
-		    ropesEqual(normalized, context->ucs4_1);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->ucs4_1);
+                    ropesEqual(normalized, context->ucs4_1);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->utf8_1, formats[i], 
-		    COL_CHAR_INVALID, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UTF8:
-		    ASSERT(normalized == context->utf8_1);
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->utf8_1, formats[i], 
+                    COL_CHAR_INVALID, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UTF8:
+                    ASSERT(normalized == context->utf8_1);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->utf8_1);
-		    ropesEqual(normalized, context->utf8_1);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->utf8_1);
+                    ropesEqual(normalized, context->utf8_1);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->utf16_1, formats[i], 
-		    COL_CHAR_INVALID, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UTF16:
-		    ASSERT(normalized == context->utf16_1);
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->utf16_1, formats[i], 
+                    COL_CHAR_INVALID, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UTF16:
+                    ASSERT(normalized == context->utf16_1);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->utf16_1);
-		    ropesEqual(normalized, context->utf16_1);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->utf16_1);
+                    ropesEqual(normalized, context->utf16_1);
+            }
+        }
     }
 }
 
 TEST_CASE(testRopeNormalizeStringLossy, testRopeNormalize, context) {
     static const Col_StringFormat formats[] = {COL_UCS1, COL_UCS2, COL_UCS4, 
-	    COL_UCS, COL_UTF8, COL_UTF16};
+            COL_UCS, COL_UTF8, COL_UTF16};
     int i, flatten;
     Col_Word normalized;
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->ucs2_2, formats[i], 
-		    COL_CHAR_INVALID, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		    ASSERT(normalized == Col_EmptyRope());
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->ucs2_2, formats[i], 
+                    COL_CHAR_INVALID, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                    ASSERT(normalized == Col_EmptyRope());
+                    break;
 
-		case COL_UCS2:
-		case COL_UCS:
-		    ASSERT(normalized == context->ucs2_2);
-		    break;
+                case COL_UCS2:
+                case COL_UCS:
+                    ASSERT(normalized == context->ucs2_2);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->ucs2_2);
-		    ropesEqual(normalized, context->ucs2_2);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->ucs2_2);
+                    ropesEqual(normalized, context->ucs2_2);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->ucs4_2, formats[i], 
-		    COL_CHAR_INVALID, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		    ASSERT(normalized == Col_EmptyRope());
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->ucs4_2, formats[i], 
+                    COL_CHAR_INVALID, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                    ASSERT(normalized == Col_EmptyRope());
+                    break;
 
-		case COL_UCS4:
-		case COL_UCS:
-		    ASSERT(normalized == context->ucs4_2);
-		    break;
+                case COL_UCS4:
+                case COL_UCS:
+                    ASSERT(normalized == context->ucs4_2);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->ucs4_2);
-		    ropesEqual(normalized, context->ucs4_2);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->ucs4_2);
+                    ropesEqual(normalized, context->ucs4_2);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->ucs4_4, formats[i], 
-		    COL_CHAR_INVALID, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		case COL_UCS2:
-		    ASSERT(normalized == Col_EmptyRope());
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->ucs4_4, formats[i], 
+                    COL_CHAR_INVALID, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                case COL_UCS2:
+                    ASSERT(normalized == Col_EmptyRope());
+                    break;
 
-		case COL_UCS4:
-		case COL_UCS:
-		    ASSERT(normalized == context->ucs4_4);
-		    break;
+                case COL_UCS4:
+                case COL_UCS:
+                    ASSERT(normalized == context->ucs4_4);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->ucs4_4);
-		    ropesEqual(normalized, context->ucs4_4);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->ucs4_4);
+                    ropesEqual(normalized, context->ucs4_4);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->utf8_2, formats[i], 
-		    COL_CHAR_INVALID, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		    ASSERT(normalized == Col_EmptyRope());
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->utf8_2, formats[i], 
+                    COL_CHAR_INVALID, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                    ASSERT(normalized == Col_EmptyRope());
+                    break;
 
-		case COL_UTF8:
-		    ASSERT(normalized == context->utf8_2);
-		    break;
+                case COL_UTF8:
+                    ASSERT(normalized == context->utf8_2);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->utf8_2);
-		    ropesEqual(normalized, context->utf8_2);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->utf8_2);
+                    ropesEqual(normalized, context->utf8_2);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->utf8_4, formats[i], 
-		    COL_CHAR_INVALID, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		case COL_UCS2:
-		    ASSERT(normalized == Col_EmptyRope());
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->utf8_4, formats[i], 
+                    COL_CHAR_INVALID, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                case COL_UCS2:
+                    ASSERT(normalized == Col_EmptyRope());
+                    break;
 
-		case COL_UTF8:
-		    ASSERT(flatten ? (normalized != context->utf8_4) : (normalized == context->utf8_4));
-		    ropesEqual(normalized, context->utf8_4);
-		    break;
+                case COL_UTF8:
+                    ASSERT(flatten ? (normalized != context->utf8_4) : (normalized == context->utf8_4));
+                    ropesEqual(normalized, context->utf8_4);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->utf8_4);
-		    ropesEqual(normalized, context->utf8_4);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->utf8_4);
+                    ropesEqual(normalized, context->utf8_4);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->utf16_2, formats[i], 
-		    COL_CHAR_INVALID, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		    ASSERT(normalized == Col_EmptyRope());
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->utf16_2, formats[i], 
+                    COL_CHAR_INVALID, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                    ASSERT(normalized == Col_EmptyRope());
+                    break;
 
-		case COL_UTF16:
-		    ASSERT(normalized == context->utf16_2);
-		    ropesEqual(normalized, context->utf16_2);
-		    break;
+                case COL_UTF16:
+                    ASSERT(normalized == context->utf16_2);
+                    ropesEqual(normalized, context->utf16_2);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->utf16_2);
-		    ropesEqual(normalized, context->utf16_2);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->utf16_2);
+                    ropesEqual(normalized, context->utf16_2);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->utf16_4, formats[i], 
-		    COL_CHAR_INVALID, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		case COL_UCS2:
-		    ASSERT(normalized == Col_EmptyRope());
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->utf16_4, formats[i], 
+                    COL_CHAR_INVALID, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                case COL_UCS2:
+                    ASSERT(normalized == Col_EmptyRope());
+                    break;
 
-		case COL_UTF16:
-		    ASSERT(normalized == context->utf16_4 || flatten);
-		    ropesEqual(normalized, context->utf16_4);
-		    break;
+                case COL_UTF16:
+                    ASSERT(normalized == context->utf16_4 || flatten);
+                    ropesEqual(normalized, context->utf16_4);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->utf16_4);
-		    ropesEqual(normalized, context->utf16_4);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->utf16_4);
+                    ropesEqual(normalized, context->utf16_4);
+            }
+        }
     }
 }
 
 TEST_CASE(testRopeNormalizeStringReplace, testRopeNormalize, context) {
     static const Col_StringFormat formats[] = {COL_UCS1, COL_UCS2, COL_UCS4, 
-	    COL_UCS, COL_UTF8, COL_UTF16};
+            COL_UCS, COL_UTF8, COL_UTF16};
     int i, flatten;
     Col_Word normalized;
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->ucs2_2, formats[i], 
-		    0, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->ucs2_2)));
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->ucs2_2, formats[i], 
+                    0, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->ucs2_2)));
+                    break;
 
-		case COL_UCS2:
-		case COL_UCS:
-		    ASSERT(normalized == context->ucs2_2);
-		    break;
+                case COL_UCS2:
+                case COL_UCS:
+                    ASSERT(normalized == context->ucs2_2);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->ucs2_2);
-		    ropesEqual(normalized, context->ucs2_2);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->ucs2_2);
+                    ropesEqual(normalized, context->ucs2_2);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->ucs4_2, formats[i], 
-		    0, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->ucs4_2)));
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->ucs4_2, formats[i], 
+                    0, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->ucs4_2)));
+                    break;
 
-		case COL_UCS4:
-		case COL_UCS:
-		    ASSERT(normalized == context->ucs4_2);
-		    break;
+                case COL_UCS4:
+                case COL_UCS:
+                    ASSERT(normalized == context->ucs4_2);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->ucs4_2);
-		    ropesEqual(normalized, context->ucs4_2);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->ucs4_2);
+                    ropesEqual(normalized, context->ucs4_2);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->ucs4_4, formats[i], 
-		    0, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		case COL_UCS2:
-		    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->ucs4_4)));
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->ucs4_4, formats[i], 
+                    0, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                case COL_UCS2:
+                    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->ucs4_4)));
+                    break;
 
-		case COL_UCS4:
-		case COL_UCS:
-		    ASSERT(normalized == context->ucs4_4);
-		    break;
+                case COL_UCS4:
+                case COL_UCS:
+                    ASSERT(normalized == context->ucs4_4);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->ucs4_4);
-		    ropesEqual(normalized, context->ucs4_4);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->ucs4_4);
+                    ropesEqual(normalized, context->ucs4_4);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->utf8_2, formats[i], 
-		    0, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->utf8_2)));
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->utf8_2, formats[i], 
+                    0, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->utf8_2)));
+                    break;
 
-		case COL_UTF8:
-		    ASSERT(normalized == context->utf8_2);
-		    break;
+                case COL_UTF8:
+                    ASSERT(normalized == context->utf8_2);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->utf8_2);
-		    ropesEqual(normalized, context->utf8_2);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->utf8_2);
+                    ropesEqual(normalized, context->utf8_2);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->utf8_4, formats[i], 
-		    0, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		case COL_UCS2:
-		    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->utf8_4)));
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->utf8_4, formats[i], 
+                    0, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                case COL_UCS2:
+                    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->utf8_4)));
+                    break;
 
-		case COL_UTF8:
-		    ASSERT(flatten ? (normalized != context->utf8_4) : (normalized == context->utf8_4));
-		    ropesEqual(normalized, context->utf8_4);
-		    break;
+                case COL_UTF8:
+                    ASSERT(flatten ? (normalized != context->utf8_4) : (normalized == context->utf8_4));
+                    ropesEqual(normalized, context->utf8_4);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->utf8_4);
-		    ropesEqual(normalized, context->utf8_4);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->utf8_4);
+                    ropesEqual(normalized, context->utf8_4);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->utf16_2, formats[i], 
-		    0, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->utf16_2)));
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->utf16_2, formats[i], 
+                    0, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->utf16_2)));
+                    break;
 
-		case COL_UTF16:
-		    ASSERT(normalized == context->utf16_2);
-		    ropesEqual(normalized, context->utf16_2);
-		    break;
+                case COL_UTF16:
+                    ASSERT(normalized == context->utf16_2);
+                    ropesEqual(normalized, context->utf16_2);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->utf16_2);
-		    ropesEqual(normalized, context->utf16_2);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->utf16_2);
+                    ropesEqual(normalized, context->utf16_2);
+            }
+        }
     }
 
     for (i=0; i < sizeof(formats)/sizeof(*formats); i++) {
-	for (flatten=0; flatten <= 1; flatten++) {
-	    normalized = Col_NormalizeRope(context->utf16_4, formats[i], 
-		    0, flatten);
-	    ASSERT(ropeCheckFormat(normalized, formats[i]));
-	    switch (formats[i]) {
-		case COL_UCS1:
-		case COL_UCS2:
-		    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->utf16_4)));
-		    break;
+        for (flatten=0; flatten <= 1; flatten++) {
+            normalized = Col_NormalizeRope(context->utf16_4, formats[i], 
+                    0, flatten);
+            ASSERT(ropeCheckFormat(normalized, formats[i]));
+            switch (formats[i]) {
+                case COL_UCS1:
+                case COL_UCS2:
+                    ropesEqual(normalized, Col_RepeatRope(Col_NewCharWord(0), Col_RopeLength(context->utf16_4)));
+                    break;
 
-		case COL_UTF16:
-		    ASSERT(normalized == context->utf16_4 || flatten);
-		    ropesEqual(normalized, context->utf16_4);
-		    break;
+                case COL_UTF16:
+                    ASSERT(normalized == context->utf16_4 || flatten);
+                    ropesEqual(normalized, context->utf16_4);
+                    break;
 
-		default:
-		    ASSERT(normalized != context->utf16_4);
-		    ropesEqual(normalized, context->utf16_4);
-	    }
-	}
+                default:
+                    ASSERT(normalized != context->utf16_4);
+                    ropesEqual(normalized, context->utf16_4);
+            }
+        }
     }
 }
 
@@ -1602,7 +1603,7 @@ TEST_CASE(testRopeNormalizeSubstring, testRopeNormalize, context) {
     ropesEqual(normalized, flattened);
 
     rope = Col_ConcatRopes(rope, Col_Subrope(context->ucs2_2, 1, 
-	    SIZE_MAX));
+            SIZE_MAX));
     normalized = Col_NormalizeRope(rope, COL_UCS, COL_CHAR_INVALID, 0);
     ASSERT(ropeCheckFormat(normalized, COL_UCS));
     ASSERT(!ropeCheckFormat(normalized, COL_UCS1));
@@ -1627,7 +1628,7 @@ TEST_CASE(testRopeNormalizeSubstring, testRopeNormalize, context) {
     ropesEqual(normalized, flattened);
 
     rope = Col_ConcatRopes(Col_Subrope(context->ucs4_4, 1, 
-	    SIZE_MAX), rope);
+            SIZE_MAX), rope);
     normalized = Col_NormalizeRope(rope, COL_UCS, COL_CHAR_INVALID, 0);
     ASSERT(ropeCheckFormat(normalized, COL_UCS));
     ASSERT(!ropeCheckFormat(normalized, COL_UCS1));
@@ -1706,11 +1707,11 @@ static int traverseRopeChunks(size_t index, size_t length, size_t number, const 
     size_t i;
     const void *p = chunks->data;
     ASSERT(number == 1);
-    ASSERT_MSG(index == info->index, "index=%u, info->index=%u", index, info->index);
+    ASSERT(index == info->index, "index=%u, info->index=%u", index, info->index);
     for (i = 0; i < length; i++, COL_CHAR_NEXT(chunks->format, p)) {
-	Col_Char c1 = Col_RopeAt(info->rope, info->index+i);
-	Col_Char c2 = COL_CHAR_GET(chunks->format, p);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", info->index+i, c1, c2);
+        Col_Char c1 = Col_RopeAt(info->rope, info->index+i);
+        Col_Char c2 = COL_CHAR_GET(chunks->format, p);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", info->index+i, c1, c2);
     }
     info->index += length;
     return 0;
@@ -1720,11 +1721,11 @@ static int traverseRopeChunksR(size_t index, size_t length, size_t number, const
     size_t i;
     const void *p = chunks->data;
     ASSERT(number == 1);
-    ASSERT_MSG(index == info->index-length+1, "index=%u, info->index-length+1=%u", index, info->index-length+1);
+    ASSERT(index == info->index-length+1, "index=%u, info->index-length+1=%u", index, info->index-length+1);
     for (i = 0; i < length; i++, COL_CHAR_NEXT(chunks->format, p)) {
-	Col_Char c1 = Col_RopeAt(info->rope, info->index-length+1+i);
-	Col_Char c2 = COL_CHAR_GET(chunks->format, p);
-	ASSERT_MSG(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", info->index-length+1+i, c1, c2);
+        Col_Char c1 = Col_RopeAt(info->rope, info->index-length+1+i);
+        Col_Char c2 = COL_CHAR_GET(chunks->format, p);
+        ASSERT(c1 == c2, "index=%u, c1=U+%x, c2=U+%x", info->index-length+1+i, c1, c2);
     }
     info->index -= length;
     return 0;
@@ -1740,20 +1741,20 @@ static void ropeAccess(Col_Word rope) {
 
     /* Forward. */
     for (Col_RopeIterFirst(it, rope); !Col_RopeIterEnd(it); Col_RopeIterNext(it)) {
-	size_t index = Col_RopeIterIndex(it);
-	Col_Char c1 = Col_RopeAt(rope, index);
-	Col_Char c2 = Col_RopeIterAt(it);
+        size_t index = Col_RopeIterIndex(it);
+        Col_Char c1 = Col_RopeAt(rope, index);
+        Col_Char c2 = Col_RopeIterAt(it);
 
-	ASSERT_MSG(c1 == c2, "index=%u", index);
+        ASSERT(c1 == c2, "index=%u", index);
     }
 
     /* Backward. */
     for (Col_RopeIterLast(it, rope); !Col_RopeIterEnd(it); Col_RopeIterPrevious(it)) {
-	size_t index = Col_RopeIterIndex(it);
-	Col_Char c1 = Col_RopeAt(rope, index);
-	Col_Char c2 = Col_RopeIterAt(it);
+        size_t index = Col_RopeIterIndex(it);
+        Col_Char c1 = Col_RopeAt(rope, index);
+        Col_Char c2 = Col_RopeIterAt(it);
 
-	ASSERT_MSG(c1 == c2, "index=%u", index);
+        ASSERT(c1 == c2, "index=%u", index);
     }
 
     /* Chunks. */
@@ -1761,18 +1762,18 @@ static void ropeAccess(Col_Word rope) {
     info.index = 0;
     size = 0;
     Col_TraverseRopeChunks(rope, info.index, SIZE_MAX, 0, traverseRopeChunks, 
-	    (Col_ClientData) &info, &size);
-    ASSERT_MSG(info.index == size, "info.index=%u, size=%u", info.index, size);
-    ASSERT_MSG(size == Col_RopeLength(rope), "size=%u, length=%u", size, Col_RopeLength(rope));
+            (Col_ClientData) &info, &size);
+    ASSERT(info.index == size, "info.index=%u, size=%u", info.index, size);
+    ASSERT(size == Col_RopeLength(rope), "size=%u, length=%u", size, Col_RopeLength(rope));
 
     /* Chunks (reverse). */
     info.rope = rope;
     info.index = Col_RopeLength(rope)-1;
     size = 0;
     Col_TraverseRopeChunks(rope, info.index, SIZE_MAX, 1, traverseRopeChunksR, 
-	    (Col_ClientData) &info, &size);
-    ASSERT_MSG(info.index == (size_t)-1, "info.index=%u", info.index);
-    ASSERT_MSG(size == Col_RopeLength(rope), "size=%u, length=%u", size, Col_RopeLength(rope));
+            (Col_ClientData) &info, &size);
+    ASSERT(info.index == (size_t)-1, "info.index=%u", info.index);
+    ASSERT(size == Col_RopeLength(rope), "size=%u, length=%u", size, Col_RopeLength(rope));
 }
 static void ropeInsert(Col_Word into, Col_Word rope) {
      /*
@@ -1786,46 +1787,46 @@ static void ropeInsert(Col_Word into, Col_Word rope) {
     Col_RopeIterator itResult, itInto, itRope;
 
     for (i=0; i < sizeof(indices)/sizeof(*indices); i++) {
-	size_t where = indices[i];
+        size_t where = indices[i];
 
-	result = Col_RopeInsert(into, where, rope);
-	ASSERT(Col_RopeLength(result) == Col_RopeLength(into)+Col_RopeLength(rope));
-	ropeAccess(result);
+        result = Col_RopeInsert(into, where, rope);
+        ASSERT(Col_RopeLength(result) == Col_RopeLength(into)+Col_RopeLength(rope));
+        ropeAccess(result);
 
-	/*
-	 * Compare result with expected result.
-	 */
+        /*
+         * Compare result with expected result.
+         */
 
-	/* Part before insertion point. */
-	for (Col_RopeIterFirst(itResult, result), Col_RopeIterFirst(itInto, into);
-		!Col_RopeIterEnd(itInto) && Col_RopeIterIndex(itInto) < where; 
-		Col_RopeIterNext(itResult), Col_RopeIterNext(itInto)) {
-	    Col_Char c1 = Col_RopeIterAt(itResult);
-	    Col_Char c2 = Col_RopeIterAt(itInto);
+        /* Part before insertion point. */
+        for (Col_RopeIterFirst(itResult, result), Col_RopeIterFirst(itInto, into);
+                !Col_RopeIterEnd(itInto) && Col_RopeIterIndex(itInto) < where; 
+                Col_RopeIterNext(itResult), Col_RopeIterNext(itInto)) {
+            Col_Char c1 = Col_RopeIterAt(itResult);
+            Col_Char c2 = Col_RopeIterAt(itInto);
 
-	    ASSERT_MSG(c1 == c2, "where=%u, index=%u", where, Col_RopeIterIndex(itResult));
-	}
+            ASSERT(c1 == c2, "where=%u, index=%u", where, Col_RopeIterIndex(itResult));
+        }
 
-	/* Inserted rope. */
-	for (Col_RopeIterFirst(itRope, rope);
-		!Col_RopeIterEnd(itRope); 
-		Col_RopeIterNext(itResult), Col_RopeIterNext(itRope)) {
-	    Col_Char c1 = Col_RopeIterAt(itResult);
-	    Col_Char c2 = Col_RopeIterAt(itRope);
+        /* Inserted rope. */
+        for (Col_RopeIterFirst(itRope, rope);
+                !Col_RopeIterEnd(itRope); 
+                Col_RopeIterNext(itResult), Col_RopeIterNext(itRope)) {
+            Col_Char c1 = Col_RopeIterAt(itResult);
+            Col_Char c2 = Col_RopeIterAt(itRope);
 
-	    ASSERT_MSG(c1 == c2, "where=%u, index=%u", where, Col_RopeIterIndex(itResult));
-	}
+            ASSERT(c1 == c2, "where=%u, index=%u", where, Col_RopeIterIndex(itResult));
+        }
 
-	/* Part after insertion point. */
-	for (;
-		!Col_RopeIterEnd(itInto); 
-		Col_RopeIterNext(itResult), Col_RopeIterNext(itInto)) {
-	    Col_Char c1 = Col_RopeIterAt(itResult);
-	    Col_Char c2 = Col_RopeIterAt(itInto);
+        /* Part after insertion point. */
+        for (;
+                !Col_RopeIterEnd(itInto); 
+                Col_RopeIterNext(itResult), Col_RopeIterNext(itInto)) {
+            Col_Char c1 = Col_RopeIterAt(itResult);
+            Col_Char c2 = Col_RopeIterAt(itInto);
 
-	    ASSERT_MSG(c1 == c2, "where=%u, index=%u", where, Col_RopeIterIndex(itResult));
-	}
-	ASSERT(Col_RopeIterEnd(itResult));
+            ASSERT(c1 == c2, "where=%u, index=%u", where, Col_RopeIterIndex(itResult));
+        }
+        ASSERT(Col_RopeIterEnd(itResult));
     }
 }
 static void ropeRemove(Col_Word rope) {
@@ -1840,46 +1841,46 @@ static void ropeRemove(Col_Word rope) {
     Col_RopeIterator itResult, itRope;
 
     for (i1=0; i1 < sizeof(indices)/sizeof(*indices); i1++) {
-	size_t last = indices[i1];
+        size_t last = indices[i1];
 
-	for (i2=0; i2 < sizeof(indices)/sizeof(*indices); i2++) {
-	    size_t first = indices[i2];
+        for (i2=0; i2 < sizeof(indices)/sizeof(*indices); i2++) {
+            size_t first = indices[i2];
 
-	    if (first > last) break;
+            if (first > last) break;
 
-	    result = Col_RopeRemove(rope, first, last);
-	    ASSERT(Col_RopeLength(result) == Col_RopeLength(rope)
-		    - ((last<length?last:length-1)-first+1));
-	    ropeAccess(result);
+            result = Col_RopeRemove(rope, first, last);
+            ASSERT(Col_RopeLength(result) == Col_RopeLength(rope)
+                    - ((last<length?last:length-1)-first+1));
+            ropeAccess(result);
 
-	    /*
-	     * Compare result with expected result.
-	     */
+            /*
+             * Compare result with expected result.
+             */
 
-	    /* Part before deleted section.*/
-	    for (Col_RopeIterFirst(itResult, result), Col_RopeIterFirst(itRope, rope);
-		    !Col_RopeIterEnd(itRope) && Col_RopeIterIndex(itRope) < first; 
-		    Col_RopeIterNext(itResult), Col_RopeIterNext(itRope)) {
-		Col_Char c1 = Col_RopeIterAt(itResult);
-		Col_Char c2 = Col_RopeIterAt(itRope);
+            /* Part before deleted section.*/
+            for (Col_RopeIterFirst(itResult, result), Col_RopeIterFirst(itRope, rope);
+                    !Col_RopeIterEnd(itRope) && Col_RopeIterIndex(itRope) < first; 
+                    Col_RopeIterNext(itResult), Col_RopeIterNext(itRope)) {
+                Col_Char c1 = Col_RopeIterAt(itResult);
+                Col_Char c2 = Col_RopeIterAt(itRope);
 
-		ASSERT_MSG(c1 == c2, "index=%u", Col_RopeIterIndex(itResult));
-	    }
+                ASSERT(c1 == c2, "index=%u", Col_RopeIterIndex(itResult));
+            }
 
-	    /* Part after deleted section.*/
-	    if (last < length) {
-		Col_RopeIterMoveTo(itRope, last+1);
-		for (;
-			!Col_RopeIterEnd(itRope); 
-			Col_RopeIterNext(itResult), Col_RopeIterNext(itRope)) {
-		    Col_Char c1 = Col_RopeIterAt(itResult);
-		    Col_Char c2 = Col_RopeIterAt(itRope);
+            /* Part after deleted section.*/
+            if (last < length) {
+                Col_RopeIterMoveTo(itRope, last+1);
+                for (;
+                        !Col_RopeIterEnd(itRope); 
+                        Col_RopeIterNext(itResult), Col_RopeIterNext(itRope)) {
+                    Col_Char c1 = Col_RopeIterAt(itResult);
+                    Col_Char c2 = Col_RopeIterAt(itRope);
 
-		    ASSERT_MSG(c1 == c2, "index=%u", Col_RopeIterIndex(itResult));
-		}
-	    }
-	    ASSERT(Col_RopeIterEnd(itResult));
-	}
+                    ASSERT(c1 == c2, "index=%u", Col_RopeIterIndex(itResult));
+                }
+            }
+            ASSERT(Col_RopeIterEnd(itResult));
+        }
     }
 }
 static void ropeReplace(Col_Word rope, Col_Word with) {
@@ -1894,57 +1895,57 @@ static void ropeReplace(Col_Word rope, Col_Word with) {
     Col_RopeIterator itResult, itRope, itWith;
 
     for (i1=0; i1 < sizeof(indices)/sizeof(*indices); i1++) {
-	size_t last = indices[i1];
+        size_t last = indices[i1];
 
-	for (i2=0; i2 < sizeof(indices)/sizeof(*indices); i2++) {
-	    size_t first = indices[i2];
+        for (i2=0; i2 < sizeof(indices)/sizeof(*indices); i2++) {
+            size_t first = indices[i2];
 
-	    if (first > last) break;
+            if (first > last) break;
 
-	    result = Col_RopeReplace(rope, first, last, with);
-	    ASSERT(Col_RopeLength(result) == Col_RopeLength(rope)
-		    - ((last<length?last:length-1)-first+1)
-		    + Col_RopeLength(with));
-	    ropeAccess(result);
+            result = Col_RopeReplace(rope, first, last, with);
+            ASSERT(Col_RopeLength(result) == Col_RopeLength(rope)
+                    - ((last<length?last:length-1)-first+1)
+                    + Col_RopeLength(with));
+            ropeAccess(result);
 
-	    /*
-	     * Compare result with expected result.
-	     */
+            /*
+             * Compare result with expected result.
+             */
 
-	    /* Part before replaced section.*/
-	    for (Col_RopeIterFirst(itResult, result), Col_RopeIterFirst(itRope, rope);
-		    !Col_RopeIterEnd(itRope) && Col_RopeIterIndex(itRope) < first; 
-		    Col_RopeIterNext(itResult), Col_RopeIterNext(itRope)) {
-		Col_Char c1 = Col_RopeIterAt(itResult);
-		Col_Char c2 = Col_RopeIterAt(itRope);
+            /* Part before replaced section.*/
+            for (Col_RopeIterFirst(itResult, result), Col_RopeIterFirst(itRope, rope);
+                    !Col_RopeIterEnd(itRope) && Col_RopeIterIndex(itRope) < first; 
+                    Col_RopeIterNext(itResult), Col_RopeIterNext(itRope)) {
+                Col_Char c1 = Col_RopeIterAt(itResult);
+                Col_Char c2 = Col_RopeIterAt(itRope);
 
-		ASSERT_MSG(c1 == c2, "index=%u", Col_RopeIterIndex(itResult));
-	    }
+                ASSERT(c1 == c2, "index=%u", Col_RopeIterIndex(itResult));
+            }
 
-	    /* Replaced section. */
-	    for (Col_RopeIterFirst(itWith, with);
-		    !Col_RopeIterEnd(itWith); 
-		    Col_RopeIterNext(itResult), Col_RopeIterNext(itWith)) {
-		Col_Char c1 = Col_RopeIterAt(itResult);
-		Col_Char c2 = Col_RopeIterAt(itWith);
+            /* Replaced section. */
+            for (Col_RopeIterFirst(itWith, with);
+                    !Col_RopeIterEnd(itWith); 
+                    Col_RopeIterNext(itResult), Col_RopeIterNext(itWith)) {
+                Col_Char c1 = Col_RopeIterAt(itResult);
+                Col_Char c2 = Col_RopeIterAt(itWith);
 
-		ASSERT_MSG(c1 == c2, "index=%u", Col_RopeIterIndex(itResult));
-	    }
+                ASSERT(c1 == c2, "index=%u", Col_RopeIterIndex(itResult));
+            }
 
-	    /* Part after replaced section.*/
-	    if (last < length) {
-		Col_RopeIterMoveTo(itRope, last+1);
-		for (;
-			!Col_RopeIterEnd(itRope); 
-			Col_RopeIterNext(itResult), Col_RopeIterNext(itRope)) {
-		    Col_Char c1 = Col_RopeIterAt(itResult);
-		    Col_Char c2 = Col_RopeIterAt(itRope);
+            /* Part after replaced section.*/
+            if (last < length) {
+                Col_RopeIterMoveTo(itRope, last+1);
+                for (;
+                        !Col_RopeIterEnd(itRope); 
+                        Col_RopeIterNext(itResult), Col_RopeIterNext(itRope)) {
+                    Col_Char c1 = Col_RopeIterAt(itResult);
+                    Col_Char c2 = Col_RopeIterAt(itRope);
 
-		    ASSERT_MSG(c1 == c2, "index=%u", Col_RopeIterIndex(itResult));
-		}
-	    }
-	    ASSERT(Col_RopeIterEnd(itResult));
-	}
+                    ASSERT(c1 == c2, "index=%u", Col_RopeIterIndex(itResult));
+                }
+            }
+            ASSERT(Col_RopeIterEnd(itResult));
+        }
     }
 }
 
@@ -1955,10 +1956,10 @@ static int compareRopeChunks(size_t index, size_t length, size_t number, const C
     ASSERT(chunks[0].data);
     ASSERT(chunks[1].data);
     for (i = 0; i < length; i++, COL_CHAR_NEXT(chunks[0].format, p[0]),
-	    COL_CHAR_NEXT(chunks[1].format, p[1])) {
-	Col_Char c1 = COL_CHAR_GET(chunks[0].format, p[0]);
-	Col_Char c2 = COL_CHAR_GET(chunks[1].format, p[1]);
-	ASSERT_MSG(c1 == c2, "index=%u", index+i);
+            COL_CHAR_NEXT(chunks[1].format, p[1])) {
+        Col_Char c1 = COL_CHAR_GET(chunks[0].format, p[0]);
+        Col_Char c2 = COL_CHAR_GET(chunks[1].format, p[1]);
+        ASSERT(c1 == c2, "index=%u", index+i);
     }
     return 0;
 }
@@ -1969,23 +1970,23 @@ static void ropesEqual(Col_Word rope1, Col_Word rope2) {
 
     /* Iterators. */
     for (Col_RopeIterFirst(it1, rope1), Col_RopeIterFirst(it2, rope2);
-	    !Col_RopeIterEnd(it1); 
-	    Col_RopeIterNext(it1), Col_RopeIterNext(it2)) {
-	size_t index = Col_RopeIterIndex(it1);
-	Col_Char c1 = Col_RopeIterAt(it1);
-	Col_Char c2 = Col_RopeIterAt(it2);
+            !Col_RopeIterEnd(it1); 
+            Col_RopeIterNext(it1), Col_RopeIterNext(it2)) {
+        size_t index = Col_RopeIterIndex(it1);
+        Col_Char c1 = Col_RopeIterAt(it1);
+        Col_Char c2 = Col_RopeIterAt(it2);
 
-	ASSERT_MSG(index == Col_RopeIterIndex(it2), "index=%u", index);
-	ASSERT_MSG(c1 == c2, "index=%u", index);
+        ASSERT(index == Col_RopeIterIndex(it2), "index=%u", index);
+        ASSERT(c1 == c2, "index=%u", index);
     }
     ASSERT(Col_RopeIterEnd(it2));
 
     /* Chunks. */
     {
-	Col_Word ropes[] = {rope1, rope2};
-	size_t length = 0;
-	Col_TraverseRopeChunksN(2, ropes, 0, SIZE_MAX, compareRopeChunks, NULL, &length);
-	ASSERT(length == Col_RopeLength(rope1));
+        Col_Word ropes[] = {rope1, rope2};
+        size_t length = 0;
+        Col_TraverseRopeChunksN(2, ropes, 0, SIZE_MAX, compareRopeChunks, NULL, &length);
+        ASSERT(length == Col_RopeLength(rope1));
     }
 
     /* Comparison. */
@@ -1994,9 +1995,9 @@ static void ropesEqual(Col_Word rope1, Col_Word rope2) {
 static int ropeFormatProc(size_t index, size_t length, size_t number, const Col_RopeChunk *chunks, Col_ClientData clientData) {
     Col_StringFormat format = (Col_StringFormat) clientData;
     if (format == COL_UCS) {
-	if (chunks->format != COL_UCS1 && chunks->format != COL_UCS2 && chunks->format != COL_UCS4) return 1;
+        if (chunks->format != COL_UCS1 && chunks->format != COL_UCS2 && chunks->format != COL_UCS4) return 1;
     } else {
-	if (chunks->format != format) return 1;
+        if (chunks->format != format) return 1;
     }
     return 0;
 }

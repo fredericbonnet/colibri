@@ -19,12 +19,51 @@
 
 
 #include "unitTest.h"
+#include "testColibri.h"
+
+/* Colibri error proc handler. */
+int test_errorProc(Col_ErrorLevel level, Col_ErrorDomain domain, int code, va_list args) {
+    const char *levelString;
+    switch (level) {
+    case COL_FATAL:
+        levelString = "FATAL";
+        break;
+
+    case COL_ERROR:
+        levelString = "ERROR";
+        break;
+
+    case COL_TYPECHECK:
+        levelString = "TYPECHECK";
+        break;
+
+    case COL_VALUECHECK:
+        levelString = "VALUECHECK";
+        break;
+    }
+    printf("\n[%s] ", levelString);
+    vprintf(domain[code], args);
+    printf("\n");
+
+    TEST_ABORT();
+}
+
+/* Test failure log handler. */
+void log_failure(const char *file, int line, const char *type, const char *test, const char *msg, va_list args) {
+    printf("\n[%s] %s(%d) : %s", type, file, line, test);
+    if (msg) {
+        printf(" | "); 
+        vprintf(msg, args);
+    }
+    printf("\n");
+}
 
 TEST_SUITE(testColibri, 
     testImmediateWords, testRopes, testLists, testMaps, testStrBufs
 )
 
 int main(int argc, char* argv[]) {
+    int fail = 0;
 #ifdef DO_TRACE
     freopen( "c:\\err.txt", "wt", stderr);
 #endif
@@ -33,28 +72,18 @@ int main(int argc, char* argv[]) {
     getc(stdin);
 
     /* Only execute tests given as command line arguments. */
-    if (argc == 1) {
-        testColibri(NULL);
+    if (argc <= 1) {
+        fail = testColibri(NULL);
     } else {
         int i;
         for (i=1; i < argc; i++) {
             char *name = argv[i];
-            testColibri(name);
+            fail += testColibri(name);
         }
     }
-
-//    testCustomRopes();
-//    testGeneration();
-//    testGrow();
-
-//    testAllocInts();
-//    testAllocIntVects();
-//    testRandomIntVects();
-//    testChildren();
-//    testChildVect();
 
     printf("Hit return...\n");
     getc(stdin);
     
-    exit(0);
+    exit(fail);
 }

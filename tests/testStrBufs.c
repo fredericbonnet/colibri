@@ -4,6 +4,7 @@
 #include <colibri.h>
 
 #include "unitTest.h"
+#include "testColibri.h"
 
 
 // TODO test UTF-8/16
@@ -41,23 +42,23 @@ TEST_FIXTURE_SETUP(testStrBufs, context) {
     Col_PauseGC();
 
     for (i=0; i < sizeof(data8)/sizeof(*data8); i++) {
-	data8[i] = (Col_Char1) i+0x20;
+        data8[i] = (Col_Char1) i+0x20;
     }
     context->rope8 = Col_NewRope(COL_UCS1, data8, sizeof(data8));
 
     for (i=0; i < sizeof(data16)/sizeof(*data16); i++) {
-	data16[i] = (Col_Char2) i+0x100;
+        data16[i] = (Col_Char2) i+0x100;
     }
     context->rope16 = Col_NewRope(COL_UCS2, data16, sizeof(data16));
 
     for (i=0; i < sizeof(data32)/sizeof(*data32); i++) {
-	data32[i] = (Col_Char4) i+0x10000;
+        data32[i] = (Col_Char4) i+0x10000;
     }
     context->rope32 = Col_NewRope(COL_UCS4, data32, sizeof(data32));
 }
 TEST_FIXTURE_TEARDOWN(testStrBufs, context) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -155,9 +156,9 @@ static void append(Col_Word strbuf, Col_Word rope, int successExpected, size_t *
 /* Get result of above operation. */
 static Col_Word appended(Col_Word rope) {
     return Col_ConcatRopesV(
-	Col_NewCharWord(Col_RopeAt(rope, 0)),
-	Col_Subrope(rope, 1, 1),
-	rope
+        Col_NewCharWord(Col_RopeAt(rope, 0)),
+        Col_Subrope(rope, 1, 1),
+        rope
     );
 }
 
@@ -219,8 +220,8 @@ TEST_CASE(testStrBufsFreezeSmallString, testStrBufs, context) {
     /* Character-wise. */
     strbuf = Col_NewStringBuffer(3, COL_UCS1);
     for (i = 0, Col_RopeIterFirst(it, context->rope8); 
-	    i < 3 && !Col_RopeIterEnd(it); i++, Col_RopeIterNext(it)) {
-	ASSERT(Col_StringBufferAppendChar(strbuf, Col_RopeIterAt(it)));
+            i < 3 && !Col_RopeIterEnd(it); i++, Col_RopeIterNext(it)) {
+        ASSERT(Col_StringBufferAppendChar(strbuf, Col_RopeIterAt(it)));
     }
     frozen = Col_StringBufferFreeze(strbuf);
     ASSERT(frozen != strbuf);
@@ -228,8 +229,8 @@ TEST_CASE(testStrBufsFreezeSmallString, testStrBufs, context) {
 
     strbuf = Col_NewStringBuffer(3, COL_UCS);
     for (i = 0, Col_RopeIterFirst(it, context->rope8); 
-	    i < 3 && !Col_RopeIterEnd(it); i++, Col_RopeIterNext(it)) {
-	ASSERT(Col_StringBufferAppendChar(strbuf, Col_RopeIterAt(it)));
+            i < 3 && !Col_RopeIterEnd(it); i++, Col_RopeIterNext(it)) {
+        ASSERT(Col_StringBufferAppendChar(strbuf, Col_RopeIterAt(it)));
     }
     frozen = Col_StringBufferFreeze(strbuf);
     ASSERT(frozen != strbuf);
@@ -267,8 +268,8 @@ TEST_CASE(testStrBufsFreezeString, testStrBufs, context) {
     /* Char-wise. */
     strbuf = Col_NewStringBuffer(Col_RopeLength(context->rope8), COL_UCS1);
     for (Col_RopeIterFirst(it, context->rope8); !Col_RopeIterEnd(it);
-	    Col_RopeIterNext(it)) {
-	ASSERT(Col_StringBufferAppendChar(strbuf, Col_RopeIterAt(it)));
+            Col_RopeIterNext(it)) {
+        ASSERT(Col_StringBufferAppendChar(strbuf, Col_RopeIterAt(it)));
     }
     frozen = Col_StringBufferFreeze(strbuf);
     ASSERT(frozen == strbuf);
@@ -276,8 +277,8 @@ TEST_CASE(testStrBufsFreezeString, testStrBufs, context) {
 
     strbuf = Col_NewStringBuffer(Col_RopeLength(context->rope16), COL_UCS2);
     for (Col_RopeIterFirst(it, context->rope16); !Col_RopeIterEnd(it);
-	    Col_RopeIterNext(it)) {
-	ASSERT(Col_StringBufferAppendChar(strbuf, Col_RopeIterAt(it)));
+            Col_RopeIterNext(it)) {
+        ASSERT(Col_StringBufferAppendChar(strbuf, Col_RopeIterAt(it)));
     }
     frozen = Col_StringBufferFreeze(strbuf);
     ASSERT(frozen == strbuf);
@@ -285,8 +286,8 @@ TEST_CASE(testStrBufsFreezeString, testStrBufs, context) {
 
     strbuf = Col_NewStringBuffer(Col_RopeLength(context->rope32), COL_UCS4);
     for (Col_RopeIterFirst(it, context->rope32); !Col_RopeIterEnd(it);
-	    Col_RopeIterNext(it)) {
-	ASSERT(Col_StringBufferAppendChar(strbuf, Col_RopeIterAt(it)));
+            Col_RopeIterNext(it)) {
+        ASSERT(Col_StringBufferAppendChar(strbuf, Col_RopeIterAt(it)));
     }
     frozen = Col_StringBufferFreeze(strbuf);
     ASSERT(frozen == strbuf);
@@ -337,9 +338,9 @@ TEST_CASE(testStrBufsFreezeBig, testStrBufs, context) {
     /* Char-wise. */
     strbuf = Col_NewStringBuffer(100000, COL_UCS1);
     for (i=0, Col_RopeIterFirst(it, context->rope8); i < 100000;
-	    i++, Col_RopeIterNext(it), Col_RopeIterEnd(it) 
-	    ? (Col_RopeIterFirst(it, context->rope8), 0) : 0) {
-	ASSERT(Col_StringBufferAppendChar(strbuf, Col_RopeIterAt(it)));
+            i++, Col_RopeIterNext(it), Col_RopeIterEnd(it) 
+            ? (Col_RopeIterFirst(it, context->rope8), 0) : 0) {
+        ASSERT(Col_StringBufferAppendChar(strbuf, Col_RopeIterAt(it)));
     }
     frozen = Col_StringBufferFreeze(strbuf);
     ASSERT(frozen != strbuf);

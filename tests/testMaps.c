@@ -4,6 +4,7 @@
 #include <colibri.h>
 
 #include "unitTest.h"
+#include "testColibri.h"
 
 /*
  *---------------------------------------------------------------------------
@@ -45,7 +46,7 @@ TEST_FIXTURE_SETUP(testStringTries) {
 }
 TEST_FIXTURE_TEARDOWN(testStringTries) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -61,23 +62,23 @@ TEST_CASE(testStringTrie, testStringTries) {
     Col_Word prev;
 
     for (i=0; i<nb; i++) {
-	Col_Word key;
-	char buf[32];
-	snprintf(buf, 32, "%d", i);
-	key = Col_NewRopeFromString(buf);
-	ASSERT_MSG(Col_TrieMapSet(map, key, Col_NewIntWord(i+1000)), "index=%d", i);
-	ASSERT_MSG(!Col_TrieMapSet(map, key, Col_NewIntWord(i+2000)), "index=%d", i);
+        Col_Word key;
+        char buf[32];
+        snprintf(buf, 32, "%d", i);
+        key = Col_NewRopeFromString(buf);
+        ASSERT(Col_TrieMapSet(map, key, Col_NewIntWord(i+1000)), "index=%d", i);
+        ASSERT(!Col_TrieMapSet(map, key, Col_NewIntWord(i+2000)), "index=%d", i);
     }
     ASSERT(Col_MapSize(map) == nb);
 
     for (i=0; i<nb; i++) {
-	Col_Word key, value;
-	char buf[32];
-	snprintf(buf, 32, "%d", i);
-	key = Col_NewRopeFromString(buf);
-	ASSERT_MSG(Col_TrieMapGet(map, key, &value), "index=%d", i);
-	ASSERT_MSG(Col_WordType(value) == COL_INT, "index=%d", i);
-	ASSERT_MSG(Col_IntWordValue(value) == i+2000, "index=%d", i);
+        Col_Word key, value;
+        char buf[32];
+        snprintf(buf, 32, "%d", i);
+        key = Col_NewRopeFromString(buf);
+        ASSERT(Col_TrieMapGet(map, key, &value), "index=%d", i);
+        ASSERT(Col_WordType(value) == COL_INT, "index=%d", i);
+        ASSERT(Col_IntWordValue(value) == i+2000, "index=%d", i);
     }
 
     Col_TrieMapIterFirst(it, map);
@@ -85,14 +86,14 @@ TEST_CASE(testStringTrie, testStringTries) {
     prev = WORD_NIL;
     i = 0;
     while (!Col_MapIterEnd(it)) {
-	Col_Word key, value;
-	Col_MapIterGet(it, &key, &value);
-	if (prev) {
-	    ASSERT_MSG(Col_CompareRopes(prev, key) < 0, "index=%d", i);
-	}
-	prev = key;
-	Col_TrieMapIterNext(it);
-	i++;
+        Col_Word key, value;
+        Col_MapIterGet(it, &key, &value);
+        if (prev) {
+            ASSERT(Col_CompareRopes(prev, key) < 0, "index=%d", i);
+        }
+        prev = key;
+        Col_TrieMapIterNext(it);
+        i++;
     }
     ASSERT(i == nb);
 
@@ -101,25 +102,25 @@ TEST_CASE(testStringTrie, testStringTries) {
     prev = WORD_NIL;
     i = 0;
     while (!Col_MapIterEnd(it)) {
-	Col_Word key, value;
-	Col_MapIterGet(it, &key, &value);
-	if (prev) {
-	    ASSERT_MSG(Col_CompareRopes(prev, key) > 0, "index=%d", i);
-	}
-	prev = key;
-	Col_TrieMapIterPrevious(it);
-	i++;
+        Col_Word key, value;
+        Col_MapIterGet(it, &key, &value);
+        if (prev) {
+            ASSERT(Col_CompareRopes(prev, key) > 0, "index=%d", i);
+        }
+        prev = key;
+        Col_TrieMapIterPrevious(it);
+        i++;
     }
     ASSERT(i == nb);
 
     for (i=0; i<nb; i++) {
-	Col_Word key, value;
-	char buf[32];
-	snprintf(buf, 32, "%d", i);
-	key = Col_NewRopeFromString(buf);
-	ASSERT_MSG(Col_TrieMapUnset(map, key), "index=%d", i);
-	ASSERT_MSG(!Col_TrieMapUnset(map, key), "index=%d", i);
-	ASSERT_MSG(!Col_TrieMapGet(map, key, &value), "index=%d", i);
+        Col_Word key, value;
+        char buf[32];
+        snprintf(buf, 32, "%d", i);
+        key = Col_NewRopeFromString(buf);
+        ASSERT(Col_TrieMapUnset(map, key), "index=%d", i);
+        ASSERT(!Col_TrieMapUnset(map, key), "index=%d", i);
+        ASSERT(!Col_TrieMapGet(map, key, &value), "index=%d", i);
     }
     ASSERT(Col_MapSize(map) == 0);
 }
@@ -132,23 +133,23 @@ TEST_CASE(testStringTrieReverse, testStringTries) {
     Col_Word prev;
 
     for (i=nb-1; i>=0; i--) {
-	Col_Word key;
-	char buf[32];
-	snprintf(buf, 32, "%d", i);
-	key = Col_NewRopeFromString(buf);
-	ASSERT_MSG(Col_TrieMapSet(map, key, Col_NewIntWord(i+1000)), "index=%d", i);
-	ASSERT_MSG(!Col_TrieMapSet(map, key, Col_NewIntWord(i+2000)), "index=%d", i);
+        Col_Word key;
+        char buf[32];
+        snprintf(buf, 32, "%d", i);
+        key = Col_NewRopeFromString(buf);
+        ASSERT(Col_TrieMapSet(map, key, Col_NewIntWord(i+1000)), "index=%d", i);
+        ASSERT(!Col_TrieMapSet(map, key, Col_NewIntWord(i+2000)), "index=%d", i);
     }
     ASSERT(Col_MapSize(map) == nb);
 
     for (i=0; i<nb; i++) {
-	Col_Word key, value;
-	char buf[32];
-	snprintf(buf, 32, "%d", i);
-	key = Col_NewRopeFromString(buf);
-	ASSERT_MSG(Col_TrieMapGet(map, key, &value), "index=%d", i);
-	ASSERT_MSG(Col_WordType(value) == COL_INT, "index=%d", i);
-	ASSERT_MSG(Col_IntWordValue(value) == i+2000, "index=%d", i);
+        Col_Word key, value;
+        char buf[32];
+        snprintf(buf, 32, "%d", i);
+        key = Col_NewRopeFromString(buf);
+        ASSERT(Col_TrieMapGet(map, key, &value), "index=%d", i);
+        ASSERT(Col_WordType(value) == COL_INT, "index=%d", i);
+        ASSERT(Col_IntWordValue(value) == i+2000, "index=%d", i);
     }
 
     Col_TrieMapIterFirst(it, map);
@@ -156,14 +157,14 @@ TEST_CASE(testStringTrieReverse, testStringTries) {
     prev = WORD_NIL;
     i = 0;
     while (!Col_MapIterEnd(it)) {
-	Col_Word key;
-	key = Col_MapIterGetKey(it);
-	if (prev) {
-	    ASSERT_MSG(Col_CompareRopes(prev, key) < 0, "index=%d", i);
-	}
-	prev = key;
-	Col_TrieMapIterNext(it);
-	i++;
+        Col_Word key;
+        key = Col_MapIterGetKey(it);
+        if (prev) {
+            ASSERT(Col_CompareRopes(prev, key) < 0, "index=%d", i);
+        }
+        prev = key;
+        Col_TrieMapIterNext(it);
+        i++;
     }
     ASSERT(i == nb);
 
@@ -172,25 +173,25 @@ TEST_CASE(testStringTrieReverse, testStringTries) {
     prev = WORD_NIL;
     i = 0;
     while (!Col_MapIterEnd(it)) {
-	Col_Word key;
-	key = Col_MapIterGetKey(it);
-	if (prev) {
-	    ASSERT_MSG(Col_CompareRopes(prev, key) > 0, "index=%d", i);
-	}
-	prev = key;
-	Col_TrieMapIterPrevious(it);
-	i++;
+        Col_Word key;
+        key = Col_MapIterGetKey(it);
+        if (prev) {
+            ASSERT(Col_CompareRopes(prev, key) > 0, "index=%d", i);
+        }
+        prev = key;
+        Col_TrieMapIterPrevious(it);
+        i++;
     }
     ASSERT(i == nb);
 
     for (i=0; i<nb; i++) {
-	Col_Word key, value;
-	char buf[32];
-	snprintf(buf, 32, "%d", i);
-	key = Col_NewRopeFromString(buf);
-	ASSERT_MSG(Col_TrieMapUnset(map, key), "index=%d", i);
-	ASSERT_MSG(!Col_TrieMapUnset(map, key), "index=%d", i);
-	ASSERT_MSG(!Col_TrieMapGet(map, key, &value), "index=%d", i);
+        Col_Word key, value;
+        char buf[32];
+        snprintf(buf, 32, "%d", i);
+        key = Col_NewRopeFromString(buf);
+        ASSERT(Col_TrieMapUnset(map, key), "index=%d", i);
+        ASSERT(!Col_TrieMapUnset(map, key), "index=%d", i);
+        ASSERT(!Col_TrieMapGet(map, key, &value), "index=%d", i);
     }
     ASSERT(Col_MapSize(map) == 0);
 }
@@ -211,7 +212,7 @@ TEST_FIXTURE_SETUP(testStringHashes) {
 }
 TEST_FIXTURE_TEARDOWN(testStringHashes) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -222,44 +223,44 @@ TEST_CASE(testStringHashes, testStringHashes) {
     const int nb=1000;
 
     for (i=0; i<nb; i++) {
-	Col_Word key;
-	char buf[32];
-	snprintf(buf, 32, "%d", i);
-	key = Col_NewRopeFromString(buf);
-	ASSERT_MSG(Col_HashMapSet(map, key, Col_NewIntWord(i+1000)), "index=%d", i);
-	ASSERT_MSG(!Col_HashMapSet(map, key, Col_NewIntWord(i+2000)), "index=%d", i);
+        Col_Word key;
+        char buf[32];
+        snprintf(buf, 32, "%d", i);
+        key = Col_NewRopeFromString(buf);
+        ASSERT(Col_HashMapSet(map, key, Col_NewIntWord(i+1000)), "index=%d", i);
+        ASSERT(!Col_HashMapSet(map, key, Col_NewIntWord(i+2000)), "index=%d", i);
     }
     ASSERT(Col_MapSize(map) == nb);
 
     for (i=0; i<nb; i++) {
-	Col_Word key, value;
-	char buf[32];
-	snprintf(buf, 32, "%d", i);
-	key = Col_NewRopeFromString(buf);
-	ASSERT_MSG(Col_HashMapGet(map, key, &value), "index=%d", i);
-	ASSERT_MSG(Col_WordType(value) == COL_INT, "index=%d", i);
-	ASSERT_MSG(Col_IntWordValue(value) == i+2000, "index=%d", i);
+        Col_Word key, value;
+        char buf[32];
+        snprintf(buf, 32, "%d", i);
+        key = Col_NewRopeFromString(buf);
+        ASSERT(Col_HashMapGet(map, key, &value), "index=%d", i);
+        ASSERT(Col_WordType(value) == COL_INT, "index=%d", i);
+        ASSERT(Col_IntWordValue(value) == i+2000, "index=%d", i);
     }
 
     Col_HashMapIterBegin(it, map);
     ASSERT(!Col_MapIterEnd(it));
     i = 0;
     while (!Col_MapIterEnd(it)) {
-	Col_Word key, value;
-	Col_MapIterGet(it, &key, &value);
-	Col_HashMapIterNext(it);
-	i++;
+        Col_Word key, value;
+        Col_MapIterGet(it, &key, &value);
+        Col_HashMapIterNext(it);
+        i++;
     }
     ASSERT(i == nb);
 
     for (i=0; i<nb; i++) {
-	Col_Word key, value;
-	char buf[32];
-	snprintf(buf, 32, "%d", i);
-	key = Col_NewRopeFromString(buf);
-	ASSERT_MSG(Col_HashMapUnset(map, key), "index=%d", i);
-	ASSERT_MSG(!Col_HashMapUnset(map, key), "index=%d", i);
-	ASSERT_MSG(!Col_HashMapGet(map, key, &value), "index=%d", i);
+        Col_Word key, value;
+        char buf[32];
+        snprintf(buf, 32, "%d", i);
+        key = Col_NewRopeFromString(buf);
+        ASSERT(Col_HashMapUnset(map, key), "index=%d", i);
+        ASSERT(!Col_HashMapUnset(map, key), "index=%d", i);
+        ASSERT(!Col_HashMapGet(map, key, &value), "index=%d", i);
     }
     ASSERT(Col_MapSize(map) == 0);
 }
@@ -292,7 +293,7 @@ TEST_FIXTURE_SETUP(testIntTries) {
 }
 TEST_FIXTURE_TEARDOWN(testIntTries) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -308,16 +309,16 @@ TEST_CASE(testIntTrie, testIntTries) {
     intptr_t prev;
 
     for (i=0; i<nb; i++) {
-	ASSERT_MSG(Col_IntTrieMapSet(map, i, Col_NewIntWord(i+1000)), "index=%d", i);
-	ASSERT_MSG(!Col_IntTrieMapSet(map, i, Col_NewIntWord(i+2000)), "index=%d", i);
+        ASSERT(Col_IntTrieMapSet(map, i, Col_NewIntWord(i+1000)), "index=%d", i);
+        ASSERT(!Col_IntTrieMapSet(map, i, Col_NewIntWord(i+2000)), "index=%d", i);
     }
     ASSERT(Col_MapSize(map) == nb);
 
     for (i=0; i<nb; i++) {
-	Col_Word value;
-	ASSERT_MSG(Col_IntTrieMapGet(map, i, &value), "index=%d", i);
-	ASSERT_MSG(Col_WordType(value) == COL_INT, "index=%d", i);
-	ASSERT_MSG(Col_IntWordValue(value) == i+2000, "index=%d", i);
+        Col_Word value;
+        ASSERT(Col_IntTrieMapGet(map, i, &value), "index=%d", i);
+        ASSERT(Col_WordType(value) == COL_INT, "index=%d", i);
+        ASSERT(Col_IntWordValue(value) == i+2000, "index=%d", i);
     }
 
     Col_TrieMapIterFirst(it, map);
@@ -325,15 +326,15 @@ TEST_CASE(testIntTrie, testIntTries) {
     prev = -1;
     i = 0;
     while (!Col_MapIterEnd(it)) {
-	intptr_t key;
-	Col_Word value;
-	Col_IntMapIterGet(it, &key, &value);
-	if (prev != -1) {
-	    ASSERT_MSG(prev < key, "index=%d", i);
-	}
-	prev = key;
-	Col_TrieMapIterNext(it);
-	i++;
+        intptr_t key;
+        Col_Word value;
+        Col_IntMapIterGet(it, &key, &value);
+        if (prev != -1) {
+            ASSERT(prev < key, "index=%d", i);
+        }
+        prev = key;
+        Col_TrieMapIterNext(it);
+        i++;
     }
     ASSERT(i == nb);
 
@@ -342,23 +343,23 @@ TEST_CASE(testIntTrie, testIntTries) {
     prev = -1;
     i = 0;
     while (!Col_MapIterEnd(it)) {
-	intptr_t key;
-	Col_Word value;
-	Col_IntMapIterGet(it, &key, &value);
-	if (prev != -1) {
-	    ASSERT_MSG(prev > key, "index=%d", i);
-	}
-	prev = key;
-	Col_TrieMapIterPrevious(it);
-	i++;
+        intptr_t key;
+        Col_Word value;
+        Col_IntMapIterGet(it, &key, &value);
+        if (prev != -1) {
+            ASSERT(prev > key, "index=%d", i);
+        }
+        prev = key;
+        Col_TrieMapIterPrevious(it);
+        i++;
     }
     ASSERT(i == nb);
 
     for (i=0; i<nb; i++) {
-	Col_Word value;
-	ASSERT_MSG(Col_IntTrieMapUnset(map, i), "index=%d", i);
-	ASSERT_MSG(!Col_IntTrieMapUnset(map, i), "index=%d", i);
-	ASSERT_MSG(!Col_IntTrieMapGet(map, i, &value), "index=%d", i);
+        Col_Word value;
+        ASSERT(Col_IntTrieMapUnset(map, i), "index=%d", i);
+        ASSERT(!Col_IntTrieMapUnset(map, i), "index=%d", i);
+        ASSERT(!Col_IntTrieMapGet(map, i, &value), "index=%d", i);
     }
     ASSERT(Col_MapSize(map) == 0);
 }
@@ -371,16 +372,16 @@ TEST_CASE(testIntTrieReverse, testIntTries) {
     intptr_t prev;
 
     for (i=nb-1; i>=0; i--) {
-	ASSERT_MSG(Col_IntTrieMapSet(map, i, Col_NewIntWord(i+1000)), "index=%d", i);
-	ASSERT_MSG(!Col_IntTrieMapSet(map, i, Col_NewIntWord(i+2000)), "index=%d", i);
+        ASSERT(Col_IntTrieMapSet(map, i, Col_NewIntWord(i+1000)), "index=%d", i);
+        ASSERT(!Col_IntTrieMapSet(map, i, Col_NewIntWord(i+2000)), "index=%d", i);
     }
     ASSERT(Col_MapSize(map) == nb);
 
     for (i=0; i<nb; i++) {
-	Col_Word value;
-	ASSERT_MSG(Col_IntTrieMapGet(map, i, &value), "index=%d", i);
-	ASSERT_MSG(Col_WordType(value) == COL_INT, "index=%d", i);
-	ASSERT_MSG(Col_IntWordValue(value) == i+2000, "index=%d", i);
+        Col_Word value;
+        ASSERT(Col_IntTrieMapGet(map, i, &value), "index=%d", i);
+        ASSERT(Col_WordType(value) == COL_INT, "index=%d", i);
+        ASSERT(Col_IntWordValue(value) == i+2000, "index=%d", i);
     }
 
     Col_TrieMapIterFirst(it, map);
@@ -388,15 +389,15 @@ TEST_CASE(testIntTrieReverse, testIntTries) {
     prev = -1;
     i = 0;
     while (!Col_MapIterEnd(it)) {
-	intptr_t key;
-	Col_Word value;
-	Col_IntMapIterGet(it, &key, &value);
-	if (prev != -1) {
-	    ASSERT_MSG(prev < key, "index=%d", i);
-	}
-	prev = key;
-	Col_TrieMapIterNext(it);
-	i++;
+        intptr_t key;
+        Col_Word value;
+        Col_IntMapIterGet(it, &key, &value);
+        if (prev != -1) {
+            ASSERT(prev < key, "index=%d", i);
+        }
+        prev = key;
+        Col_TrieMapIterNext(it);
+        i++;
     }
     ASSERT(i == nb);
 
@@ -405,23 +406,23 @@ TEST_CASE(testIntTrieReverse, testIntTries) {
     prev = -1;
     i = 0;
     while (!Col_MapIterEnd(it)) {
-	intptr_t key;
-	Col_Word value;
-	Col_IntMapIterGet(it, &key, &value);
-	if (prev != -1) {
-	    ASSERT_MSG(prev > key, "index=%d", i);
-	}
-	prev = key;
-	Col_TrieMapIterPrevious(it);
-	i++;
+        intptr_t key;
+        Col_Word value;
+        Col_IntMapIterGet(it, &key, &value);
+        if (prev != -1) {
+            ASSERT(prev > key, "index=%d", i);
+        }
+        prev = key;
+        Col_TrieMapIterPrevious(it);
+        i++;
     }
     ASSERT(i == nb);
 
     for (i=0; i<nb; i++) {
-	Col_Word value;
-	ASSERT_MSG(Col_IntTrieMapUnset(map, i), "index=%d", i);
-	ASSERT_MSG(!Col_IntTrieMapUnset(map, i), "index=%d", i);
-	ASSERT_MSG(!Col_IntTrieMapGet(map, i, &value), "index=%d", i);
+        Col_Word value;
+        ASSERT(Col_IntTrieMapUnset(map, i), "index=%d", i);
+        ASSERT(!Col_IntTrieMapUnset(map, i), "index=%d", i);
+        ASSERT(!Col_IntTrieMapGet(map, i, &value), "index=%d", i);
     }
     ASSERT(Col_MapSize(map) == 0);
 }
@@ -442,7 +443,7 @@ TEST_FIXTURE_SETUP(testIntHashes) {
 }
 TEST_FIXTURE_TEARDOWN(testIntHashes) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -453,35 +454,35 @@ TEST_CASE(testIntHashes, testIntHashes) {
     const int nb=1000;
 
     for (i=0; i<nb; i++) {
-	ASSERT_MSG(Col_IntHashMapSet(map, i, Col_NewIntWord(i+1000)), "index=%d", i);
-	ASSERT_MSG(!Col_IntHashMapSet(map, i, Col_NewIntWord(i+2000)), "index=%d", i);
+        ASSERT(Col_IntHashMapSet(map, i, Col_NewIntWord(i+1000)), "index=%d", i);
+        ASSERT(!Col_IntHashMapSet(map, i, Col_NewIntWord(i+2000)), "index=%d", i);
     }
     ASSERT(Col_MapSize(map) == nb);
 
     for (i=0; i<nb; i++) {
-	Col_Word value;
-	ASSERT_MSG(Col_IntHashMapGet(map, i, &value), "index=%d", i);
-	ASSERT_MSG(Col_WordType(value) == COL_INT, "index=%d", i);
-	ASSERT_MSG(Col_IntWordValue(value) == i+2000, "index=%d", i);
+        Col_Word value;
+        ASSERT(Col_IntHashMapGet(map, i, &value), "index=%d", i);
+        ASSERT(Col_WordType(value) == COL_INT, "index=%d", i);
+        ASSERT(Col_IntWordValue(value) == i+2000, "index=%d", i);
     }
 
     Col_HashMapIterBegin(it, map);
     ASSERT(!Col_MapIterEnd(it));
     i = 0;
     while (!Col_MapIterEnd(it)) {
-	intptr_t key;
-	Col_Word value;
-	Col_IntMapIterGet(it, &key, &value);
-	Col_HashMapIterNext(it);
-	i++;
+        intptr_t key;
+        Col_Word value;
+        Col_IntMapIterGet(it, &key, &value);
+        Col_HashMapIterNext(it);
+        i++;
     }
     ASSERT(i == nb);
 
     for (i=0; i<nb; i++) {
-	Col_Word value;
-	ASSERT_MSG(Col_IntHashMapUnset(map, i), "index=%d", i);
-	ASSERT_MSG(!Col_IntHashMapUnset(map, i), "index=%d", i);
-	ASSERT_MSG(!Col_IntHashMapGet(map, i, &value), "index=%d", i);
+        Col_Word value;
+        ASSERT(Col_IntHashMapUnset(map, i), "index=%d", i);
+        ASSERT(!Col_IntHashMapUnset(map, i), "index=%d", i);
+        ASSERT(!Col_IntHashMapGet(map, i, &value), "index=%d", i);
     }
     ASSERT(Col_MapSize(map) == 0);
 }

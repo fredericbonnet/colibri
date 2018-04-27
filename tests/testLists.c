@@ -4,6 +4,7 @@
 #include <colibri.h>
 
 #include "unitTest.h"
+#include "testColibri.h"
 
 /*
  *---------------------------------------------------------------------------
@@ -41,7 +42,7 @@ TEST_FIXTURE_SETUP(testNewList) {
 }
 TEST_FIXTURE_TEARDOWN(testNewList) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -53,17 +54,17 @@ TEST_CASE(testNewSmallList, testNewList) {
     Col_Word list;
 
     for (i=0; i < l; i++) {
-	e[i] = Col_NewIntWord(i);
+        e[i] = Col_NewIntWord(i);
     }
 
     list = Col_NewList(l, e);
     ASSERT(Col_ListLength(list) == l);
     listAccess(list);
     for (Col_ListIterFirst(it, list); !Col_ListIterEnd(it); Col_ListIterNext(it)) {
-	size_t index = Col_ListIterIndex(it);
-	Col_Word e = Col_ListIterAt(it);
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) index, "index=%u", index);
+        size_t index = Col_ListIterIndex(it);
+        Col_Word e = Col_ListIterAt(it);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) index, "index=%u", index);
     }
 }
 TEST_CASE(testNewLargeList, testNewList) {
@@ -74,17 +75,17 @@ TEST_CASE(testNewLargeList, testNewList) {
     Col_Word list;
 
     for (i=0; i < l; i++) {
-	e[i] = Col_NewIntWord(i);
+        e[i] = Col_NewIntWord(i);
     }
 
     list = Col_NewList(l, e);
     ASSERT(Col_ListLength(list) == l);
     listAccess(list);
     for (Col_ListIterFirst(it, list); !Col_ListIterEnd(it); Col_ListIterNext(it)) {
-	size_t index = Col_ListIterIndex(it);
-	Col_Word e = Col_ListIterAt(it);
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) index, "index=%u", index);
+        size_t index = Col_ListIterIndex(it);
+        Col_Word e = Col_ListIterAt(it);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) index, "index=%u", index);
     }
 }
 
@@ -112,14 +113,14 @@ TEST_FIXTURE_SETUP(testSublists, context) {
     Col_PauseGC();
 
     for (i=0; i < l; i++) {
-	e[i] = Col_NewIntWord(i);
+        e[i] = Col_NewIntWord(i);
     }
 
     context->list = Col_NewList(l, e);
 }
 TEST_FIXTURE_TEARDOWN(testSublists, context) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -130,17 +131,17 @@ TEST_CASE(testSmallSublists, testSublists, context) {
     Col_ListIterator it;
 
     for (offset=0; offset < length; offset++) {
-	sublist = Col_Sublist(context->list, offset, offset+sublength-1);
-	ASSERT(Col_ListLength(sublist) == (offset<=length-sublength?sublength:length-offset));
+        sublist = Col_Sublist(context->list, offset, offset+sublength-1);
+        ASSERT(Col_ListLength(sublist) == (offset<=length-sublength?sublength:length-offset));
 
-	listAccess(sublist);
+        listAccess(sublist);
 
-	for (Col_ListIterFirst(it, sublist); !Col_ListIterEnd(it); Col_ListIterNext(it)) {
-	    size_t index = Col_ListIterIndex(it);
-	    Col_Word e = Col_ListIterAt(it);
-	    ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	    ASSERT_MSG(Col_IntWordValue(e) == (int) (index+offset), "index=%u", index);
-	}
+        for (Col_ListIterFirst(it, sublist); !Col_ListIterEnd(it); Col_ListIterNext(it)) {
+            size_t index = Col_ListIterIndex(it);
+            Col_Word e = Col_ListIterAt(it);
+            ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+            ASSERT(Col_IntWordValue(e) == (int) (index+offset), "index=%u", index);
+        }
     }
 }
 TEST_CASE(testLargeSublists, testSublists, context) {
@@ -150,17 +151,17 @@ TEST_CASE(testLargeSublists, testSublists, context) {
     Col_ListIterator it;
 
     for (offset=0; offset < length; offset++) {
-	sublist = Col_Sublist(context->list, offset, offset+sublength-1);
-	ASSERT(Col_ListLength(sublist) == (offset<=length-sublength?sublength:length-offset));
+        sublist = Col_Sublist(context->list, offset, offset+sublength-1);
+        ASSERT(Col_ListLength(sublist) == (offset<=length-sublength?sublength:length-offset));
 
-	listAccess(sublist);
+        listAccess(sublist);
 
-	for (Col_ListIterFirst(it, sublist); !Col_ListIterEnd(it); Col_ListIterNext(it)) {
-	    size_t index = Col_ListIterIndex(it);
-	    Col_Word e = Col_ListIterAt(it);
-	    ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	    ASSERT_MSG(Col_IntWordValue(e) == (int) (index+offset), "index=%u", index);
-	}
+        for (Col_ListIterFirst(it, sublist); !Col_ListIterEnd(it); Col_ListIterNext(it)) {
+            size_t index = Col_ListIterIndex(it);
+            Col_Word e = Col_ListIterAt(it);
+            ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+            ASSERT(Col_IntWordValue(e) == (int) (index+offset), "index=%u", index);
+        }
     }
 }
 TEST_CASE(testNestedSublists, testSublists, context) {
@@ -178,11 +179,11 @@ TEST_CASE(testNestedSublists, testSublists, context) {
     size_t level;
 
     Col_Word list = Col_Sublist(
-	Col_ConcatLists(
-	    Col_Sublist(context->list, 50, half-51),
-	    Col_Sublist(context->list, half+50, length-51)
-	),
-	50, length-251
+        Col_ConcatLists(
+            Col_Sublist(context->list, 50, half-51),
+            Col_Sublist(context->list, half+50, length-51)
+        ),
+        50, length-251
     );
 
     ASSERT(Col_ListLength(list) == length-300);
@@ -191,15 +192,15 @@ TEST_CASE(testNestedSublists, testSublists, context) {
 
     offset=100;
     for (index=0; index < half-150; index++) {
-	Col_Word e = Col_ListAt(list, index);
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) (index+offset), "index=%u", index);
+        Col_Word e = Col_ListAt(list, index);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) (index+offset), "index=%u", index);
     }
     offset=200;
     for (; index < length-300; index++) {
-	Col_Word e = Col_ListAt(list, index);
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) (index+offset), "index=%u", index);
+        Col_Word e = Col_ListAt(list, index);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) (index+offset), "index=%u", index);
     }
 
     /* 
@@ -208,10 +209,10 @@ TEST_CASE(testNestedSublists, testSublists, context) {
 
     list = context->list;
     for (level = 0; level < 5; level++) {
-	list = Col_ConcatLists(list, list);
-	list = Col_Sublist(list, 1, Col_ListLength(list)-2);
+        list = Col_ConcatLists(list, list);
+        list = Col_Sublist(list, 1, Col_ListLength(list)-2);
 
-	listAccess(list);
+        listAccess(list);
     }
 }
 
@@ -246,22 +247,22 @@ TEST_FIXTURE_SETUP(testAcyclicListOps,context) {
     Col_PauseGC();
 
     for (i=0; i < 10; i++) {
-	e[i] = Col_NewIntWord(i);
+        e[i] = Col_NewIntWord(i);
     }
     context->small1 = Col_NewList(10, e);
 
     for (i=0; i < 5; i++) {
-	e[i] = Col_NewIntWord(i+1000);
+        e[i] = Col_NewIntWord(i+1000);
     }
     context->small2 = Col_NewList(5, e);
 
     for (i=0; i < 1000; i++) {
-	e[i] = Col_NewIntWord(i+2000);
+        e[i] = Col_NewIntWord(i+2000);
     }
     context->large1 = Col_NewList(1000, e);
 
     for (i=0; i < 500; i++) {
-	e[i] = Col_NewIntWord(i+3000);
+        e[i] = Col_NewIntWord(i+3000);
     }
     context->large2 = Col_NewList(500, e);
 
@@ -275,7 +276,7 @@ TEST_FIXTURE_SETUP(testAcyclicListOps,context) {
 }
 TEST_FIXTURE_TEARDOWN(testAcyclicListOps,context) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -419,22 +420,22 @@ TEST_FIXTURE_SETUP(testCyclicListOps, context) {
     Col_PauseGC();
 
     for (i=0; i < 10; i++) {
-	e[i] = Col_NewIntWord(i);
+        e[i] = Col_NewIntWord(i);
     }
     context->small1 = Col_ConcatLists(Col_NewList(6, e), Col_CircularList(Col_NewList(4, e+6)));
 
     for (i=0; i < 5; i++) {
-	e[i] = Col_NewIntWord(i+10000);
+        e[i] = Col_NewIntWord(i+10000);
     }
     context->small2 = Col_NewList(5, e);
 
     for (i=0; i < 1000; i++) {
-	e[i] = Col_NewIntWord(i+20000);
+        e[i] = Col_NewIntWord(i+20000);
     }
     context->large1 = Col_ConcatLists(Col_NewList(600, e), Col_CircularList(Col_NewList(400, e+600)));
 
     for (i=0; i < 500; i++) {
-	e[i] = Col_NewIntWord(i+30000);
+        e[i] = Col_NewIntWord(i+30000);
     }
     context->large2 = Col_NewList(500, e);
 
@@ -445,7 +446,7 @@ TEST_FIXTURE_SETUP(testCyclicListOps, context) {
 }
 TEST_FIXTURE_TEARDOWN(testCyclicListOps, context) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -567,7 +568,7 @@ TEST_FIXTURE_SETUP(testListIterators, context) {
     context->length = 10000;
     context->elements = (Col_Word *) malloc(context->length  * sizeof(Col_Word));
     for (i = 0; i < context->length; i++) {
-	context->elements[i] = Col_NewIntWord(i);
+        context->elements[i] = Col_NewIntWord(i);
     }
     //context->elements[16] = Col_NewIntWord(0); // To generate an error.
 
@@ -575,13 +576,13 @@ TEST_FIXTURE_SETUP(testListIterators, context) {
 
     context->sublistOffset = 13;
     context->sublist = Col_Sublist(context->list, 
-	    context->sublistOffset, context->length-41);
+            context->sublistOffset, context->length-41);
 
     // TODO cyclic lists
 }
 TEST_FIXTURE_TEARDOWN(testListIterators, context) {
     if (!TEST_FAIL) {
-	Col_ResumeGC();
+        Col_ResumeGC();
     }
     Col_Cleanup();
 }
@@ -592,35 +593,35 @@ TEST_CASE(testListIteratorDirect, testListIterators, context) {
 
     length = Col_ListLength(context->list);
     for (i = 0; i < length; i++) {
-	Col_Word e = (Col_ListIterBegin(it, context->list, i), Col_ListIterAt(it));
-	size_t index = Col_ListIterIndex(it);
+        Col_Word e = (Col_ListIterBegin(it, context->list, i), Col_ListIterAt(it));
+        size_t index = Col_ListIterIndex(it);
 
-	ASSERT_MSG(index == i, "index=%u", index);
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) index, "index=%u", index);
-	ASSERT_MSG(Col_ListIterAt(it) == Col_ListAt(context->list, index), "index=%u", index);
+        ASSERT(index == i, "index=%u", index);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) index, "index=%u", index);
+        ASSERT(Col_ListIterAt(it) == Col_ListAt(context->list, index), "index=%u", index);
     }
 
     length = Col_ListLength(context->sublist);
     for (i = 0; i < length; i++) {
-	Col_Word e = (Col_ListIterBegin(it, context->sublist, i), Col_ListIterAt(it));
-	size_t index = Col_ListIterIndex(it);
+        Col_Word e = (Col_ListIterBegin(it, context->sublist, i), Col_ListIterAt(it));
+        size_t index = Col_ListIterIndex(it);
 
-	ASSERT_MSG(index == i, "index=%u", index);
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) (index+context->sublistOffset), "index=%u", index);
-	ASSERT_MSG(Col_ListIterAt(it) == Col_ListAt(context->sublist, index), "index=%u", index);
+        ASSERT(index == i, "index=%u", index);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) (index+context->sublistOffset), "index=%u", index);
+        ASSERT(Col_ListIterAt(it) == Col_ListAt(context->sublist, index), "index=%u", index);
     }
 
     length = context->length;
     for (i = 0; i < length; i++) {
-	Col_Word e = (Col_ListIterArray(it, context->length, context->elements), Col_ListIterMoveTo(it, i), Col_ListIterAt(it));
-	size_t index = Col_ListIterIndex(it);
+        Col_Word e = (Col_ListIterArray(it, context->length, context->elements), Col_ListIterMoveTo(it, i), Col_ListIterAt(it));
+        size_t index = Col_ListIterIndex(it);
 
-	ASSERT_MSG(index == i, "index=%u", index);
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) index, "index=%u", index);
-	ASSERT_MSG(Col_ListIterAt(it) == Col_ListAt(context->list, index), "index=%u", index);
+        ASSERT(index == i, "index=%u", index);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) index, "index=%u", index);
+        ASSERT(Col_ListIterAt(it) == Col_ListAt(context->list, index), "index=%u", index);
     }
 }
 
@@ -628,25 +629,25 @@ TEST_CASE(testListIteratorForward, testListIterators, context) {
     Col_ListIterator it;
 
     for (Col_ListIterFirst(it, context->list); 
-	    !Col_ListIterEnd(it); 
-	    Col_ListIterNext(it)) {
-	Col_Word e = Col_ListIterAt(it);
-	size_t index = Col_ListIterIndex(it);
+            !Col_ListIterEnd(it); 
+            Col_ListIterNext(it)) {
+        Col_Word e = Col_ListIterAt(it);
+        size_t index = Col_ListIterIndex(it);
 
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) index, "index=%u", index);
-	ASSERT_MSG(Col_ListIterAt(it) == Col_ListAt(context->list, index), "index=%u", index);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) index, "index=%u", index);
+        ASSERT(Col_ListIterAt(it) == Col_ListAt(context->list, index), "index=%u", index);
     }
 
     for (Col_ListIterFirst(it, context->sublist); 
-	    !Col_ListIterEnd(it); 
-	    Col_ListIterNext(it)) {
-	Col_Word e = Col_ListIterAt(it);
-	size_t index = Col_ListIterIndex(it);
+            !Col_ListIterEnd(it); 
+            Col_ListIterNext(it)) {
+        Col_Word e = Col_ListIterAt(it);
+        size_t index = Col_ListIterIndex(it);
 
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) (index+context->sublistOffset), "index=%u", index);
-	ASSERT_MSG(Col_ListIterAt(it) == Col_ListAt(context->sublist, index), "index=%u", index);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) (index+context->sublistOffset), "index=%u", index);
+        ASSERT(Col_ListIterAt(it) == Col_ListAt(context->sublist, index), "index=%u", index);
     }
 }
 
@@ -654,25 +655,25 @@ TEST_CASE(testListIteratorBackward, testListIterators, context) {
     Col_ListIterator it;
 
     for (Col_ListIterLast(it, context->list); 
-	    !Col_ListIterEnd(it);
-	    Col_ListIterPrevious(it)) {
-	Col_Word e = Col_ListIterAt(it);
-	size_t index = Col_ListIterIndex(it);
+            !Col_ListIterEnd(it);
+            Col_ListIterPrevious(it)) {
+        Col_Word e = Col_ListIterAt(it);
+        size_t index = Col_ListIterIndex(it);
 
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) index, "index=%u", index);
-	ASSERT_MSG(Col_ListIterAt(it) == Col_ListAt(context->list, index), "index=%u", index);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) index, "index=%u", index);
+        ASSERT(Col_ListIterAt(it) == Col_ListAt(context->list, index), "index=%u", index);
     }
 
     for (Col_ListIterLast(it, context->sublist); 
-	    !Col_ListIterEnd(it); 
-	    Col_ListIterPrevious(it)) {
-	Col_Word e = Col_ListIterAt(it);
-	size_t index = Col_ListIterIndex(it);
+            !Col_ListIterEnd(it); 
+            Col_ListIterPrevious(it)) {
+        Col_Word e = Col_ListIterAt(it);
+        size_t index = Col_ListIterIndex(it);
 
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) (index+context->sublistOffset), "index=%u", index);
-	ASSERT_MSG(Col_ListIterAt(it) == Col_ListAt(context->sublist, index), "index=%u", index);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) (index+context->sublistOffset), "index=%u", index);
+        ASSERT(Col_ListIterAt(it) == Col_ListAt(context->sublist, index), "index=%u", index);
     }
 }
 
@@ -682,48 +683,48 @@ TEST_CASE(testListIteratorStride, testListIterators, context) {
 
     /* Forward. */
     for (Col_ListIterFirst(it, context->list); 
-	    !Col_ListIterEnd(it); 
-	    Col_ListIterForward(it, stride)) {
-	Col_Word e = Col_ListIterAt(it);
-	size_t index = Col_ListIterIndex(it);
+            !Col_ListIterEnd(it); 
+            Col_ListIterForward(it, stride)) {
+        Col_Word e = Col_ListIterAt(it);
+        size_t index = Col_ListIterIndex(it);
 
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) index, "index=%u", index);
-	ASSERT_MSG(Col_ListIterAt(it) == Col_ListAt(context->list, index), "index=%u", index);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) index, "index=%u", index);
+        ASSERT(Col_ListIterAt(it) == Col_ListAt(context->list, index), "index=%u", index);
     }
 
     for (Col_ListIterFirst(it, context->sublist); 
-	    !Col_ListIterEnd(it); 
-	    Col_ListIterForward(it, stride)) {
-	Col_Word e = Col_ListIterAt(it);
-	size_t index = Col_ListIterIndex(it);
+            !Col_ListIterEnd(it); 
+            Col_ListIterForward(it, stride)) {
+        Col_Word e = Col_ListIterAt(it);
+        size_t index = Col_ListIterIndex(it);
 
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) (index+context->sublistOffset), "index=%u", index);
-	ASSERT_MSG(Col_ListIterAt(it) == Col_ListAt(context->sublist, index), "index=%u", index);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) (index+context->sublistOffset), "index=%u", index);
+        ASSERT(Col_ListIterAt(it) == Col_ListAt(context->sublist, index), "index=%u", index);
     }
 
     /* Backward. */
     for (Col_ListIterLast(it, context->list); 
-	    !Col_ListIterEnd(it);
-	    Col_ListIterBackward(it, stride)) {
-	Col_Word e = Col_ListIterAt(it);
-	size_t index = Col_ListIterIndex(it);
+            !Col_ListIterEnd(it);
+            Col_ListIterBackward(it, stride)) {
+        Col_Word e = Col_ListIterAt(it);
+        size_t index = Col_ListIterIndex(it);
 
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) index, "index=%u", index);
-	ASSERT_MSG(Col_ListIterAt(it) == Col_ListAt(context->list, index), "index=%u", index);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) index, "index=%u", index);
+        ASSERT(Col_ListIterAt(it) == Col_ListAt(context->list, index), "index=%u", index);
     }
 
     for (Col_ListIterLast(it, context->sublist); 
-	    !Col_ListIterEnd(it); 
-	    Col_ListIterBackward(it, stride)) {
-	Col_Word e = Col_ListIterAt(it);
-	size_t index = Col_ListIterIndex(it);
+            !Col_ListIterEnd(it); 
+            Col_ListIterBackward(it, stride)) {
+        Col_Word e = Col_ListIterAt(it);
+        size_t index = Col_ListIterIndex(it);
 
-	ASSERT_MSG(Col_WordType(e) == COL_INT, "index=%u", index);
-	ASSERT_MSG(Col_IntWordValue(e) == (int) (index+context->sublistOffset), "index=%u", index);
-	ASSERT_MSG(Col_ListIterAt(it) == Col_ListAt(context->sublist, index), "index=%u", index);
+        ASSERT(Col_WordType(e) == COL_INT, "index=%u", index);
+        ASSERT(Col_IntWordValue(e) == (int) (index+context->sublistOffset), "index=%u", index);
+        ASSERT(Col_ListIterAt(it) == Col_ListAt(context->sublist, index), "index=%u", index);
     }
 }
 
@@ -742,10 +743,10 @@ static int traverseListChunks(size_t index, size_t length, size_t number, const 
     ASSERT(number == 1);
     ASSERT(index == info->index);
     for (i = 0; i < length; i++) {
-	Col_Word e1 = Col_ListAt(info->list, info->index+i);
-	Col_Word e2 = (*chunks == COL_LISTCHUNK_VOID ? WORD_NIL : (*chunks)[i]);
+        Col_Word e1 = Col_ListAt(info->list, info->index+i);
+        Col_Word e2 = (*chunks == COL_LISTCHUNK_VOID ? WORD_NIL : (*chunks)[i]);
 
-	ASSERT_MSG(e1 == e2, "index=%u, e1=%u, e2=%u", info->index+i, e1, e2);
+        ASSERT(e1 == e2, "index=%u, e1=%u, e2=%u", info->index+i, e1, e2);
     }
     info->index += length;
     return 0;
@@ -754,12 +755,12 @@ static int traverseListChunksR(size_t index, size_t length, size_t number, const
     TraverseListChunksInfo *info = (TraverseListChunksInfo *) clientData;
     size_t i;
     ASSERT(number == 1);
-    ASSERT_MSG(index == info->index-length+1, "index=%u, info->index-length+1=%u", index, info->index-length+1);
+    ASSERT(index == info->index-length+1, "index=%u, info->index-length+1=%u", index, info->index-length+1);
     for (i = 0; i < length; i++) {
-	Col_Word e1 = Col_ListAt(info->list, info->index-length+1+i);
-	Col_Word e2 = (*chunks == COL_LISTCHUNK_VOID ? WORD_NIL : (*chunks)[i]);
+        Col_Word e1 = Col_ListAt(info->list, info->index-length+1+i);
+        Col_Word e2 = (*chunks == COL_LISTCHUNK_VOID ? WORD_NIL : (*chunks)[i]);
 
-	ASSERT_MSG(e1 == e2, "index=%u, e1=%u, e2=%u", info->index-length+1+i, e1, e2);
+        ASSERT(e1 == e2, "index=%u, e1=%u, e2=%u", info->index-length+1+i, e1, e2);
     }
     info->index -= length;
     return 0;
@@ -777,28 +778,28 @@ static void listAccess(Col_Word list) {
 
    /* Forward. */
     for (looped=0, Col_ListIterFirst(it, list); 
-	    !Col_ListIterEnd(it); 
-	    prev = Col_ListIterIndex(it), looped = Col_ListIterNext(it)) {
-	size_t index = Col_ListIterIndex(it);
-	Col_Word e1 = Col_ListAt(list, index);
-	Col_Word e2 = Col_ListIterAt(it);
+            !Col_ListIterEnd(it); 
+            prev = Col_ListIterIndex(it), looped = Col_ListIterNext(it)) {
+        size_t index = Col_ListIterIndex(it);
+        Col_Word e1 = Col_ListAt(list, index);
+        Col_Word e2 = Col_ListIterAt(it);
 
-	ASSERT_MSG(e1 == e2, "index=%u", index);
+        ASSERT(e1 == e2, "index=%u", index);
 
-	if (looped) {
-	    /* Loop detected. */
-	    ASSERT_MSG(Col_ListLoopLength(list) == prev-index+1, "index=%u, prev=%u", index, prev);
-	    break;
-	}
+        if (looped) {
+            /* Loop detected. */
+            ASSERT(Col_ListLoopLength(list) == prev-index+1, "index=%u, prev=%u", index, prev);
+            break;
+        }
     }
 
     /* Backward. */
     for (Col_ListIterLast(it, list); !Col_ListIterEnd(it); Col_ListIterPrevious(it)) {
-	size_t index = Col_ListIterIndex(it);
-	Col_Word e1 = Col_ListAt(list, index);
-	Col_Word e2 = Col_ListIterAt(it);
+        size_t index = Col_ListIterIndex(it);
+        Col_Word e1 = Col_ListAt(list, index);
+        Col_Word e2 = Col_ListIterAt(it);
 
-	ASSERT_MSG(e1 == e2, "index=%u", index);
+        ASSERT(e1 == e2, "index=%u", index);
     }
 
     /* Chunks. */
@@ -806,18 +807,18 @@ static void listAccess(Col_Word list) {
     info.index = 0;
     size = 0;
     Col_TraverseListChunks(list, info.index, SIZE_MAX, 0, traverseListChunks, 
-	    (Col_ClientData) &info, &size);
-    ASSERT_MSG(info.index == size, "info.index=%u, size=%u", info.index, size);
-    ASSERT_MSG(size == Col_ListLength(list), "size=%u, length=%u", size, Col_ListLength(list));
+            (Col_ClientData) &info, &size);
+    ASSERT(info.index == size, "info.index=%u, size=%u", info.index, size);
+    ASSERT(size == Col_ListLength(list), "size=%u, length=%u", size, Col_ListLength(list));
 
     /* Chunks (reverse). */
     info.list = list;
     info.index = Col_ListLength(list)-1;
     size = 0;
     Col_TraverseListChunks(list, info.index, SIZE_MAX, 1, traverseListChunksR, 
-	    (Col_ClientData) &info, &size);
-    ASSERT_MSG(info.index == (size_t)-1, "info.index=%u", info.index);
-    ASSERT_MSG(size == Col_ListLength(list), "size=%u, length=%u", size, Col_ListLength(list));
+            (Col_ClientData) &info, &size);
+    ASSERT(info.index == (size_t)-1, "info.index=%u", info.index);
+    ASSERT(size == Col_ListLength(list), "size=%u, length=%u", size, Col_ListLength(list));
 }
 static void listInsert(Col_Word into, Col_Word list) {
      /*
@@ -835,98 +836,98 @@ static void listInsert(Col_Word into, Col_Word list) {
     size_t prev=0;
 
     for (offset=0; offset < 3; offset++) {
-	for (i=0; i < sizeof(indices)/sizeof(*indices); i++) {
-	    size_t where = indices[i] + offset*length;
-	    size_t whereReal;
+        for (i=0; i < sizeof(indices)/sizeof(*indices); i++) {
+            size_t where = indices[i] + offset*length;
+            size_t whereReal;
 
-	    /* Immutable. */
-	    iResult = Col_ListInsert(into, where, list);
-	    listAccess(iResult);
+            /* Immutable. */
+            iResult = Col_ListInsert(into, where, list);
+            listAccess(iResult);
 
-	    /* Mutable. */
-	    mResult = Col_NewMList(); Col_MListInsert(mResult, 0, into); 
-	    Col_MListInsert(mResult, where, list);
-	    listAccess(mResult);
+            /* Mutable. */
+            mResult = Col_NewMList(); Col_MListInsert(mResult, 0, into); 
+            Col_MListInsert(mResult, where, list);
+            listAccess(mResult);
 
-	    /*
-	     * Compare mutable and immutable results.
-	     */
+            /*
+             * Compare mutable and immutable results.
+             */
 
-	    listsEqual(iResult, mResult);
+            listsEqual(iResult, mResult);
 
-	    /*
-	     * Compare immutable result with expected result.
-	     */
+            /*
+             * Compare immutable result with expected result.
+             */
 
-	    /* Part before insertion point. */
-	    whereReal = where;
-	    if (loop && where > length-loop) {
-		/* Adjust insertion point so that it lies within loop. */
-		whereReal = (where - (length-loop)) % loop + (length-loop);
-		if (whereReal == length-loop) whereReal = length;
-	    }
-	    for (looped=0, Col_ListIterFirst(itResult, iResult), Col_ListIterFirst(itInto, into);
-		    !Col_ListIterEnd(itInto) && Col_ListIterIndex(itInto) < whereReal; 
-		    prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itInto)) {
-		size_t index = Col_ListIterIndex(itResult);
-		Col_Word e1 = Col_ListIterAt(itResult);
-		Col_Word e2 = Col_ListIterAt(itInto);
+            /* Part before insertion point. */
+            whereReal = where;
+            if (loop && where > length-loop) {
+                /* Adjust insertion point so that it lies within loop. */
+                whereReal = (where - (length-loop)) % loop + (length-loop);
+                if (whereReal == length-loop) whereReal = length;
+            }
+            for (looped=0, Col_ListIterFirst(itResult, iResult), Col_ListIterFirst(itInto, into);
+                    !Col_ListIterEnd(itInto) && Col_ListIterIndex(itInto) < whereReal; 
+                    prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itInto)) {
+                size_t index = Col_ListIterIndex(itResult);
+                Col_Word e1 = Col_ListIterAt(itResult);
+                Col_Word e2 = Col_ListIterAt(itInto);
 
-		ASSERT_MSG(e1 == e2, "where=%u, index=%u", where, index);
+                ASSERT(e1 == e2, "where=%u, index=%u", where, index);
 
-		/* Loop forbidden: inserted list is before loop end. */
-		ASSERT_MSG(!looped, "where=%u, index=%u, prev=%u", where, index, prev);
+                /* Loop forbidden: inserted list is before loop end. */
+                ASSERT(!looped, "where=%u, index=%u, prev=%u", where, index, prev);
 
-		if (loop && Col_ListIterIndex(itInto)+1 == whereReal && whereReal == length) {
-		    /* Ensure that loop ends next. */
-		    whereReal = length-loop;
-		}
-	    }
+                if (loop && Col_ListIterIndex(itInto)+1 == whereReal && whereReal == length) {
+                    /* Ensure that loop ends next. */
+                    whereReal = length-loop;
+                }
+            }
 
-	    /* Inserted list. */
-	    for (Col_ListIterFirst(itList, list);
-		    !Col_ListIterEnd(itList); 
-		    prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itList)) {
-		size_t index = Col_ListIterIndex(itResult);
-		Col_Word e1 = Col_ListIterAt(itResult);
-		Col_Word e2 = Col_ListIterAt(itList);
+            /* Inserted list. */
+            for (Col_ListIterFirst(itList, list);
+                    !Col_ListIterEnd(itList); 
+                    prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itList)) {
+                size_t index = Col_ListIterIndex(itResult);
+                Col_Word e1 = Col_ListIterAt(itResult);
+                Col_Word e2 = Col_ListIterAt(itList);
 
-		ASSERT_MSG(e1 == e2, "where=%u, index=%u", where, index);
+                ASSERT(e1 == e2, "where=%u, index=%u", where, index);
 
-		if (looped) {
-		    /* Loop detected, inserted list must be cyclic. */
-		    ASSERT_MSG(Col_ListLoopLength(list) == prev-index+1, "where=%u, index=%u, prev=%u", where, index, prev);
-		    break;
-		}
-	    }
-	    if (!Col_ListIterEnd(itList)) {
-		/* Inserted list was cyclic. */
-		ASSERT_MSG(looped, "where=%u", where);
-		ASSERT_MSG(Col_ListLoopLength(list), "where=%u", where);
-		continue;
-	    }
+                if (looped) {
+                    /* Loop detected, inserted list must be cyclic. */
+                    ASSERT(Col_ListLoopLength(list) == prev-index+1, "where=%u, index=%u, prev=%u", where, index, prev);
+                    break;
+                }
+            }
+            if (!Col_ListIterEnd(itList)) {
+                /* Inserted list was cyclic. */
+                ASSERT(looped, "where=%u", where);
+                ASSERT(Col_ListLoopLength(list), "where=%u", where);
+                continue;
+            }
 
-	    /* Part after insertion point. */
-	    for (;
-		    !Col_ListIterEnd(itInto); 
-		    prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itInto)) {
-		size_t index = Col_ListIterIndex(itResult);
-		Col_Word e1 = Col_ListIterAt(itResult);
-		Col_Word e2 = Col_ListIterAt(itInto);
+            /* Part after insertion point. */
+            for (;
+                    !Col_ListIterEnd(itInto); 
+                    prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itInto)) {
+                size_t index = Col_ListIterIndex(itResult);
+                Col_Word e1 = Col_ListIterAt(itResult);
+                Col_Word e2 = Col_ListIterAt(itInto);
 
-		ASSERT_MSG(e1 == e2, "where=%u, index=%u", where, index);
+                ASSERT(e1 == e2, "where=%u, index=%u", where, index);
 
-		if (looped) {
-		    /* Loop detected. */
-		    ASSERT_MSG(Col_ListLoopLength(iResult) == prev-index+1, "where=%u, index=%u, prev=%u", where, index, prev);
-		    break;
-		}
-	    }
-	    if (!Col_ListIterEnd(itResult)) {
-		ASSERT_MSG(looped, "where=%u", where);
-		ASSERT_MSG(Col_ListLoopLength(iResult), "where=%u", where);
-	    }
-	}
+                if (looped) {
+                    /* Loop detected. */
+                    ASSERT(Col_ListLoopLength(iResult) == prev-index+1, "where=%u, index=%u, prev=%u", where, index, prev);
+                    break;
+                }
+            }
+            if (!Col_ListIterEnd(itResult)) {
+                ASSERT(looped, "where=%u", where);
+                ASSERT(Col_ListLoopLength(iResult), "where=%u", where);
+            }
+        }
     }
 }
 static void listRemove(Col_Word list) {
@@ -945,86 +946,86 @@ static void listRemove(Col_Word list) {
     size_t prev=0;
 
     for (offset1=0; offset1 < 3; offset1++) {
-	for (i1=0; i1 < sizeof(indices)/sizeof(*indices); i1++) {
-	    size_t last = indices[i1] + offset1*length;
+        for (i1=0; i1 < sizeof(indices)/sizeof(*indices); i1++) {
+            size_t last = indices[i1] + offset1*length;
 
-	    for (offset2=0; offset2 < 3; offset2++) {
-		for (i2=0; i2 < sizeof(indices)/sizeof(*indices); i2++) {
-		    size_t first = indices[i2] + offset2*length;
-		    size_t firstReal;
+            for (offset2=0; offset2 < 3; offset2++) {
+                for (i2=0; i2 < sizeof(indices)/sizeof(*indices); i2++) {
+                    size_t first = indices[i2] + offset2*length;
+                    size_t firstReal;
 
-		    if (first > last) break;
+                    if (first > last) break;
 
-		    /* Immutable. */
-		    iResult = Col_ListRemove(list, first, last);
-		    listAccess(iResult);
+                    /* Immutable. */
+                    iResult = Col_ListRemove(list, first, last);
+                    listAccess(iResult);
 
-		    /* Mutable. */
-		    mResult = Col_NewMList(); Col_MListInsert(mResult, 0, list); 
-		    Col_MListRemove(mResult, first, last);
-		    listAccess(mResult);
+                    /* Mutable. */
+                    mResult = Col_NewMList(); Col_MListInsert(mResult, 0, list); 
+                    Col_MListRemove(mResult, first, last);
+                    listAccess(mResult);
 
-		    /*
-		     * Compare mutable and immutable results.
-		     */
+                    /*
+                     * Compare mutable and immutable results.
+                     */
 
-		    listsEqual(iResult, mResult);
+                    listsEqual(iResult, mResult);
 
-		    /*
-		     * Compare immutable result with expected result.
-		     */
+                    /*
+                     * Compare immutable result with expected result.
+                     */
 
-		    /* Part before deleted section.*/
-		    firstReal = first;
-		    if (loop && first > length-loop) {
-			/* Adjust first index so that it lies within loop. */
-			firstReal = (first - (length-loop)) % loop + (length-loop);
-			if (firstReal == length-loop) firstReal = length;
-		    }
-		    for (looped=0, Col_ListIterFirst(itResult, iResult), Col_ListIterFirst(itList, list);
-			    !Col_ListIterEnd(itList) && Col_ListIterIndex(itList) < firstReal; 
-			    prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itList)) {
-			size_t index = Col_ListIterIndex(itResult);
-			Col_Word e1 = Col_ListIterAt(itResult);
-			Col_Word e2 = Col_ListIterAt(itList);
+                    /* Part before deleted section.*/
+                    firstReal = first;
+                    if (loop && first > length-loop) {
+                        /* Adjust first index so that it lies within loop. */
+                        firstReal = (first - (length-loop)) % loop + (length-loop);
+                        if (firstReal == length-loop) firstReal = length;
+                    }
+                    for (looped=0, Col_ListIterFirst(itResult, iResult), Col_ListIterFirst(itList, list);
+                            !Col_ListIterEnd(itList) && Col_ListIterIndex(itList) < firstReal; 
+                            prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itList)) {
+                        size_t index = Col_ListIterIndex(itResult);
+                        Col_Word e1 = Col_ListIterAt(itResult);
+                        Col_Word e2 = Col_ListIterAt(itList);
 
-			ASSERT_MSG(e1 == e2, "first=%u, last=%u, index=%u", first, last, index);
+                        ASSERT(e1 == e2, "first=%u, last=%u, index=%u", first, last, index);
 
-			/* Loop forbidden: first index is before loop end. */
-			ASSERT_MSG(!looped, "first=%u, last=%u, index=%u, prev=%u", first, last, index, prev);
+                        /* Loop forbidden: first index is before loop end. */
+                        ASSERT(!looped, "first=%u, last=%u, index=%u, prev=%u", first, last, index, prev);
 
-			if (loop && Col_ListIterIndex(itList)+1 == firstReal && firstReal == length) {
-			    /* Ensure that loop ends next. */
-			    firstReal = length-loop;
-			}
-		    }
+                        if (loop && Col_ListIterIndex(itList)+1 == firstReal && firstReal == length) {
+                            /* Ensure that loop ends next. */
+                            firstReal = length-loop;
+                        }
+                    }
 
-		    /* Part after deleted section.*/
-		    if (last < length) {
-			Col_ListIterMoveTo(itList, last+1);
-			for (;
-				!Col_ListIterEnd(itList); 
-				prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itList)) {
-			    size_t index = Col_ListIterIndex(itResult);
-			    Col_Word e1 = Col_ListIterAt(itResult);
-			    Col_Word e2 = Col_ListIterAt(itList);
+                    /* Part after deleted section.*/
+                    if (last < length) {
+                        Col_ListIterMoveTo(itList, last+1);
+                        for (;
+                                !Col_ListIterEnd(itList); 
+                                prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itList)) {
+                            size_t index = Col_ListIterIndex(itResult);
+                            Col_Word e1 = Col_ListIterAt(itResult);
+                            Col_Word e2 = Col_ListIterAt(itList);
 
-			    ASSERT_MSG(e1 == e2, "first=%u, last=%u, index=%u", first, last, index);
+                            ASSERT(e1 == e2, "first=%u, last=%u, index=%u", first, last, index);
 
-			    if (looped) {
-				/* Loop detected. */
-				ASSERT_MSG(Col_ListLoopLength(iResult) == prev-index+1, "first=%u, last=%u, index=%u, prev=%u", first, last, index, prev);
-				break;
-			    }
-			}
-			if (!Col_ListIterEnd(itResult)) {
-			    ASSERT_MSG(looped, "where=%u", "first=%u, last=%u", first, last);
-			    ASSERT_MSG(Col_ListLoopLength(iResult), "first=%u, last=%u", first, last);
-			}
-		    }
-		}
-	    }
-	}
+                            if (looped) {
+                                /* Loop detected. */
+                                ASSERT(Col_ListLoopLength(iResult) == prev-index+1, "first=%u, last=%u, index=%u, prev=%u", first, last, index, prev);
+                                break;
+                            }
+                        }
+                        if (!Col_ListIterEnd(itResult)) {
+                            ASSERT(looped, "where=%u", "first=%u, last=%u", first, last);
+                            ASSERT(Col_ListLoopLength(iResult), "first=%u, last=%u", first, last);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 static void listReplace(Col_Word list, Col_Word with) {
@@ -1043,109 +1044,109 @@ static void listReplace(Col_Word list, Col_Word with) {
     size_t prev=0;
 
     for (offset1=0; offset1 < 3; offset1++) {
-	for (i1=0; i1 < sizeof(indices)/sizeof(*indices); i1++) {
-	    size_t last = indices[i1] + offset1*length;
+        for (i1=0; i1 < sizeof(indices)/sizeof(*indices); i1++) {
+            size_t last = indices[i1] + offset1*length;
 
-	    for (offset2=0; offset2 < 3; offset2++) {
-		for (i2=0; i2 < sizeof(indices)/sizeof(*indices); i2++) {
-		    size_t first = indices[i2] + offset2*length;
-		    size_t firstReal;
+            for (offset2=0; offset2 < 3; offset2++) {
+                for (i2=0; i2 < sizeof(indices)/sizeof(*indices); i2++) {
+                    size_t first = indices[i2] + offset2*length;
+                    size_t firstReal;
 
-		    if (first > last) break;
+                    if (first > last) break;
 
-		    /* Immutable. */
-		    iResult = Col_ListReplace(list, first, last, with);
-		    listAccess(iResult);
+                    /* Immutable. */
+                    iResult = Col_ListReplace(list, first, last, with);
+                    listAccess(iResult);
 
-		    /* Mutable. */
-		    mResult = Col_NewMList(); Col_MListInsert(mResult, 0, list); 
-		    Col_MListReplace(mResult, first, last, with);
-		    listAccess(mResult);
+                    /* Mutable. */
+                    mResult = Col_NewMList(); Col_MListInsert(mResult, 0, list); 
+                    Col_MListReplace(mResult, first, last, with);
+                    listAccess(mResult);
 
-		    /*
-		     * Compare mutable and immutable results.
-		     */
+                    /*
+                     * Compare mutable and immutable results.
+                     */
 
-		    listsEqual(iResult, mResult);
+                    listsEqual(iResult, mResult);
 
-		    /*
-		     * Compare immutable result with expected result.
-		     */
+                    /*
+                     * Compare immutable result with expected result.
+                     */
 
-		    /* Part before replaced section.*/
-		    firstReal = first;
-		    if (loop && first > length-loop) {
-			/* Adjust first index so that it lies within loop. */
-			firstReal = (first - (length-loop)) % loop + (length-loop);
-			if (firstReal == length-loop) firstReal = length;
-		    }
-		    for (looped=0, Col_ListIterFirst(itResult, iResult), Col_ListIterFirst(itList, list);
-			    !Col_ListIterEnd(itList) && Col_ListIterIndex(itList) < firstReal; 
-			    prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itList)) {
-			size_t index = Col_ListIterIndex(itResult);
-			Col_Word e1 = Col_ListIterAt(itResult);
-			Col_Word e2 = Col_ListIterAt(itList);
+                    /* Part before replaced section.*/
+                    firstReal = first;
+                    if (loop && first > length-loop) {
+                        /* Adjust first index so that it lies within loop. */
+                        firstReal = (first - (length-loop)) % loop + (length-loop);
+                        if (firstReal == length-loop) firstReal = length;
+                    }
+                    for (looped=0, Col_ListIterFirst(itResult, iResult), Col_ListIterFirst(itList, list);
+                            !Col_ListIterEnd(itList) && Col_ListIterIndex(itList) < firstReal; 
+                            prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itList)) {
+                        size_t index = Col_ListIterIndex(itResult);
+                        Col_Word e1 = Col_ListIterAt(itResult);
+                        Col_Word e2 = Col_ListIterAt(itList);
 
-			ASSERT_MSG(e1 == e2, "foo first=%u, last=%u, index=%u", first, last, index);
+                        ASSERT(e1 == e2, "foo first=%u, last=%u, index=%u", first, last, index);
 
-			/* Loop forbidden: first index is before loop end. */
-			ASSERT_MSG(!looped, "first=%u, last=%u, index=%u, prev=%u", first, last, index, prev);
+                        /* Loop forbidden: first index is before loop end. */
+                        ASSERT(!looped, "first=%u, last=%u, index=%u, prev=%u", first, last, index, prev);
 
-			if (loop && Col_ListIterIndex(itList)+1 == firstReal && firstReal == length) {
-			    /* Ensure that loop ends next. */
-			    firstReal = length-loop;
-			}
-		    }
+                        if (loop && Col_ListIterIndex(itList)+1 == firstReal && firstReal == length) {
+                            /* Ensure that loop ends next. */
+                            firstReal = length-loop;
+                        }
+                    }
 
-		    /* Replaced section. */
-		    for (Col_ListIterFirst(itWith, with);
-			    !Col_ListIterEnd(itWith); 
-			    prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itWith)) {
-			size_t index = Col_ListIterIndex(itResult);
-			Col_Word e1 = Col_ListIterAt(itResult);
-			Col_Word e2 = Col_ListIterAt(itWith);
+                    /* Replaced section. */
+                    for (Col_ListIterFirst(itWith, with);
+                            !Col_ListIterEnd(itWith); 
+                            prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itWith)) {
+                        size_t index = Col_ListIterIndex(itResult);
+                        Col_Word e1 = Col_ListIterAt(itResult);
+                        Col_Word e2 = Col_ListIterAt(itWith);
 
-			ASSERT_MSG(e1 == e2, "first=%u, last=%u, index=%u", first, last, index);
+                        ASSERT(e1 == e2, "first=%u, last=%u, index=%u", first, last, index);
 
-			if (looped) {
-			    /* Loop detected, inserted list must be cyclic. */
-			    ASSERT_MSG(Col_ListLoopLength(with) == prev-index+1, "first=%u, last=%u, index=%u, prev=%u", first, last, index, prev);
-			    break;
-			}
-		    }
-		    if (!Col_ListIterEnd(itWith)) {
-			/* Inserted list was cyclic. */
-			ASSERT_MSG(looped, "first=%u, last=%u", first, last);
-			ASSERT_MSG(Col_ListLoopLength(with), "first=%u, last=%u", first, last);
-			continue;
-		    }
+                        if (looped) {
+                            /* Loop detected, inserted list must be cyclic. */
+                            ASSERT(Col_ListLoopLength(with) == prev-index+1, "first=%u, last=%u, index=%u, prev=%u", first, last, index, prev);
+                            break;
+                        }
+                    }
+                    if (!Col_ListIterEnd(itWith)) {
+                        /* Inserted list was cyclic. */
+                        ASSERT(looped, "first=%u, last=%u", first, last);
+                        ASSERT(Col_ListLoopLength(with), "first=%u, last=%u", first, last);
+                        continue;
+                    }
 
-		    /* Part after replaced section.*/
-		    if (last < length) {
-			Col_ListIterMoveTo(itList, last+1);
-			for (;
-				!Col_ListIterEnd(itList); 
-				prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itList)) {
-			    size_t index = Col_ListIterIndex(itResult);
-			    Col_Word e1 = Col_ListIterAt(itResult);
-			    Col_Word e2 = Col_ListIterAt(itList);
+                    /* Part after replaced section.*/
+                    if (last < length) {
+                        Col_ListIterMoveTo(itList, last+1);
+                        for (;
+                                !Col_ListIterEnd(itList); 
+                                prev = Col_ListIterIndex(itResult), looped = Col_ListIterNext(itResult), Col_ListIterNext(itList)) {
+                            size_t index = Col_ListIterIndex(itResult);
+                            Col_Word e1 = Col_ListIterAt(itResult);
+                            Col_Word e2 = Col_ListIterAt(itList);
 
-			    ASSERT_MSG(e1 == e2, "first=%u, last=%u, index=%u", first, last, index);
+                            ASSERT(e1 == e2, "first=%u, last=%u, index=%u", first, last, index);
 
-			    if (looped) {
-				/* Loop detected. */
-				ASSERT_MSG(Col_ListLoopLength(iResult) == prev-index+1, "first=%u, last=%u, index=%u, prev=%u", first, last, index, prev);
-				break;
-			    }
-			}
-			if (!Col_ListIterEnd(itResult)) {
-			    ASSERT_MSG(looped, "first=%u, last=%u", first, last);
-			    ASSERT_MSG(Col_ListLoopLength(iResult), "first=%u, last=%u", first, last);
-			}
-		    }
-		}
-	    }
-	}
+                            if (looped) {
+                                /* Loop detected. */
+                                ASSERT(Col_ListLoopLength(iResult) == prev-index+1, "first=%u, last=%u, index=%u, prev=%u", first, last, index, prev);
+                                break;
+                            }
+                        }
+                        if (!Col_ListIterEnd(itResult)) {
+                            ASSERT(looped, "first=%u, last=%u", first, last);
+                            ASSERT(Col_ListLoopLength(iResult), "first=%u, last=%u", first, last);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1155,10 +1156,10 @@ static int compareListChunks(size_t index, size_t length, size_t number, const C
     ASSERT(chunks[0]);
     ASSERT(chunks[1]);
     for (i = 0; i < length; i++) {
-	Col_Word e1 = (chunks[0] == COL_LISTCHUNK_VOID ? WORD_NIL : chunks[0][i]);
-	Col_Word e2 = (chunks[1] == COL_LISTCHUNK_VOID ? WORD_NIL : chunks[1][i]);
+        Col_Word e1 = (chunks[0] == COL_LISTCHUNK_VOID ? WORD_NIL : chunks[0][i]);
+        Col_Word e2 = (chunks[1] == COL_LISTCHUNK_VOID ? WORD_NIL : chunks[1][i]);
 
-	ASSERT_MSG(e1 == e2, "index=%u", index+i);
+        ASSERT(e1 == e2, "index=%u", index+i);
     }
     return 0;
 }
@@ -1172,35 +1173,35 @@ static void listsEqual(Col_Word list1, Col_Word list2) {
 
     /* Iterators. */
     for (looped=0, Col_ListIterFirst(it1, list1), Col_ListIterFirst(it2, list2);
-	    !Col_ListIterEnd(it1); 
-	    prev = Col_ListIterIndex(it1), looped = Col_ListIterNext(it1), Col_ListIterNext(it2)) {
-	size_t index = Col_ListIterIndex(it1);
-	Col_Word e1 = Col_ListIterAt(it1);
-	Col_Word e2 = Col_ListIterAt(it2);
+            !Col_ListIterEnd(it1); 
+            prev = Col_ListIterIndex(it1), looped = Col_ListIterNext(it1), Col_ListIterNext(it2)) {
+        size_t index = Col_ListIterIndex(it1);
+        Col_Word e1 = Col_ListIterAt(it1);
+        Col_Word e2 = Col_ListIterAt(it2);
 
-	ASSERT_MSG(index == Col_ListIterIndex(it2), "index=%u", index);
-	ASSERT_MSG(e1 == e2, "index=%u", index);
+        ASSERT(index == Col_ListIterIndex(it2), "index=%u", index);
+        ASSERT(e1 == e2, "index=%u", index);
 
-	if (looped) {
-	    /* Loop detected. */
-	    ASSERT_MSG(Col_ListLoopLength(list1) == prev-index+1, "index=%u, prev=%u", index, prev);
-	    ASSERT_MSG(Col_ListLoopLength(list2) == prev-index+1, "index=%u, prev=%u", index, prev);
-	    break;
-	}
+        if (looped) {
+            /* Loop detected. */
+            ASSERT(Col_ListLoopLength(list1) == prev-index+1, "index=%u, prev=%u", index, prev);
+            ASSERT(Col_ListLoopLength(list2) == prev-index+1, "index=%u, prev=%u", index, prev);
+            break;
+        }
     }
     if (Col_ListIterEnd(it1)) {
-	ASSERT(!looped);
-	ASSERT(Col_ListIterEnd(it2));
+        ASSERT(!looped);
+        ASSERT(Col_ListIterEnd(it2));
     } else {
-	ASSERT(looped);
-	ASSERT(!Col_ListIterEnd(it2));
+        ASSERT(looped);
+        ASSERT(!Col_ListIterEnd(it2));
     }
 
     /* Chunks. */
     {
-	Col_Word lists[] = {list1, list2};
-	size_t length = 0;
-	Col_TraverseListChunksN(2, lists, 0, SIZE_MAX, compareListChunks, NULL, &length);
-	ASSERT(length == Col_ListLength(list1));
+        Col_Word lists[] = {list1, list2};
+        size_t length = 0;
+        Col_TraverseListChunksN(2, lists, 0, SIZE_MAX, compareListChunks, NULL, &length);
+        ASSERT(length == Col_ListLength(list1));
     }
 }
