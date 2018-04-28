@@ -17,7 +17,7 @@
 /**
  * Signature of test functions.
  * 
- * @param Name of test to execute, on NULL. Useful with test suites.
+ * @param name  Name of test to execute, on NULL. Useful with test suites.
  * 
  * @return Number of failed tests.
  * 
@@ -25,6 +25,27 @@
  * @see TEST_CASE
  */
 typedef int (TestProc) (const char * name);
+
+/**
+ * Function signature of test traversal proc.
+ * 
+ * @param name  Name of traversed test.
+ * @param nb    Number of subtests.
+ * 
+ * @see TEST_TRAVERSE
+ */
+typedef void (TestTraverseProc)(const char *name, int nb);
+
+/**
+ * Traverse a test hierarchy.
+ * 
+ * @param _testName     Name of the traversed test.
+ * @param _proc         Test traversal proc.
+ * 
+ * @see TestTraverseProc
+ */
+#define TEST_TRAVERSE(_testName, _proc) \
+    _testName##_traverse(_proc)
 
 /**
  * Function signature of test failure log handlers.
@@ -113,9 +134,10 @@ static void test_assertFailed(TestFailureLoggerProc *proc, const char *file,
  * @see TEST_SUITE
  */
 typedef struct TestDescr {
-    const char * name;              /*!< Test name. */
-    int (*test)(const char *);      /*!< Pointer to test function. */
-    int (*testCaseRunner)(void);    /*!< Pointer to test runner. */
+    const char * name;                          /*!< Test name. */
+    int (*test)(const char *);                  /*!< Test function. */
+    int (*testCaseRunner)(void);                /*!< Test runner. */
+    void (*traverse)(TestTraverseProc *proc);   /*!< Test traversal. */
 } TestDescr;
 
 /** @internal
@@ -124,7 +146,7 @@ typedef struct TestDescr {
  * @see TEST_SUITE
  */
 #define TEST_SUITE_DECLARE_TEST_CASE(_testName) \
-    {COL_STRINGIZE(_testName), _testName, _testName##_testCaseRunner},
+    {COL_STRINGIZE(_testName), _testName, _testName##_testCaseRunner, _testName##_traverse},
 
 /** @internal
  * Utility to declare a test case in a suite.
@@ -133,7 +155,8 @@ typedef struct TestDescr {
  */
 #define TEST_SUITE_DECLARE_TEST(_testName) \
     int _testName(const char *); \
-    int _testName##_testCaseRunner();
+    int _testName##_testCaseRunner(void); \
+    void _testName##_traverse(TestTraverseProc *); \
 
 /**
  * Test fixture context declaration.
@@ -451,13 +474,21 @@ static void test_afterSubtest(const char *suiteName, int nb, int index,
     static TestDescr _suiteName##_tests[] = { \
         COL_FOR_EACH(TEST_SUITE_DECLARE_TEST_CASE,__VA_ARGS__) \
         {NULL, NULL, NULL}}; \
-    int _suiteName##_testCaseRunner() { \
-        TestDescr * test=_suiteName##_tests; \
+    void _suiteName##_traverse(TestTraverseProc *proc) { \
         const int nb=sizeof(_suiteName##_tests)/sizeof(*_suiteName##_tests)-1; \
-        const int index=(int) (test - _suiteName##_tests); \
+        TestDescr * test=_suiteName##_tests; \
+        proc(COL_STRINGIZE(_suiteName), nb); \
+        for (; test->name; test++) { \
+            test->traverse(proc); \
+        } \
+    } \
+    int _suiteName##_testCaseRunner() { \
+        const int nb=sizeof(_suiteName##_tests)/sizeof(*_suiteName##_tests)-1; \
+        TestDescr * test=_suiteName##_tests; \
         int fail=0; \
         TEST_SUITE_ENTER(COL_STRINGIZE(_suiteName), nb); \
         for (; test->name; test++) { \
+            const int index=(int) (test - _suiteName##_tests); \
             int sfail=0; \
             TEST_SUITE_BEFORE_SUBTEST(COL_STRINGIZE(_suiteName), nb, index, \
                 test->name, fail); \
@@ -565,6 +596,9 @@ static void test_leaveTestCase(const char *testName, int fail) {}
 
 #define TEST_CASE_DECLARE(_testName) \
     int _testName##_testCaseRunner(void); \
+    void _testName##_traverse(TestTraverseProc *proc) { \
+        proc(COL_STRINGIZE(_testName), 0); \
+    } \
     int _testName(const char *name) { \
         int fail=0; \
         if (!name || strcmp(name, COL_STRINGIZE(_testName)) == 0) { \

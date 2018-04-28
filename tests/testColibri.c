@@ -87,7 +87,13 @@ void leaveTestCase(const char *testName, int fail) {
     fflush(stdout);
 }
 
-
+/* Test traversal procs used to list tests in suite. */
+void printTestCase(const char *name, int nb) {
+    if (nb == 0) printf("%s\n", name);
+}
+void printTestName(const char *name, int nb) {
+    printf("%s\n", name);
+}
 
 TEST_SUITE(testColibri, 
     testImmediateWords, testRopes, testLists, testMaps, testStrBufs
@@ -102,10 +108,17 @@ int main(int argc, char* argv[]) {
     printf("Hit return...\n");
     getc(stdin);
 
-    /* Only execute tests given as command line arguments. */
     if (argc <= 1) {
+        /* Execute all tests. */
         fail = testColibri(NULL);
+    } else if (strcmp(argv[1], "-l") == 0 || strcmp(argv[1], "--list") == 0) {
+        /* List test cases. */
+        TEST_TRAVERSE(testColibri, printTestCase);
+    } else if (strcmp(argv[1], "-a") == 0 || strcmp(argv[1], "--list-all") == 0) {
+        /* List all tests. */
+        TEST_TRAVERSE(testColibri, printTestName);
     } else {
+        /* Only execute tests given as command line arguments. */
         int i;
         for (i=1; i < argc; i++) {
             char *name = argv[i];
