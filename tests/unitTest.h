@@ -136,7 +136,6 @@ static void test_assertFailed(TestFailureLoggerProc *proc, const char *file,
 typedef struct TestDescr {
     const char * name;                          /*!< Test name. */
     int (*test)(const char *);                  /*!< Test function. */
-    int (*testCaseRunner)(void);                /*!< Test runner. */
     void (*traverse)(TestTraverseProc *proc);   /*!< Test traversal. */
 } TestDescr;
 
@@ -146,7 +145,7 @@ typedef struct TestDescr {
  * @see TEST_SUITE
  */
 #define TEST_SUITE_DECLARE_TEST_CASE(_testName) \
-    {COL_STRINGIZE(_testName), _testName, _testName##_testCaseRunner, _testName##_traverse},
+    {COL_STRINGIZE(_testName), _testName, _testName##_traverse},
 
 /** @internal
  * Utility to declare a test case in a suite.
@@ -492,7 +491,7 @@ static void test_afterSubtest(const char *suiteName, int nb, int index,
             int sfail=0; \
             TEST_SUITE_BEFORE_SUBTEST(COL_STRINGIZE(_suiteName), nb, index, \
                 test->name, fail); \
-            sfail = test->testCaseRunner(); \
+            sfail = test->test(NULL); \
             fail += sfail; \
             TEST_SUITE_AFTER_SUBTEST(COL_STRINGIZE(_suiteName), nb, index, \
                 test->name, fail, sfail); \
