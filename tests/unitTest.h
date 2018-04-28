@@ -154,7 +154,6 @@ typedef struct TestDescr {
  */
 #define TEST_SUITE_DECLARE_TEST(_testName) \
     int _testName(const char *); \
-    int _testName##_testCaseRunner(void); \
     void _testName##_traverse(TestTraverseProc *); \
 
 /**
@@ -299,7 +298,6 @@ typedef struct TestDescr {
  * @see TEST_FIXTURE_CONTEXT
  * @see TEST_FIXTURE_SETUP
  */
-// TODO rename TEST_FAIL to TEST_FAILED / TEST_FAILURE?
 #if defined(COL_PARENS)
 #   define TEST_FIXTURE_TEARDOWN(...) \
         COL_CONCATENATE(TEST_FIXTURE_TEARDOWN_,COL_ARGCOUNT(__VA_ARGS__)) COL_PARENS(__VA_ARGS__)
@@ -657,7 +655,7 @@ static void test_leaveTestCase(const char *testName, int fail) {}
     static void _testName##_testCase(struct _fixtureName##_Context * _context)
 
 /**
- * Throws an error if the given value is false.
+ * Hard assertion, throws an error if the given value is false.
  * 
  * @param x     Value to test. Evaluated once, so it can be an expression with 
  *              side effects.
@@ -667,14 +665,36 @@ static void test_leaveTestCase(const char *testName, int fail) {}
  * @note *msg* and following arguments arguments are suitable arguments to 
  * printf().
  * 
- * @see test_failure TODO
- * @see ASSERT_MSG
+ * @see TEST_FAILURE_LOGGER
+ * @see TEST_ABORT
+ * @see VERIFY
  */
 #define ASSERT(x, /* msg, */ ...) \
     _ASSERT(x, #x, __VA_ARGS__)
 
 #define _ASSERT(x, ...) \
     {if (!(x)) { test_assertFailed(TEST_FAILURE_LOGGER, __FILE__, __LINE__, \
-        "ASSERTION", COL_ARGCOUNT(__VA_ARGS__), __VA_ARGS__); TEST_ABORT(); } }
+        "ASSERT", COL_ARGCOUNT(__VA_ARGS__), __VA_ARGS__); TEST_ABORT(); } }
+
+/**
+ * Soft assertion, logs an error if the given value is false.
+ * 
+ * @param x     Value to test. Evaluated once, so it can be an expression with 
+ *              side effects.
+ * @param msg   (optional) Message format string.
+ * @param ...   (optional) Message string arguments.
+ * 
+ * @note *msg* and following arguments arguments are suitable arguments to 
+ * printf().
+ * 
+ * @see TEST_FAILURE_LOGGER
+ * @see ASSERT
+ */
+#define VERIFY(x, /* msg, */ ...) \
+    _VERIFY(x, #x, __VA_ARGS__)
+
+#define _VERIFY(x, ...) \
+    {if (!(x)) { test_assertFailed(TEST_FAILURE_LOGGER, __FILE__, __LINE__, \
+        "VERIFY", COL_ARGCOUNT(__VA_ARGS__), __VA_ARGS__); } }
 
 #endif /* _COLIBRI_UNITTEST */
