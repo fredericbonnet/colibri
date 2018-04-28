@@ -82,7 +82,11 @@ void enterTestCase(const char *testName) {
     fflush(stdout);
 }
 void leaveTestCase(const char *testName, int fail) {
-    if (!fail) printf("passed");
+    if (fail) {
+        printf("failed");
+    } else {
+        printf("passed");
+    }
     printf("\n");
     fflush(stdout);
 }
@@ -105,18 +109,23 @@ int main(int argc, char* argv[]) {
     freopen( "c:\\err.txt", "wt", stderr);
 #endif
 
+    if (argc > 1 && argv[1][0] == '-') {
+        if (strcmp(argv[1], "-l") == 0 || strcmp(argv[1], "--list") == 0) {
+            /* List test cases. */
+            TEST_TRAVERSE(testColibri, printTestCase);
+        } else if (strcmp(argv[1], "-a") == 0 || strcmp(argv[1], "--list-all") == 0) {
+            /* List all tests. */
+            TEST_TRAVERSE(testColibri, printTestName);
+        }
+        return 0;
+    }
+
     printf("Hit return...\n");
     getc(stdin);
 
     if (argc <= 1) {
         /* Execute all tests. */
         fail = testColibri(NULL);
-    } else if (strcmp(argv[1], "-l") == 0 || strcmp(argv[1], "--list") == 0) {
-        /* List test cases. */
-        TEST_TRAVERSE(testColibri, printTestCase);
-    } else if (strcmp(argv[1], "-a") == 0 || strcmp(argv[1], "--list-all") == 0) {
-        /* List all tests. */
-        TEST_TRAVERSE(testColibri, printTestName);
     } else {
         /* Only execute tests given as command line arguments. */
         int i;
