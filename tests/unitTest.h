@@ -12,13 +12,7 @@
 #ifndef _COLIBRI_UNITTEST
 #define _COLIBRI_UNITTEST
 
-#include <stdio.h>
 #include <setjmp.h>
-
-#if defined(_MSC_VER)
-#   define snprintf sprintf_s
-#   pragma warning(disable: 4100)
-#endif
 
 /**
  * Signature of test functions.
@@ -40,12 +34,35 @@ typedef int (TestProc) (const char * name);
  * @param type  Type of test that failed (e.g. "ASSERTION").
  * @param test  Tested expression.
  * @param msg   Optional message format string, or NULL.
- * @patam args  Optional message string parameter list, or NULL.
+ * @param args  Optional message string parameter list, or NULL.
  * 
  * @note *msg* and *args* are suitable arguments to vprintf().
+ * 
+ * @see TEST_FAILURE_LOGGER
  */
-typedef void (TestFailureLogProc)(const char *file, int line, const char *type,
-    const char *test, const char *msg, va_list args);
+typedef void (TestFailureLoggerProc)(const char *file, int line, 
+    const char *type, const char *test, const char *msg, va_list args);
+
+/** @internal
+ * Default test failure log handler. Does nothing.
+ * 
+ * @see TestFailureLoggerProc
+ * @see TEST_FAILURE_LOGGER
+ */
+static void test_logFailure(const char *file, int line, const char *type,
+    const char *test, const char *msg, va_list args) {}
+
+/**
+ * Define the test failure log handler.
+ * 
+ * Called when a test failed.
+ * 
+ * The default handler does nothing. Redefine this macro to use a custom
+ * handler.
+ * 
+ * @see TestFailureLoggerProc
+ */
+#define TEST_FAILURE_LOGGER test_logFailure
 
 /**
  * Abort a test case.
@@ -76,7 +93,8 @@ static jmp_buf test_failureEnv;
  * @param test  Tested expression.
  * @param ...   Optional message format string and parameters.
  */
-static void test_assertFailed(TestFailureLogProc *proc, const char *file, int line, const char *type, int count, const char *test, ...) {
+static void test_assertFailed(TestFailureLoggerProc *proc, const char *file, 
+        int line, const char *type, int count, const char *test, ...) {
     if (count > 1) {
         /* Extra args after *test* */
         va_list args;
@@ -95,9 +113,9 @@ static void test_assertFailed(TestFailureLogProc *proc, const char *file, int li
  * @see TEST_SUITE
  */
 typedef struct TestDescr {
-    const char * name;                      /*!< Test name. */
-    int (*test)(const char *);              /*!< Pointer to test function. */
-    int (*testCaseRunner)(const char *);    /*!< Pointer to test runner. */
+    const char * name;              /*!< Test name. */
+    int (*test)(const char *);      /*!< Pointer to test function. */
+    int (*testCaseRunner)(void);    /*!< Pointer to test runner. */
 } TestDescr;
 
 /** @internal
@@ -115,7 +133,7 @@ typedef struct TestDescr {
  */
 #define TEST_SUITE_DECLARE_TEST(_testName) \
     int _testName(const char *); \
-    int _testName##_testCaseRunner(const char *);
+    int _testName##_testCaseRunner();
 
 /**
  * Test fixture context declaration.
@@ -269,10 +287,148 @@ typedef struct TestDescr {
 #endif
 
 #define TEST_FIXTURE_TEARDOWN_1(_fixtureName) \
-    static void _fixtureName##_teardown(int TEST_FAIL, void * _fixtureName##_DUMMY)
+    static void _fixtureName##_teardown(int TEST_FAIL, \
+        void * _fixtureName##_DUMMY)
 
 #define TEST_FIXTURE_TEARDOWN_2(_fixtureName, _context) \
-    static void _fixtureName##_teardown(int TEST_FAIL, struct _fixtureName##_Context * _context)
+    static void _fixtureName##_teardown(int TEST_FAIL, \
+        struct _fixtureName##_Context * _context)
+
+/**
+ * Function signature of test suite enter hooks.
+ * 
+ * Called before running the first subtest.
+ * 
+ * @param suiteName     Test suite name.
+ * @param nb            Number of subtests.
+ * 
+ * @see TEST_SUITE_ENTER
+ */
+typedef void (TestSuiteEnterProc)(const char *suiteName, int nb);
+
+/** @internal
+ * Default test suite enter hook. Does nothing.
+ * 
+ * @see TestSuiteEnterProc
+ * @see TEST_SUITE_ENTER
+ */
+static void test_enterTestSuite(const char *suiteName, int nb) {}
+
+/**
+ * Define the test suite enter hook.
+ * 
+ * The default hook does nothing. Redefine this macro to use a custom hook.
+ * 
+ * @see TestSuiteEnterProc
+ * @see TEST_SUITE_LEAVE
+ */
+#define TEST_SUITE_ENTER test_enterTestSuite
+
+/**
+ * Function signature of test suite leave hooks.
+ * 
+ * @param suiteName     Test suite name.
+ * @param nb            Number of subtests.
+ * @param fail          Number of failed subtests (including the subtests' 
+ *                      subtests if any).
+ * 
+ * @see TEST_SUITE_LEAVE
+ */
+typedef void (TestSuiteLeaveProc)(const char *suiteName, int nb, int fail);
+
+/** @internal
+ * Default test suite leave hook. Does nothing.
+ * 
+ * @see TestSuiteLeaveProc
+ * @see TEST_SUITE_LEAVE
+ */
+static void test_leaveTestSuite(const char *suiteName, int nb, int fail) {}
+
+/**
+ * Define the test suite leave hook.
+ * 
+ * Called after running all subtests.
+ * 
+ * The default hook does nothing. Redefine this macro to use a custom hook.
+ * 
+ * @see TestSuiteLeaveProc
+ * @see TEST_SUITE_ENTER
+ */
+#define TEST_SUITE_LEAVE test_leaveTestSuite
+
+/**
+ * Function signature of test suite before subtest hooks.
+ * 
+ * Called before running each subtest.
+ * 
+ * @param suiteName     Test suite name.
+ * @param nb            Number of subtests.
+ * @param index         Index of subtest.
+ * @param testName      Name of subtest.
+ * @param fail          Failed test suite subtests so far  (including its 
+ *                      subtests' subtests if any).
+ * 
+ * @see TEST_SUITE_BEFORE_SUBTEST
+ */
+typedef void (TestSuiteBeforeSubtestProc)(const char *suiteName, int nb, 
+    int index, const char *testName, int fail);
+
+/** @internal
+ * Default test suite before subtest hook. Does nothing.
+ * 
+ * @see TestSuiteBeforeSubtestProc
+ * @see TEST_SUITE_BEFORE_SUBTEST
+ */
+static void test_beforeSubtest(const char *suiteName, int nb, int index, 
+    const char *testName, int fail) {}
+
+/**
+ * Define the test suite before subset hook.
+ * 
+ * The default hook does nothing. Redefine this macro to use a custom hook.
+ * 
+ * @see TestSuiteBeforeSubtestProc
+ * @see TEST_SUITE_AFTER_SUBTEST
+ */
+#define TEST_SUITE_BEFORE_SUBTEST test_beforeSubtest
+
+/**
+ * Function signature of test suite after subtest hooks.
+ * 
+ * Called before running each subtest.
+ * 
+ * @param suiteName     Test suite name.
+ * @param nb            Number of subtests.
+ * @param index         Index of subtest.
+ * @param testName      Name of subtest.
+ * @param fail          Failed test suite subtests so far (including its 
+ *                      subtests' subtests if any).
+ * @param sfail         The subtest's failed tests (including its subtests if
+ *                      any).
+ * 
+ * @see TEST_SUITE_AFTER_SUBTEST
+ */
+typedef void (TestSuiteAfterSubtestProc)(const char *suiteName, int nb, 
+    int index, const char *testName, int fail, int sfail);
+
+/** @internal
+ * Default test suite after subtest hook. Does nothing.
+ * 
+ * @see TestSuiteAfterSubtestProc
+ * @see TEST_SUITE_AFTER_SUBTEST
+ */
+static void test_afterSubtest(const char *suiteName, int nb, int index, 
+    const char *testName, int fail, int sfail) {}
+
+/**
+ * Define the test suite after subset hook.
+ * 
+ * The default hook does nothing. Redefine this macro to use a custom hook.
+ * 
+ * @see TestSuiteAfterSubtestProc
+ * @see TEST_SUITE_BEFORE_SUBTEST
+ */
+#define TEST_SUITE_AFTER_SUBTEST test_afterSubtest
 
 /**
  * Test suite declaration.
@@ -289,28 +445,34 @@ typedef struct TestDescr {
  * @see TestProc
  * @see TEST_CASE
  */ 
+
 #define TEST_SUITE(_suiteName, ...) \
     COL_FOR_EACH(TEST_SUITE_DECLARE_TEST,__VA_ARGS__) \
     static TestDescr _suiteName##_tests[] = { \
         COL_FOR_EACH(TEST_SUITE_DECLARE_TEST_CASE,__VA_ARGS__) \
         {NULL, NULL, NULL}}; \
-    int _suiteName##_testCaseRunner(const char * prefix) { \
+    int _suiteName##_testCaseRunner() { \
         TestDescr * test=_suiteName##_tests; \
         const int nb=sizeof(_suiteName##_tests)/sizeof(*_suiteName##_tests)-1; \
-        char buf[256]; \
+        const int index=(int) (test - _suiteName##_tests); \
         int fail=0; \
-        printf("%s%s (%d subtests) ...\n", prefix, COL_STRINGIZE(_suiteName), nb); fflush(stdout); \
+        TEST_SUITE_ENTER(COL_STRINGIZE(_suiteName), nb); \
         for (; test->name; test++) { \
-            snprintf(buf, 256, "\t%s%d. ", prefix, (int) (test - _suiteName##_tests + 1)); \
-            fail += test->testCaseRunner(buf); \
+            int sfail=0; \
+            TEST_SUITE_BEFORE_SUBTEST(COL_STRINGIZE(_suiteName), nb, index, \
+                test->name, fail); \
+            sfail = test->testCaseRunner(); \
+            fail += sfail; \
+            TEST_SUITE_AFTER_SUBTEST(COL_STRINGIZE(_suiteName), nb, index, \
+                test->name, fail, sfail); \
         } \
-        printf("%s%s : %d failed\n", prefix, COL_STRINGIZE(_suiteName), fail); fflush(stdout); \
+        TEST_SUITE_LEAVE(COL_STRINGIZE(_suiteName), nb, fail); \
         return fail; \
     } \
     int _suiteName(const char *name) { \
         int fail=0; \
         if (!name || strcmp(name, COL_STRINGIZE(_suiteName)) == 0) { \
-            fail += _suiteName##_testCaseRunner(""); \
+            fail += _suiteName##_testCaseRunner(); \
         } else { \
             TestDescr * test=_suiteName##_tests; \
             for (; test->name; test++) { \
@@ -319,6 +481,65 @@ typedef struct TestDescr {
         } \
         return fail; \
     }
+
+/**
+ * Function signature of test case enter hooks.
+ * 
+ * Called before running the test case.
+ * 
+ * @param testName      Test case name.
+ * 
+ * @see TEST_CASE_ENTER
+ */
+typedef void (TestCaseEnterProc)(const char *testName);
+
+/** @internal
+ * Default test case enter hook. Does nothing.
+ * 
+ * @see TestCaseEnterProc
+ * @see TEST_CASE_ENTER
+ */
+static void test_enterTestCase(const char *testName) {}
+
+/**
+ * Define the test case enter hook.
+ * 
+ * The default hook does nothing. Redefine this macro to use a custom hook.
+ * 
+ * @see TestCaseEnterProc
+ * @see TEST_CASE_LEAVE
+ */
+#define TEST_CASE_ENTER test_enterTestCase
+
+/**
+ * Function signature of test case leave hooks.
+ * 
+ * Called after running the test case.
+ * 
+ * @param testName      Test case name.
+ * @param fail          Failed tests (including its subtests if any).
+ * 
+ * @see TEST_CASE_LEAVE
+ */
+typedef void (TestCaseLeaveProc)(const char *testName, int fail);
+
+/** @internal
+ * Default test case enter hook. Does nothing.
+ * 
+ * @see TestCaseLeaveProc
+ * @see TEST_CASE_LEAVE
+ */
+static void test_leaveTestCase(const char *testName, int fail) {}
+
+/**
+ * Define the test case enter hook.
+ * 
+ * The default hook does nothing. Redefine this macro to use a custom hook.
+ * 
+ * @see TestCaseLeaveProc
+ * @see TEST_CASE_ENTER
+ */
+#define TEST_CASE_LEAVE test_leaveTestCase
 
 /**
  * Test case declaration.
@@ -342,70 +563,62 @@ typedef struct TestDescr {
         COL_CONCATENATE(TEST_CASE_,COL_ARGCOUNT(__VA_ARGS__))(__VA_ARGS__)
 #endif
 
-#define TEST_CASE_1(_testName) \
-    static void _testName##_testCase(void); \
-    int _testName##_testCaseRunner(const char * prefix) { \
-        int fail; \
-        printf("%s%s ... ", prefix, COL_STRINGIZE(_testName)); fflush(stdout); \
-        fail = setjmp(test_failureEnv); \
-        if (!fail) { \
-            _testName##_testCase(); \
-            printf("passed\n"); fflush(stdout); \
-        } \
-        return fail; \
-    } \
+#define TEST_CASE_DECLARE(_testName) \
+    int _testName##_testCaseRunner(void); \
     int _testName(const char *name) { \
         int fail=0; \
         if (!name || strcmp(name, COL_STRINGIZE(_testName)) == 0) { \
-            fail += _testName##_testCaseRunner(""); \
+            fail += _testName##_testCaseRunner(); \
         } \
+        return fail; \
+    }
+
+#define TEST_CASE_1(_testName) \
+    TEST_CASE_DECLARE(_testName) \
+    static void _testName##_testCase(void); \
+    int _testName##_testCaseRunner() { \
+        int fail; \
+        TEST_CASE_ENTER(COL_STRINGIZE(_testName)); \
+        fail = setjmp(test_failureEnv); \
+        if (!fail) { \
+            _testName##_testCase(); \
+        } \
+        TEST_CASE_LEAVE(COL_STRINGIZE(_testName), fail); \
         return fail; \
     } \
     static void _testName##_testCase(void)
 
 #define TEST_CASE_2(_testName, _fixtureName) \
-    static void _testName##_testCase(); \
-    int _testName##_testCaseRunner(const char * prefix) { \
+    TEST_CASE_DECLARE(_testName) \
+    static void _testName##_testCase(void); \
+    int _testName##_testCaseRunner() { \
         int fail; \
-        printf("%s%s ... ", prefix, COL_STRINGIZE(_testName)); fflush(stdout); \
+        TEST_CASE_ENTER(COL_STRINGIZE(_testName)); \
         fail = setjmp(test_failureEnv); \
         if (!fail) { \
             _fixtureName##_setup(NULL); \
             _testName##_testCase(); \
-            printf("passed\n"); fflush(stdout); \
         } \
         _fixtureName##_teardown(fail, NULL); \
-        return fail; \
-    } \
-    int _testName(const char *name) { \
-        int fail=0; \
-        if (!name || strcmp(name, COL_STRINGIZE(_testName)) == 0) { \
-            fail += _testName##_testCaseRunner(""); \
-        } \
+        TEST_CASE_LEAVE(COL_STRINGIZE(_testName), fail); \
         return fail; \
     } \
     static void _testName##_testCase()
 
 #define TEST_CASE_3(_testName, _fixtureName, _context) \
+    TEST_CASE_DECLARE(_testName) \
     static void _testName##_testCase(struct _fixtureName##_Context *); \
-    int _testName##_testCaseRunner(const char * prefix) { \
+    int _testName##_testCaseRunner() { \
         struct _fixtureName##_Context context; \
         int fail; \
-        printf("%s%s ... ", prefix, COL_STRINGIZE(_testName)); fflush(stdout); \
+        TEST_CASE_ENTER(COL_STRINGIZE(_testName)); \
         fail = setjmp(test_failureEnv); \
         if (!fail) { \
             _fixtureName##_setup(&context); \
             _testName##_testCase(&context); \
-            printf("passed\n"); fflush(stdout); \
         } \
         _fixtureName##_teardown(fail, &context); \
-        return fail; \
-    } \
-    int _testName(const char *name) { \
-        int fail=0; \
-        if (!name || strcmp(name, COL_STRINGIZE(_testName)) == 0) { \
-            _testName##_testCaseRunner(""); \
-        } \
+        TEST_CASE_LEAVE(COL_STRINGIZE(_testName), fail); \
         return fail; \
     } \
     static void _testName##_testCase(struct _fixtureName##_Context * _context)
@@ -415,8 +628,11 @@ typedef struct TestDescr {
  * 
  * @param x     Value to test. Evaluated once, so it can be an expression with 
  *              side effects.
- * @param msg   (optional) Format string passed to vprintf()
- * @maram ...   Remaining arguments passed to vprintf()
+ * @param msg   (optional) Message format string.
+ * @param ...   (optional) Message string arguments.
+ * 
+ * @note *msg* and following arguments arguments are suitable arguments to 
+ * printf().
  * 
  * @see test_failure TODO
  * @see ASSERT_MSG
@@ -425,7 +641,7 @@ typedef struct TestDescr {
     _ASSERT(x, #x, __VA_ARGS__)
 
 #define _ASSERT(x, ...) \
-    {if (!(x)) { test_assertFailed(TEST_LOG_FAILURE, __FILE__, __LINE__, \
+    {if (!(x)) { test_assertFailed(TEST_FAILURE_LOGGER, __FILE__, __LINE__, \
         "ASSERTION", COL_ARGCOUNT(__VA_ARGS__), __VA_ARGS__); TEST_ABORT(); } }
 
 #endif /* _COLIBRI_UNITTEST */
