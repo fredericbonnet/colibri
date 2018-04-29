@@ -1,5 +1,5 @@
 /**
- * @file unitTest.h
+ * @file picotest.h
  *
  * This file defines a minimalist unit testing framework for C programs.
  * 
@@ -9,8 +9,8 @@
  * process state is no longer reliable anyway.
  */
 
-#ifndef _COLIBRI_UNITTEST
-#define _COLIBRI_UNITTEST
+#ifndef _PICOTEST
+#define _PICOTEST
 
 #include <setjmp.h>
 
@@ -697,4 +697,4 @@ static void test_leaveTestCase(const char *testName, int fail) {}
     {if (!(x)) { test_assertFailed(TEST_FAILURE_LOGGER, __FILE__, __LINE__, \
         "VERIFY", COL_ARGCOUNT(__VA_ARGS__), __VA_ARGS__); } }
 
-#endif /* _COLIBRI_UNITTEST */
+#endif /* _PICOTEST */

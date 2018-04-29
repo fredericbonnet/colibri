@@ -3,7 +3,8 @@
 
 #include <colibri.h>
 
-#include "unitTest.h"
+#include "picotest.h"
+
 #include "testColibri.h"
 
 /*

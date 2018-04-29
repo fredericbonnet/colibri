@@ -6,6 +6,8 @@
 
 #include <colibri.h>
 
+#include "picotest.h"
+
 #ifdef _DEBUG
 #   define DO_TRACE
 #endif
@@ -17,8 +19,6 @@
 #   define TRACE
 #endif
 
-
-#include "unitTest.h"
 #include "testColibri.h"
 
 /* Colibri error proc handler. */
