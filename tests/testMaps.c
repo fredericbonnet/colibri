@@ -15,7 +15,7 @@
  *---------------------------------------------------------------------------
  */
 
-TEST_SUITE(testMaps, 
+PICOTEST_SUITE(testMaps, 
    testStringMaps, testIntMaps
 )
 
@@ -27,7 +27,7 @@ TEST_SUITE(testMaps,
  *---------------------------------------------------------------------------
  */
 
-TEST_SUITE(testStringMaps, 
+PICOTEST_SUITE(testStringMaps, 
    testStringTries, testStringHashes
 )
 
@@ -39,23 +39,23 @@ TEST_SUITE(testStringMaps,
  *---------------------------------------------------------------------------
  */
 
-TEST_FIXTURE_SETUP(testStringTries) {
+PICOTEST_FIXTURE_SETUP(testStringTries) {
     Col_Init(COL_SINGLE);
     Col_SetErrorProc(ERROR_PROC);
 
     Col_PauseGC();
 }
-TEST_FIXTURE_TEARDOWN(testStringTries) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testStringTries) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
-TEST_SUITE(testStringTries, 
+PICOTEST_SUITE(testStringTries, 
    testStringTrie, testStringTrieReverse
 )
 
-TEST_CASE(testStringTrie, testStringTries) {
+PICOTEST_CASE(testStringTrie, testStringTries) {
     Col_MapIterator it;
     Col_Word map = Col_NewStringTrieMap();
     int i;
@@ -126,7 +126,7 @@ TEST_CASE(testStringTrie, testStringTries) {
     ASSERT(Col_MapSize(map) == 0);
 }
 
-TEST_CASE(testStringTrieReverse, testStringTries) {
+PICOTEST_CASE(testStringTrieReverse, testStringTries) {
     Col_MapIterator it;
     Col_Word map = Col_NewStringTrieMap();
     int i;
@@ -205,19 +205,19 @@ TEST_CASE(testStringTrieReverse, testStringTries) {
  *---------------------------------------------------------------------------
  */
 
-TEST_FIXTURE_SETUP(testStringHashes) {
+PICOTEST_FIXTURE_SETUP(testStringHashes) {
     Col_Init(COL_SINGLE);
     Col_SetErrorProc(ERROR_PROC);
 
     Col_PauseGC();
 }
-TEST_FIXTURE_TEARDOWN(testStringHashes) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testStringHashes) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
-TEST_CASE(testStringHashes, testStringHashes) {
+PICOTEST_CASE(testStringHashes, testStringHashes) {
     Col_MapIterator it;
     Col_Word map = Col_NewStringHashMap(0);
     int i;
@@ -274,7 +274,7 @@ TEST_CASE(testStringHashes, testStringHashes) {
  *---------------------------------------------------------------------------
  */
 
-TEST_SUITE(testIntMaps, 
+PICOTEST_SUITE(testIntMaps, 
    testIntTries, testIntHashes
 )
 
@@ -286,23 +286,23 @@ TEST_SUITE(testIntMaps,
  *---------------------------------------------------------------------------
  */
 
-TEST_FIXTURE_SETUP(testIntTries) {
+PICOTEST_FIXTURE_SETUP(testIntTries) {
     Col_Init(COL_SINGLE);
     Col_SetErrorProc(ERROR_PROC);
 
     Col_PauseGC();
 }
-TEST_FIXTURE_TEARDOWN(testIntTries) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testIntTries) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
-TEST_SUITE(testIntTries, 
+PICOTEST_SUITE(testIntTries, 
    testIntTrie, testIntTrieReverse
 )
 
-TEST_CASE(testIntTrie, testIntTries) {
+PICOTEST_CASE(testIntTrie, testIntTries) {
     Col_MapIterator it;
     Col_Word map = Col_NewIntTrieMap();
     int i;
@@ -365,7 +365,7 @@ TEST_CASE(testIntTrie, testIntTries) {
     ASSERT(Col_MapSize(map) == 0);
 }
 
-TEST_CASE(testIntTrieReverse, testIntTries) {
+PICOTEST_CASE(testIntTrieReverse, testIntTries) {
     Col_MapIterator it;
     Col_Word map = Col_NewIntTrieMap();
     int i;
@@ -436,19 +436,19 @@ TEST_CASE(testIntTrieReverse, testIntTries) {
  *---------------------------------------------------------------------------
  */
 
-TEST_FIXTURE_SETUP(testIntHashes) {
+PICOTEST_FIXTURE_SETUP(testIntHashes) {
     Col_Init(COL_SINGLE);
     Col_SetErrorProc(ERROR_PROC);
 
     Col_PauseGC();
 }
-TEST_FIXTURE_TEARDOWN(testIntHashes) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testIntHashes) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
-TEST_CASE(testIntHashes, testIntHashes) {
+PICOTEST_CASE(testIntHashes, testIntHashes) {
     Col_MapIterator it;
     Col_Word map = Col_NewIntHashMap(0);
     int i;

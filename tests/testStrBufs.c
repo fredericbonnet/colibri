@@ -21,17 +21,17 @@
 static void append(Col_Word strbuf, Col_Word rope, int success, size_t *lengthPtr);
 static Col_Word appended(Col_Word rope);
 
-TEST_SUITE(testStrBufs,
+PICOTEST_SUITE(testStrBufs,
     testStrBufs8, testStrBufs16, testStrBufs32, testStrBufsFreeze
 )
 
 
-TEST_FIXTURE_CONTEXT(testStrBufs) {
+PICOTEST_FIXTURE_CONTEXT(testStrBufs) {
     Col_Word rope8;
     Col_Word rope16;
     Col_Word rope32;
 };
-TEST_FIXTURE_SETUP(testStrBufs, context) {
+PICOTEST_FIXTURE_SETUP(testStrBufs, context) {
     static Col_Char1 data8[64];
     static Col_Char2 data16[64];
     static Col_Char4 data32[64];
@@ -57,13 +57,13 @@ TEST_FIXTURE_SETUP(testStrBufs, context) {
     }
     context->rope32 = Col_NewRope(COL_UCS4, data32, sizeof(data32));
 }
-TEST_FIXTURE_TEARDOWN(testStrBufs, context) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testStrBufs, context) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
-TEST_CASE(testStrBufs8, testStrBufs, context) {
+PICOTEST_CASE(testStrBufs8, testStrBufs, context) {
     size_t length = 0;
     Col_Word result = Col_EmptyRope();
 
@@ -85,7 +85,7 @@ TEST_CASE(testStrBufs8, testStrBufs, context) {
     result = Col_ConcatRopes(result, appended(context->rope8));
     ASSERT(Col_CompareRopes(Col_StringBufferValue(strbuf), result) == 0);
 }
-TEST_CASE(testStrBufs16, testStrBufs, context) {
+PICOTEST_CASE(testStrBufs16, testStrBufs, context) {
     size_t length = 0;
     Col_Word result = Col_EmptyRope();
 
@@ -109,7 +109,7 @@ TEST_CASE(testStrBufs16, testStrBufs, context) {
     result = Col_ConcatRopes(result, appended(context->rope8));
     ASSERT(Col_CompareRopes(Col_StringBufferValue(strbuf), result) == 0);
 }
-TEST_CASE(testStrBufs32, testStrBufs, context) {
+PICOTEST_CASE(testStrBufs32, testStrBufs, context) {
     size_t length = 0;
     Col_Word result = Col_EmptyRope();
 
@@ -163,11 +163,11 @@ static Col_Word appended(Col_Word rope) {
     );
 }
 
-TEST_SUITE(testStrBufsFreeze,
+PICOTEST_SUITE(testStrBufsFreeze,
     testStrBufsFreezeChar, testStrBufsFreezeSmallString,
     testStrBufsFreezeString, testStrBufsFreezeBig
 );
-TEST_CASE(testStrBufsFreezeChar, testStrBufs, context) {
+PICOTEST_CASE(testStrBufsFreezeChar, testStrBufs, context) {
     Col_Word strbuf, frozen;
     Col_RopeIterator it;
 
@@ -213,7 +213,7 @@ TEST_CASE(testStrBufsFreezeChar, testStrBufs, context) {
     ASSERT(frozen != strbuf);
     ASSERT(frozen == Col_Subrope(context->rope32, 0, 0));
 }
-TEST_CASE(testStrBufsFreezeSmallString, testStrBufs, context) {
+PICOTEST_CASE(testStrBufsFreezeSmallString, testStrBufs, context) {
     Col_Word strbuf, frozen;
     Col_RopeIterator it, begin, end;
     size_t i;
@@ -262,7 +262,7 @@ TEST_CASE(testStrBufsFreezeSmallString, testStrBufs, context) {
     ASSERT(frozen != strbuf);
     ASSERT(frozen == Col_Subrope(context->rope8, 0, 2));
 }
-TEST_CASE(testStrBufsFreezeString, testStrBufs, context) {
+PICOTEST_CASE(testStrBufsFreezeString, testStrBufs, context) {
     Col_Word strbuf, frozen;
     Col_RopeIterator it, begin, end;
 
@@ -331,7 +331,7 @@ TEST_CASE(testStrBufsFreezeString, testStrBufs, context) {
     ASSERT(frozen == strbuf);
     ASSERT(Col_CompareRopes(frozen, context->rope32) == 0);
 }
-TEST_CASE(testStrBufsFreezeBig, testStrBufs, context) {
+PICOTEST_CASE(testStrBufsFreezeBig, testStrBufs, context) {
     Col_Word strbuf, frozen;
     Col_RopeIterator it, begin, end;
     size_t i;

@@ -21,7 +21,7 @@ static void listRemove(Col_Word list);
 static void listReplace(Col_Word list, Col_Word with);
 static void listsEqual(Col_Word list1, Col_Word list2);
 
-TEST_SUITE(testLists, 
+PICOTEST_SUITE(testLists, 
     testNewList, testSublists, testListIterators, testAcyclicListOps,
     testCyclicListOps    
 )
@@ -30,24 +30,24 @@ TEST_SUITE(testLists,
  * List creation.
  */
 
-TEST_SUITE(testNewList, 
+PICOTEST_SUITE(testNewList, 
     testNewSmallList, testNewLargeList
 )
 
 
-TEST_FIXTURE_SETUP(testNewList) {
+PICOTEST_FIXTURE_SETUP(testNewList) {
     Col_Init(COL_SINGLE);
     Col_SetErrorProc(ERROR_PROC);
 
     Col_PauseGC();
 }
-TEST_FIXTURE_TEARDOWN(testNewList) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testNewList) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
-TEST_CASE(testNewSmallList, testNewList) {
+PICOTEST_CASE(testNewSmallList, testNewList) {
     Col_Word e[10];
     size_t l = sizeof(e)/sizeof(*e);
     size_t i;
@@ -68,7 +68,7 @@ TEST_CASE(testNewSmallList, testNewList) {
         ASSERT(Col_IntWordValue(e) == (int) index, "index=%u", index);
     }
 }
-TEST_CASE(testNewLargeList, testNewList) {
+PICOTEST_CASE(testNewLargeList, testNewList) {
     Col_Word e[1000];
     size_t l = sizeof(e)/sizeof(*e);
     size_t i;
@@ -95,15 +95,15 @@ TEST_CASE(testNewLargeList, testNewList) {
  * Sublists.
  */
 
-TEST_SUITE(testSublists, 
+PICOTEST_SUITE(testSublists, 
     testSmallSublists, testLargeSublists, testNestedSublists
 )
 
 
-TEST_FIXTURE_CONTEXT(testSublists) {
+PICOTEST_FIXTURE_CONTEXT(testSublists) {
     Col_Word list;
 };
-TEST_FIXTURE_SETUP(testSublists, context) {
+PICOTEST_FIXTURE_SETUP(testSublists, context) {
     Col_Word e[1000];
     size_t l = sizeof(e)/sizeof(*e);
     size_t i;
@@ -119,13 +119,13 @@ TEST_FIXTURE_SETUP(testSublists, context) {
 
     context->list = Col_NewList(l, e);
 }
-TEST_FIXTURE_TEARDOWN(testSublists, context) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testSublists, context) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
-TEST_CASE(testSmallSublists, testSublists, context) {
+PICOTEST_CASE(testSmallSublists, testSublists, context) {
     size_t length = Col_ListLength(context->list);
     size_t offset, sublength=5;
     Col_Word sublist;
@@ -145,7 +145,7 @@ TEST_CASE(testSmallSublists, testSublists, context) {
         }
     }
 }
-TEST_CASE(testLargeSublists, testSublists, context) {
+PICOTEST_CASE(testLargeSublists, testSublists, context) {
     size_t length = Col_ListLength(context->list);
     size_t offset, sublength=length/2;
     Col_Word sublist;
@@ -165,7 +165,7 @@ TEST_CASE(testLargeSublists, testSublists, context) {
         }
     }
 }
-TEST_CASE(testNestedSublists, testSublists, context) {
+PICOTEST_CASE(testNestedSublists, testSublists, context) {
     /*
      * Level 2 nesting:
      *
@@ -222,11 +222,11 @@ TEST_CASE(testNestedSublists, testSublists, context) {
  * Ayclic lists.
  */
 
-TEST_SUITE(testAcyclicListOps,
+PICOTEST_SUITE(testAcyclicListOps,
     testAcyclicListAccess, testAcyclicListInsert, testAcyclicListRemove, 
     testAcyclicListReplace
 )
-TEST_FIXTURE_CONTEXT(testAcyclicListOps) {
+PICOTEST_FIXTURE_CONTEXT(testAcyclicListOps) {
     Col_Word small1;
     Col_Word small2;
     Col_Word large1;
@@ -238,7 +238,7 @@ TEST_FIXTURE_CONTEXT(testAcyclicListOps) {
     Col_Word largeVoid1;
     Col_Word largeVoid2;
 };
-TEST_FIXTURE_SETUP(testAcyclicListOps,context) {
+PICOTEST_FIXTURE_SETUP(testAcyclicListOps,context) {
     Col_Word e[1000];
     size_t i;
 
@@ -275,13 +275,13 @@ TEST_FIXTURE_SETUP(testAcyclicListOps,context) {
     context->largeVoid1 = Col_NewList(1000, NULL);
     context->largeVoid2 = Col_NewList(500, NULL);
 }
-TEST_FIXTURE_TEARDOWN(testAcyclicListOps,context) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testAcyclicListOps,context) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
-TEST_CASE(testAcyclicListAccess, testAcyclicListOps,context) {
+PICOTEST_CASE(testAcyclicListAccess, testAcyclicListOps,context) {
     listAccess(context->small1);
     listAccess(context->small2);
     listAccess(context->large1);
@@ -293,7 +293,7 @@ TEST_CASE(testAcyclicListAccess, testAcyclicListOps,context) {
     listAccess(context->largeVoid1);
     listAccess(context->largeVoid2);
 }
-TEST_CASE(testAcyclicListInsert, testAcyclicListOps,context) {
+PICOTEST_CASE(testAcyclicListInsert, testAcyclicListOps,context) {
     listInsert(context->small1, context->small2);
     listInsert(context->small2, context->small1);
 
@@ -336,7 +336,7 @@ TEST_CASE(testAcyclicListInsert, testAcyclicListOps,context) {
     listInsert(context->smallVoid1, context->largeVoid2);
     listInsert(context->largeVoid2, context->smallVoid1);
 }
-TEST_CASE(testAcyclicListRemove, testAcyclicListOps,context) {
+PICOTEST_CASE(testAcyclicListRemove, testAcyclicListOps,context) {
     listRemove(context->small1);
     listRemove(context->small2);
     listRemove(context->large1);
@@ -348,7 +348,7 @@ TEST_CASE(testAcyclicListRemove, testAcyclicListOps,context) {
     listRemove(context->largeVoid1);
     listRemove(context->largeVoid2);
 }
-TEST_CASE(testAcyclicListReplace, testAcyclicListOps,context) {
+PICOTEST_CASE(testAcyclicListReplace, testAcyclicListOps,context) {
     listReplace(context->small1, context->small2);
     listReplace(context->small2, context->small1);
 
@@ -397,11 +397,11 @@ TEST_CASE(testAcyclicListReplace, testAcyclicListOps,context) {
  * cyclic lists.
  */
 
-TEST_SUITE(testCyclicListOps,
+PICOTEST_SUITE(testCyclicListOps,
     testCyclicListAccess, testCyclicListInsert, testCyclicListRemove, 
     testCyclicListReplace
 )
-TEST_FIXTURE_CONTEXT(testCyclicListOps) {
+PICOTEST_FIXTURE_CONTEXT(testCyclicListOps) {
     Col_Word small1;
     Col_Word small2;
     Col_Word large1;
@@ -411,7 +411,7 @@ TEST_FIXTURE_CONTEXT(testCyclicListOps) {
     Col_Word largeVoid1;
     Col_Word largeVoid2;
 };
-TEST_FIXTURE_SETUP(testCyclicListOps, context) {
+PICOTEST_FIXTURE_SETUP(testCyclicListOps, context) {
     Col_Word e[1000];
     size_t i;
 
@@ -445,13 +445,13 @@ TEST_FIXTURE_SETUP(testCyclicListOps, context) {
     context->largeVoid1 = Col_ConcatLists(Col_NewList(600, NULL), Col_CircularList(Col_NewList(400, NULL)));
     context->largeVoid2 = Col_NewList(500, NULL);
 }
-TEST_FIXTURE_TEARDOWN(testCyclicListOps, context) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testCyclicListOps, context) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
-TEST_CASE(testCyclicListAccess, testCyclicListOps, context) {
+PICOTEST_CASE(testCyclicListAccess, testCyclicListOps, context) {
     listAccess(context->small1);
     listAccess(context->small2);
     listAccess(context->large1);
@@ -461,7 +461,7 @@ TEST_CASE(testCyclicListAccess, testCyclicListOps, context) {
     listAccess(context->largeVoid1);
     listAccess(context->largeVoid2);
 }
-TEST_CASE(testCyclicListInsert, testCyclicListOps, context) {
+PICOTEST_CASE(testCyclicListInsert, testCyclicListOps, context) {
     listInsert(context->small1, context->small2);
     listInsert(context->small2, context->small1);
     listInsert(context->small1, context->small1);
@@ -496,7 +496,7 @@ TEST_CASE(testCyclicListInsert, testCyclicListOps, context) {
     listInsert(context->smallVoid1, context->largeVoid2);
     listInsert(context->largeVoid2, context->smallVoid1);
 }
-TEST_CASE(testCyclicListRemove, testCyclicListOps, context) {
+PICOTEST_CASE(testCyclicListRemove, testCyclicListOps, context) {
     listRemove(context->small1);
     listRemove(context->small2);
     listRemove(context->large1);
@@ -506,7 +506,7 @@ TEST_CASE(testCyclicListRemove, testCyclicListOps, context) {
     listRemove(context->largeVoid1);
     listRemove(context->largeVoid2);
 }
-TEST_CASE(testCyclicListReplace, testCyclicListOps, context) {
+PICOTEST_CASE(testCyclicListReplace, testCyclicListOps, context) {
     listReplace(context->small1, context->small2);
     listReplace(context->small2, context->small1);
     listReplace(context->small1, context->small1);
@@ -547,18 +547,18 @@ TEST_CASE(testCyclicListReplace, testCyclicListOps, context) {
  * List iterators.
  */
 
-TEST_SUITE(testListIterators, 
+PICOTEST_SUITE(testListIterators, 
     testListIteratorDirect, testListIteratorForward, testListIteratorBackward, 
     testListIteratorStride
 )
 
-TEST_FIXTURE_CONTEXT(testListIterators) {
+PICOTEST_FIXTURE_CONTEXT(testListIterators) {
     size_t length;
     Col_Word *elements;
     Col_Word list, sublist;
     size_t sublistOffset;
 };
-TEST_FIXTURE_SETUP(testListIterators, context) {
+PICOTEST_FIXTURE_SETUP(testListIterators, context) {
     size_t i;
 
     Col_Init(COL_SINGLE);
@@ -581,14 +581,14 @@ TEST_FIXTURE_SETUP(testListIterators, context) {
 
     // TODO cyclic lists
 }
-TEST_FIXTURE_TEARDOWN(testListIterators, context) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testListIterators, context) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
 
-TEST_CASE(testListIteratorDirect, testListIterators, context) {
+PICOTEST_CASE(testListIteratorDirect, testListIterators, context) {
     size_t i, length;
     Col_ListIterator it;
 
@@ -626,7 +626,7 @@ TEST_CASE(testListIteratorDirect, testListIterators, context) {
     }
 }
 
-TEST_CASE(testListIteratorForward, testListIterators, context) {
+PICOTEST_CASE(testListIteratorForward, testListIterators, context) {
     Col_ListIterator it;
 
     for (Col_ListIterFirst(it, context->list); 
@@ -652,7 +652,7 @@ TEST_CASE(testListIteratorForward, testListIterators, context) {
     }
 }
 
-TEST_CASE(testListIteratorBackward, testListIterators, context) {
+PICOTEST_CASE(testListIteratorBackward, testListIterators, context) {
     Col_ListIterator it;
 
     for (Col_ListIterLast(it, context->list); 
@@ -678,7 +678,7 @@ TEST_CASE(testListIteratorBackward, testListIterators, context) {
     }
 }
 
-TEST_CASE(testListIteratorStride, testListIterators, context) {
+PICOTEST_CASE(testListIteratorStride, testListIterators, context) {
     size_t stride = 7;
     Col_ListIterator it;
 

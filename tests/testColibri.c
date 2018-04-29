@@ -45,7 +45,7 @@ int test_errorProc(Col_ErrorLevel level, Col_ErrorDomain domain, int code, va_li
     vprintf(domain[code], args);
     printf("\n");
 
-    TEST_ABORT();
+    PICOTEST_ABORT();
 }
 
 /* Test failure log handler. */
@@ -99,7 +99,7 @@ void printTestName(const char *name, int nb) {
     printf("%s\n", name);
 }
 
-TEST_SUITE(testColibri, 
+PICOTEST_SUITE(testColibri, 
     testImmediateWords, testRopes, testLists, testMaps, testStrBufs
 )
 
@@ -112,10 +112,10 @@ int main(int argc, char* argv[]) {
     if (argc > 1 && argv[1][0] == '-') {
         if (strcmp(argv[1], "-l") == 0 || strcmp(argv[1], "--list") == 0) {
             /* List test cases. */
-            TEST_TRAVERSE(testColibri, printTestCase);
+            PICOTEST_TRAVERSE(testColibri, printTestCase);
         } else if (strcmp(argv[1], "-a") == 0 || strcmp(argv[1], "--list-all") == 0) {
             /* List all tests. */
-            TEST_TRAVERSE(testColibri, printTestName);
+            PICOTEST_TRAVERSE(testColibri, printTestName);
         }
         return 0;
     }

@@ -15,19 +15,19 @@
  *---------------------------------------------------------------------------
  */
 
-TEST_FIXTURE_SETUP(testImmediateWords) {
+PICOTEST_FIXTURE_SETUP(testImmediateWords) {
     Col_Init(COL_SINGLE);
     Col_SetErrorProc(ERROR_PROC);
 
     Col_PauseGC();
 }
-TEST_FIXTURE_TEARDOWN(testImmediateWords) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testImmediateWords) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
-TEST_SUITE(testImmediateWords, 
+PICOTEST_SUITE(testImmediateWords, 
    testBools, testImmediateInts, testImmediateFloats, testImmediateStrings, 
    testImmediateLists
 )
@@ -40,7 +40,7 @@ TEST_SUITE(testImmediateWords,
  *---------------------------------------------------------------------------
  */
 
-TEST_CASE(testBools, testImmediateWords) {
+PICOTEST_CASE(testBools, testImmediateWords) {
     ASSERT(Col_WordType(WORD_TRUE) & COL_BOOL);
     ASSERT(Col_WordType(WORD_FALSE) & COL_BOOL);
     ASSERT(!Col_BoolWordValue(WORD_FALSE));
@@ -60,7 +60,7 @@ TEST_CASE(testBools, testImmediateWords) {
  *---------------------------------------------------------------------------
  */
 
-TEST_CASE(testImmediateInts, testImmediateWords) {
+PICOTEST_CASE(testImmediateInts, testImmediateWords) {
     Col_Word word;
 
     // Immediate ints.
@@ -102,7 +102,7 @@ TEST_CASE(testImmediateInts, testImmediateWords) {
  *---------------------------------------------------------------------------
  */
 
-TEST_CASE(testImmediateFloats, testImmediateWords) {
+PICOTEST_CASE(testImmediateFloats, testImmediateWords) {
     Col_Word word;
 
     // Immediate floats.
@@ -156,7 +156,7 @@ TEST_CASE(testImmediateFloats, testImmediateWords) {
  *---------------------------------------------------------------------------
  */
 
-TEST_CASE(testImmediateStrings, testImmediateWords) {
+PICOTEST_CASE(testImmediateStrings, testImmediateWords) {
     Col_Word word;
     char str1[] = "12345678";
     unsigned short str21[] = {'1', '2', '3', '4', '5', '6', '7', '8', 0}, str22[] = {0x1234, 0x5678};
@@ -303,7 +303,7 @@ TEST_CASE(testImmediateStrings, testImmediateWords) {
  *---------------------------------------------------------------------------
  */
 
-TEST_CASE(testImmediateLists, testImmediateWords) {
+PICOTEST_CASE(testImmediateLists, testImmediateWords) {
     Col_Word word;
 
     // Immediate void lists.

@@ -3,28 +3,32 @@ Col_ErrorProc test_errorProc;
 #define ERROR_PROC test_errorProc
 
 /* Test failure log handler. */
-TestFailureLoggerProc logFailure;
-#undef TEST_FAILURE_LOGGER
-#define TEST_FAILURE_LOGGER logFailure
+PicoTestFailureLoggerProc logFailure;
+#undef PICOTEST_FAILURE_LOGGER
+#define PICOTEST_FAILURE_LOGGER logFailure
 
 /* Test suite tracing hooks. */
-TestSuiteEnterProc enterTestSuite;
-TestSuiteLeaveProc leaveTestSuite;
-TestSuiteBeforeSubtestProc beforeSubtest;
-TestSuiteAfterSubtestProc afterSubtest;
-#undef TEST_SUITE_ENTER
-#undef TEST_SUITE_LEAVE
-#undef TEST_SUITE_BEFORE_SUBTEST
-#undef TEST_SUITE_AFTER_SUBTEST
-#define TEST_SUITE_ENTER enterTestSuite
-#define TEST_SUITE_LEAVE leaveTestSuite
-#define TEST_SUITE_BEFORE_SUBTEST beforeSubtest
-#define TEST_SUITE_AFTER_SUBTEST afterSubtest
+PicoTestSuiteEnterProc enterTestSuite;
+PicoTestSuiteLeaveProc leaveTestSuite;
+PicoTestSuiteBeforeSubtestProc beforeSubtest;
+PicoTestSuiteAfterSubtestProc afterSubtest;
+#undef PICOTEST_SUITE_ENTER
+#undef PICOTEST_SUITE_LEAVE
+#undef PICOTEST_SUITE_BEFORE_SUBTEST
+#undef PICOTEST_SUITE_AFTER_SUBTEST
+#define PICOTEST_SUITE_ENTER enterTestSuite
+#define PICOTEST_SUITE_LEAVE leaveTestSuite
+#define PICOTEST_SUITE_BEFORE_SUBTEST beforeSubtest
+#define PICOTEST_SUITE_AFTER_SUBTEST afterSubtest
 
 /* Test case tracing hooks. */
-TestCaseEnterProc enterTestCase;
-TestCaseLeaveProc leaveTestCase;
-#undef TEST_CASE_ENTER
-#undef TEST_CASE_LEAVE
-#define TEST_CASE_ENTER enterTestCase
-#define TEST_CASE_LEAVE leaveTestCase
+PicoTestCaseEnterProc enterTestCase;
+PicoTestCaseLeaveProc leaveTestCase;
+#undef PICOTEST_CASE_ENTER
+#undef PICOTEST_CASE_LEAVE
+#define PICOTEST_CASE_ENTER enterTestCase
+#define PICOTEST_CASE_LEAVE leaveTestCase
+
+/* Shorthands. */
+#define ASSERT PICOTEST_ASSERT
+#define VERIFY PICOTEST_VERIFY

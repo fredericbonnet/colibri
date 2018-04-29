@@ -22,7 +22,7 @@ static void ropeReplace(Col_Word rope, Col_Word with);
 static void ropesEqual(Col_Word rope1, Col_Word rope2);
 static int ropeCheckFormat(Col_Word rope, Col_StringFormat format);
 
-TEST_SUITE(testRopes, 
+PICOTEST_SUITE(testRopes, 
     testNewRope, testSubropes, testRopeOps, testRopeIterators, testRopeUtf,
     testRopeNormalize
 )
@@ -31,24 +31,24 @@ TEST_SUITE(testRopes,
  * Rope creation.
  */
 
-TEST_SUITE(testNewRope, 
+PICOTEST_SUITE(testNewRope, 
     testNewSmallRope, testNewLargeRope
 )
 
 
-TEST_FIXTURE_SETUP(testNewRope) {
+PICOTEST_FIXTURE_SETUP(testNewRope) {
     Col_Init(COL_SINGLE);
     Col_SetErrorProc(ERROR_PROC);
 
     Col_PauseGC();
 }
-TEST_FIXTURE_TEARDOWN(testNewRope) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testNewRope) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
-TEST_CASE(testNewSmallRope, testNewRope) {
+PICOTEST_CASE(testNewSmallRope, testNewRope) {
     Col_Char1 c[10];
     size_t l = sizeof(c)/sizeof(*c);
     size_t index;
@@ -76,7 +76,7 @@ TEST_CASE(testNewSmallRope, testNewRope) {
         if (index > 0) ASSERT(Col_RopeFind(rope, (Col_Char) index, index-1, SIZE_MAX, 1) == SIZE_MAX, "index=%u", index);
     }
 }
-TEST_CASE(testNewLargeRope, testNewRope) {
+PICOTEST_CASE(testNewLargeRope, testNewRope) {
     Col_Char2 c[1000];
     size_t l = sizeof(c)/sizeof(*c);
     size_t index;
@@ -110,15 +110,15 @@ TEST_CASE(testNewLargeRope, testNewRope) {
  * Subropes.
  */
 
-TEST_SUITE(testSubropes, 
+PICOTEST_SUITE(testSubropes, 
     testSmallSubropes, testLargeSubropes, testNestedSubropes
 )
 
 
-TEST_FIXTURE_CONTEXT(testSubropes) {
+PICOTEST_FIXTURE_CONTEXT(testSubropes) {
     Col_Word rope;
 };
-TEST_FIXTURE_SETUP(testSubropes, context) {
+PICOTEST_FIXTURE_SETUP(testSubropes, context) {
     Col_Char2 c[1000];
     size_t l = sizeof(c)/sizeof(*c);
     size_t index;
@@ -134,13 +134,13 @@ TEST_FIXTURE_SETUP(testSubropes, context) {
 
     context->rope = Col_NewRope(COL_UCS2, c, sizeof(c));
 }
-TEST_FIXTURE_TEARDOWN(testSubropes) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testSubropes) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
-TEST_CASE(testSmallSubropes, testSubropes, context) {
+PICOTEST_CASE(testSmallSubropes, testSubropes, context) {
     size_t length = Col_RopeLength(context->rope);
     size_t index;
     size_t offset, sublength=10;
@@ -176,7 +176,7 @@ TEST_CASE(testSmallSubropes, testSubropes, context) {
         if (offset > 0) ASSERT(Col_RopeSearch(context->rope, subrope, offset-1, SIZE_MAX, 1) == SIZE_MAX, "offset=%u", offset);
     }
 }
-TEST_CASE(testLargeSubropes, testSubropes, context) {
+PICOTEST_CASE(testLargeSubropes, testSubropes, context) {
     size_t length = Col_RopeLength(context->rope);
     size_t index;
     size_t offset, sublength=length/2;
@@ -212,7 +212,7 @@ TEST_CASE(testLargeSubropes, testSubropes, context) {
         if (offset > 0) ASSERT(Col_RopeSearch(context->rope, subrope, offset-1, SIZE_MAX, 1) == SIZE_MAX, "offset=%u", offset);
     }
 }
-TEST_CASE(testNestedSubropes, testSubropes, context) {
+PICOTEST_CASE(testNestedSubropes, testSubropes, context) {
     /*
      * Level 2 nesting:
      *
@@ -271,18 +271,18 @@ TEST_CASE(testNestedSubropes, testSubropes, context) {
  * Rope operations.
  */
 
-TEST_SUITE(testRopeOps,
+PICOTEST_SUITE(testRopeOps,
     testRopeAccess, testRopeInsert, testRopeRemove, testRopeReplace
 )
 
 
-TEST_FIXTURE_CONTEXT(testRopeOps) {
+PICOTEST_FIXTURE_CONTEXT(testRopeOps) {
     Col_Word small1;
     Col_Word small2;
     Col_Word large1;
     Col_Word large2;
 };
-TEST_FIXTURE_SETUP(testRopeOps, context) {
+PICOTEST_FIXTURE_SETUP(testRopeOps, context) {
     Col_Char1 c1[10];
     Col_Char2 c2[1000];
     size_t i;
@@ -312,19 +312,19 @@ TEST_FIXTURE_SETUP(testRopeOps, context) {
     }
     context->large2 = Col_NewRope(COL_UCS2, c2, 500*sizeof(*c2));
 }
-TEST_FIXTURE_TEARDOWN(testRopeOps) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testRopeOps) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
-TEST_CASE(testRopeAccess, testRopeOps, context) {
+PICOTEST_CASE(testRopeAccess, testRopeOps, context) {
     ropeAccess(context->small1);
     ropeAccess(context->small2);
     ropeAccess(context->large1);
     ropeAccess(context->large2);
 }
-TEST_CASE(testRopeInsert, testRopeOps, context) {
+PICOTEST_CASE(testRopeInsert, testRopeOps, context) {
     ropeInsert(context->small1, context->small2);
     ropeInsert(context->small2, context->small1);
 
@@ -334,13 +334,13 @@ TEST_CASE(testRopeInsert, testRopeOps, context) {
     ropeInsert(context->small1, context->large2);
     ropeInsert(context->large2, context->small1);
 }
-TEST_CASE(testRopeRemove, testRopeOps, context) {
+PICOTEST_CASE(testRopeRemove, testRopeOps, context) {
     ropeRemove(context->small1);
     ropeRemove(context->small2);
     ropeRemove(context->large1);
     ropeRemove(context->large2);
 }
-TEST_CASE(testRopeReplace, testRopeOps, context) {
+PICOTEST_CASE(testRopeReplace, testRopeOps, context) {
     ropeReplace(context->small1, context->small2);
     ropeReplace(context->small2, context->small1);
 
@@ -356,19 +356,19 @@ TEST_CASE(testRopeReplace, testRopeOps, context) {
  * Rope iterators.
  */
 
-TEST_SUITE(testRopeIterators, 
+PICOTEST_SUITE(testRopeIterators, 
     testRopeIteratorDirect, testRopeIteratorForward, testRopeIteratorBackward, 
     testRopeIteratorStride
 )
 
 
-TEST_FIXTURE_CONTEXT(testRopeIterators) {
+PICOTEST_FIXTURE_CONTEXT(testRopeIterators) {
     size_t length;
     Col_Char2 *data;
     Col_Word rope, subrope;
     size_t subropeOffset;
 };
-TEST_FIXTURE_SETUP(testRopeIterators, context) {
+PICOTEST_FIXTURE_SETUP(testRopeIterators, context) {
     size_t i;
 
     Col_Init(COL_SINGLE);
@@ -390,14 +390,14 @@ TEST_FIXTURE_SETUP(testRopeIterators, context) {
     context->subrope = Col_Subrope(context->rope, 
             context->subropeOffset, context->length-41);
 }
-TEST_FIXTURE_TEARDOWN(testRopeIterators, context) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testRopeIterators, context) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
     free(context->data);
 }
-TEST_CASE(testRopeIteratorDirect, testRopeIterators, context) {
+PICOTEST_CASE(testRopeIteratorDirect, testRopeIterators, context) {
     size_t i, length;
     Col_RopeIterator it;
 
@@ -432,7 +432,7 @@ TEST_CASE(testRopeIteratorDirect, testRopeIterators, context) {
     }
 }
 
-TEST_CASE(testRopeIteratorForward, testRopeIterators, context) {
+PICOTEST_CASE(testRopeIteratorForward, testRopeIterators, context) {
     Col_RopeIterator it;
 
     for (Col_RopeIterFirst(it, context->rope); 
@@ -467,7 +467,7 @@ TEST_CASE(testRopeIteratorForward, testRopeIterators, context) {
 
 }
 
-TEST_CASE(testRopeIteratorBackward, testRopeIterators, context) {
+PICOTEST_CASE(testRopeIteratorBackward, testRopeIterators, context) {
     Col_RopeIterator it;
 
     for (Col_RopeIterLast(it, context->rope); 
@@ -502,7 +502,7 @@ TEST_CASE(testRopeIteratorBackward, testRopeIterators, context) {
     }
 }
 
-TEST_CASE(testRopeIteratorStride, testRopeIterators, context) {
+PICOTEST_CASE(testRopeIteratorStride, testRopeIterators, context) {
     size_t stride = 7;
     Col_RopeIterator it;
 
@@ -554,7 +554,7 @@ TEST_CASE(testRopeIteratorStride, testRopeIterators, context) {
  * UTF ropes.
  */
 
-TEST_SUITE(testRopeUtf, 
+PICOTEST_SUITE(testRopeUtf, 
     testRopeUtf8, testRopeUtf16
 )
 
@@ -562,13 +562,13 @@ TEST_SUITE(testRopeUtf,
  * UTF-8 ropes.
  */
 
-TEST_SUITE(testRopeUtf8,
+PICOTEST_SUITE(testRopeUtf8,
     testRopeUtf8Data, testRopeUtf8Create, testRopeUtf8Access, 
     testRopeUtf8Iterate
 )
 
 
-TEST_CASE(testRopeUtf8Data) {
+PICOTEST_CASE(testRopeUtf8Data) {
     Col_Char1 data[COL_UTF8_MAX_WIDTH];
     const Col_Char1 *p;
     Col_Char c, c2;
@@ -589,11 +589,11 @@ TEST_CASE(testRopeUtf8Data) {
 }
 
 
-TEST_FIXTURE_CONTEXT(testRopeUtf8) {
+PICOTEST_FIXTURE_CONTEXT(testRopeUtf8) {
     size_t length, byteLength;
     Col_Char1 *data;
 };
-TEST_FIXTURE_SETUP(testRopeUtf8, context) {
+PICOTEST_FIXTURE_SETUP(testRopeUtf8, context) {
     /*
      * UTF-8 string containing all the codepoints in range (inc. the invalid
      * ones such as surrogage halves, as we only care about numeric 
@@ -645,14 +645,14 @@ TEST_FIXTURE_SETUP(testRopeUtf8, context) {
 
     Col_PauseGC();
 }
-TEST_FIXTURE_TEARDOWN(testRopeUtf8, context) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testRopeUtf8, context) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
     free(context->data);
 }
-TEST_CASE(testRopeUtf8Create, testRopeUtf8, context) {
+PICOTEST_CASE(testRopeUtf8Create, testRopeUtf8, context) {
     Col_Word rope;
     size_t length;
     
@@ -681,17 +681,17 @@ TEST_CASE(testRopeUtf8Create, testRopeUtf8, context) {
     length = Col_RopeLength(rope);
     ASSERT(length == (0x10FFFF-0x10000+1));
 }
-TEST_CASE(testRopeUtf8Access, testRopeUtf8, context) {
+PICOTEST_CASE(testRopeUtf8Access, testRopeUtf8, context) {
     ropeAccess(Col_NewRope(COL_UTF8, context->data, context->byteLength));
 }
 
 
-TEST_SUITE(testRopeUtf8Iterate,
+PICOTEST_SUITE(testRopeUtf8Iterate,
     testRopeUtf8IterateForward, testRopeUtf8IterateBackward
 )
 
 
-TEST_CASE(testRopeUtf8IterateForward, testRopeUtf8, context) {
+PICOTEST_CASE(testRopeUtf8IterateForward, testRopeUtf8, context) {
     Col_RopeIterator it;
     Col_Char c1, c2;
     size_t index;
@@ -715,7 +715,7 @@ TEST_CASE(testRopeUtf8IterateForward, testRopeUtf8, context) {
     }
     ASSERT(c1 == 0x10FFFF+1);
 }
-TEST_CASE(testRopeUtf8IterateBackward, testRopeUtf8, context) {
+PICOTEST_CASE(testRopeUtf8IterateBackward, testRopeUtf8, context) {
     Col_RopeIterator it;
     Col_Char c1, c2;
     size_t index;
@@ -735,13 +735,13 @@ TEST_CASE(testRopeUtf8IterateBackward, testRopeUtf8, context) {
  * UTF-16 ropes.
  */
 
-TEST_SUITE(testRopeUtf16,
+PICOTEST_SUITE(testRopeUtf16,
     testRopeUtf16Data, testRopeUtf16Create, testRopeUtf16Access, 
     testRopeUtf16Iterate
 )
 
 
-TEST_CASE(testRopeUtf16Data) {
+PICOTEST_CASE(testRopeUtf16Data) {
     Col_Char2 data[COL_UTF16_MAX_WIDTH];
     const Col_Char2 *p;
     Col_Char c, c2;
@@ -762,11 +762,11 @@ TEST_CASE(testRopeUtf16Data) {
 }
 
 
-TEST_FIXTURE_CONTEXT(testRopeUtf16) {
+PICOTEST_FIXTURE_CONTEXT(testRopeUtf16) {
     size_t length, byteLength;
     Col_Char2 *data;
 };
-TEST_FIXTURE_SETUP(testRopeUtf16, context) {
+PICOTEST_FIXTURE_SETUP(testRopeUtf16, context) {
     /*
      * UTF-16 string containing all the valid codepoints.
      */
@@ -801,14 +801,14 @@ TEST_FIXTURE_SETUP(testRopeUtf16, context) {
 
     Col_PauseGC();
 }
-TEST_FIXTURE_TEARDOWN(testRopeUtf16, context) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testRopeUtf16, context) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
     free(context->data);
 }
-TEST_CASE(testRopeUtf16Create, testRopeUtf16, context) {
+PICOTEST_CASE(testRopeUtf16Create, testRopeUtf16, context) {
     Col_Word rope;
     size_t length;
     
@@ -827,17 +827,17 @@ TEST_CASE(testRopeUtf16Create, testRopeUtf16, context) {
     length = Col_RopeLength(rope);
     ASSERT(length == (0x10FFFF-0x10000+1));
 }
-TEST_CASE(testRopeUtf16Access, testRopeUtf16, context) {
+PICOTEST_CASE(testRopeUtf16Access, testRopeUtf16, context) {
     ropeAccess(Col_NewRope(COL_UTF16, context->data, context->byteLength));
 }
 
 
-TEST_SUITE(testRopeUtf16Iterate,
+PICOTEST_SUITE(testRopeUtf16Iterate,
     testRopeUtf16IterateForward, testRopeUtf16IterateBackward
 )
 
 
-TEST_CASE(testRopeUtf16IterateForward, testRopeUtf16, context) {
+PICOTEST_CASE(testRopeUtf16IterateForward, testRopeUtf16, context) {
     Col_RopeIterator it;
     Col_Char c1, c2;
     size_t index;
@@ -861,7 +861,7 @@ TEST_CASE(testRopeUtf16IterateForward, testRopeUtf16, context) {
     }
     ASSERT(c1 == 0x10FFFF+1);
 }
-TEST_CASE(testRopeUtf16IterateBackward, testRopeUtf16, context) {
+PICOTEST_CASE(testRopeUtf16IterateBackward, testRopeUtf16, context) {
     Col_RopeIterator it;
     Col_Char c1, c2;
     size_t index;
@@ -883,14 +883,14 @@ TEST_CASE(testRopeUtf16IterateBackward, testRopeUtf16, context) {
  */
 
 
-TEST_SUITE(testRopeNormalize, 
+PICOTEST_SUITE(testRopeNormalize, 
     testRopeNormalizePrerequisites, testRopeNormalizeSmallChar, 
     testRopeNormalizeSmallString, testRopeNormalizeSubstring,
     testRopeNormalizeConcat
 )
 
 
-TEST_FIXTURE_CONTEXT(testRopeNormalize) {
+PICOTEST_FIXTURE_CONTEXT(testRopeNormalize) {
     Col_Word char1_1;
     Col_Word char2_1;
     Col_Word char2_2;
@@ -911,7 +911,7 @@ TEST_FIXTURE_CONTEXT(testRopeNormalize) {
     Col_Word utf16_2;
     Col_Word utf16_4;
 };
-TEST_FIXTURE_SETUP(testRopeNormalize, context) {
+PICOTEST_FIXTURE_SETUP(testRopeNormalize, context) {
     Col_Char1 ucs1[256];
     Col_Char2 ucs2[256+256];
     Col_Char4 ucs4[256+256+256];
@@ -984,14 +984,14 @@ TEST_FIXTURE_SETUP(testRopeNormalize, context) {
     context->utf16_2 = Col_NewRope(COL_UTF16, utf16+256, 512);
     context->utf16_4 = Col_NewRope(COL_UTF16, utf16+256+256, 1024);
 }
-TEST_FIXTURE_TEARDOWN(testRopeNormalize, context) {
-    if (!TEST_FAIL) {
+PICOTEST_FIXTURE_TEARDOWN(testRopeNormalize, context) {
+    if (!PICOTEST_FAIL) {
         Col_ResumeGC();
     }
     Col_Cleanup();
 }
 
-TEST_CASE(testRopeNormalizePrerequisites, testRopeNormalize, context) {
+PICOTEST_CASE(testRopeNormalizePrerequisites, testRopeNormalize, context) {
     ASSERT(ropeCheckFormat(context->char1_1, COL_UCS1));
     ASSERT(ropeCheckFormat(context->char1_1, COL_UCS));
     ASSERT(ropeCheckFormat(context->char2_1, COL_UCS2));
@@ -1049,7 +1049,7 @@ TEST_CASE(testRopeNormalizePrerequisites, testRopeNormalize, context) {
     ropesEqual(context->ucs4_4, context->utf8_4);
     ropesEqual(context->ucs4_4, context->utf16_4);
 }
-TEST_CASE(testRopeNormalizeSmallChar, testRopeNormalize, context) {
+PICOTEST_CASE(testRopeNormalizeSmallChar, testRopeNormalize, context) {
     Col_Char c1_1 = Col_RopeAt(context->char1_1, 0);
     Col_Char c2_1 = Col_RopeAt(context->char2_1, 0);
     Col_Char c2_2 = Col_RopeAt(context->char2_2, 0);
@@ -1144,7 +1144,7 @@ TEST_CASE(testRopeNormalizeSmallChar, testRopeNormalize, context) {
     ASSERT(Col_NormalizeRope(context->char4_4, COL_UCS2, c2_2, 0) == context->char2_2);
 }
 
-TEST_CASE(testRopeNormalizeSmallString, testRopeNormalize, context) {
+PICOTEST_CASE(testRopeNormalizeSmallString, testRopeNormalize, context) {
     static const Col_StringFormat formats[] = {COL_UCS1, COL_UCS2, COL_UCS4, 
             COL_UCS, COL_UTF8, COL_UTF16};
     int i, flatten;
@@ -1168,12 +1168,12 @@ TEST_CASE(testRopeNormalizeSmallString, testRopeNormalize, context) {
     }
 }
 
-TEST_SUITE(testRopeNormalizeString,
+PICOTEST_SUITE(testRopeNormalizeString,
     testRopeNormalizeStringLossless, testRopeNormalizeStringLossy, 
     testRopeNormalizeStringReplace
 )
 
-TEST_CASE(testRopeNormalizeStringLossless, testRopeNormalize, context) {
+PICOTEST_CASE(testRopeNormalizeStringLossless, testRopeNormalize, context) {
     static const Col_StringFormat formats[] = {COL_UCS1, COL_UCS2, COL_UCS4, 
             COL_UCS, COL_UTF8, COL_UTF16};
     int i, flatten;
@@ -1267,7 +1267,7 @@ TEST_CASE(testRopeNormalizeStringLossless, testRopeNormalize, context) {
     }
 }
 
-TEST_CASE(testRopeNormalizeStringLossy, testRopeNormalize, context) {
+PICOTEST_CASE(testRopeNormalizeStringLossy, testRopeNormalize, context) {
     static const Col_StringFormat formats[] = {COL_UCS1, COL_UCS2, COL_UCS4, 
             COL_UCS, COL_UTF8, COL_UTF16};
     int i, flatten;
@@ -1429,7 +1429,7 @@ TEST_CASE(testRopeNormalizeStringLossy, testRopeNormalize, context) {
     }
 }
 
-TEST_CASE(testRopeNormalizeStringReplace, testRopeNormalize, context) {
+PICOTEST_CASE(testRopeNormalizeStringReplace, testRopeNormalize, context) {
     static const Col_StringFormat formats[] = {COL_UCS1, COL_UCS2, COL_UCS4, 
             COL_UCS, COL_UTF8, COL_UTF16};
     int i, flatten;
@@ -1591,7 +1591,7 @@ TEST_CASE(testRopeNormalizeStringReplace, testRopeNormalize, context) {
     }
 }
 
-TEST_CASE(testRopeNormalizeSubstring, testRopeNormalize, context) {
+PICOTEST_CASE(testRopeNormalizeSubstring, testRopeNormalize, context) {
     Col_Word rope, normalized, flattened;
 
     rope = Col_Subrope(context->ucs1_1, 1, SIZE_MAX);
@@ -1656,7 +1656,7 @@ TEST_CASE(testRopeNormalizeSubstring, testRopeNormalize, context) {
     ropesEqual(normalized, flattened);
 }
 
-TEST_CASE(testRopeNormalizeConcat, testRopeNormalize, context) {
+PICOTEST_CASE(testRopeNormalizeConcat, testRopeNormalize, context) {
     Col_Word rope, normalized, flattened;
 
     rope = Col_ConcatRopes(context->ucs1_1, context->ucs2_1);
