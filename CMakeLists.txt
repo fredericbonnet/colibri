@@ -70,3 +70,8 @@ target_link_libraries(test_colibri
 install(TARGETS test_colibri EXPORT test_colibri
 	RUNTIME DESTINATION bin/${CMAKE_BUILD_TYPE}
 )
+
+enable_testing()
+picotest_discover_tests(test_colibri
+	TEST_LIST_OPTION "-l"
+)
