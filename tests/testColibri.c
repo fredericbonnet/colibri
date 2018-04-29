@@ -6,7 +6,7 @@
 
 #include <colibri.h>
 
-#include "picotest.h"
+#include <picotest.h>
 
 #ifdef _DEBUG
 #   define DO_TRACE

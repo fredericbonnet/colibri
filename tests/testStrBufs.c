@@ -3,7 +3,7 @@
 
 #include <colibri.h>
 
-#include "picotest.h"
+#include <picotest.h>
 
 #include "testColibri.h"
 

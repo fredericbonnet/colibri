@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.11)
 
 project(colibri LANGUAGES C)
 
+LIST(APPEND CMAKE_MODULE_PATH ${CMAKE_INSTALL_PREFIX}/cmake ${CMAKE_CURRENT_LIST_DIR}/../lib)
+
+find_package(PicoTest REQUIRED)
+
 # Colibri library
 add_library(colibri SHARED)
 target_compile_definitions(colibri
@@ -61,6 +65,7 @@ target_sources(test_colibri
 target_link_libraries(test_colibri
 	PRIVATE
 		colibri
+		PicoTest
 )
 install(TARGETS test_colibri EXPORT test_colibri
 	RUNTIME DESTINATION bin/${CMAKE_BUILD_TYPE}
