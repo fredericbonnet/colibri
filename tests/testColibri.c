@@ -73,9 +73,9 @@ void leaveTestSuite(const char *suiteName, int nb,
     printf("%s%s : %d failed (total)\n", prefix, suiteName, fail);
     fflush(stdout);
 }
-void beforeSubtest(const char *suiteName, int nb, int index, const char *testName, int fail) {
+void beforeSubtest(const char *suiteName, int nb, int fail, int index, const char *testName) {
 }
-void afterSubtest(const char *suiteName, int nb, int index, const char *testName, int fail, int sfail) {
+void afterSubtest(const char *suiteName, int nb, int fail, int index, const char *testName, int sfail) {
 }
 void enterTestCase(const char *testName) {
     printf("%s%s ... ", prefix, testName);
