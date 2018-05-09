@@ -40,13 +40,31 @@ else()
 		PRIVATE
 			platform/unix/colUnixPlatform.c
 	)
+	# FIXME
+	target_compile_definitions(colibri
+		PUBLIC 
+			HAVE_STDINT_H
+	)
+	target_link_libraries(colibri
+		PUBLIC
+			pthread
+	)
 endif()
 
-install(TARGETS colibri EXPORT colibri-config
-	RUNTIME DESTINATION bin/${CMAKE_BUILD_TYPE}
-	ARCHIVE DESTINATION lib/${CMAKE_BUILD_TYPE}
-	LIBRARY DESTINATION lib/${CMAKE_BUILD_TYPE}/static
-)
+# FIXME
+if (WIN32)
+	install(TARGETS colibri EXPORT colibri-config
+		RUNTIME DESTINATION bin/${CMAKE_BUILD_TYPE}
+		ARCHIVE DESTINATION lib/${CMAKE_BUILD_TYPE}
+		LIBRARY DESTINATION lib/${CMAKE_BUILD_TYPE}/static
+	)
+else()
+	install(TARGETS colibri EXPORT colibri-config
+		RUNTIME DESTINATION bin/${CMAKE_BUILD_TYPE}
+		ARCHIVE DESTINATION lib/${CMAKE_BUILD_TYPE}
+		LIBRARY DESTINATION bin/${CMAKE_BUILD_TYPE}
+	)
+endif()
 install(DIRECTORY include/ DESTINATION include/colibri)
 install(EXPORT colibri-config DESTINATION cmake)
 
