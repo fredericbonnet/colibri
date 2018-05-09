@@ -43,7 +43,7 @@ System and Architecture (Unix-specific)
  */
                                                                                 #       ifndef DOXYGEN
 extern pthread_key_t tsdKey;
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 /*!     @} */
 /********************************************************************************//*!   @name \
  * System Page Allocation                                                       *//*!   @{ *//*
@@ -107,7 +107,7 @@ extern pthread_key_t tsdKey;
  */
                                                                                 #       ifndef DOXYGEN
 extern pthread_mutex_t mutexRange;
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 /*!     @} */
                                                                                 /*!     @} */
 #endif /* _COLIBRI_UNIXPLATFORM */

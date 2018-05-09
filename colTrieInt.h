@@ -471,7 +471,7 @@ Trie Nodes
  *//*-----------------------------------------------------------------------*/
                                                                                 #       ifndef DOXYGEN
 #define TRIENODE_MASK                   (UINT_MAX>>CHAR_BIT)
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 #ifdef COL_BIGENDIAN
 #   define WORD_TRIENODE_BIT(word)      ((((Col_Char *)(word))[0])&TRIENODE_MASK)
 #   define WORD_TRIENODE_SET_BIT(word, bit) ((((Col_Char *)(word))[0])&=~TRIENODE_MASK,(((Col_Char *)(word))[0])|=((bit)&TRIENODE_MASK))
@@ -672,7 +672,7 @@ String Trie Nodes
  *//*-----------------------------------------------------------------------*/
                                                                                 #       ifndef DOXYGEN
 #define STRTRIENODE_MASK                (UINT_MAX>>CHAR_BIT)
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 #ifdef COL_BIGENDIAN
 #   define WORD_STRTRIENODE_MASK(word)  ((((Col_Char *)(word))[0])&STRTRIENODE_MASK)
 #   define WORD_STRTRIENODE_SET_MASK(word, mask) ((((Col_Char *)(word))[0])&=~STRTRIENODE_MASK,(((Col_Char *)(word))[0])|=((size)&STRTRIENODE_MASK))

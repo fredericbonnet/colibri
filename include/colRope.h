@@ -477,7 +477,7 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *//*-----------------------------------------------------------------------*/
 
 #define Col_RopeIterSetNull(it) \
-    memset(it, 0, sizeof(it))
+    memset((it), 0, sizeof(*(it)))
 
 /*---------------------------------------------------------------------------   *//*!   @def \
  * Col_RopeIterRope

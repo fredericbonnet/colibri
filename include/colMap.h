@@ -151,7 +151,7 @@ typedef ColMapIterator Col_MapIterator[1];
  *//*-----------------------------------------------------------------------*/
 
 #define Col_MapIterSetNull(it) \
-    memset(it, 0, sizeof(it))
+    memset((it), 0, sizeof(*(it)))
 
 /*---------------------------------------------------------------------------   *//*!   @def \
  * Col_MapIterMap

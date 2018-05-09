@@ -354,7 +354,7 @@ Mutable Vectors
  *//*-----------------------------------------------------------------------*/
                                                                                 #       ifndef DOXYGEN
 #define MVECTOR_SIZE_MASK               MVECTOR_MAX_SIZE
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 #ifdef COL_BIGENDIAN
 #   define WORD_MVECTOR_SIZE(word)      ((((size_t *)(word))[0])&MVECTOR_SIZE_MASK)
 #   define WORD_MVECTOR_SET_SIZE(word, size) ((((size_t *)(word))[0])&=~MVECTOR_SIZE_MASK,(((size_t *)(word))[0])|=((size)&MVECTOR_SIZE_MASK))

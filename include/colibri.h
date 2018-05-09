@@ -195,7 +195,7 @@ extern "C" {
 #endif
 
 #include <stddef.h> /* For size_t */
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 
 /*
 ================================================================================*//*!   @addtogroup basic_types \

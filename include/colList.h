@@ -294,7 +294,7 @@ typedef ColListIterator Col_ListIterator[1];
  *//*-----------------------------------------------------------------------*/
 
 #define Col_ListIterSetNull(it) \
-    memset(it, 0, sizeof(it))
+    memset((it), 0, sizeof(*(it)))
 
 /*---------------------------------------------------------------------------   *//*!   @def \
  * Col_ListIterList

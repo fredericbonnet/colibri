@@ -43,7 +43,7 @@ System and Architecture (Win32-specific)
  */
                                                                                 #       ifndef DOXYGEN
 extern DWORD tlsToken;
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 /*!     @} */
 /********************************************************************************//*!   @name \
  * System Page Allocation                                                       *//*!   @{ *//*
@@ -82,7 +82,7 @@ extern DWORD tlsToken;
  */
                                                                                 #       ifndef DOXYGEN
 extern CRITICAL_SECTION csRange;
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 /*!     @} */
                                                                                 /*!     @} */
 #endif /* _COLIBRI_WIN32PLATFORM */

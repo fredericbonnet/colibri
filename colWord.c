@@ -28,7 +28,7 @@
 
 static int              HasSynonymField(Col_Word word);
 static void             AddSynonymField(Col_Word *wordPtr);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 
 /*
 ================================================================================*//*!   @addtogroup words \
@@ -607,14 +607,14 @@ Col_SortWords(
     Col_Word v;
                                                                                 #       ifndef DOXYGEN
 #define SWAP(a, b) {Col_Word tmp=b; b=a; a=tmp;}
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
     /*
      * Entry point for tail recursive calls.
      */
                                                                                 #       ifndef DOXYGEN
 #define TAIL_RECURSE(_first, _last) \
     first = (_first); last = (_last); goto start;
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 start:
 
     if (last <= first) return;

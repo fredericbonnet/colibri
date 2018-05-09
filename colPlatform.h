@@ -18,7 +18,7 @@
 #else /* FIXME */
 #   include "platform/unix/colUnixPlatform.h"
 #endif
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 
 
 /*
@@ -139,7 +139,7 @@ void                    PlatLeaveProtectRoots(GroupData *data);
 void                    PlatSyncPauseGC(GroupData *data);
 int                     PlatTrySyncPauseGC(GroupData *data);
 void                    PlatSyncResumeGC(GroupData *data, int schedule);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 /*!     @} */
 /********************************************************************************//*!   @name \
  * System Page Allocation                                                       *//*!   @{ *//*
@@ -155,7 +155,7 @@ int                     PlatAllocPages(void *addr, size_t number);
 int                     PlatFreePages(void *addr, size_t number);
 int                     PlatProtectPages(void *addr, size_t number,
                                 int protect);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 /*!     @} */
                                                                                 /*!     @} */
 #endif /* _COLIBRI_PLATFORM */

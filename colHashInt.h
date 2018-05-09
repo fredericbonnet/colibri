@@ -487,7 +487,7 @@ Hash Entries
  *//*-----------------------------------------------------------------------*/
                                                                                 #       ifndef DOXYGEN
 #define HASHENTRY_HASH_MASK             (UINTPTR_MAX^UCHAR_MAX)
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 #ifdef COL_BIGENDIAN
 #   define WORD_HASHENTRY_HASH(word)    ((((uintptr_t *)(word))[0]<<CHAR_BIT)&HASHENTRY_HASH_MASK)
 #   define WORD_HASHENTRY_SET_HASH(word, hash) ((((uintptr_t *)(word))[0])&=~(HASHENTRY_HASH_MASK>>CHAR_BIT),(((uintptr_t *)(word))[0])|=(((hash)&HASHENTRY_HASH_MASK)>>CHAR_BIT))

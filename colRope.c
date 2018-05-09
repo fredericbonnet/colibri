@@ -42,7 +42,7 @@ static void             GetChunk(struct RopeChunkTraverseInfo *info,
                             Col_RopeChunk *chunkPtr, int reverse);
 static void             NextChunk(struct RopeChunkTraverseInfo *info,
                             size_t nb, int reverse);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 
 /*
 ================================================================================*//*!   @addtogroup rope_words \

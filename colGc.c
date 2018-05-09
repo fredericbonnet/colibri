@@ -52,7 +52,7 @@ static void             SweepUnreachableCells(GroupData *data,
 static void             PromotePages(GroupData *data, MemoryPool *pool);
 static void             ResetPool(MemoryPool *pool);
 static Col_CustomWordChildEnumProc MarkWordChild;
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 
 /*
 ================================================================================*//*!   @addtogroup gc \
@@ -1238,7 +1238,7 @@ MarkWord(
                                                                                 #       ifndef DOXYGEN
 #define TAIL_RECURSE(_wordPtr, _parentPage) \
     wordPtr = (_wordPtr); parentPage = (_parentPage); goto start;
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 start:
 
     type = WORD_TYPE(*wordPtr);

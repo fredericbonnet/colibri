@@ -1290,7 +1290,7 @@ Custom Words
         (((value)>>((sizeof(value)-1)*8)) | ((value)<<8))
 #   define ROTATE_RIGHT(value) \
         (((value)<<((sizeof(value)-1)*8)) | ((value)>>8))
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 #   define WORD_TYPEINFO(word) \
         ((Col_CustomWordType *)(ROTATE_LEFT(*(uintptr_t *)(word))&~1))
 #   define WORD_SET_TYPEINFO(word, addr) \

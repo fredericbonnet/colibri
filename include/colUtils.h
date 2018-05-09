@@ -35,7 +35,7 @@ Utilities                                                                       
     COL_CONCATENATE2(arg1, arg2)
 #define COL_CONCATENATE2(arg1, arg2) \
     arg1##arg2
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 
 /********************************************************************************//*!   @name \
  * Variadic Macro Utilities
@@ -76,7 +76,7 @@ Utilities                                                                       
         _51,_52,_53,_54,_55,_56,_57,_58,_59,_60, \
         _61,_62,_63, \
     N,...) N
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 #if defined(_MSC_VER)
 /*
  * MSVC is buggy wrt. (__VA_ARGS__) syntax. The workaround involves the use of a
@@ -240,7 +240,7 @@ Utilities                                                                       
 #   define COL_FOR_EACH_61(what, x, ...) what(x) COL_FOR_EACH_60(what,__VA_ARGS__)
 #   define COL_FOR_EACH_62(what, x, ...) what(x) COL_FOR_EACH_61(what,__VA_ARGS__)
 #   define COL_FOR_EACH_63(what, x, ...) what(x) COL_FOR_EACH_62(what,__VA_ARGS__)
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 #   define COL_FOR_EACH(what, ...) COL_CONCATENATE(COL_FOR_EACH_,COL_ARGCOUNT(__VA_ARGS__))(what,__VA_ARGS__)
 
 #endif /* _MSC_VER */
@@ -284,7 +284,7 @@ Error Handling & Debugging                                                      
 
 #define COL_RUNTIMECHECK(condition, level, domain, code, ...) \
     if (!(condition)) { \
-        Col_Error((level), (domain), (code), __VA_ARGS__); \
+        Col_Error((level), (domain), (code), ## __VA_ARGS__); \
         goto COL_CONCATENATE(FAILED,__LINE__); \
     } \
     if (0) \

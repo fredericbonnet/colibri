@@ -60,7 +60,7 @@ static Col_Word         ConvertStringNodeToMutable(Col_Word node, Col_Word map,
                                 Col_Word prefix);
 static Col_Word         ConvertIntNodeToMutable(Col_Word node, Col_Word map,
                                 intptr_t prefix);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 
 /*
 ================================================================================*//*!   @addtogroup triemap_words \

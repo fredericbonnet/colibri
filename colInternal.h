@@ -112,7 +112,7 @@ Error Handling & Debugging                                                      
  *//*-----------------------------------------------------------------------*/
 
 #define TYPECHECK(condition, code, ...) \
-    COL_DEBUGCHECK(condition, COL_TYPECHECK, ColibriDomain, code, __VA_ARGS__)
+    COL_DEBUGCHECK(condition, COL_TYPECHECK, ColibriDomain, code, ## __VA_ARGS__)
 
 /*---------------------------------------------------------------------------   *//*!   @def \
  * VALUECHECK
@@ -128,7 +128,7 @@ Error Handling & Debugging                                                      
  *//*-----------------------------------------------------------------------*/
 
 #define VALUECHECK(condition, code, ...) \
-    COL_RUNTIMECHECK(condition, COL_VALUECHECK, ColibriDomain, code, __VA_ARGS__)
+    COL_RUNTIMECHECK(condition, COL_VALUECHECK, ColibriDomain, code, ## __VA_ARGS__)
 
 /*---------------------------------------------------------------------------   *//*!   @def \
  * TRACE
@@ -151,7 +151,7 @@ Error Handling & Debugging                                                      
  */
                                                                                 #       ifndef DOXYGEN
 extern const char * const ColibriDomain[];
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 /*!     @} */
 /*
 ================================================================================*//*!   @addtogroup pages_cells \
@@ -399,7 +399,7 @@ typedef char Cell[CELL_SIZE];
 #define PAGE_NEXT_MASK                  (~(PAGE_GENERATION_MASK|PAGE_FLAGS_MASK))
 #define PAGE_GENERATION_MASK            0x0F
 #define PAGE_FLAGS_MASK                 0xF0
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 #define PAGE_NEXT(page)                 ((Page *)((*(uintptr_t *)(page)) & PAGE_NEXT_MASK))
 #define PAGE_SET_NEXT(page, next)       (*(uintptr_t *)(page) &= ~PAGE_NEXT_MASK, *(uintptr_t *)(page) |= ((uintptr_t)(next)) & PAGE_NEXT_MASK)
 #define PAGE_GENERATION(page)           ((*(uintptr_t *)(page)) & PAGE_GENERATION_MASK)
@@ -502,14 +502,14 @@ typedef struct MemoryPool {
                                                                                 #       ifndef DOXYGEN
 void                    PoolInit(MemoryPool *pool, unsigned int generation);
 void                    PoolCleanup(MemoryPool *pool);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 /*!     @} */
 /********************************************************************************//*!   @name \
  * System Page Allocation                                                       *//*!   @{ *//*
  ******************************************************************************/
                                                                                 #       ifndef DOXYGEN
 void                    SysPageProtect(void *page, int protect);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 /*!     @} */
 /********************************************************************************//*!   @name \
  * Page Allocation                                                              *//*!   @{ *//*
@@ -517,7 +517,7 @@ void                    SysPageProtect(void *page, int protect);
                                                                                 #       ifndef DOXYGEN
 void                    PoolAllocPages(MemoryPool *pool, size_t number);
 void                    PoolFreeEmptyPages(MemoryPool *pool);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 /*!     @} */
 /********************************************************************************//*!   @name \
  * Cell Allocation                                                              *//*!   @{ *//*
@@ -530,7 +530,7 @@ void                    ClearAllCells(Page *page);
 int                     TestCell(Page *page, size_t index);
 size_t                  NbSetCells(Page *page);
 Cell *                  AllocCells(size_t number);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 /*!     @} */
                                                                                 /*!     @} */
 /*
@@ -617,7 +617,7 @@ void                    GcInitThread(ThreadData *data);
 void                    GcInitGroup(GroupData *data);
 void                    GcCleanupThread(ThreadData *data);
 void                    GcCleanupGroup(GroupData *data);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 /*!     @} */
 /********************************************************************************//*!   @name \
  * Mark & Sweep Algorithm                                                       *//*!   @{ *//*
@@ -627,7 +627,7 @@ void                    PerformGC(GroupData *data);
 void                    RememberSweepable(Col_Word word,
                             Col_CustomWordType *type);
 void                    CleanupSweepables(MemoryPool *pool);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
                                                                                 /*!     @} */
                                                                                 /*!     @} */
 /*

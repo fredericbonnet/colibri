@@ -24,7 +24,7 @@
  */
 
 static void             CommitBuffer(Col_Word strbuf);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 
 /*
 ================================================================================*//*!   @addtogroup strbuf_words \

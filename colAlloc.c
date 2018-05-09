@@ -23,7 +23,7 @@ static void             SysPageFree(void * base);
 static void             SysPageTrim(void * base);
 static Cell *           PageAllocCells(size_t number, Cell *firstCell);
 static size_t           FindFreeCells(void *page, size_t number, size_t index);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 
 /*
 ================================================================================*//*!   @cond PRIVATE @addtogroup alloc \

@@ -54,7 +54,7 @@ static void             GetChunk(struct ListChunkTraverseInfo *info,
                             const Col_Word **chunkPtr, int reverse);
 static void             NextChunk(struct ListChunkTraverseInfo *info,
                             size_t nb, int reverse);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 
 /*
 ================================================================================*//*!   @addtogroup list_words \
@@ -3291,18 +3291,18 @@ Col_MListSort(
 - transformation totale en mutable
 
 - si root = mvector => sort sur mvector
-- si root = circular list => récursion sur core
-- sinon => quicksort avec itérators jusqu'à ce que le range soit contenu dans 1 seul mvector => sort sur mvector
+- si root = circular list => rï¿½cursion sur core
+- sinon => quicksort avec itï¿½rators jusqu'ï¿½ ce que le range soit contenu dans 1 seul mvector => sort sur mvector
 
 
-pas d'optimisation particulière sur les void lists concaténées
+pas d'optimisation particuliï¿½re sur les void lists concatï¿½nï¿½es
 
 
 
 transfo totale mutable:
 
-- si node immutable (y compris void) : flatten jusqu'à limite longueur mvector
-- si mconcat : récurse + rebalance
+- si node immutable (y compris void) : flatten jusqu'ï¿½ limite longueur mvector
+- si mconcat : rï¿½curse + rebalance
 */
     //TODO
 

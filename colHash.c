@@ -44,7 +44,7 @@ static Col_Word         ConvertEntryToMutable(Col_Word entry,
                             Col_Word *prevPtr);
 static Col_Word         ConvertIntEntryToMutable(Col_Word entry,
                             Col_Word *prevPtr);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 
 /*
 ================================================================================*//*!   @addtogroup hashmap_words \

@@ -25,7 +25,7 @@ static struct Win32GroupData * AllocGroupData(unsigned int model);
 static void             FreeGroupData(struct Win32GroupData *groupData);
 static DWORD WINAPI     GcThreadProc(LPVOID lpParameter);
 static BOOL             Init(void);
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 
 /*
 ================================================================================*//*!   @addtogroup arch_win32 \
@@ -44,7 +44,7 @@ static const int MultiplyDeBruijnBitPosition2[32] =
   31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
 };
 #define LOG2(v) MultiplyDeBruijnBitPosition2[(uint32_t)(v * 0x077CB531U) >> 27]
-                                                                                #       endif DOXYGEN
+                                                                                #       endif /* DOXYGEN */
 
 /********************************************************************************//*!   @name \
  * Thread-Local Storage                                                         *//*!   @{ *//*
