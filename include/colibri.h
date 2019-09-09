@@ -1,7 +1,7 @@
-/*                                                                              *//*!   @file \
- * colibri.h
+/**
+ * @file colibri.h
  *
- *  This header file defines the public API of the Colibri library.
+ * This header file defines the public API of the Colibri library.
  */
 
 #ifndef _COLIBRI
@@ -14,7 +14,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-                                                                                #       ifndef DOXYGEN
+
+/*! \cond IGNORE */
+
 /*
  * The following definitions set up the proper options for Windows compilers.
  * We use this method because there is no autoconf equivalent.
@@ -49,10 +51,11 @@ extern "C" {
  * nonempty. To build a static library, the macro STATIC_BUILD should be
  * defined.
  *
- * Note: when building static but linking dynamically to MSVCRT we must still
- *       correctly decorate the C library imported function.  Use CRTIMPORT
- *       for this purpose.  _DLL is defined by the compiler when linking to
- *       MSVCRT.
+ * @note
+ *      When building static but linking dynamically to MSVCRT we must still
+ *      correctly decorate the C library imported function.  Use CRTIMPORT
+ *      for this purpose.  _DLL is defined by the compiler when linking to
+ *      MSVCRT.
  */
 
 #if (defined(__WIN32__) && (defined(_MSC_VER) || (__BORLANDC__ >= 0x0550) || defined(__LCC__) || defined(__WATCOMC__) || (defined(__GNUC__) && defined(__declspec))))
@@ -195,55 +198,43 @@ extern "C" {
 #endif
 
 #include <stddef.h> /* For size_t */
-                                                                                #       endif /* DOXYGEN */
+
+/*! \endcond *//* IGNORE */
+
 
 /*
-================================================================================*//*!   @addtogroup basic_types \
-Basic Types                                                                     *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\defgroup basic_types Basic Types
+\{*//*==========================================================================
 */
 
-/*---------------------------------------------------------------------------
- * Col_ClientData
- *                                                                              *//*!
- *  Opaque token used to hold private data. Typically used with callbacks.
- *//*-----------------------------------------------------------------------*/
-
+/** Opaque token used to hold private data. Typically used with callbacks. */
 typedef void * Col_ClientData;
 
-                                                                                /*!     @} */
+/* End of Basic Types *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup strings \
-Strings                                                                         *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\defgroup strings Strings
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Basic String Types & Constants                                               *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Basic String Types & Constants
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------
- * Col_Char
- *                                                                              *//*!
- *  String characters use the 32-bit Unicode encoding.
- *//*-----------------------------------------------------------------------*/
-
+/** String characters use the 32-bit Unicode encoding. */
 typedef uint32_t Col_Char;
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * COL_CHAR_INVALID
- *
- *  Invalid Unicode character. Used in error cases.
- *//*-----------------------------------------------------------------------*/
-
+/** Invalid Unicode character. Used in error cases. */
 #define COL_CHAR_INVALID    ((Col_Char) -1)
 
 /*---------------------------------------------------------------------------
  * Character Types
  *
- *  Characters use the Universal Character Set (UCS) encoding.
- *//*-----------------------------------------------------------------------*/
-
+ * Characters use the Universal Character Set (UCS) encoding.
+ */
 /*! 1-byte UCS codepoint truncated to the lower 8 bits, i.e.\ Latin-1. */
 typedef uint8_t Col_Char1;
 /*! 2-byte UCS-2 codepoint. */
@@ -253,40 +244,32 @@ typedef Col_Char Col_Char4;
 
 /*---------------------------------------------------------------------------
  * Maximum character codepoints.
- *                                                                              *//*!   @def \
- * COL_CHAR_MAX
- *  Maximum Universal Character Set (UCS) codepoint.
- *                                                                              *//*!   @def \
- * COL_CHAR1_MAX
- *  Maximum UCS-1 codepoint.
- *                                                                              *//*!   @def \
- * COL_CHAR2_MAX
- *  Maximum UCS-2 codepoint.
- *                                                                              *//*!   @def \
- * COL_CHAR4_MAX
- *  Maximum UCS-4 codepoint, same as #COL_CHAR_MAX.
- *//*-----------------------------------------------------------------------*/
+ *--------------------------------------------------------------------------*/
 
+/** Maximum Universal Character Set (UCS) codepoint. */
 #define COL_CHAR_MAX        ((Col_Char) 0x10FFFF)
+
+/** Maximum UCS-1 codepoint. */
 #define COL_CHAR1_MAX       0xFF
+
+/** Maximum UCS-2 codepoint. */
 #define COL_CHAR2_MAX       0xFFFF
+
+/** Maximum UCS-4 codepoint, same as #COL_CHAR_MAX. */
 #define COL_CHAR4_MAX       COL_CHAR_MAX
 
-/*---------------------------------------------------------------------------   *//*!   @enum \
- * Col_StringFormat
+/**
+ * String formats.
  *
- *  Strings can use various formats.
- *
- *  @attention
+ * @attention
  *      We assume that UTF-8/16 data is always well-formed. It is the caller
  *      responsibility to validate and ensure well-formedness of UTF-8/16 data,
  *      notably for security reasons.
  *
- *  @note
+ * @note
  *      Numeric values are chosen so that the lower 3 bits give the character
  *      width in the data chunk.
- *//*-----------------------------------------------------------------------*/
-
+ */
 typedef enum Col_StringFormat {
     COL_UCS1=0x01,      /*!< Fixed-width array of Col_Char1 */
     COL_UCS2=0x02,      /*!< Fixed-width array of Col_Char2 */
@@ -295,25 +278,16 @@ typedef enum Col_StringFormat {
     COL_UTF16=0x12      /*!< UTF-16 variable width encoding */
 } Col_StringFormat;
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * COL_UTF8_MAX_WIDTH
- *
- *  Maximum width of character in UTF-8 code units.
- *//*-----------------------------------------------------------------------*/
-
+/** Maximum width of character in UTF-8 code units. */
 #define COL_UTF8_MAX_WIDTH  4
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * COL_UTF8_WIDTH
+/**
+ * Get width of character in UTF-8 code units.
  *
- *  Get width of character in UTF-8 code units.
+ * @param c     The character.
  *
- *  @param c     The character.
- *
- *  @result
- *      Number of UTF-8 codepoints needed for the character (0 if invalid).
- *//*-----------------------------------------------------------------------*/
-
+ * @return Number of UTF-8 codepoints needed for the character (0 if invalid).
+ */
 #define COL_UTF8_WIDTH(c) \
     (  (c) <= 0x7F  ? 1 \
      : (c) <= 0x7FF ? 2 \
@@ -323,53 +297,42 @@ typedef enum Col_StringFormat {
      : (c) <= 0x10FFFF  ? 4 \
      :            0 )
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * COL_UTF16_MAX_WIDTH
- *
- *  Maximum width of character in UTF-16 code units.
- *//*-----------------------------------------------------------------------*/
-
+/** Maximum width of character in UTF-16 code units. */
 #define COL_UTF16_MAX_WIDTH 2
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * COL_UTF16_WIDTH
+/**
+ * Get width of character in UTF-16 code units.
  *
- *  Get width of character in UTF-16 code units.
+ * @param c     The character.
  *
- *  @param c     The character.
- *
- *  @result
- *      Number of UTF-16 codepoints needed for the character (0 if invalid).
- *//*-----------------------------------------------------------------------*/
-
+ * @return Number of UTF-16 codepoints needed for the character (0 if invalid).
+ */
 #define COL_UTF16_WIDTH(c) \
     (  (c) <= 0xD7FF    ? 1 \
      : (c) <= 0xDFFF    ? 0 \
      : (c) <= 0xFFFF    ? 1 \
      : (c) <= 0x10FFFF  ? 2 \
      :            0 )
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Character Data Chunk Access                                                  *//*!   @{ *//*
- ******************************************************************************/
+/* End of Basic String Types & Constants *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * COL_CHAR_GET
+
+/***************************************************************************//*!
+ * \name Character Data Chunk Access
+ ***************************************************************************\{*/
+
+/**
+ * Get current character in data chunk.
  *
- *  Get current character in data chunk.
+ * @param format    Data format (see #Col_StringFormat).
+ * @param data      Pointer to current character.
  *
- *  @param format   Data format (see #Col_StringFormat).
- *  @param data     Pointer to current character.
- *
- *  @warning
+ * @warning
  *      Arguments are referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @result
- *      Character codepoint.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Character codepoint.
+ */
 #define COL_CHAR_GET(format, data) \
     (  (format) == COL_UCS1  ?            *((const Col_Char1 *) (data)) \
      : (format) == COL_UCS2  ?            *((const Col_Char2 *) (data)) \
@@ -378,18 +341,15 @@ typedef enum Col_StringFormat {
      : (format) == COL_UTF16 ? Col_Utf16Get((const Col_Char2 *) (data)) \
      : COL_CHAR_INVALID)
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * COL_CHAR_NEXT
+/**
+ * Move to next character in data chunk.
  *
- *  Move to next character in data chunk.
+ * @param format    Data format (see #Col_StringFormat).
+ * @param data      Pointer to current character.
  *
- *  @param format   Data format (see #Col_StringFormat).
- *  @param data     Pointer to current character.
- *
- *  @sideeffect
+ * @sideeffect
  *      The data pointer is moved just past the current character
- *//*-----------------------------------------------------------------------*/
-
+ */
 #define COL_CHAR_NEXT(format, data) \
     (data) = \
     (  (format) == COL_UCS1  ? (const char *) (data) + 1 \
@@ -399,18 +359,15 @@ typedef enum Col_StringFormat {
      : (format) == COL_UTF16 ? (const char *) Col_Utf16Next((const Col_Char2 *) (data)) \
      : NULL)
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * COL_CHAR_PREVIOUS
+/**
+ * Move to previous character in data chunk.
  *
- *  Move to previous character in data chunk.
+ * @param format    Data format (see #Col_StringFormat).
+ * @param data      Pointer to current character.
  *
- *  @param format   Data format (see #Col_StringFormat).
- *  @param data     Pointer to current character.
- *
- *  @sideeffect
+ * @sideeffect
  *      The data pointer is moved to the previous character
- *//*-----------------------------------------------------------------------*/
-
+ */
 #define COL_CHAR_PREVIOUS(format, data) \
     (data) =  \
     (  (format) == COL_UCS1  ? (const char *) (data) - 1 \
@@ -437,6 +394,10 @@ EXTERN Col_Char2 *          Col_Utf16Set(Col_Char2 * data, Col_Char c);
 EXTERN const Col_Char2 *    Col_Utf16Next(const Col_Char2 * data);
 EXTERN const Col_Char2 *    Col_Utf16Prev(const Col_Char2 * data);
 
+/* End of Character Data Chunk Access *//*!\}*/
+
+/* End of Strings *//*!\}*/
+
 
 /*
  * Include other files.
@@ -455,106 +416,102 @@ EXTERN const Col_Char2 *    Col_Utf16Prev(const Col_Char2 * data);
 #include "colMap.h"
 #include "colHash.h"
 #include "colTrie.h"
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+
 /*
-================================================================================*//*!   @addtogroup init \
-Initialization/Cleanup                                                          *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\defgroup init Initialization/Cleanup
+\{*//*==========================================================================
 */
-                                                                                /*!     @anchor threading_models */
-/********************************************************************************//*!   @name \
- * Threading Model Constants
- *
- *  Threading models chosen at initialization time.                             *//*!   @{ *//*
- ******************************************************************************/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * COL_SINGLE
+/***************************************************************************//*!
+ * @anchor threading_models
+ * \name Threading Model Constants
  *
- *  Strict appartment + stop-the-world model. GC is done synchronously when
- *  client thread resumes GC.
- *
- *  @see Col_Init
- *  @see Col_PauseGC
- *  @see Col_ResumeGC
- *//*-----------------------------------------------------------------------*/
+ * Threading models chosen at initialization time.
+ ***************************************************************************\{*/
 
+/**
+ * Strict appartment + stop-the-world model. GC is done synchronously when
+ * client thread resumes GC.
+ *
+ * @see Col_Init
+ * @see Col_PauseGC
+ * @see Col_ResumeGC
+ */
 #define COL_SINGLE      0
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * COL_ASYNC
+/**
+ * Strict appartment model with asynchronous GC. GC uses a dedicated thread
+ * for asynchronous processing, the client thread cannot pause a running GC
+ * and is blocked until completion.
  *
- *  Strict appartment model with asynchronous GC. GC uses a dedicated thread
- *  for asynchronous processing, the client thread cannot pause a running GC
- *  and is blocked until completion.
- *
- *  @see Col_Init
- *  @see Col_PauseGC
- *  @see Col_ResumeGC
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_Init
+ * @see Col_PauseGC
+ * @see Col_ResumeGC
+ */
 #define COL_ASYNC       1
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * COL_SHARED
+/**
+ * Shared multithreaded model with GC-preference. Data can be shared across
+ * client threads of the same group (COL_SHARED is the base index value). GC
+ * uses a dedicated thread for asynchronous processing.; GC process starts
+ * once all client threads get out of pause, no client thread can pause a
+ * scheduled GC.
  *
- *  Shared multithreaded model with GC-preference. Data can be shared across
- *  client threads of the same group (COL_SHARED is the base index value). GC
- *  uses a dedicated thread for asynchronous processing.; GC process starts
- *  once all client threads get out of pause, no client thread can pause a
- *  scheduled GC.
- *
- *  @see Col_Init
- *  @see Col_PauseGC
- *  @see Col_ResumeGC
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_Init
+ * @see Col_PauseGC
+ * @see Col_ResumeGC
+ */
 #define COL_SHARED      2
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Initialization/Cleanup Functions                                             *//*!   @{ *//*
- ******************************************************************************/
+/* End of Threading Model Constants *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Initialization/Cleanup Functions
+ ***************************************************************************\{*/
 
 EXTERN void     Col_Init(unsigned int model);
 EXTERN void     Col_Cleanup(void);
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Initialization/Cleanup Functions *//*!\}*/
+
+/* End of Initialization/Cleanup *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup error \
-Error Handling & Debugging                                                      *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\defgroup error Error Handling & Debugging
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Generic Error Handling                                                       *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Generic Error Handling
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @enum \
- * Col_ErrorLevel
+/**
+ * @enum Col_ErrorLevel 
+ *      Error levels.
  *
- *  Error levels.
+ * @see Col_Error
  *
- *  @see Col_Error
- *
- *  @var COL_FATAL
+ * @var COL_FATAL
  *      Fatal error within Colibri, forces process termination.
- *  @var COL_ERROR
+ * @var COL_ERROR
  *      Error typically caused by the application (bad input...) with potential
  *      side effects, leaving the application in a potentially unstable state.
  *      Typically when trying to allocate cells outside a GC-protected section.
  *      Default implementation forces process termination.
- *  @var COL_TYPECHECK
+ * @var COL_TYPECHECK
  *      Idempotent (i.e.\ without side effect) type-related error. Typically
  *      when passing words of a bad type in debug mode. Default implementation
  *      does not force process termination.
- *  @var COL_VALUECHECK
+ * @var COL_VALUECHECK
  *      Idempotent (i.e.\ without side effect) value-related error. Typically
  *      when using lengths, indices or iterators outside of their validity
  *      range. Default implementation does not force process termination.
- *//*-----------------------------------------------------------------------*/
-
+ */
 typedef enum Col_ErrorLevel {
     COL_FATAL,
     COL_ERROR,
@@ -562,40 +519,34 @@ typedef enum Col_ErrorLevel {
     COL_VALUECHECK,
 } Col_ErrorLevel;
 
-/*---------------------------------------------------------------------------
- * Col_ErrorDomain
- *                                                                              *//*!
- *  Domain into which error codes are defined. Domains are merely string tables
- *  indexed by error code. Each module (library, application...) can define its
- *  own domain with specific error codes and associated messages. The
- *  pointer to the message table serves as a unique identifier for various
- *  coexisting domains.
+/**
+ * Domain into which error codes are defined. Domains are merely string tables
+ * indexed by error code. Each module (library, application...) can define its
+ * own domain with specific error codes and associated messages. The
+ * pointer to the message table serves as a unique identifier for various
+ * coexisting domains.
  *
- *  @see Col_SetErrorProc
- *  @see Col_ErrorLevel
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_SetErrorProc
+ * @see Col_ErrorLevel
+ */
 typedef const char * const * Col_ErrorDomain;
 
-/*---------------------------------------------------------------------------
- * Col_ErrorProc
- *                                                                              *//*!
- *  Function signature of custom error handlers. Colibri provides a default
- *  error handler, but applications can define their own.
+/**
+ * Function signature of custom error handlers. Colibri provides a default
+ * error handler, but applications can define their own.
  *
- *  @param domain   Error domain.
- *  @param level    Error level.
- *  @param code     Error code.
- *  @param args     Remaining arguments passed to domain proc.
+ * @param domain    Error domain.
+ * @param level     Error level.
+ * @param code      Error code.
+ * @param args      Remaining arguments passed to domain proc.
  *
- *  @result
- *      Nonzero stops further error processing.
+ * @retval 0        to stop further error processing.
+ * @retval <>0      to continue error processing.
  *
- *  @see Col_SetErrorProc
- *  @see Col_ErrorLevel
- *  @see Col_ErrorDomain
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_SetErrorProc
+ * @see Col_ErrorLevel
+ * @see Col_ErrorDomain
+ */
 typedef int (Col_ErrorProc) (Col_ErrorLevel level, Col_ErrorDomain domain,
     int code, va_list args);
 
@@ -606,20 +557,19 @@ typedef int (Col_ErrorProc) (Col_ErrorLevel level, Col_ErrorDomain domain,
 EXTERN void     Col_Error(Col_ErrorLevel level, Col_ErrorDomain domain,
                     int code, ...);
 EXTERN void     Col_SetErrorProc(Col_ErrorProc *proc);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Colibri Error Domain                                                         *//*!   @{ *//*
- ******************************************************************************/
+/* End of Generic Error Handling *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @enum \
- * Col_ErrorCode
+
+/***************************************************************************//*!
+ * \name Colibri Error Domain
+ ***************************************************************************\{*/
+
+/**
+ * Error codes defined in the Colibri domain.
  *
- *  Error codes defined in the Colibri domain.
- *
- *  @see Col_GetErrorDomain
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_GetErrorDomain
+ */
 typedef enum Col_ErrorCode {
     COL_ERROR_GENERIC,              /*!< Generic error. */
     COL_ERROR_ASSERTION,            /*!< Assertion failed. */
@@ -666,19 +616,25 @@ typedef enum Col_ErrorCode {
  */
 
 EXTERN Col_ErrorDomain  Col_GetErrorDomain();
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Colibri Error Domain *//*!\}*/
+
+/* End of Error Handling & Debugging *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup gc \
-Garbage Collection                                                              *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\defgroup gc Garbage Collection
+\{*//*==========================================================================
 */
 
 EXTERN void     Col_PauseGC(void);
 EXTERN int      Col_TryPauseGC(void);
 EXTERN void     Col_ResumeGC(void);
 
-                                                                                /*!     @} */
+
+/* End of Garbage Collection *//*!\}*/
+
 /*
  * end block for C++
  */

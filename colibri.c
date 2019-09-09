@@ -1,10 +1,10 @@
-/*                                                                              *//*!   @file \
- * colibri.c
+/**
+ * @file colibri.c
  *
- *  This file implements the string, initialization/cleanup, and error
- *  handling functions.
+ * This file implements the string, initialization/cleanup, and error
+ * handling functions.
  *
- *  @see colibri.h
+ * @see colibri.h
  */
 
 #include "include/colibri.h"
@@ -16,28 +16,28 @@
 
 
 /*
-================================================================================*//*!   @addtogroup strings \
-Strings                                                                         *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup strings Strings
+\{*//*==========================================================================
 */
 
-/*---------------------------------------------------------------------------
- * Col_Utf8Addr
- *                                                                              *//*!
- *  Find the index-th char in a UTF-8 sequence.
+/*******************************************************************************
+ * Character Data Chunk Access
+ ******************************************************************************/
+
+/**
+ * Find the index-th char in a UTF-8 sequence.
  *
- *  Iterate over char boundaries from the beginning or end of the string,
- *  whichever is closest, until the char is reached.
+ * Iterate over char boundaries from the beginning or end of the string,
+ * whichever is closest, until the char is reached.
  *
- *  @attention
+ * @attention
  *      We assume that UTF-8 data is always well-formed. It is the caller
  *      responsibility to validate and ensure well-formedness of UTF-8 data,
  *      notably for security reasons.
  *
- *  @return
- *      Pointer to the character.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Pointer to the character.
+ */
 const Col_Char1 *
 Col_Utf8Addr(
     const Col_Char1 * data, /*!< UTF-8 code unit sequence. */
@@ -83,15 +83,11 @@ Col_Utf8Addr(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_Utf8Get
- *                                                                              *//*!
- *  Get the first character codepoint of a UTF-8 sequence.
+/**
+ * Get the first character codepoint of a UTF-8 sequence.
  *
- *  @return
- *      32-bit Unicode codepoint of the char.
- *//*-----------------------------------------------------------------------*/
-
+ * @return 32-bit Unicode codepoint of the char.
+ */
 Col_Char
 Col_Utf8Get(
     const Col_Char1 * data) /*!< UTF-8 code unit sequence. */
@@ -135,15 +131,11 @@ Col_Utf8Get(
     return COL_CHAR_INVALID;
 }
 
-/*---------------------------------------------------------------------------
- * Col_Utf8Set
- *                                                                              *//*!
- *  Append character in a UTF-8 sequence.
+/**
+ * Append character in a UTF-8 sequence.
  *
- *  @return
- *    Position just past the newly added character in sequence.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Position just past the newly added character in sequence.
+ */
 Col_Char1 *
 Col_Utf8Set(
     Col_Char1 * data,   /*!< UTF-8 code unit sequence. */
@@ -168,15 +160,11 @@ Col_Utf8Set(
     return data;
 }
 
-/*---------------------------------------------------------------------------
- * Col_Utf8Next
- *                                                                              *//*!
- *  Get next character in a UTF-8 sequence.
+/**
+ * Get next character in a UTF-8 sequence.
  *
- *  @return
- *      Position just past the first character in sequence.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Position just past the first character in sequence.
+ */
 const Col_Char1 *
 Col_Utf8Next(
     const Col_Char1 * data) /*!< UTF-8 code unit sequence. */
@@ -188,16 +176,12 @@ Col_Utf8Next(
         :                               1 );
 }
 
-/*---------------------------------------------------------------------------
- * Col_Utf8Prev
- *                                                                              *//*!
- *  Get previous character in a UTF-8 sequence. This is done by skipping
- *  all continuation code units.
+/**
+ * Get previous character in a UTF-8 sequence. This is done by skipping
+ * all continuation code units.
  *
- *  @return
- *      Position of the previous character in sequence.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Position of the previous character in sequence.
+ */
 const Col_Char1 *
 Col_Utf8Prev(
     const Col_Char1 * data) /*!< UTF-8 code unit sequence. */
@@ -206,23 +190,19 @@ Col_Utf8Prev(
     return data;
 }
 
-/*---------------------------------------------------------------------------
- * Col_Utf16Addr
- *                                                                              *//*!
- *  Find the index-th char in a UTF-16 code unit sequence.
+/**
+ * Find the index-th char in a UTF-16 code unit sequence.
  *
- *  Iterate over char boundaries from the beginning or end of the string,
- *  whichever is closest, until the char is reached.
+ * Iterate over char boundaries from the beginning or end of the string,
+ * whichever is closest, until the char is reached.
  *
- *  @attention
+ * @attention
  *      We assume that UTF-16 data is always well-formed. It is the caller
  *      responsibility to validate and ensure well-formedness of UTF-16 data,
  *      notably for security reasons.
  *
- *  @return
- *      Pointer to the character.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Pointer to the character.
+ */
 const Col_Char2 *
 Col_Utf16Addr(
     const Col_Char2 * data, /*!< UTF-16 code unit sequence. */
@@ -268,15 +248,11 @@ Col_Utf16Addr(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_Utf16Get
- *                                                                              *//*!
- *  Get the first character codepoint of a UTF-16 sequence.
+/**
+ * Get the first character codepoint of a UTF-16 sequence.
  *
- *  @return
- *      Unicode codepoint of the char.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Unicode codepoint of the char.
+ */
 Col_Char
 Col_Utf16Get(
     const Col_Char2 * data) /*!< UTF-16 code unit sequence. */
@@ -298,15 +274,11 @@ Col_Utf16Get(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_Utf16Set
- *                                                                              *//*!
- *  Append character in a UTF-16 sequence.
+/**
+ * Append character in a UTF-16 sequence.
  *
- *  @return
- *      Position just past the newly added character in sequence.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Position just past the newly added character in sequence.
+ */
 Col_Char2 *
 Col_Utf16Set(
     Col_Char2 * data,   /*!< UTF-16 code unit sequence. */
@@ -322,15 +294,11 @@ Col_Utf16Set(
     return data;
 }
 
-/*---------------------------------------------------------------------------
- * Col_Utf16Next
- *                                                                              *//*!
- *  Get next character in a UTF-16 sequence.
+/**
+ * Get next character in a UTF-16 sequence.
  *
- *  @return
- *      Position just past the first character in sequence.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Position just past the first character in sequence.
+ */
 const Col_Char2 *
 Col_Utf16Next(
     const Col_Char2 * data) /*!< UTF-16 code unit sequence. */
@@ -340,16 +308,12 @@ Col_Utf16Next(
         :                                   1 );
 }
 
-/*---------------------------------------------------------------------------
- * Col_Utf16Prev
- *                                                                              *//*!
- *  Get previous character in a UTF-16 sequence. This is done by skipping
- *  all low surrogate code units.
+/**
+ * Get previous character in a UTF-16 sequence. This is done by skipping
+ * all low surrogate code units.
  *
- *  @return
- *      Position of the previous character in sequence.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Position of the previous character in sequence.
+ */
 const Col_Char2 *
 Col_Utf16Prev(
     const Col_Char2 * data) /*!< UTF-16 code unit sequence. */
@@ -358,24 +322,29 @@ Col_Utf16Prev(
     return data;
 }
 
-                                                                                /*!     @} */
+/* End of Character Data Chunk Access */
+
+/* End of Strings *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup init \
-Initialization/Cleanup                                                          *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup init Initialization/Cleanup
+\{*//*==========================================================================
 */
 
-/*---------------------------------------------------------------------------
- * Col_Init
- *                                                                              *//*!
- *  Initialize the library. Must be called in every thread.
+/*******************************************************************************
+ * Initialization/Cleanup Functions
+ ******************************************************************************/
+
+/**
+ * Initialize the library. Must be called in every thread.
  *
- *  @sideeffect
+ * @sideeffect
  *      Initialize the memory allocator & garbage collector.
  *
- *  @see @ref threading_models "Threading Model Constants"
- *//*-----------------------------------------------------------------------*/
-
+ * @see @ref threading_models "Threading Model Constants"
+ */
 void
 Col_Init(
     unsigned int model) /*!< Threading model. */
@@ -383,38 +352,40 @@ Col_Init(
     PlatEnter(model);
 }
 
-/*---------------------------------------------------------------------------
- * Col_Cleanup
- *                                                                              *//*!
- *  Cleanup the library. Must be called in every thread.
+/**
+ * Cleanup the library. Must be called in every thread.
  *
- *  @sideeffect
+ * @sideeffect
  *      Cleanup the memory allocator & garbage collector.
- *//*-----------------------------------------------------------------------*/
-
+ */
 void
 Col_Cleanup()
 {
     PlatLeave();
 }
 
-                                                                                /*!     @} */
+/* End of Initialization/Cleanup Functions */
+
+/* End of Initialization/Cleanup *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup error \
-Error Handling & Debugging                                                      *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup error Error Handling & Debugging
+\{*//*==========================================================================
 */
 
-/*---------------------------------------------------------------------------
- * ColibriDomain
- *                                                                              *//*!
- *  Domain for Colibri error codes. Defines a message string for each code.
- *
- *  @see Col_ErrorCode
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/*******************************************************************************
+ * Generic Error Handling
+ ******************************************************************************/
 
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Domain for Colibri error codes. Defines a message string for each code.
+ *
+ * @see Col_ErrorCode
+ */
 const char * const ColibriDomain[] = {
     "Generic error: %s",                        /* COL_ERROR_GENERIC (message) */
     "%s(%d) : assertion failed! (%s)",          /* COL_ERROR_ASSERTION (file, line, expression) */
@@ -461,19 +432,18 @@ const char * const ColibriDomain[] = {
     "%x is not a string buffer",                /* COL_ERROR_STRBUF (word) */
 };
 
-/*---------------------------------------------------------------------------
- * Col_Error
- *                                                                              *//*!
- *  Signal an error condition.
+/** @endcond @endprivate */
+
+/**
+ * Signal an error condition.
  *
- *  @attention
+ * @attention
  *      Default implementation exits the processus when level is #COL_FATAL
  *      or #COL_ERROR.
  *
- *  @see Col_SetErrorProc
- *  @see Col_ErrorDomain
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_SetErrorProc
+ * @see Col_ErrorDomain
+ */
 void
 Col_Error(
     Col_ErrorLevel level,   /*!< Error level. */
@@ -534,14 +504,11 @@ Col_Error(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_SetErrorProc
- *                                                                              *//*!
- *  Set or reset the thread's custom error proc.
+/**
+ * Set or reset the thread's custom error proc.
  *
- *  @see Col_Error
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_Error
+ */
 void
 Col_SetErrorProc(
     Col_ErrorProc *proc)    /*!< The new error proc (may be NULL). */
@@ -549,21 +516,26 @@ Col_SetErrorProc(
     PlatGetThreadData()->errorProc = proc;
 }
 
-/*---------------------------------------------------------------------------
- * Col_GetErrorDomain
- *                                                                              *//*!
- *  Get the domain for Colibri error codes.
- *
- *  @return
- *      The domain.
- *
- *  @see Col_Error
- *//*-----------------------------------------------------------------------*/
+/* End of Generic Error Handling */
 
+
+/*******************************************************************************
+ * Colibri Error Domain
+ ******************************************************************************/
+
+/**
+ * Get the domain for Colibri error codes.
+ *
+ * @return The domain.
+ *
+ * @see Col_Error
+ */
 Col_ErrorDomain
 Col_GetErrorDomain()
 {
     return ColibriDomain;
 }
 
-                                                                                /*!     @} */
+/* End of Colibri Error Domain */
+
+/* End of Error Handling & Debugging *//*!\}*/

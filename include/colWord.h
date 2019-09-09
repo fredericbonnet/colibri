@@ -1,10 +1,10 @@
-/*                                                                              *//*!   @file \
- * colWord.h
+/**
+ * @file colWord.h
  *
- *  This header file defines the word handling features of Colibri.
+ * This header file defines the word handling features of Colibri.
  *
- *  Words are a generic abstract datatype framework used in conjunction with
- *  the exact generational garbage collector and the cell-based allocator.
+ * Words are a generic abstract datatype framework used in conjunction with
+ * the exact generational garbage collector and the cell-based allocator.
  */
 
 #ifndef _COLIBRI_WORD
@@ -14,74 +14,63 @@
 
 
 /*
-================================================================================*//*!   @addtogroup words \
-Words
+===========================================================================*//*!
+\defgroup words Words
 
-  Words are a generic abstract datatype framework used in conjunction with
-  the exact generational garbage collector and the cell-based allocator.        *//*!   @{ *//*
-================================================================================
+Words are a generic abstract datatype framework used in conjunction with
+the exact generational garbage collector and the cell-based allocator.
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Basic Word Types & Constants                                                 *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Basic Word Types & Constants
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------
- * Col_Word
- *                                                                              *//*!
- *  Colibri words are opaque types.
- *//*-----------------------------------------------------------------------*/
-
+/** Colibri words are opaque types. */
 typedef uintptr_t Col_Word;
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_NIL
- *
- *  Nil is a valid word.
- *//*-----------------------------------------------------------------------*/
-
+/** Nil word. */
 #define WORD_NIL \
     ((Col_Word) 0)
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Boolean Values
+/* End of Basic Word Types & Constants *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Boolean Values
  *
- *  Boolean singleton words. Values are immediate and constant, which means
- *  that they can be safely compared and stored in static storage.
+ * Boolean singleton words. Values are immediate and constant, which means
+ * that they can be safely compared and stored in static storage.
  *
- *  @warning
+ * @warning
  *      C and Colibri booleans are not interchangeable. More specifically,
  *      #WORD_FALSE is not false in the C sense because it is nonzero. They are
  *      also distinct from integer words: an integer zero is not a boolean false
  *      contrary to C. So it is an error to write e.g. "if (WORD_FALSE)".
- *                                                                              *//*!   @{ *//*
- ******************************************************************************/
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_FALSE
- *  False boolean word.
- *                                                                              *//*!   @def \
- * WORD_TRUE
- *  True boolean word.
- *//*-----------------------------------------------------------------------*/
-
+/** False boolean word. */
 #define WORD_FALSE \
     ((Col_Word) 0x004)
+
+/** True boolean word. */
 #define WORD_TRUE \
     ((Col_Word) 0x104)
-                                                                                /*!     @} */
-                                                                                /*!     @anchor word_types */
-/********************************************************************************//*!   @name \
- * Word Types
+
+/* End of Boolean Values *//*!\}*/
+
+
+/***************************************************************************//*!
+ * @anchor word_types
+ * \name Word Types
  *
- *  Data types recognized by Colibri. Values are OR-able so that a word can
- *  match several types (e.g. a custom rope type as returned by
- *  Col_WordType() would be #COL_CUSTOM | #COL_ROPE ).
+ * Data types recognized by Colibri. Values are OR-able so that a word can
+ * match several types (e.g. a custom rope type as returned by
+ * Col_WordType() would be #COL_CUSTOM | #COL_ROPE ).
  *
- *  @see Col_WordType
- *  @see Col_CustomWordType                                                      *//*!   @{ *//*
- ******************************************************************************/
+ * @see Col_WordType
+ * @see Col_CustomWordType
+ ***************************************************************************\{*/
 
 #define COL_NIL         0x0000  /*!< Nil. */
 #define COL_CUSTOM      0x0001  /*!< Custom type. */
@@ -100,64 +89,71 @@ typedef uintptr_t Col_Word;
 #define COL_HASHMAP     0x2000  /*!< Hash map. */
 #define COL_TRIEMAP     0x4000  /*!< Trie map. */
 #define COL_STRBUF      0x8000  /*!< String buffer. */
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Word Creation                                                                *//*!   @{ *//*
- ******************************************************************************/
+/* End of Word Types *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Word Creation
+ ***************************************************************************\{*/
 
 EXTERN Col_Word     Col_NewBoolWord(int value);
 EXTERN Col_Word     Col_NewIntWord(intptr_t value);
 EXTERN Col_Word     Col_NewFloatWord(double value);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Word Accessors                                                               *//*!   @{ *//*
- ******************************************************************************/
+/* End of Word Creation *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Word Accessors
+ ***************************************************************************\{*/
 
 EXTERN int          Col_WordType(Col_Word word);
 EXTERN int          Col_BoolWordValue(Col_Word word);
 EXTERN intptr_t     Col_IntWordValue(Col_Word word);
 EXTERN double       Col_FloatWordValue(Col_Word word);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Word Synonyms                                                                *//*!   @{ *//*
- ******************************************************************************/
+/* End of Word Accessors *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Word Synonyms
+ ***************************************************************************\{*/
 
 EXTERN Col_Word     Col_WordSynonym(Col_Word word);
 EXTERN void         Col_WordAddSynonym(Col_Word *wordPtr, Col_Word synonym);
 EXTERN void         Col_WordClearSynonym(Col_Word word);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Word Lifetime Management                                                     *//*!   @{ *//*
- ******************************************************************************/
+/* End of Word Synonyms *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Word Lifetime Management
+ ***************************************************************************\{*/
 
 EXTERN void         Col_WordPreserve(Col_Word word);
 EXTERN void         Col_WordRelease(Col_Word word);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Word Operations                                                              *//*!   @{ *//*
- ******************************************************************************/
+/* End of Word Lifetime Management *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!
- * Col_WordCompareProc
+
+/***************************************************************************//*!
+ * \name Word Operations
+ ***************************************************************************\{*/
+
+/**
+ * Function signature of word comparison function. Used for sorting.
  *
- *  Function signature of word comparison function. Used for sorting.
- *
- *  @param w1, w2       Words to compare.
- *  @param clientData   Opaque client data. Typically passed to the calling
+ * @param w1, w2        Words to compare.
+ * @param clientData    Opaque client data. Typically passed to the calling
  *                      proc (e.g. Col_SortWords()).
  *
- *  @retval negative    if **w1** is less than **w2**.
- *  @retval positive    if **w1** is greater than **w2**.
- *  @retval zero        if both words are equal.
+ * @retval negative     if **w1** is less than **w2**.
+ * @retval positive     if **w1** is greater than **w2**.
+ * @retval zero         if both words are equal.
  *
- *  @see Col_SortWords
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_SortWords
+ */
 typedef int (Col_WordCompareProc) (Col_Word w1, Col_Word w2,
     Col_ClientData clientData);
 
@@ -168,94 +164,83 @@ typedef int (Col_WordCompareProc) (Col_Word w1, Col_Word w2,
 EXTERN void     Col_SortWords(Col_Word *first, Col_Word *last,
                 Col_WordCompareProc *proc,
                 Col_ClientData clientData);
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Word Operations *//*!\}*/
+
+/* End of Words *//*!\}*/
+
 
 /*
-================================================================================*//*!   @addtogroup custom_words \
-Custom Words
-                                                                                        @ingroup words
-  Custom words are words defined by applicative code. They can extend existing
-  word types like ropes or maps, or define application-specific data types.     *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\defgroup custom_words Custom Words
+\ingroup words
+
+Custom words are words defined by applicative code. They can extend existing
+word types like ropes or maps, or define application-specific data types.
+
+@see Col_CustomWordType
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Custom Word Type Descriptors                                                 *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Custom Word Type Descriptors
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------
- * Col_CustomWordSizeProc
- *                                                                              *//*!
- *  Function signature of custom word size procs.
+/**
+ * Function signature of custom word size procs.
  *
- *  @param word     Custom word to get size for.
+ * @param word  Custom word to get size for.
  *
- *  @return
- *      The custom word size in bytes.
+ * @return The custom word size in bytes.
  *
- *  @see Col_CustomWordType
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CustomWordType
+ */
 typedef size_t (Col_CustomWordSizeProc) (Col_Word word);
 
-/*---------------------------------------------------------------------------
- * Col_CustomWordFreeProc
- *                                                                              *//*!
- *  Function signature of custom word cleanup procs. Called on collected
- *  words during the sweep phase of the garbage collection.
+/**
+ * Function signature of custom word cleanup procs. Called on collected
+ * words during the sweep phase of the garbage collection.
  *
- *  @param word     Custom word to cleanup.
+ * @param word  Custom word to cleanup.
  *
- *  @see Col_CustomWordType
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CustomWordType
+ */
 typedef void (Col_CustomWordFreeProc) (Col_Word word);
 
-/*---------------------------------------------------------------------------
- * Col_CustomWordChildEnumProc
- *                                                                              *//*!
- *  Function signature of custom word child enumeration procs. Called during
- *  the mark phase of the garbage collection. Words are movable, so pointer
- *  values may be modified in the process.
+/**
+ * Function signature of custom word child enumeration procs. Called during
+ * the mark phase of the garbage collection. Words are movable, so pointer
+ * values may be modified in the process.
  *
- *  @param word         Custom word whose child is being followed.
- *  @param childPtr     Pointer to child, may be overwritten if moved.
- *  @param clientData   Opaque client data. Same value as passed to
+ * @param word          Custom word whose child is being followed.
+ * @param childPtr      Pointer to child, may be overwritten if moved.
+ * @param clientData    Opaque client data. Same value as passed to
  *                      Col_CustomWordChildrenProc().
  *
- *  @see Col_CustomWordType
- *  @see Col_CustomWordChildrenProc
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CustomWordType
+ * @see Col_CustomWordChildrenProc
+ */
 typedef void (Col_CustomWordChildEnumProc) (Col_Word word, Col_Word *childPtr,
     Col_ClientData clientData);
 
-/*---------------------------------------------------------------------------
- * Col_CustomWordChildrenProc
- *                                                                              *//*!
- *  Function signature of custom word child enumeration procs. Called during
- *  the mark phase of the garbage collection.
+/**
+ * Function signature of custom word child enumeration procs. Called during
+ * the mark phase of the garbage collection.
  *
- *  @param word         Custom word to follow children for.
- *  @param proc         Callback proc called at each child.
- *  @param clientData   Opaque data passed as is to above proc.
- *
- *  @see Col_CustomWordType
- *  @see Col_CustomWordChildEnumProc
- *//*-----------------------------------------------------------------------*/
-
+ * @param word          Custom word to follow children for.
+ * @param proc          Callback proc called at each child.
+ * @param clientData    Opaque data passed as is to above proc.
+ * @see Col_CustomWordType
+ * @see Col_CustomWordChildEnumProc
+ */
 typedef void (Col_CustomWordChildrenProc) (Col_Word word,
     Col_CustomWordChildEnumProc *proc, Col_ClientData clientData);
 
-/*---------------------------------------------------------------------------
- * Col_CustomWordType
- *                                                                              *//*!
- *  Custom word type descriptor.
+/**
+ * Custom word type descriptor.
  *
- *  @see @ref word_types "Word Types"
- *//*-----------------------------------------------------------------------*/
-
+ * @see @ref word_types "Word Types"
+ */
 typedef struct Col_CustomWordType {
     /*! Type identifier. */
     int type;
@@ -274,21 +259,28 @@ typedef struct Col_CustomWordType {
         the word, in no special order. If NULL, do nothing. */
     Col_CustomWordChildrenProc *childrenProc;
 } Col_CustomWordType;
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Custom Word Creation                                                         *//*!   @{ *//*
- ******************************************************************************/
+/* End of Custom Word Type Descriptors *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Custom Word Creation
+ ***************************************************************************\{*/
 
 EXTERN Col_Word     Col_NewCustomWord(Col_CustomWordType *type, size_t size,
                         void **dataPtr);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Custom Word Accessors                                                        *//*!   @{ *//*
- ******************************************************************************/
+/* End of Custom Word Creation *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Custom Word Accessors
+ ***************************************************************************\{*/
 
 EXTERN Col_CustomWordType * Col_CustomWordInfo(Col_Word word, void **dataPtr);
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Custom Word Accessors *//*!\}*/
+
+/* End of Custom Words *//*!\}*/
+
 #endif /* _COLIBRI_WORD */

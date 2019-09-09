@@ -1,13 +1,13 @@
-/*                                                                              *//*!   @file \
- * colStrBuf.c
+/**
+ * @file colStrBuf.c
  *
- *  This file implements the string buffer handling features of Colibri.
+ * This file implements the string buffer handling features of Colibri.
  *
- *  String buffers are used to build strings incrementally in an efficient
- *  manner, by appending individual characters or whole ropes. The current
- *  accumulated rope can be retrieved at any time.
+ * String buffers are used to build strings incrementally in an efficient
+ * manner, by appending individual characters or whole ropes. The current
+ * accumulated rope can be retrieved at any time.
  *
- *  @see colStrBuf.h
+ * @see colStrBuf.h
  */
 
 #include "include/colibri.h"
@@ -18,45 +18,42 @@
 #include "colStrBufInt.h"
 
 #include <string.h>
-                                                                                #       ifndef DOXYGEN
+
 /*
  * Prototypes for functions used only in this file.
  */
 
+/*! \cond IGNORE */
 static void             CommitBuffer(Col_Word strbuf);
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
+
 
 /*
-================================================================================*//*!   @addtogroup strbuf_words \
-String Buffers                                                                  *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup strbuf_words String Buffers
+\{*//*==========================================================================
 */
 
 /*******************************************************************************
  * String Buffer Creation
  ******************************************************************************/
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------   *//*!   @def \
- * STRBUF_DEFAULT_SIZE
- *
- *  Default size for string buffers.
- *
- *  @see Col_NewStringBuffer
- *  
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Default size for string buffers.
+ *
+ * @see Col_NewStringBuffer
+ */
 #define STRBUF_DEFAULT_SIZE     5
-                                                                                /*!     @endcond */
-/*---------------------------------------------------------------------------
- * Col_MaxStringBufferLength
- *                                                                              *//*!
- *  Get the maximum buffer length of string buffers.
- *
- *  @return
- *      The max string buffer length.
- *//*-----------------------------------------------------------------------*/
 
+/** @endcond @endprivate */
+
+/**
+ * Get the maximum buffer length of string buffers.
+ *
+ * @return The max string buffer length.
+ */
 size_t
 Col_MaxStringBufferLength(
     Col_StringFormat format)    /*!< Format policy. */
@@ -64,20 +61,16 @@ Col_MaxStringBufferLength(
     return STRBUF_MAX_LENGTH(STRBUF_MAX_SIZE * CELL_SIZE, format);
 }
 
-/*---------------------------------------------------------------------------
- * Col_NewStringBuffer
- *                                                                              *//*!
- *  Create a new string buffer word.
+/**
+ * Create a new string buffer word.
  *
- *  @note
+ * @note
  *      The actual maximum length will be rounded up to fit an even number of
  *      cells, and won't exceed the maximum value given by
  *      [Col_MaxStringBufferLength(format)](@ref Col_MaxStringBufferLength).
  *
- *  @return
- *      The new word.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The new word.
+ */
 Col_Word
 Col_NewStringBuffer(
     size_t maxLength,           /*!< Maximum length of string buffer. If zero,
@@ -104,22 +97,20 @@ Col_NewStringBuffer(
     return strbuf;
 }
 
+/* End of String Buffer Creation */
+
 
 /*******************************************************************************
  * String Buffer Accessors
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_StringBufferFormat
- *                                                                              *//*!
- *  Get the character format used by the internal buffer.
+/**
+ * Get the character format used by the internal buffer.
  *
- *  @return
- *      The string buffer format.
+ * @return The string buffer format.
  *
- *  @see Col_NewStringBuffer
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NewStringBuffer
+ */
 Col_StringFormat
 Col_StringBufferFormat(
     Col_Word strbuf)    /*!< String buffer to get length for. */
@@ -128,24 +119,21 @@ Col_StringBufferFormat(
      * Check preconditions.
      */
 
-    TYPECHECK_STRBUF(strbuf) return 0;                                          /*!     @typecheck{COL_ERROR_STRBUF,strbuf} */
+    /*! @typecheck{COL_ERROR_STRBUF,strbuf} */
+    TYPECHECK_STRBUF(strbuf) return 0;
 
     WORD_UNWRAP(strbuf);
 
     return (Col_StringFormat) WORD_STRBUF_FORMAT(strbuf);
 }
 
-/*---------------------------------------------------------------------------
- * Col_StringBufferMaxLength
- *                                                                              *//*!
- *  Get the maximum length of the string buffer.
+/**
+ * Get the maximum length of the string buffer.
  *
- *  @return
- *      The string buffer maximum length.
+ * @return The string buffer maximum length.
  *
- *  @see Col_NewStringBuffer
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NewStringBuffer
+ */
 size_t
 Col_StringBufferMaxLength(
     Col_Word strbuf)    /*!< String buffer to get maximum length for. */
@@ -154,7 +142,8 @@ Col_StringBufferMaxLength(
      * Check preconditions.
      */
 
-    TYPECHECK_STRBUF(strbuf) return 0;                                          /*!     @typecheck{COL_ERROR_STRBUF,strbuf} */
+    /*! @typecheck{COL_ERROR_STRBUF,strbuf} */
+    TYPECHECK_STRBUF(strbuf) return 0;
 
     WORD_UNWRAP(strbuf);
 
@@ -162,15 +151,11 @@ Col_StringBufferMaxLength(
             WORD_STRBUF_FORMAT(strbuf));
 }
 
-/*---------------------------------------------------------------------------
- * Col_StringBufferLength
- *                                                                              *//*!
- *  Get the current length of the string buffer.
+/**
+ * Get the current length of the string buffer.
  *
- *  @return
- *      The string buffer length.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The string buffer length.
+ */
 size_t
 Col_StringBufferLength(
     Col_Word strbuf)    /*!< String buffer to get length for. */
@@ -179,7 +164,8 @@ Col_StringBufferLength(
      * Check preconditions.
      */
 
-    TYPECHECK_STRBUF(strbuf) return 0;                                          /*!     @typecheck{COL_ERROR_STRBUF,strbuf} */
+    /*! @typecheck{COL_ERROR_STRBUF,strbuf} */
+    TYPECHECK_STRBUF(strbuf) return 0;
 
     WORD_UNWRAP(strbuf);
 
@@ -192,15 +178,11 @@ Col_StringBufferLength(
             + WORD_STRBUF_LENGTH(strbuf);
 }
 
-/*---------------------------------------------------------------------------
- * Col_StringBufferValue
- *                                                                              *//*!
- *  Get the current cumulated string.
+/**
+ * Get the current cumulated string.
  *
- *  @return
- *      The string buffer string value.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The string buffer string value.
+ */
 Col_Word
 Col_StringBufferValue(
     Col_Word strbuf)    /*!< String buffer to get value for. */
@@ -209,45 +191,44 @@ Col_StringBufferValue(
      * Check preconditions.
      */
 
-    TYPECHECK_STRBUF(strbuf) return WORD_NIL;                                   /*!     @typecheck{COL_ERROR_STRBUF,strbuf} */
+    /*! @typecheck{COL_ERROR_STRBUF,strbuf} */
+    TYPECHECK_STRBUF(strbuf) return WORD_NIL;
 
     WORD_UNWRAP(strbuf);
 
-    CommitBuffer(strbuf);                                                       /*!     @sideeffect Commit buffer into accumulated rope. */
+    /*!
+     * @sideeffect
+     * Commit buffer into accumulated rope.
+     */
+    CommitBuffer(strbuf);
     return WORD_STRBUF_ROPE(strbuf);
 }
+
+/* End of String Buffer Accessors */
 
 
 /*******************************************************************************
  * String Buffer Operations
  ******************************************************************************/
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------   *//*!   @def \
- * MAX_SHORT_ROPE_LENGTH
- *
- *  Maximum length a rope must have to be appended character-wise into the
- *  buffer, instead of being appended as a whole.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Maximum length a rope must have to be appended character-wise into the
+ * buffer, instead of being appended as a whole.
+ */
 #define MAX_SHORT_ROPE_LENGTH(format) \
         ((size_t)(3*CELL_SIZE*CHAR_WIDTH(format)))
-                                                                                /*!     @endcond */
-/*---------------------------------------------------------------------------
- * CommitBuffer
- *                                                                              *//*!
- *  Commit buffered characters into accumulated rope and clear buffer.
- *
- *  @see Col_StringBufferFormat
- *  @see Col_StringBufferAppendChar
- *  @see Col_StringBufferAppendRope
- *  @see Col_StringBufferAppendSequence
- *  @see Col_StringBufferReserve
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/**
+ * Commit buffered characters into accumulated rope and clear buffer.
+ *
+ * @see Col_StringBufferFormat
+ * @see Col_StringBufferAppendChar
+ * @see Col_StringBufferAppendRope
+ * @see Col_StringBufferAppendSequence
+ * @see Col_StringBufferReserve
+ */
 static void
 CommitBuffer(
     Col_Word strbuf)    /*!< String buffer to commit. */
@@ -282,19 +263,18 @@ CommitBuffer(
     WORD_STRBUF_LENGTH(strbuf) = 0;
 }
 
-/*---------------------------------------------------------------------------
- * Col_StringBufferAppendChar
- *                                                                              *//*!
- *  Append the given character to the string buffer.
- *
- *  @retval 0       if character was not appended (may occur when the character
- *                  codepoint is unrepresentable in the target format).
- *  @retval <>0     if character was appended.
- *
- *  @see Col_StringBufferAppendRope
- *  @see Col_StringBufferAppendSequence
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
+/**
+ * Append the given character to the string buffer.
+ *
+ * @retval 0    if character was not appended (may occur when the character
+ *              codepoint is unrepresentable in the target format).
+ * @retval <>0  if character was appended.
+ *
+ * @see Col_StringBufferAppendRope
+ * @see Col_StringBufferAppendSequence
+ */
 int
 Col_StringBufferAppendChar(
     Col_Word strbuf,    /*!< String buffer to append character to. */
@@ -308,7 +288,8 @@ Col_StringBufferAppendChar(
      * Check preconditions.
      */
 
-    TYPECHECK_STRBUF(strbuf) return 0;                                          /*!     @typecheck{COL_ERROR_STRBUF,strbuf} */
+    /*! @typecheck{COL_ERROR_STRBUF,strbuf} */
+    TYPECHECK_STRBUF(strbuf) return 0;
 
     WORD_UNWRAP(strbuf);
 
@@ -351,7 +332,11 @@ Col_StringBufferAppendChar(
          * Buffer is full, commit first.
          */
 
-        CommitBuffer(strbuf);                                                   /*!     @sideeffect May commit buffer. */
+        /*!
+         * @sideeffect
+         * May commit buffer.
+         */
+        CommitBuffer(strbuf);
         ASSERT(WORD_STRBUF_LENGTH(strbuf) == 0);
     }
 
@@ -388,20 +373,17 @@ Col_StringBufferAppendChar(
     return 1;
 }
 
-/*---------------------------------------------------------------------------
- * Col_StringBufferAppendRope
- *                                                                              *//*!
- *  Append the given rope to the string buffer.
+/**
+ * Append the given rope to the string buffer.
  *
- *  @retval 0       if not all characters were appended (may occur when some
- *                  character codepoints are unrepresentable in the target
- *                  format).
- *  @retval <>0     if all characters were appended.
+ * @retval 0    if not all characters were appended (may occur when some
+ *              character codepoints are unrepresentable in the target
+ *              format).
+ * @retval <>0  if all characters were appended.
  *
- *  @see Col_StringBufferAppendChar
- *  @see Col_StringBufferAppendSequence
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_StringBufferAppendChar
+ * @see Col_StringBufferAppendSequence
+ */
 int
 Col_StringBufferAppendRope(
     Col_Word strbuf,    /*!< String buffer to append rope to. */
@@ -415,7 +397,8 @@ Col_StringBufferAppendRope(
      * Check preconditions.
      */
 
-    TYPECHECK_STRBUF(strbuf) return 0;                                          /*!     @typecheck{COL_ERROR_STRBUF,strbuf} */
+    /*! @typecheck{COL_ERROR_STRBUF,strbuf} */
+    TYPECHECK_STRBUF(strbuf) return 0;
 
     if ((ropeLength = Col_RopeLength(rope)) == 0) {
         /*
@@ -454,7 +437,11 @@ Col_StringBufferAppendRope(
          * Commit buffer before appending rope.
          */
 
-        CommitBuffer(strbuf);                                                   /*!     @sideeffect May commit buffer. */
+        /*!
+         * @sideeffect
+         * May commit buffer.
+         */
+        CommitBuffer(strbuf);
     }
 
     /*
@@ -467,20 +454,17 @@ Col_StringBufferAppendRope(
     return (Col_RopeLength(rope2) == ropeLength);
 }
 
-/*---------------------------------------------------------------------------
- * Col_StringBufferAppendSequence
- *                                                                              *//*!
- *  Append the given rope sequence to the string buffer.
+/**
+ * Append the given rope sequence to the string buffer.
  *
- *  @retval 0       if not all characters were appended (may occur when some
- *                  character codepoints are unrepresentable in the target
- *                  format).
- *  @retval <>0     if all characters were appended.
+ * @retval 0    if not all characters were appended (may occur when some
+ *              character codepoints are unrepresentable in the target
+ *              format).
+ * @retval <>0  if all characters were appended.
  *
- *  @see Col_StringBufferAppendChar
- *  @see Col_StringBufferAppendRope
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_StringBufferAppendChar
+ * @see Col_StringBufferAppendRope
+ */
 int
 Col_StringBufferAppendSequence(
     Col_Word strbuf,                /*!< String buffer to append character
@@ -495,7 +479,8 @@ Col_StringBufferAppendSequence(
      * Check preconditions.
      */
 
-    TYPECHECK_STRBUF(strbuf) return 0;                                          /*!     @typecheck{COL_ERROR_STRBUF,strbuf} */
+    /*! @typecheck{COL_ERROR_STRBUF,strbuf} */
+    TYPECHECK_STRBUF(strbuf) return 0;
 
     if (Col_RopeIterCompare(begin, end) >= 0) {
         /*
@@ -534,24 +519,21 @@ Col_StringBufferAppendSequence(
             Col_RopeIterIndex(begin), Col_RopeIterIndex(end)-1));
 }
 
-/*---------------------------------------------------------------------------
- * Col_StringBufferReserve
- *                                                                              *//*!
- *  Reserve a number of characters for direct buffer access. Characters can
- *  then be accessed as array elements using the format given at creation time.
+/**
+ * Reserve a number of characters for direct buffer access. Characters can
+ * then be accessed as array elements using the format given at creation time.
  *
  *
- *  @retval NULL    if the buffer is too small to store the given number of
+ * @retval NULL     if the buffer is too small to store the given number of
  *                  characters.
- *  @retval pointer to the beginning of the reserved area.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval pointer  to the beginning of the reserved area.
+ */
 void *
 Col_StringBufferReserve(
     Col_Word strbuf,    /*!< String buffer to reserve into. */
     size_t length)      /*!< Number of characters to reserve. Must be <=
-                             [Col_StringBufferMaxLength(strbuf)]
-                             (@ref Col_StringBufferMaxLength). */
+                             [Col_StringBufferMaxLength(strbuf)](@ref Col_StringBufferMaxLength).
+                         */
 {
     Col_StringFormat format;
     size_t maxLength;
@@ -561,7 +543,8 @@ Col_StringBufferReserve(
      * Check preconditions.
      */
 
-    TYPECHECK_STRBUF(strbuf) return NULL;                                       /*!     @typecheck{COL_ERROR_STRBUF,strbuf} */
+    /*! @typecheck{COL_ERROR_STRBUF,strbuf} */
+    TYPECHECK_STRBUF(strbuf) return NULL;
 
     WORD_UNWRAP(strbuf);
 
@@ -582,7 +565,11 @@ Col_StringBufferReserve(
          * Not enough remaining space, commit buffer first.
          */
 
-        CommitBuffer(strbuf);                                                   /*!     @sideeffect May commit buffer. */
+        /*!
+         * @sideeffect
+         * May commit buffer.
+         */
+        CommitBuffer(strbuf);
         ASSERT(WORD_STRBUF_LENGTH(strbuf) == 0);
     }
 
@@ -597,12 +584,9 @@ Col_StringBufferReserve(
     return (void *) data;
 }
 
-/*---------------------------------------------------------------------------
- * Col_StringBufferRelease
- *                                                                              *//*!
- *  Release previously reserved characters.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Release previously reserved characters.
+ */
 void
 Col_StringBufferRelease(
     Col_Word strbuf,    /*!< String buffer to release. */
@@ -612,23 +596,25 @@ Col_StringBufferRelease(
      * Check preconditions.
      */
 
-    TYPECHECK_STRBUF(strbuf) return;                                            /*!     @typecheck{COL_ERROR_STRBUF,strbuf} */
+    /*! @typecheck{COL_ERROR_STRBUF,strbuf} */
+    TYPECHECK_STRBUF(strbuf) return;
 
     WORD_UNWRAP(strbuf);
 
     if (WORD_STRBUF_LENGTH(strbuf) < length) {
         WORD_STRBUF_LENGTH(strbuf) = 0;
     } else {
-        WORD_STRBUF_LENGTH(strbuf) -= length;                                   /*!     @sideeffect Decrease current length. */
+        /*!
+         * @sideeffect
+         * Decrease current length.
+         */
+        WORD_STRBUF_LENGTH(strbuf) -= length;
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_StringBufferReset
- *                                                                              *//*!
- *  Empty the string buffer: reset buffer length & accumulated rope.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Empty the string buffer: reset buffer length & accumulated rope.
+ */
 void
 Col_StringBufferReset(
     Col_Word strbuf)    /*!< String buffer to reset. */
@@ -637,7 +623,8 @@ Col_StringBufferReset(
      * Check preconditions.
      */
 
-    TYPECHECK_STRBUF(strbuf) return;                                            /*!     @typecheck{COL_ERROR_STRBUF,strbuf} */
+    /*! @typecheck{COL_ERROR_STRBUF,strbuf} */
+    TYPECHECK_STRBUF(strbuf) return;
 
     WORD_UNWRAP(strbuf);
 
@@ -645,19 +632,15 @@ Col_StringBufferReset(
     WORD_STRBUF_LENGTH(strbuf) = 0;
 }
 
-/*---------------------------------------------------------------------------
- * Col_StringBufferFreeze
- *                                                                              *//*!
- *  Freeze the string buffer word, turning it into a rope.
+/**
+ * Freeze the string buffer word, turning it into a rope.
  *
- *  @return
- *      The accumulated rope so far.
+ * @return The accumulated rope so far.
  *
- *  @sideeffect
+ * @sideeffect
  *      As the word may be transmuted into a rope, it can no longer be used as a
  *      string buffer.
- *//*-----------------------------------------------------------------------*/
-
+ */
 Col_Word
 Col_StringBufferFreeze(
     Col_Word strbuf)    /*!< String buffer to freeze. */
@@ -670,7 +653,8 @@ Col_StringBufferFreeze(
      * Check preconditions.
      */
 
-    TYPECHECK_STRBUF(strbuf) return WORD_NIL;                                   /*!     @typecheck{COL_ERROR_STRBUF,strbuf} */
+    /*! @typecheck{COL_ERROR_STRBUF,strbuf} */
+    TYPECHECK_STRBUF(strbuf) return WORD_NIL;
 
     WORD_UNWRAP(strbuf);
 
@@ -803,4 +787,6 @@ Col_StringBufferFreeze(
     return Col_StringBufferValue(strbuf);
 }
 
-                                                                                /*!     @} */
+/* End of String Buffer Operations */
+
+/* End of String Buffers *//*!\}*/

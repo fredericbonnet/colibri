@@ -1,7 +1,9 @@
-/*                                                                              *//*!   @file \
- * colAlloc.c
+/**
+ * @file colAlloc.c
  *
- *  This file implements the memory allocation features of Colibri.
+ * This file implements the memory allocation features of Colibri.
+ *
+ * @beginprivate @cond PRIVATE
  */
 
 #include "include/colibri.h"
@@ -10,11 +12,12 @@
 
 #include <stdlib.h>
 #include <string.h>
-                                                                                #       ifndef DOXYGEN
+
 /*
  * Prototypes for functions used only in this file.
  */
 
+/*! \cond IGNORE */
 typedef struct AddressRange *pAddressRange;
 static size_t           FindFreePagesInRange(struct AddressRange *range,
                             size_t number, size_t index);
@@ -23,29 +26,61 @@ static void             SysPageFree(void * base);
 static void             SysPageTrim(void * base);
 static Cell *           PageAllocCells(size_t number, Cell *firstCell);
 static size_t           FindFreeCells(void *page, size_t number, size_t index);
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
+
 
 /*
-================================================================================*//*!   @cond PRIVATE @addtogroup alloc \
-Memory Allocation                                                               *//*!   @endcond @{ *//*
-================================================================================
+===========================================================================*//*!
+\internal \weakgroup arch System and Architecture
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Bit Handling                                                                 *//*!   @{ *//*
+/*******************************************************************************
+ * System Page Allocation
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * firstZeroBitSequence
- *                                                                              *//*!
- *  Position of the first zero-bit sequence of a given length in byte.
- *  First index is length of zero-bit sequence to look for, minus 1. Second
- *  index is value of byte in which to search. Result is index of the first
- *  bit in matching zero-bit sequence, or -1 if none.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * System page size in bytes.
+ */
+size_t systemPageSize;
+
+/**
+ * Allocation granularity of address ranges.
+ */
+size_t allocGranularity;
+
+/**
+ * Bits to shift to convert between pages and bytes.
+ */
+size_t shiftPage;
+
+/** @endcond @endprivate */
+
+/* End of System Page Allocation */
+
+/* End of System and Architecture *//*!\}*/
+
+
+/*
+===========================================================================*//*!
+\internal \weakgroup alloc Memory Allocation
+\{*//*==========================================================================
+*/
+
+/***************************************************************************//*!
+ * \name Bit Handling
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Position of the first zero-bit sequence of a given length in byte.
+ * First index is length of zero-bit sequence to look for, minus 1. Second
+ * index is value of byte in which to search. Result is index of the first
+ * bit in matching zero-bit sequence, or -1 if none.
+ */
 static const char firstZeroBitSequence[7][256] = {
     { /* single bit */
          0,  1,  0,  2,  0,  1,  0,  3,  0,  1,  0,  2,  0,  1,  0,  4,
@@ -176,15 +211,10 @@ static const char firstZeroBitSequence[7][256] = {
     /* 8-bit sequences need no table, just test for zero byte */
 };
 
-/*---------------------------------------------------------------------------
- * longestLeadingZeroBitSequence
- *                                                                              *//*!
- *  Longest leading zero-bit sequence in byte. Index is value of byte.
- *  Result is number of consecutive cleared bytes starting at MSB.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Longest leading zero-bit sequence in byte. Index is value of byte.
+ * Result is number of consecutive cleared bytes starting at MSB.
+ */
 static const char longestLeadingZeroBitSequence[256] = {
     8, 7, 6, 6, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4,
     3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
@@ -204,15 +234,10 @@ static const char longestLeadingZeroBitSequence[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
-/*---------------------------------------------------------------------------
- * nbBitsSet
- *                                                                              *//*!
- *  Number of bits set in byte. Index is value of byte. Result is number of
- *  set bits.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Number of bits set in byte. Index is value of byte. Result is number of
+ * set bits.
+ */
 static const char nbBitsSet[256] = {
     0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
     1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
@@ -231,20 +256,21 @@ static const char nbBitsSet[256] = {
     3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
     4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8
 };
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Memory Pools                                                                 *//*!   @{ *//*
+/** @endcond @endprivate */
+
+/* End of Bit Handling *//*!\}*/
+
+
+/*******************************************************************************
+ * Memory Pools
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * PoolInit
- *                                                                              *//*!
- *  Initialize memory pool.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Initialize memory pool.
+ */
 void
 PoolInit(
     MemoryPool *pool,           /*!< Pool to initialize. */
@@ -254,16 +280,11 @@ PoolInit(
     pool->generation = generation;
 }
 
-/*---------------------------------------------------------------------------
- * PoolCleanup
- *                                                                              *//*!
- *  Cleanup memory pool.
+/**
+ * Cleanup memory pool.
  *
- *  @see SysPageFree
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see SysPageFree
+ */
 void
 PoolCleanup(
     MemoryPool *pool)   /*!< Pool to cleanup. */
@@ -288,121 +309,90 @@ PoolCleanup(
         SysPageFree(base);
     }
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * System Page Allocation
- *
- *  Granularity-free system page allocation based on address range
- *  reservation.
- *
- *  ### Address Reservation And Allocation
- *
- *  Some systems allow single system page allocations (e.g. POSIX mmap),
- *  while others require coarser grained schemes (e.g. Windows
- *  VirtualAlloc). However in both cases we have to keep track of allocated
- *  pages, especially for generational page write monitoring. So address
- *  ranges are reserved, and individual pages can be allocated and freed
- *  within these ranges. From a higher level this allows for per-page
- *  allocation, while at the same time providing enough metadata for memory
- *  introspection.
- *
- *  When the number of pages to allocate exceeds a certain size (defined as
- *  #LARGE_PAGE_SIZE), a dedicated address range is reserved and allocated,
- *  which must be freed all at once. Else, pages are allocated within larger
- *  address ranges using the following scheme:
- *
- *  Address ranges are reserved in geometrically increasing sizes up to a
- *  maximum size (the first being a multiple of the allocation granularity).
- *  Ranges form a singly-linked list in allocation order (so that search
- *  times are geometrically increasing too). A descriptor structure is
- *  malloc'd along with the range and consists of a pointer to the next
- *  descriptor, the base address of the range, the total and free numbers of
- *  pages and the index of the first free page in range, and a page alloc
- *  info table indicating:
- *
- *    - For free pages, zero.
- *    - For first page in group, the negated size of the group.
- *    - For remaining pages, the index in group.
- *
- *  That way, page group info can be known via direct access from the page
- *  index in range:
- *
- *    - When alloc info is zero, the page is free.
- *    - When negative, the page is the first in a group of the given
- *      negated size.
- *    - When positive, the page is the n-th in a group whose first
- *      page is the n-th previous one.
- *
- *  To allocate a group of pages in an address range, the alloc info table
- *  is scanned until a large enough group of free pages is found.
- *
- *  To free a group of pages, the containing address range is found by
- *  scanning all ranges in order (this is fast, as this only involves
- *  address comparison and the ranges grow geometrically). In either cases
- *  the descriptor is updated accordingly. If a containing range is not
- *  found we assume that it was a dedicated range and we attempt to release
- *  it at once.
- *
- *  Just following this alloc info table is a bitmask table used for write
- *  tracking. With our generational GC, pages of older generations are
- *  write-protected so that references pointing to younger cells can be
- *  tracked during the mark phase: such modified pages contain potential
- *  parent cells that must be followed along with roots. Regular ranges use
- *  a bitmask array, while dedicated ranges only have to store one value
- *  for the whole range.
- *
- *  This allocation scheme may not look optimal at first sight (especially
- *  the alloc info table scanning step), but keep in mind that the typical
- *  use case only involves single page allocations. Multiple page
- *  allocations only occur when allocating large, multiple cell-based
- *  structures, and most structures are single cell sized. And very large
- *  pages will end up in their own dedicated range with no group management.
- *  Moreover stress tests have shown that this scheme yielded similar or
- *  better performances than the previous schemes.                              *//*!   @{ *//*
- ******************************************************************************/
+/** @endcond @endprivate */
 
-/*---------------------------------------------------------------------------
- * systemPageSize
- *                                                                              *//*!
- *  System page size in bytes.
+/* End of Memory Pools */
+
+
+/***************************************************************************//*!
+ * \name Address Reservation And Allocation
  *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
-size_t systemPageSize;
-
-/*---------------------------------------------------------------------------
- * allocGranularity
- *                                                                              *//*!
- *  Allocation granularity of address ranges.
+ * Granularity-free system page allocation based on address range
+ * reservation.
  *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
-size_t allocGranularity;
-
-/*---------------------------------------------------------------------------
- * shiftPage
- *                                                                              *//*!
- *  Bits to shift to convert between pages and bytes.
+ * Some systems allow single system page allocations (e.g. POSIX mmap),
+ * while others require coarser grained schemes (e.g. Windows
+ * VirtualAlloc). However in both cases we have to keep track of allocated
+ * pages, especially for generational page write monitoring. So address
+ * ranges are reserved, and individual pages can be allocated and freed
+ * within these ranges. From a higher level this allows for per-page
+ * allocation, while at the same time providing enough metadata for memory
+ * introspection.
  *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
-size_t shiftPage;
-
-/*---------------------------------------------------------------------------
- * AddressRange
- *                                                                              *//*!
- *  Address range descriptor for allocated system pages.
+ * When the number of pages to allocate exceeds a certain size (defined as
+ * #LARGE_PAGE_SIZE), a dedicated address range is reserved and allocated,
+ * which must be freed all at once. Else, pages are allocated within larger
+ * address ranges using the following scheme:
  *
- *  @see SysPageAlloc
- *  @see SysPageFree
+ * Address ranges are reserved in geometrically increasing sizes up to a
+ * maximum size (the first being a multiple of the allocation granularity).
+ * Ranges form a singly-linked list in allocation order (so that search
+ * times are geometrically increasing too). A descriptor structure is
+ * malloc'd along with the range and consists of a pointer to the next
+ * descriptor, the base address of the range, the total and free numbers of
+ * pages and the index of the first free page in range, and a page alloc
+ * info table indicating:
  *
- *  @private
- *//*-----------------------------------------------------------------------*/
+ * - For free pages, zero.
+ * - For first page in group, the negated size of the group.
+ * - For remaining pages, the index in group.
+ *
+ * That way, page group info can be known via direct access from the page
+ * index in range:
+ *
+ * - When alloc info is zero, the page is free.
+ * - When negative, the page is the first in a group of the given
+ *   negated size.
+ * - When positive, the page is the n-th in a group whose first
+ *   page is the n-th previous one.
+ *
+ * To allocate a group of pages in an address range, the alloc info table
+ * is scanned until a large enough group of free pages is found.
+ *
+ * To free a group of pages, the containing address range is found by
+ * scanning all ranges in order (this is fast, as this only involves
+ * address comparison and the ranges grow geometrically). In either cases
+ * the descriptor is updated accordingly. If a containing range is not
+ * found we assume that it was a dedicated range and we attempt to release
+ * it at once.
+ *
+ * Just following this alloc info table is a bitmask table used for write
+ * tracking. With our generational GC, pages of older generations are
+ * write-protected so that references pointing to younger cells can be
+ * tracked during the mark phase: such modified pages contain potential
+ * parent cells that must be followed along with roots. Regular ranges use
+ * a bitmask array, while dedicated ranges only have to store one value
+ * for the whole range.
+ *
+ * This allocation scheme may not look optimal at first sight (especially
+ * the alloc info table scanning step), but keep in mind that the typical
+ * use case only involves single page allocations. Multiple page
+ * allocations only occur when allocating large, multiple cell-based
+ * structures, and most structures are single cell sized. And very large
+ * pages will end up in their own dedicated range with no group management.
+ * Moreover stress tests have shown that this scheme yielded similar or
+ * better performances than the previous schemes.
+ ***************************************************************************\{*/
 
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Address range descriptor for allocated system pages.
+ *
+ * @see SysPageAlloc
+ * @see SysPageFree
+ */
 typedef struct AddressRange {
     struct AddressRange *next;  /*!< Next descriptor in list. */
     void *base;                 /*!< Base address. */
@@ -412,61 +402,38 @@ typedef struct AddressRange {
     char allocInfo[0];          /*!< Info about allocated pages in range. */
 } AddressRange;
 
-/*---------------------------------------------------------------------------
- * ranges
- *                                                                              *//*!
- *  Reserved address ranges for general purpose.
+/**
+ * Reserved address ranges for general purpose.
  *
- *  @see SysPageAlloc
- *  @see SysPageFree
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see SysPageAlloc
+ * @see SysPageFree
+ */
 static AddressRange *ranges = NULL;
 
-/*---------------------------------------------------------------------------
- * dedicatedRanges
- *                                                                              *//*!
- *  Dedicated address ranges for large pages.
+/**
+ * Dedicated address ranges for large pages.
  *
- *  @see SysPageAlloc
- *  @see SysPageFree
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see SysPageAlloc
+ * @see SysPageFree
+ */
 static AddressRange *dedicatedRanges = NULL;
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------   *//*!   @def \
- * FIRST_RANGE_SIZE
- *
- *  Size of first reserved range.
- *
- *  @private
- *
- *                                                                              *//*!   @def \
- * MAX_RANGE_SIZE
- *
- *  Maximum size of ranges.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/**
+ * Size of first reserved range.
+ */
 #define FIRST_RANGE_SIZE    256     /* 1 MB */
-#define MAX_RANGE_SIZE      32768   /* 128 MB */
-                                                                                /*!     @endcond */
-/*---------------------------------------------------------------------------
- * FindFreePagesInRange
- *                                                                              *//*!
- *  Find given number of free consecutive pages in alloc info table.
- *
- *  @retval index   of first page of sequence if found.
- *  @retval -1      otherwise.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/**
+ * Maximum size of ranges.
+ */
+#define MAX_RANGE_SIZE      32768   /* 128 MB */
+
+/**
+ * Find given number of free consecutive pages in alloc info table.
+ *
+ * @retval index   of first page of sequence if found.
+ * @retval -1      otherwise.
+ */
 static size_t
 FindFreePagesInRange(
     AddressRange *range,    /*!< Address range to look into. */
@@ -515,22 +482,16 @@ FindFreePagesInRange(
     return (size_t) -1;
 }
 
-/*---------------------------------------------------------------------------
- * SysPageAlloc
- *                                                                              *//*!
- *  Allocate system pages.
+/**
+ * Allocate system pages.
  *
- *  @return
- *      The allocated system pages' base address.
+ * @return The allocated system pages' base address.
  *
- *  @sideeffect
+ * @sideeffect
  *      May reserve new address ranges.
  *
- *  @see SysPageFree
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see SysPageFree
+ */
 static void *
 SysPageAlloc(
     size_t number,  /*!< Number of system pages to alloc. */
@@ -553,8 +514,9 @@ SysPageAlloc(
              * Fatal error!
              */
 
+            /*! @fatal{COL_ERROR_MEMORY,Address range allocation failed} */
             Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
-                    "Address range allocation failed");                         /*!     @fatal{COL_ERROR_MEMORY,Address range allocation failed} */
+                    "Address range allocation failed");
             return NULL;
         }
 
@@ -650,8 +612,9 @@ SysPageAlloc(
                  * Fatal error!
                  */
 
+                /*! @fatal{COL_ERROR_MEMORY,Address range reservation failed} */
                 Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
-                        "Address range reservation failed");                    /*!     @fatal{COL_ERROR_MEMORY,Address range reservation failed} */
+                        "Address range reservation failed");
                 goto end;
             }
 
@@ -683,8 +646,9 @@ SysPageAlloc(
              * Fatal error!
              */
 
+            /*! @fatal{COL_ERROR_MEMORY,Page allocation failed} */
             Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
-                    "Page allocation failed");                                  /*!     @fatal{COL_ERROR_MEMORY,Page allocation failed} */
+                    "Page allocation failed");
             goto end;
         }
 
@@ -717,19 +681,14 @@ end:
     return addr;
 }
 
-/*---------------------------------------------------------------------------
- * SysPageFree
- *                                                                              *//*!
- *  Free system pages.
+/**
+ * Free system pages.
  *
- *  @sideeffect
+ * @sideeffect
  *      May release address ranges.
  *
- *  @see SysPageAlloc
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see SysPageAlloc
+ */
 static void
 SysPageFree(
     void * base)    /*!< Base address of the pages to free. */
@@ -771,8 +730,9 @@ SysPageFree(
                  * Not found.
                  */
 
+                /*! @fatal{COL_ERROR_MEMORY,Page not found} */
                 Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
-                        "Page not found");                                      /*!     @fatal{COL_ERROR_MEMORY,Page not found} */
+                        "Page not found");
                 goto end;
             }
 
@@ -785,8 +745,9 @@ SysPageFree(
                  * Fatal error!
                  */
 
+                /*! @fatal{COL_ERROR_MEMORY,Address range release failed} */
                 Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
-                        "Address range release failed");                        /*!     @fatal{COL_ERROR_MEMORY,Address range release failed} */
+                        "Address range release failed");
                 goto end;
             }
 
@@ -813,8 +774,9 @@ SysPageFree(
              * Fatal error!
              */
 
+            /*! @fatal{COL_ERROR_MEMORY,Page deallocation failed} */
             Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
-                    "Page deallocation failed");                                /*!     @fatal{COL_ERROR_MEMORY,Page deallocation failed} */
+                    "Page deallocation failed");
             goto end;
         }
 
@@ -839,16 +801,11 @@ end:
     PlatLeaveProtectAddressRanges();
 }
 
-/*---------------------------------------------------------------------------
- * SysPageTrim
- *                                                                              *//*!
- *  Free trailing pages of system page groups, keeping only the first page.
+/**
+ * Free trailing pages of system page groups, keeping only the first page.
  *
- *  @see SysPageFree
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see SysPageFree
+ */
 static void
 SysPageTrim(
     void * base)    /*!< Base address of the pages to free. */
@@ -875,8 +832,9 @@ SysPageTrim(
              * Not found. Cannot trim dedicated ranges.
              */
 
+            /*! @fatal{COL_ERROR_MEMORY,Page not found} */
             Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
-                    "Page not found");                                          /*!     @fatal{COL_ERROR_MEMORY,Page not found} */
+                    "Page not found");
             goto end;
         }
 
@@ -902,8 +860,9 @@ SysPageTrim(
              * Fatal error!
              */
 
+            /*! @fatal{COL_ERROR_MEMORY,Page deallocation failed} */
             Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
-                    "Page deallocation failed");                                /*!     @fatal{COL_ERROR_MEMORY,Page deallocation failed} */
+                    "Page deallocation failed");
             goto end;
         }
 
@@ -929,14 +888,20 @@ end:
     PlatLeaveProtectAddressRanges();
 }
 
-/*---------------------------------------------------------------------------
- * SysPageProtect
- *                                                                              *//*!
- *  Write-protect system page group.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
+/* End of Address Reservation And Allocation *//*!\}*/
+
+
+/*******************************************************************************
+ * System Page Allocation
+ ******************************************************************************/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Write-protect system page group.
+ */
 void
 SysPageProtect(
     void * page,    /*!< Page belonging to page group to protect. */
@@ -977,8 +942,9 @@ SysPageProtect(
                  * Not found.
                  */
 
+                /*! @fatal{COL_ERROR_MEMORY,Page not found} */
                 Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
-                        "Page not found");                                      /*!     @fatal{COL_ERROR_MEMORY,Page not found} */
+                        "Page not found");
                 goto end;
             }
 
@@ -1014,23 +980,24 @@ SysPageProtect(
 end:
     PlatLeaveProtectAddressRanges();
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Page Allocation                                                              *//*!   @{ *//*
+/** @endcond @endprivate */
+
+/* End of System Page Allocation */
+
+
+/*******************************************************************************
+ * Page Allocation
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * PoolAllocPages
- *                                                                              *//*!
- *  Allocate pages in pool. Pages are inserted after the given page. This
- *  guarantees better performances by avoiding the traversal of previous pages.
- *
- *  @see SysPageAlloc
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Allocate pages in pool. Pages are inserted after the given page. This
+ * guarantees better performances by avoiding the traversal of previous pages.
+ *
+ * @see SysPageAlloc
+ */
 void
 PoolAllocPages(
     MemoryPool *pool,   /*!< Pool to allocate pages into. */
@@ -1114,16 +1081,11 @@ PoolAllocPages(
     PAGE_SET_FLAG(prev, PAGE_FLAG_LAST);
 }
 
-/*---------------------------------------------------------------------------
- * PoolFreeEmptyPages
- *                                                                              *//*!
- *  Free empty system pages in pool. Refresh page count in the process.
+/**
+ * Free empty system pages in pool. Refresh page count in the process.
  *
- *  @see SysPageFree
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see SysPageFree
+ */
 void
 PoolFreeEmptyPages(
     MemoryPool *pool)   /*!< Pool with pages to free. */
@@ -1223,32 +1185,33 @@ PoolFreeEmptyPages(
     ASSERT(!prev||!PAGE_NEXT(prev));
     pool->lastPage = prev;
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Cell Allocation                                                              *//*!   @{ *//*
+/** @endcond @endprivate */
+
+/* End of Page Allocation */
+
+
+/*******************************************************************************
+ * Cell Allocation
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * PoolAllocCells
- *                                                                              *//*!
- *  Allocate cells in a pool, allocating new pages if needed. Traverse and
- *  search all existing pages for a free cell sequence of the given length,
- *  and if none is found, allocate new pages.
- *
- *  @retval pointer to the first allocated cell if successful
- *  @retval NULL    otherwise
- *
- *  @sideeffect
- *    Memory pages may be allocated. This may trigger the GC later once we
- *    leave the GC-protected section.
- *
- *  @see PageAllocCells
- *  @see PoolAllocPages
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Allocate cells in a pool, allocating new pages if needed. Traverse and
+ * search all existing pages for a free cell sequence of the given length,
+ * and if none is found, allocate new pages.
+ *
+ * @retval pointer  to the first allocated cell if successful
+ * @retval NULL     otherwise
+ *
+ * @sideeffect
+ *      Memory pages may be allocated. This may trigger the GC later once we
+ *      leave the GC-protected section.
+ *
+ * @see PageAllocCells
+ * @see PoolAllocPages
+ */
 Cell *
 PoolAllocCells(
     MemoryPool *pool,   /*!< Pool to allocate cells into. */
@@ -1279,8 +1242,9 @@ PoolAllocCells(
              * Fatal error!
              */
 
+            /*! @fatal{COL_ERROR_MEMORY,Page allocation failed} */
             Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
-                    "Page allocation failed");                                  /*!     @fatal{COL_ERROR_MEMORY,Page allocation failed} */
+                    "Page allocation failed");
             return NULL;
         }
 
@@ -1341,8 +1305,9 @@ PoolAllocCells(
          * Fatal error!
          */
 
+        /*! @fatal{COL_ERROR_MEMORY,Page allocation failed} */
         Col_Error(COL_FATAL, ColibriDomain, COL_ERROR_MEMORY,
-                "Page allocation failed");                                      /*!     @fatal{COL_ERROR_MEMORY,Page allocation failed} */
+                "Page allocation failed");
         return NULL;
     }
     cells = PageAllocCells(number, PAGE_CELL(PAGE_NEXT(tail), 0));
@@ -1360,20 +1325,15 @@ PoolAllocCells(
     return cells;
 }
 
-/*---------------------------------------------------------------------------
- * PageAllocCells
- *                                                                              *//*!
- *  Allocate cells in existing pages. Traverse and search all existing pages
- *  for a free cell sequence of the given length, and if found, set cells.
+/**
+ * Allocate cells in existing pages. Traverse and search all existing pages
+ * for a free cell sequence of the given length, and if found, set cells.
  *
- *  @retval pointer to the first allocated cell if successful
- *  @retval NULL    otherwise
+ * @retval pointer  to the first allocated cell if successful
+ * @retval NULL     otherwise
  *
- *  @see FindFreeCells
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see FindFreeCells
+ */
 static Cell *
 PageAllocCells(
     size_t number,      /*!< Number of cells to allocate. */
@@ -1427,17 +1387,12 @@ PageAllocCells(
     return (Cell *) page + first;
 }
 
-/*---------------------------------------------------------------------------
- * FindFreeCells
- *                                                                              *//*!
- *  Find sequence of free cells in page.
+/**
+ * Find sequence of free cells in page.
  *
- *  @retval index   of first cell of sequence if found
- *  @retval -1      if none found
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @retval index    of first cell of sequence if found
+ * @retval -1       if none found
+ */
 static size_t
 FindFreeCells(
     void *page,     /*!< Page to look into. */
@@ -1543,14 +1498,9 @@ FindFreeCells(
     return (size_t)-1;
 }
 
-/*---------------------------------------------------------------------------
- * SetCells
- *                                                                              *//*!
- *  Set the page bitmask for a given sequence of cells.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Set the page bitmask for a given sequence of cells.
+ */
 void
 SetCells(
     Page *page,     /*!< The page. */
@@ -1572,14 +1522,9 @@ SetCells(
 #endif
 }
 
-/*---------------------------------------------------------------------------
- * ClearCells
- *                                                                              *//*!
- *  Clear the page bitmask for a given sequence of cells.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Clear the page bitmask for a given sequence of cells.
+ */
 void
 ClearCells(
     Page *page,     /*!< The page. */
@@ -1601,14 +1546,9 @@ ClearCells(
 #endif
 }
 
-/*---------------------------------------------------------------------------
- * ClearAllCells
- *                                                                              *//*!
- *  Clear the page bitmask.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Clear the page bitmask.
+ */
 void
 ClearAllCells(
     Page *page) /*!< The page. */
@@ -1634,17 +1574,11 @@ ClearAllCells(
 #endif
 }
 
-/*---------------------------------------------------------------------------
- * TestCell
- *                                                                              *//*!
- *  Test the page bitmap for a given cell.
+/**
+ * Test the page bitmap for a given cell.
  *
- *  @return
- *      Whether the cell is set.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @return Whether the cell is set.
+ */
 int
 TestCell(
     Page *page,     /*!< The page. */
@@ -1662,17 +1596,11 @@ TestCell(
 #endif
 }
 
-/*---------------------------------------------------------------------------
- * NbSetCells
- *                                                                              *//*!
- *  Get the number of cells set in a page.
+/**
+ * Get the number of cells set in a page.
  *
- *  @return
- *      Number of set cells.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @return Number of set cells.
+ */
 size_t
 NbSetCells(
     Page *page) /*!< The page. */
@@ -1710,23 +1638,26 @@ NbSetCells(
     return nb;
 #endif
 }
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/** @endcond @endprivate */
+
+/* End of Cell Allocation */
+
+/* End of Memory Allocation *//*!\}*/
+
+
 /*
-================================================================================*//*!   @cond PRIVATE @addtogroup gc_parents \
-Parents                                                                         *//*!   @endcond @{ *//*
-================================================================================
+===========================================================================*//*!
+\internal \weakgroup gc_parents Parents
+\{*//*==========================================================================
 */
 
-/*---------------------------------------------------------------------------
- * UpdateParents
- *                                                                              *//*!
- *  Add pages written since the last GC to parent tracking structures. Then
- *  each page's parent flag is cleared for the mark phase.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Add pages written since the last GC to parent tracking structures. Then
+ * each page's parent flag is cleared for the mark phase.
+ */
 void
 UpdateParents(
     GroupData *data)    /*!< Group-specific data. */
@@ -1856,4 +1787,8 @@ UpdateParents(
     }
     PlatLeaveProtectAddressRanges();
 }
-                                                                                /*!     @} */
+
+/** @endcond @endprivate */
+
+/* End of Parents *//*!\}*/
+/*! @endcond @endprivate */

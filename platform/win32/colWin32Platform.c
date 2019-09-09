@@ -1,13 +1,13 @@
-/*                                                                              *//*!   @cond PRIVATE @file \
- * colWin32Platform.c
+/**
+ * @file colWin32Platform.c
  *
- *  This file provides Win32 implementations of generic primitives needing
- *  platform-specific implementations, as well as Win32-specific primitives.
+ * This file provides Win32 implementations of generic primitives needing
+ * platform-specific implementations, as well as Win32-specific primitives.
  *
- *  @see colPlatform.h
- *  @see colWin32Platform.h
+ * @see colPlatform.h
+ * @see colWin32Platform.h
  *
- *  @private
+ * @beginprivate @cond PRIVATE
  */
 
 #include "../../include/colibri.h"
@@ -16,63 +16,67 @@
 
 #include <windows.h>
 #include <sys/types.h>
-                                                                                #       ifndef DOXYGEN
+
 /*
  * Prototypes for functions used only in this file.
  */
 
+/*! \cond IGNORE */
 static struct Win32GroupData * AllocGroupData(unsigned int model);
 static void             FreeGroupData(struct Win32GroupData *groupData);
 static DWORD WINAPI     GcThreadProc(LPVOID lpParameter);
 static BOOL             Init(void);
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
+
 
 /*
-================================================================================*//*!   @addtogroup arch_win32 \
-System and Architecture (Win32-specific)                                        *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\internal \weakgroup arch_win32 System and Architecture (Win32-specific)
+\{*//*==========================================================================
 */
-                                                                                #       ifndef DOXYGEN
+
+/** @beginprivate @cond PRIVATE */
+
 /*
  * Bit twiddling hack for computing the log2 of a power of 2.
  * See: http://www-graphics.stanford.edu/~seander/bithacks.html#IntegerLogDeBruijn
  */
 
+/*! \cond IGNORE */
 static const int MultiplyDeBruijnBitPosition2[32] =
 {
   0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8,
   31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
 };
 #define LOG2(v) MultiplyDeBruijnBitPosition2[(uint32_t)(v * 0x077CB531U) >> 27]
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
 
-/********************************************************************************//*!   @name \
- * Thread-Local Storage                                                         *//*!   @{ *//*
- ******************************************************************************/
+/** @endcond @endprivate */
 
-/*---------------------------------------------------------------------------
- * tlsToken
- *                                                                              *//*!
- *  Thread-local storage identifier. Used to get thread-specific data.
+
+/***************************************************************************//*!
+ * \name Thread-Local Storage
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Thread-local storage identifier. Used to get thread-specific data.
  *
- *  @see ThreadData
- *  @see Init
- *//*-----------------------------------------------------------------------*/
-
+ * @see ThreadData
+ * @see Init
+ */
 DWORD tlsToken;
 
-/*---------------------------------------------------------------------------
- * Win32GroupData
- *                                                                              *//*!
- *  Platform-specific group data.
+/**
+ * Platform-specific group data.
  *
- *  @see ThreadData
- *  @see GroupData
- *  @see Init
- *  @see AllocGroupData
- *  @see FreeGroupData
- *//*-----------------------------------------------------------------------*/
-
+ * @see ThreadData
+ * @see GroupData
+ * @see Init
+ * @see AllocGroupData
+ * @see FreeGroupData
+ */
 typedef struct Win32GroupData {
     GroupData data;             /*!< Generic #GroupData structure. */
     struct Win32GroupData *next;/*!< Next active group in list. */
@@ -89,44 +93,34 @@ typedef struct Win32GroupData {
     HANDLE threadGc;            /*!< GC thread. */
 } Win32GroupData;
 
-/*---------------------------------------------------------------------------
- * sharedGroups
- *                                                                              *//*!
- *  List of active groups in process.
+/**
+ * List of active groups in process.
  *
- *  @see Win32GroupData
- *  @see AllocGroupData
- *  @see FreeGroupData
- *//*-----------------------------------------------------------------------*/
-
+ * @see Win32GroupData
+ * @see AllocGroupData
+ * @see FreeGroupData
+ */
 static Win32GroupData *sharedGroups;
 
-/*---------------------------------------------------------------------------
- * csSharedGroups
- *                                                                              *//*!
- *  Critical section protecting #sharedGroups.
+/**
+ * Critical section protecting #sharedGroups.
  *
- *  @see sharedGroups
- *//*-----------------------------------------------------------------------*/
-
+ * @see sharedGroups
+ */
 static CRITICAL_SECTION csSharedGroups;
 
-/*---------------------------------------------------------------------------
- * AllocGroupData
- *                                                                              *//*!
- *  Allocate and initialize a thread group data structure.
+/**
+ * Allocate and initialize a thread group data structure.
  *
- *  @return
- *      The newly allocated structure.
+ * @return The newly allocated structure.
  *
- *  @sideeffect
+ * @sideeffect
  *      Memory allocated and system objects created.
  *
- *  @see @ref threading_models "Threading Model Constants"
- *  @see Win32GroupData
- *  @see FreeGroupData
- *//*-----------------------------------------------------------------------*/
-
+ * @see @ref threading_models "Threading Model Constants"
+ * @see Win32GroupData
+ * @see FreeGroupData
+ */
 static Win32GroupData *
 AllocGroupData(
     unsigned int model)     /*!< Threading model. */
@@ -159,18 +153,15 @@ AllocGroupData(
     return groupData;
 }
 
-/*---------------------------------------------------------------------------
- * FreeGroupData
- *                                                                              *//*!
- *  Free a thread group data structure.
+/**
+ * Free a thread group data structure.
  *
- *  @sideeffect
+ * @sideeffect
  *      Memory freed and system objects deleted.
  *
- *  @see Win32GroupData
- *  @see AllocGroupData
- *//*-----------------------------------------------------------------------*/
-
+ * @see Win32GroupData
+ * @see AllocGroupData
+ */
 static void
 FreeGroupData(
     Win32GroupData *groupData)  /*!< Structure to free. */
@@ -199,28 +190,31 @@ FreeGroupData(
     GcCleanupGroup((GroupData *) groupData);
     free(groupData);
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Process & Threads                                                            *//*!   @{ *//*
- ******************************************************************************/
+/** @endcond @endprivate */
 
-/*---------------------------------------------------------------------------
- * PlatEnter
- *                                                                              *//*!
- *  Enter the thread. If this is the first nested call, initialize thread data.
- *  If this is the first thread in its group, initialize group data as well.
+/* End of Thread-Local Storage *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Process & Threads
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Enter the thread. If this is the first nested call, initialize thread data.
+ * If this is the first thread in its group, initialize group data as well.
  *
- *  @retval nonzero     if this is the first nested call.
- *  @retval zero        otherwise.
+ * @retval <>0> if this is the first nested call.
+ * @retval 0    otherwise.
  *
- *  @see @ref threading_models "Threading Model Constants"
- *  @see ThreadData
- *  @see Win32GroupData
- *  @see PlatLeave
- *  @see Col_Init
- *//*-----------------------------------------------------------------------*/
-
+ * @see @ref threading_models "Threading Model Constants"
+ * @see ThreadData
+ * @see Win32GroupData
+ * @see PlatLeave
+ * @see Col_Init
+ */
 int
 PlatEnter(
     unsigned int model) /*!< Threading model. */
@@ -292,21 +286,18 @@ PlatEnter(
     return 1;
 }
 
-/*---------------------------------------------------------------------------
- * PlatLeave
- *                                                                              *//*!
- *  Leave the thread. If this is the first nested call, cleanup thread data.
- *  If this is the last thread in its group, cleanup group data as well.
+/**
+ * Leave the thread. If this is the first nested call, cleanup thread data.
+ * If this is the last thread in its group, cleanup group data as well.
  *
- *  @retval nonzero     if this is the last nested call.
- *  @retval zero        otherwise.
+ * @retval <>0  if this is the last nested call.
+ * @retval 0    otherwise.
  *
- *  @see ThreadData
- *  @see Win32GroupData
- *  @see PlatEnter
- *  @see Col_Cleanup
- *//*-----------------------------------------------------------------------*/
-
+ * @see ThreadData
+ * @see Win32GroupData
+ * @see PlatEnter
+ * @see Col_Cleanup
+ */
 int
 PlatLeave()
 {
@@ -371,22 +362,18 @@ PlatLeave()
     return 1;
 }
 
-/*---------------------------------------------------------------------------
- * GcThreadProc
- *                                                                              *//*!
- *  Thread dedicated to the GC process. Activated when one of the worker threads
- *  in the group triggers the GC.
+/**
+ * Thread dedicated to the GC process. Activated when one of the worker threads
+ * in the group triggers the GC.
  *
- *  @return
- *      Always zero.
+ * @return Always zero.
  *
- *  @sideeffect
+ * @sideeffect
  *      Calls #PerformGC.
  *
- *  @see AllocGroupData
- *  @see PerformGC
- *//*-----------------------------------------------------------------------*/
-
+ * @see AllocGroupData
+ * @see PerformGC
+ */
 static DWORD WINAPI
 GcThreadProc(
     LPVOID lpParameter) /*!< #Win32GroupData. */
@@ -409,19 +396,16 @@ GcThreadProc(
     }
 }
 
-/*---------------------------------------------------------------------------
- * PlatSyncPauseGC
- *                                                                              *//*!
- *  Called when a worker thread calls the outermost Col_PauseGC().
+/**
+ * Called when a worker thread calls the outermost Col_PauseGC().
  *
- *  @sideeffect
+ * @sideeffect
  *      May block as long as a GC is underway.
  *
- *  @see GcThreadProc
- *  @see SyncPauseGC
- *  @see Col_PauseGC
- *//*-----------------------------------------------------------------------*/
-
+ * @see GcThreadProc
+ * @see SyncPauseGC
+ * @see Col_PauseGC
+ */
 void
 PlatSyncPauseGC(
     GroupData *data)    /*!< Group-specific data. */
@@ -436,19 +420,16 @@ PlatSyncPauseGC(
     LeaveCriticalSection(&groupData->csGc);
 }
 
-/*---------------------------------------------------------------------------
- * PlatTrySyncPauseGC
- *                                                                              *//*!
- *  Called when a worker thread calls the outermost Col_TryPauseGC().
+/**
+ * Called when a worker thread calls the outermost Col_TryPauseGC().
  *
- *  @return
- *      Nonzero if successful.
+ * @retval <>0  if successful.
+ * @retval 0    if call would block.
  *
- *  @see GcThreadProc
- *  @see TrySyncPauseGC
- *  @see Col_TryPauseGC
- *//*-----------------------------------------------------------------------*/
-
+ * @see GcThreadProc
+ * @see TrySyncPauseGC
+ * @see Col_TryPauseGC
+ */
 int
 PlatTrySyncPauseGC(
     GroupData *data)    /*!< Group-specific data. */
@@ -467,21 +448,18 @@ PlatTrySyncPauseGC(
     return 1;
 }
 
-/*---------------------------------------------------------------------------
- * PlatSyncResumeGC
- *                                                                              *//*!
- *  Called when a worker thread calls the outermost Col_ResumeGC().
+/**
+ * Called when a worker thread calls the outermost Col_ResumeGC().
  *
- *  @sideeffect
+ * @sideeffect
  *      If last thread in group, may trigger the GC in the dedicated thread if
  *      previously scheduled. This will block further calls to
  *      Col_PauseGC() / PlatSyncPauseGC().
  *
- *  @see GcThreadProc
- *  @see SyncResumeGC
- *  @see Col_ResumeGC
- *//*-----------------------------------------------------------------------*/
-
+ * @see GcThreadProc
+ * @see SyncResumeGC
+ * @see Col_ResumeGC
+ */
 void
 PlatSyncResumeGC(
     GroupData *data,    /*!< Group-specific data. */
@@ -503,18 +481,15 @@ PlatSyncResumeGC(
     LeaveCriticalSection(&groupData->csGc);
 }
 
-/*---------------------------------------------------------------------------
- * PlatEnterProtectRoots
- *                                                                              *//*!
- *  Enter protected section around root management structures.
+/**
+ * Enter protected section around root management structures.
  *
- *  @sideeffect
+ * @sideeffect
  *      Blocks until no thread owns the section.
  *
- *  @see PlatLeaveProtectRoots
- *  @see EnterProtectRoots
- *//*-----------------------------------------------------------------------*/
-
+ * @see PlatLeaveProtectRoots
+ * @see EnterProtectRoots
+ */
 void
 PlatEnterProtectRoots(
     GroupData *data)    /*!< Group-specific data. */
@@ -524,18 +499,15 @@ PlatEnterProtectRoots(
     EnterCriticalSection(&groupData->csRoots);
 }
 
-/*---------------------------------------------------------------------------
- * PlatLeaveProtectRoots
- *                                                                              *//*!
- *  Leave protected section around root management structures.
+/**
+ * Leave protected section around root management structures.
  *
- *  @sideeffect
+ * @sideeffect
  *      May unblock any thread waiting for the section.
  *
- *  @see PlatEnterProtectRoots
- *  @see LeaveProtectRoots
- *//*-----------------------------------------------------------------------*/
-
+ * @see PlatEnterProtectRoots
+ * @see LeaveProtectRoots
+ */
 void
 PlatLeaveProtectRoots(
     GroupData *data)    /*!< Group-specific data. */
@@ -544,35 +516,34 @@ PlatLeaveProtectRoots(
     ASSERT(groupData->data.model >= COL_SHARED);
     LeaveCriticalSection(&groupData->csRoots);
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * System Page Allocation                                                       *//*!   @{ *//*
- ******************************************************************************/
+/** @endcond @endprivate */
 
-/*---------------------------------------------------------------------------
- * csRange
- *                                                                              *//*!
- *  Critical section protecting address range management.
+/* End of Process & Threads *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name System Page Allocation
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Critical section protecting address range management.
  *
- *  - #ranges:          Reserved address ranges for general purpose.
- *  - #dedicatedRanges: Dedicated address ranges for large pages.
+ * - #ranges:          Reserved address ranges for general purpose.
+ * - #dedicatedRanges: Dedicated address ranges for large pages.
  *
- *  @see PlatEnterProtectAddressRanges
- *  @see PlatLeaveProtectAddressRanges
- *//*-----------------------------------------------------------------------*/
-
+ * @see PlatEnterProtectAddressRanges
+ * @see PlatLeaveProtectAddressRanges
+ */
 CRITICAL_SECTION csRange;
 
-/*---------------------------------------------------------------------------
- * PlatReserveRange
- *                                                                              *//*!
- *  Reserve an address range.
+/**
+ * Reserve an address range.
  *
- *  @return
- *      The reserved range's base address, or NULL if failure.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The reserved range's base address, or NULL if failure.
+ */
 void *
 PlatReserveRange(
     size_t size,    /*!< Number of pages to reserve. */
@@ -582,15 +553,12 @@ PlatReserveRange(
         MEM_RESERVE | (alloc ? MEM_COMMIT : 0), PAGE_READWRITE);
 }
 
-/*---------------------------------------------------------------------------
- * PlatReleaseRange
- *                                                                              *//*!
- *  Release an address range.
+/**
+ * Release an address range.
  *
- *  @return
- *      Nonzero for success.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval <>0  for success.
+ * @retval 0    for failure.
+ */
 int
 PlatReleaseRange(
     void *base,     /*!< Base address of range to release. */
@@ -599,15 +567,12 @@ PlatReleaseRange(
     return VirtualFree(base, 0, MEM_RELEASE);
 }
 
-/*---------------------------------------------------------------------------
- * PlatAllocPages
- *                                                                              *//*!
- *  Allocate pages in reserved range.
+/**
+ * Allocate pages in reserved range.
  *
- *  @return
- *      Nonzero for success.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval <>0  for success.
+ * @retval 0    for failure.
+ */
 int
 PlatAllocPages(
     void *addr,     /*!< Address of first page to allocate. */
@@ -617,15 +582,12 @@ PlatAllocPages(
             PAGE_READWRITE);
 }
 
-/*---------------------------------------------------------------------------
- * PlatFreePages
- *                                                                              *//*!
- *  Free pages in reserved range.
+/**
+ * Free pages in reserved range.
  *
- *  @return
- *      Nonzero for success.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval <>0  for success.
+ * @retval 0    for failure.
+ */
 int
 PlatFreePages(
     void *addr,     /*!< Address of first page to free. */
@@ -634,15 +596,12 @@ PlatFreePages(
     return VirtualFree(addr, number << shiftPage, MEM_DECOMMIT);
 }
 
-/*---------------------------------------------------------------------------
- * PlatProtectPages
- *                                                                              *//*!
- *  Protect/unprotect pages in reserved range.
+/**
+ * Protect/unprotect pages in reserved range.
  *
- *  @return
- *      Nonzero for success.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval <>0  for success.
+ * @retval 0    for failure.
+ */
 int
 PlatProtectPages(
     void *addr,     /*!< Address of first page to protect/unprotect */
@@ -654,19 +613,16 @@ PlatProtectPages(
             (protect ? PAGE_READONLY : PAGE_READWRITE), &old);
 }
 
-/*---------------------------------------------------------------------------
- * PageProtectVectoredHandler
- *                                                                              *//*!
- *  Called upon exception.
+/**
+ * Called upon exception.
  *
- *  @retval EXCEPTION_CONTINUE_SEARCH       for unhandled exceptions, will pass
+ * @retval EXCEPTION_CONTINUE_SEARCH        for unhandled exceptions, will pass
  *                                          exception to other handlers.
- *  @retval EXCEPTION_CONTINUE_EXECUTION    for handled exceptions, will resume
+ * @retval EXCEPTION_CONTINUE_EXECUTION     for handled exceptions, will resume
  *                                          execution of calling code.
  *
- *  @see SysPageProtect
- *//*-----------------------------------------------------------------------*/
-
+ * @see SysPageProtect
+ */
 static LONG CALLBACK
 PageProtectVectoredHandler(
     PEXCEPTION_POINTERS exceptionInfo)  /*!< Info about caught exception. */
@@ -690,23 +646,25 @@ PageProtectVectoredHandler(
             0);
     return EXCEPTION_CONTINUE_EXECUTION;
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Initialization/Cleanup                                                       *//*!   @{ *//*
- ******************************************************************************/
+/** @endcond @endprivate */
 
-/*---------------------------------------------------------------------------
- * DllMain
- *                                                                              *//*!
- *  Windows DLL entry point.
+/* End of System Page Allocation *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Initialization/Cleanup
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Windows DLL entry point.
  *
- *  @return
- *      Always true.
+ * @return Always true.
  *
- *  @see Init
- *//*-----------------------------------------------------------------------*/
-
+ * @see Init
+ */
 BOOL APIENTRY
 DllMain(
     HMODULE hModule,    /*!< A handle to the DLL module. */
@@ -725,26 +683,22 @@ DllMain(
     return TRUE;
 }
 
-/*---------------------------------------------------------------------------
- * Init
- *                                                                              *//*!
- *  Initialization routine. Called through DllMain().
+/**
+ * Initialization routine. Called through DllMain().
  *
- *  @return
- *      Always true.
+ * @return Always true.
  *
- *  @sideeffect
+ * @sideeffect
  *      - Create thread-local storage key #tlsToken (freed upon
  *        DLL_PROCESS_DETACH in #DllMain).
  *      - Install memory protection exception handler
  *        PageProtectVectoredHandler()for parent tracking.
  *
- *  @see DllMain
- *  @see systemPageSize
- *  @see allocGranularity
- *  @see shiftPage
- *//*-----------------------------------------------------------------------*/
-
+ * @see DllMain
+ * @see systemPageSize
+ * @see allocGranularity
+ * @see shiftPage
+ */
 static BOOL
 Init()
 {
@@ -768,6 +722,10 @@ Init()
 
     return TRUE;
 }
-                                                                                /*!     @} */
-                                                                                /*!     @} */
-                                                                                /*!     @endcond */
+
+/** @endcond @endprivate */
+
+/* End of Initialization/Cleanup *//*!\}*/
+
+/* End of System and Architecture (Win32-specific) *//*!\}*/
+/*! @endcond @endprivate */

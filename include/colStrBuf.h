@@ -1,11 +1,11 @@
-/*                                                                              *//*!   @file \
- * colStrBuf.h
+/**
+ * @file colStrBuf.h
  *
- *  This header file defines the string buffer handling features of Colibri.
+ * This header file defines the string buffer handling features of Colibri.
  *
- *  String buffers are used to build strings incrementally in an efficient
- *  manner, by appending individual characters or whole ropes. The current
- *  accumulated rope can be retrieved at any time.
+ * String buffers are used to build strings incrementally in an efficient
+ * manner, by appending individual characters or whole ropes. The current
+ * accumulated rope can be retrieved at any time.
  */
 
 #ifndef _COLIBRI_STRBUF
@@ -16,36 +16,42 @@
 
 
 /*
-================================================================================*//*!   @addtogroup strbuf_words \
-String Buffers
-                                                                                        @ingroup words
+===========================================================================*//*!
+\addtogroup strbuf_words String Buffers
+\ingroup words
+
   String buffers are used to build strings incrementally in an efficient
-  manner, by appending individual characters or whole ropes.                    *//*!   @{ *//*
-================================================================================
+  manner, by appending individual characters or whole ropes. The current
+  accumulated rope can be retrieved at any time.
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * String Buffer Creation                                                       *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name String Buffer Creation
+ ***************************************************************************\{*/
 
 EXTERN size_t           Col_MaxStringBufferLength(Col_StringFormat format);
 EXTERN Col_Word         Col_NewStringBuffer(size_t maxLength,
                             Col_StringFormat format);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * String Buffer Accessors                                                      *//*!   @{ *//*
- ******************************************************************************/
+/* End of String Buffer Creation *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name String Buffer Accessors
+ ***************************************************************************\{*/
 
 EXTERN Col_StringFormat Col_StringBufferFormat(Col_Word strbuf);
 EXTERN size_t           Col_StringBufferMaxLength(Col_Word strbuf);
 EXTERN size_t           Col_StringBufferLength(Col_Word strbuf);
 EXTERN Col_Word         Col_StringBufferValue(Col_Word strbuf);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * String Buffer Operations                                                     *//*!   @{ *//*
- ******************************************************************************/
+/* End of String Buffer Accessors *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name String Buffer Operations
+ ***************************************************************************\{*/
 
 EXTERN int              Col_StringBufferAppendChar(Col_Word strbuf,
                             Col_Char c);
@@ -58,6 +64,9 @@ EXTERN void *           Col_StringBufferReserve(Col_Word strbuf, size_t length);
 EXTERN void             Col_StringBufferRelease(Col_Word strbuf, size_t length);
 EXTERN void             Col_StringBufferReset(Col_Word strbuf);
 EXTERN Col_Word         Col_StringBufferFreeze(Col_Word strbuf);
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of String Buffer Operations *//*!\}*/
+
+/* End of String Buffers *//*!\}*/
+
 #endif /* _COLIBRI_STRBUF */

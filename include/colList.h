@@ -1,14 +1,14 @@
-/*                                                                              *//*!   @file \
- * colList.h
+/**
+ * @file colList.h
  *
- *  This header file defines the list handling features of Colibri.
+ * This header file defines the list handling features of Colibri.
  *
- *  Lists are a linear collection datatype that allows for fast insertion,
- *  extraction and composition of other lists. Internally they use
- *  self-balanced binary trees, like ropes, except that they use vectors
- *  as basic containers instead of character arrays.
+ * Lists are a linear collection datatype that allows for fast insertion,
+ * extraction and composition of other lists. Internally they use
+ * self-balanced binary trees, like ropes, except that they use vectors
+ * as basic containers instead of character arrays.
  *
- *  They come in both immutable and mutable forms.
+ * They come in both immutable and mutable forms.
  */
 
 #ifndef _COLIBRI_LIST
@@ -20,61 +20,63 @@
 
 
 /*
-================================================================================*//*!   @addtogroup list_words \
-Immutable Lists
-                                                                                        @ingroup words
-  Immutable lists are constant, arbitrary-sized, linear collections of words.
+===========================================================================*//*!
+\defgroup list_words Immutable Lists
+\ingroup words
 
-  Immutable lists can be composed of immutable vectors and lists. Immutable
-  vectors can themselves be used in place of immutable lists.
+Immutable lists are constant, arbitrary-sized, linear collections of words.
 
-  @warning
+Immutable lists can be composed of immutable vectors and lists. Immutable
+vectors can themselves be used in place of immutable lists.
+
+@warning
     Mutable vectors, when used in place of immutable lists, may be potentially
     frozen in the process. To avoid that, they should be properly duplicated
-    to an immutable vector beforehand.                                          *//*!   @{ *//*
-================================================================================
+    to an immutable vector beforehand.
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Immutable List Creation                                                      *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Immutable List Creation
+ ***************************************************************************\{*/
 
 EXTERN Col_Word         Col_EmptyList();
 EXTERN Col_Word         Col_NewList(size_t length,
                             const Col_Word * elements);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Immutable List Accessors
+/* End of Immutable List Creation *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Immutable List Accessors
  *
- *  @note
- *      Work with mutable or immutable lists and vectors.                       *//*!   @{ *//*
- ******************************************************************************/
+ * @note
+ *      Works with mutable or immutable lists and vectors.
+ ***************************************************************************\{*/
 
 EXTERN size_t           Col_ListLength(Col_Word list);
 EXTERN size_t           Col_ListLoopLength(Col_Word list);
 EXTERN Col_Word         Col_ListAt(Col_Word list, size_t index);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Immutable List Operations
- *
- *  @warning
- *      Work with mutable or immutable lists and vectors, however mutable
- *      words may be frozen in the process.                                     *//*!   @{ *//*
- ******************************************************************************/
+/* End of Immutable List Accessors *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * Col_ConcatListsV
- *
- *  Variadic macro version of Col_ConcatListsNV() that deduces its number
- *  of arguments automatically.
- *
- *  @param ...  Variadic list of lists to concatenate.
- *
- *  @see COL_ARGCOUNT
- *//*-----------------------------------------------------------------------*/
 
+/***************************************************************************//*!
+ * \name Immutable List Operations
+ *
+ * @warning
+ *      Works with mutable or immutable lists and vectors, however mutable
+ *      words may be frozen in the process.
+ ***************************************************************************\{*/
+
+/**
+ * Variadic macro version of Col_ConcatListsNV() that deduces its number
+ * of arguments automatically.
+ *
+ * @param ...   Variadic list of lists to concatenate.
+ *
+ * @see COL_ARGCOUNT
+ */
 #define Col_ConcatListsV(...) \
     Col_ConcatListsNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
 
@@ -99,47 +101,43 @@ EXTERN Col_Word         Col_ListRemove(Col_Word list, size_t first,
                             size_t last);
 EXTERN Col_Word         Col_ListReplace(Col_Word list, size_t first,
                             size_t last, Col_Word with);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Immutable List Traversal
- *
- *  @note
- *      Work with mutable or immutable lists and vectors.                       *//*!   @{ *//*
- ******************************************************************************/
+/* End of Immutable List Operations *//*!\}*/
 
-/*---------------------------------------------------------------------------
- * Col_ListChunksTraverseProc
- *                                                                              *//*!
- *  Function signature of list traversal procs.
+
+/***************************************************************************//*!
+ * \name Immutable List Traversal
  *
- *  @param index        List-relative index where chunks begin.
- *  @param length       Length of chunks.
- *  @param number       Number of chunks.
- *  @param chunks       Array of chunks. When chunk is NULL, means the index is
+ * @note
+ *      Works with mutable or immutable lists and vectors.
+ ***************************************************************************\{*/
+
+/**
+ * Function signature of list traversal procs.
+ *
+ * @param index         List-relative index where chunks begin.
+ * @param length        Length of chunks.
+ * @param number        Number of chunks.
+ * @param chunks        Array of chunks. When chunk is NULL, means the index is
  *                      past the end of the traversed list. When chunk is
  *                      #COL_LISTCHUNK_VOID, means the traversed list is a void
  *                      list.
- *  @param clientData   Opaque client data. Same value as passed to
+ * @param clientData    Opaque client data. Same value as passed to
  *                      Col_TraverseListChunks() procedure family.
  *
- *  @retval zero        to continue traversal.
- *  @retval non-zero    to stop traversal. Value is returned as result of
+ * @retval zero         to continue traversal.
+ * @retval non-zero     to stop traversal. Value is returned as result of
  *                      Col_TraverseListChunks() and related procs.
- *//*-----------------------------------------------------------------------*/
-
+ */
 typedef int (Col_ListChunksTraverseProc) (size_t index, size_t length,
         size_t number, const Col_Word **chunks, Col_ClientData clientData);
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * COL_LISTCHUNK_VOID
+/**
+ * Value passed as chunk pointer to list traversal procs when traversing
+ * void lists.
  *
- *  Value passed as chunk pointer to list traversal procs when traversing
- *  void lists.
- *
- *  @see Col_ListChunksTraverseProc
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_ListChunksTraverseProc
+ */
 #define COL_LISTCHUNK_VOID \
     ((Col_Word *)-1)
 
@@ -155,44 +153,37 @@ EXTERN int              Col_TraverseListChunks(Col_Word list, size_t start,
                             size_t max, int reverse,
                             Col_ListChunksTraverseProc *proc,
                             Col_ClientData clientData, size_t *lengthPtr);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Immutable List Iteration
- *
- *  @warning
- *      Work with mutable or immutable lists and vectors, however modifying a
- *      mutable list during iteration results in undefined behavior.            *//*!   @{ *//*
- ******************************************************************************/
+/* End of Immutable List Traversal *//*!\}*/
 
-/*---------------------------------------------------------------------------
- * ColListIterLeafAtProc
- *                                                                              *//*!
- *  Helper for list iterators to access elements in leaves.
- *
- *  @param leaf     Leaf node.
- *  @param index    Leaf-relative index of element.
- *
- *  @return
- *      Element at given index.
- *
- *  @see ColListIterator
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/***************************************************************************//*!
+ * \name Immutable List Iteration
+ *
+ * @warning
+ *      Works with mutable or immutable lists and vectors, however modifying a
+ *      mutable list during iteration results in undefined behavior.
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Helper for list iterators to access elements in leaves.
+ *
+ * @param leaf      Leaf node.
+ * @param index     Leaf-relative index of element.
+ *
+ * @return Element at given index.
+ *
+ * @see ColListIterator
+ */
 typedef Col_Word (ColListIterLeafAtProc) (Col_Word leaf, size_t index);
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------
- * ColListIterator
- *                                                                              *//*!
- *  Internal implementation of list iterators.
- *
- *  @see Col_ListIterator
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/**
+ * Internal implementation of list iterators.
+ *
+ * @see Col_ListIterator
+ */
 typedef struct ColListIterator {
     Col_Word list;  /*!< List being iterated. If nil, use array iterator
                          mode. */
@@ -215,20 +206,20 @@ typedef struct ColListIterator {
             /*! Current element information in accessor mode. */
             struct {
                 Col_Word leaf;  /*!< First argument passed to **accessProc**. */
-                size_t index;   /*!< Second argument passed to 
+                size_t index;   /*!< Second argument passed to
                                      **accessProc**. */
             } access;
         } current;
     } chunk;
 } ColListIterator;
-                                                                                /*!     @endcond */
-/*---------------------------------------------------------------------------
- * Col_ListIterator
- *                                                                              *//*!
- *  List iterator. Encapsulates the necessary info to iterate & access list
- *  data transparently.
+
+/** @endcond @endprivate */
+
+/**
+ * List iterator. Encapsulates the necessary info to iterate & access list
+ * data transparently.
  *
- *  @note                                                                               @parblock
+ * @note @parblock
  *      Datatype is opaque. Fields should not be accessed by client code.
  *
  *      Each iterator takes 8 words on the stack.
@@ -238,204 +229,172 @@ typedef struct ColListIterator {
  *      - declared variables allocate the right amount of space on the stack,
  *      - calls use pass-by-reference (i.e. pointer) and not pass-by-value,
  *      - forbidden as return type.
- *                                                                                      @endparblock
- *//*-----------------------------------------------------------------------*/
-
+ * @endparblock
+ */
 typedef ColListIterator Col_ListIterator[1];
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * COL_LISTITER_NULL
- *                                                                                      @hideinitializer
- *  Static initializer for null list iterators.
+/**
+ * Static initializer for null list iterators.
  *
- *  @see Col_ListIterator
- *  @see Col_ListIterNull
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_ListIterator
+ * @see Col_ListIterNull
+ * @hideinitializer
+ */
 #define COL_LISTITER_NULL       {{WORD_NIL,0,0,{0,0,NULL,0,NULL}}}
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * Col_ListIterNull
- *                                                                                      @hideinitializer
- *  Test whether iterator is null (e.g.\ it has been set to #COL_LISTITER_NULL
- *  or Col_ListIterSetNull()).
+/**
+ * Test whether iterator is null (e.g.\ it has been set to #COL_LISTITER_NULL
+ * or Col_ListIterSetNull()).
  *
- *  @warning
+ * @warning
  *      This uninitialized state renders it unusable for any call. Use with
  *      caution.
  *
- *  @param it           The #Col_ListIterator to test.
+ * @param it    The #Col_ListIterator to test.
  *
- *  @warning
+ * @warning
  *      Argument **it** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @retval zero        if iterator if not null.
- *  @retval non-zero    if iterator is null.
+ * @retval zero         if iterator if not null.
+ * @retval non-zero     if iterator is null.
  *
- *  @see Col_ListIterator
- *  @see COL_LISTITER_NULL
- *  @see Col_ListIterSetNull
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_ListIterator
+ * @see COL_LISTITER_NULL
+ * @see Col_ListIterSetNull
+ * @hideinitializer
+ */
 #define Col_ListIterNull(it) \
     ((it)->list == WORD_NIL && (it)->chunk.current.direct == NULL)
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * Col_ListIterSetNull
+/**
+ * Set an iterator to null.
  *
- *  Set an iterator to null.
+ * @param it    The #Col_ListIterator to initialize.
  *
- *  @param it       The #Col_ListIterator to initialize.
- *
- *  @warning
+ * @warning
  *      Argument **it** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
- *//*-----------------------------------------------------------------------*/
-
+ */
 #define Col_ListIterSetNull(it) \
     memset((it), 0, sizeof(*(it)))
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * Col_ListIterList
+/**
+ * Get list for iterator.
  *
- *  Get list for iterator.
+ * @param it            The #Col_ListIterator to access.
  *
- *  @param it           The #Col_ListIterator to access.
+ * @retval WORD_NIL     if iterating over array (see Col_ListIterArray()).
+ * @retval list         if iterating over list.
  *
- *  @retval WORD_NIL    if iterating over array (see Col_ListIterArray()).
- *  @retval list        if iterating over list.
- *
- *  @valuecheck{COL_ERROR_LISTITER_END,it}
- *//*-----------------------------------------------------------------------*/
-
+ * @valuecheck{COL_ERROR_LISTITER_END,it}
+ */
 #define Col_ListIterList(it) \
     ((it)->list)
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * Col_ListIterLength
+/**
+ * Get length of the iterated sequence.
  *
- *  Get length of the iterated sequence.
+ * @param it    The #Col_ListIterator to access.
  *
- *  @param it       The #Col_ListIterator to access.
- *
- *  @result
- *      Length of iterated sequence.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Length of iterated sequence.
+ */
 #define Col_ListIterLength(it) \
     ((it)->length)
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * Col_ListIterIndex
+/**
+ * Get current index within list for iterator.
  *
- *  Get current index within list for iterator.
+ * @param it    The #Col_ListIterator to access.
  *
- *  @param it       The #Col_ListIterator to access.
+ * @return Current index.
  *
- *  @result
- *      Current index.
- *
- *  @valuecheck{COL_ERROR_LISTITER_END,it}
- *//*-----------------------------------------------------------------------*/
-
+ * @valuecheck{COL_ERROR_LISTITER_END,it}
+ */
 #define Col_ListIterIndex(it) \
     ((it)->index)
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * Col_ListIterAt
- *                                                                                      @hideinitializer
- *  Get current list element for iterator.
+/**
+ * Get current list element for iterator.
  *
- *  @param it       The #Col_ListIterator to access.
+ * @param it    The #Col_ListIterator to access.
  *
- *  @warning
+ * @warning
  *      Argument **it** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @result
- *      Current element.
+ * @return Current element.
  *
- *  @valuecheck{COL_ERROR_LISTITER_END,it}
- *//*-----------------------------------------------------------------------*/
-
+ * @valuecheck{COL_ERROR_LISTITER_END,it}
+ * @hideinitializer
+ */
 #define Col_ListIterAt(it) \
     (  ((it)->index < (it)->chunk.first || (it)->index > (it)->chunk.last) ? ColListIterUpdateTraversalInfo((ColListIterator *)(it)) \
      : (it)->chunk.accessProc ? (it)->chunk.accessProc((it)->chunk.current.access.leaf, (it)->chunk.current.access.index) \
      : (it)->chunk.current.direct ? *((it)->chunk.current.direct) : COL_NIL)
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * Col_ListIterNext
- *                                                                                      @hideinitializer
- *  Move the iterator to the next element.
+/**
+ * Move the iterator to the next element.
  *
- *  @param it       The #Col_ListIterator to move.
+ * @param it    The #Col_ListIterator to move.
  *
- *  @warning
+ * @warning
  *      Argument **it** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @retval non-zero    if the iterator looped over the cyclic list.
- *  @retval zero        in all other cases.
+ * @retval non-zero     if the iterator looped over the cyclic list.
+ * @retval zero         in all other cases.
  *
- *  @see Col_ListIterForward
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_ListIterForward
+ * @hideinitializer
+ */
 #define Col_ListIterNext(it) \
     (  ((it)->index < (it)->chunk.first || (it)->index >= (it)->chunk.last) ? Col_ListIterForward((it), 1) \
      : ((it)->index++, \
           (it)->chunk.accessProc ? ((it)->chunk.current.access.index++, 0) \
         : (it)->chunk.current.direct ? ((it)->chunk.current.direct++, 0) : 0))
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * Col_ListIterPrevious
- *                                                                                      @hideinitializer
- *  Move the iterator to the previous element.
+/**
+ * Move the iterator to the previous element.
  *
- *  @param it       The #Col_ListIterator to move.
+ * @param it    The #Col_ListIterator to move.
  *
- *  @warning
+ * @warning
  *      Argument **it** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @see Col_ListIterBackward
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_ListIterBackward
+ * @hideinitializer
+ */
 #define Col_ListIterPrevious(it) \
     (  ((it)->index <= (it)->chunk.first || (it)->index > (it)->chunk.last) ? (Col_ListIterBackward((it), 1), 0) \
      : ((it)->index--, \
           (it)->chunk.accessProc ? ((it)->chunk.current.access.index--, 0) \
         : (it)->chunk.current.direct ? ((it)->chunk.current.direct--, 0) : 0))
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * Col_ListIterEnd
+/**
+ * Test whether iterator reached end of list.
  *
- *  Test whether iterator reached end of list.
+ * @param it    The #Col_ListIterator to test.
  *
- *  @param it       The #Col_ListIterator to test.
- *
- *  @warning
+ * @warning
  *      Argument **it** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @retval zero        if iterator if not at end.
- *  @retval non-zero    if iterator is at end.
+ * @retval zero         if iterator if not at end.
+ * @retval non-zero     if iterator is at end.
  *
- *  @see Col_ListIterBegin
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_ListIterBegin
+ */
 #define Col_ListIterEnd(it) \
     ((it)->index >= (it)->length)
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * Col_ListIterSet
+/**
+ * Initialize an iterator with another one's value.
  *
- *  Initialize an iterator with another one's value.
- *
- *  @param it       The #Col_ListIterator to initialize.
- *  @param value    The #Col_ListIterator to copy.
- *//*-----------------------------------------------------------------------*/
-
+ * @param it        The #Col_ListIterator to initialize.
+ * @param value     The #Col_ListIterator to copy.
+ */
 #define Col_ListIterSet(it, value) \
     (*(it) = *(value))
 
@@ -455,126 +414,115 @@ EXTERN int              Col_ListIterMoveTo(Col_ListIterator it, size_t index);
 EXTERN int              Col_ListIterForward(Col_ListIterator it, size_t nb);
 EXTERN void             Col_ListIterBackward(Col_ListIterator it, size_t nb);
 
+/** @beginprivate @cond PRIVATE */
+
 EXTERN Col_Word         ColListIterUpdateTraversalInfo(ColListIterator *it);
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/** @endcond @endprivate */
+
+/* End of Immutable List Iteration *//*!\}*/
+
+/* End of Immutable Lists *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup customlist_words \
-Custom Lists
-                                                                                        @ingroup list_words custom_words
-  Custom Lists are @ref custom_words implementing @ref list_words with
-  applicative code.                                                             *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\defgroup customlist_words Custom Lists
+\ingroup list_words custom_words
+
+Custom lists are @ref custom_words implementing @ref list_words with
+applicative code.
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Custom List Type Descriptors                                                 *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Custom List Type Descriptors
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------
- * Col_ListLengthProc
- *                                                                              *//*!
- *  Function signature of custom list length procs.
+/**
+ * Function signature of custom list length procs.
  *
- *  @param list     Custom list to get length for.
+ * @param list  Custom list to get length for.
  *
- *  @return
- *      The custom list length.
+ * @return The custom list length.
  *
- *  @see Col_CustomListType
- *  @see Col_ListLength
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CustomListType
+ * @see Col_ListLength
+ */
 typedef size_t (Col_ListLengthProc) (Col_Word list);
 
-/*---------------------------------------------------------------------------
- * Col_ListElementAtProc
- *                                                                              *//*!
- *  Function signature of custom list element access procs.
+/**
+ * Function signature of custom list element access procs.
  *
- *  @param list     Custom list to get element from.
- *  @param index    Element index.
+ * @param list      Custom list to get element from.
+ * @param index     Element index.
  *
- *  @note
+ * @note
  *      By construction, **index** is guaranteed to be within valid range, so
  *      implementations need not bother with validation.
  *
- *  @return
- *      The element at the given index.
+ * @return The element at the given index.
  *
- *  @see Col_CustomListType
- *  @see Col_ListAt
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CustomListType
+ * @see Col_ListAt
+ */
 typedef Col_Word (Col_ListElementAtProc) (Col_Word list, size_t index);
 
-/*---------------------------------------------------------------------------
- * Col_ListChunkAtProc
- *                                                                              *//*!
- *  Function signature of custom list chunk access procs.
+/**
+ * Function signature of custom list chunk access procs.
  *
- *  @param list             Custom list to get chunk from.
- *  @param index            Index of element to get chunk for.
+ * @param list              Custom list to get chunk from.
+ * @param index             Index of element to get chunk for.
  *
- *  @param[out] chunkPtr    Chunk. If #COL_LISTCHUNK_VOID, the chunk is void
+ * @param[out] chunkPtr     Chunk. If #COL_LISTCHUNK_VOID, the chunk is void
  *                          (i.e. all its elements are nil).
- *  @param[out] firstPtr,
+ * @param[out] firstPtr,
  *              lastPtr     Chunk range of validity.
  *
- *  @note
+ * @note
  *      By construction, **index** is guaranteed to be within valid range, so
  *      implementations need not bother with validation.
  *
- *  @see Col_CustomListType
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CustomListType
+ */
 typedef void (Col_ListChunkAtProc) (Col_Word list, size_t index,
     const Col_Word **chunkPtr, size_t *firstPtr, size_t *lastPtr);
 
-/*---------------------------------------------------------------------------
- * Col_ListSublistProc
- *                                                                              *//*!
- *  Function signature of custom list sublist extraction.
+/**
+ * Function signature of custom list sublist extraction.
  *
- *  @param list             Custom list to extract sublist from.
- *  @param first, last      Range of sublist to extract (inclusive).
+ * @param list          Custom list to extract sublist from.
+ * @param first, last   Range of sublist to extract (inclusive).
  *
- *  @note
- *      By construction, **first** and **last** are guaranteed to be within 
+ * @note
+ *      By construction, **first** and **last** are guaranteed to be within
  *      valid range, so implementations need not bother with validation.
  *
- *  @retval nil     to use the generic representation.
- *  @retval list    representing the sublist otherwise.
+ * @retval nil      to use the generic representation.
+ * @retval list     representing the sublist otherwise.
  *
- *  @see Col_CustomListType
- *  @see Col_Sublist
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CustomListType
+ * @see Col_Sublist
+ */
 typedef Col_Word (Col_ListSublistProc) (Col_Word list, size_t first,
     size_t last);
 
-/*---------------------------------------------------------------------------
- * Col_ListConcatProc
- *                                                                              *//*!
- *  Function signature of custom list concatenation.
+/**
+ * Function signature of custom list concatenation.
  *
- *  @param left, right      Lists to concatenate.
+ * @param left, right   Lists to concatenate.
  *
- *  @retval nil     to use the generic representation.
- *  @retval rope    representing the concatenation of both lists otherwise.
+ * @retval nil          to use the generic representation.
+ * @retval rope         representing the concatenation of both lists otherwise.
  *
- *  @see Col_CustomListType
- *  @see Col_ConcatLists
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CustomListType
+ * @see Col_ConcatLists
+ */
 typedef Col_Word (Col_ListConcatProc) (Col_Word left, Col_Word right);
 
-/*---------------------------------------------------------------------------
- * Col_CustomListType
- *                                                                              *//*!
- *  Custom list type descriptor. Inherits from #Col_CustomWordType.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Custom list type descriptor. Inherits from #Col_CustomWordType.
+ */
 typedef struct Col_CustomListType {
     /*! Generic word type descriptor. Type field must be equal to #COL_LIST. */
     Col_CustomWordType type;
@@ -599,36 +547,43 @@ typedef struct Col_CustomListType {
         procedure. */
     Col_ListConcatProc *concatProc;
 } Col_CustomListType;
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Custom List Type Descriptors *//*!\}*/
+
+/* End of Custom Lists *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup mlist_words \
-Mutable Lists
-                                                                                        @ingroup words
-  Mutable lists are linear collection of words whose content and length can
-  vary over time.
+===========================================================================*//*!
+\defgroup mlist_words Mutable Lists
+\ingroup words
 
-  Mutable lists can be composed of either mutable or immutable lists and
-  vectors. They can be "frozen" and turned into immutable versions.
+Mutable lists are linear collection of words whose content and length can
+vary over time.
 
-  @warning
+Mutable lists can be composed of either mutable or immutable lists and
+vectors. They can be "frozen" and turned into immutable versions.
+
+@warning
     Mutable vectors *cannot* be used in place of mutable lists, as the latter
     can grow indefinitely whereas the former have a maximum length set at
-    creation time.                                                              *//*!   @{ *//*
-================================================================================
+    creation time.
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Mutable List Creation                                                        *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Mutable List Creation
+ ***************************************************************************\{*/
 
 EXTERN Col_Word         Col_NewMList();
 EXTERN Col_Word         Col_CopyMList(Col_Word mlist);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Mutable List Operations                                                      *//*!   @{ *//*
- ******************************************************************************/
+/* End of Mutable List Creation *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Mutable List Operations
+ ***************************************************************************\{*/
 
 EXTERN void             Col_MListSetLength(Col_Word mlist, size_t length);
 EXTERN void             Col_MListLoop(Col_Word mlist);
@@ -646,6 +601,9 @@ EXTERN void             Col_MListRemove(Col_Word mlist, size_t first,
                             size_t last);
 EXTERN void             Col_MListReplace(Col_Word mlist, size_t first,
                             size_t last, Col_Word with);
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Mutable List Operations *//*!\}*/
+
+/* End of Mutable Lists *//*!\}*/
+
 #endif /* _COLIBRI_LIST */

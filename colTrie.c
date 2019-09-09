@@ -1,15 +1,15 @@
-/*                                                                              *//*!   @file \
- * colTrie.c
+/**
+ * @file colTrie.c
  *
- *  This file implements the trie map handling features of Colibri.
+ * This file implements the trie map handling features of Colibri.
  *
- *  Trie maps are an implementation of generic @ref map_words that use crit-bit
- *  trees for string, integer and custom keys.
+ * Trie maps are an implementation of generic @ref map_words that use crit-bit
+ * trees for string, integer and custom keys.
  *
- *  They are always mutable.
+ * They are always mutable.
  *
- *  @see colTrie.h
- *  @see colMap.h
+ * @see colTrie.h
+ * @see colMap.h
  */
 
 #include "include/colibri.h"
@@ -22,11 +22,12 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <string.h>
-                                                                                #       ifndef DOXYGEN
+
 /*
  * Prototypes for functions used only in this file.
  */
 
+/*! \cond IGNORE */
 static Col_Word         LeftmostLeaf(Col_Word node, Col_Word *rightPtr);
 static Col_Word         RightmostLeaf(Col_Word node, Col_Word *leftPtr);
 static Col_Word         TrieMapFindNode(Col_Word map, Col_Word key, int closest,
@@ -60,31 +61,28 @@ static Col_Word         ConvertStringNodeToMutable(Col_Word node, Col_Word map,
                                 Col_Word prefix);
 static Col_Word         ConvertIntNodeToMutable(Col_Word node, Col_Word map,
                                 intptr_t prefix);
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
+
 
 /*
-================================================================================*//*!   @addtogroup triemap_words \
-Trie Maps                                                                       *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup triemap_words Trie Maps
+\{*//*==========================================================================
 */
 
 /*! @todo algorithms */
 
-/********************************************************************************//*!   @name \
- * Nodes And Leaves                                                             *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Nodes And Leaves
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------
- * LeftmostLeaf
- *                                                                              *//*!
- *  Get leftmost leaf in subtrie.
- *
- *  @return
- *    The leftmost leaf of subtrie.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Get leftmost leaf in subtrie.
+ *
+ * @return The leftmost leaf of subtrie.
+ */
 static Col_Word
 LeftmostLeaf(
     Col_Word node,  /*!< Root node of subtrie. */
@@ -113,17 +111,11 @@ LeftmostLeaf(
     }
 }
 
-/*---------------------------------------------------------------------------
- * RightmostLeaf
- *                                                                              *//*!
- *  Get rightmost leaf in subtrie.
+/**
+ * Get rightmost leaf in subtrie.
  *
- *  @return
- *    The rightmost leaf of subtrie.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @return The rightmost leaf of subtrie.
+ */
 static Col_Word
 RightmostLeaf(
     Col_Word node,  /*!< Root node of subtrie. */
@@ -151,21 +143,16 @@ RightmostLeaf(
     }
 }
 
-/*---------------------------------------------------------------------------
- * TrieMapFindNode
- *                                                                              *//*!
- *  Find node equal or closest to the given custom key.
+/**
+ * Find node equal or closest to the given custom key.
  *
- *  @retval nil     if map is empty
- *  @retval leaf    matching entry if **key** is present
- *  @retval node    with the longest common prefix if **key** is not present and
+ * @retval nil      if map is empty
+ * @retval leaf     matching entry if **key** is present
+ * @retval node     with the longest common prefix if **key** is not present and
  *                  **closest** is true.
  *
- *  @see Col_CustomTrieMapType
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CustomTrieMapType
+ */
 static Col_Word
 TrieMapFindNode(
     Col_Word map,   /*!< Custom trie map to find entry into. */
@@ -327,21 +314,16 @@ TrieMapFindNode(
     return node;
 }
 
-/*---------------------------------------------------------------------------
- * StringTrieMapFindNode
- *                                                                              *//*!
- *  Find node equal or closest to the given string key.
+/**
+ * Find node equal or closest to the given string key.
  *
- *  @retval nil     if map is empty
- *  @retval leaf    matching entry if **key** is present
- *  @retval node    with the longest common prefix if **key** is not present and
+ * @retval nil      if map is empty
+ * @retval leaf     matching entry if **key** is present
+ * @retval node     with the longest common prefix if **key** is not present and
  *                  **closest** is true.
  *
- *  @see Col_CompareRopesL
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CompareRopesL
+ */
 static Col_Word
 StringTrieMapFindNode(
     Col_Word map,   /*!< String trie map to find entry into. */
@@ -548,19 +530,14 @@ StringTrieMapFindNode(
     return node;
 }
 
-/*---------------------------------------------------------------------------
- * IntTrieMapFindNode
- *                                                                              *//*!
- *  Find node equal or closest to the given integer key.
+/**
+ * Find node equal or closest to the given integer key.
  *
- *  @retval nil     if map is empty
- *  @retval leaf    matching entry if **key** is present
- *  @retval node    with the longest common prefix if **key** is not present and
+ * @retval nil      if map is empty
+ * @retval leaf     matching entry if **key** is present
+ * @retval node     with the longest common prefix if **key** is not present and
  *                  **closest** is true.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ */
 static Col_Word
 IntTrieMapFindNode(
     Col_Word map,   /*!< Integer trie map to find entry into. */
@@ -730,26 +707,27 @@ IntTrieMapFindNode(
     if (maskPtr) *maskPtr = newMask;
     return node;
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Entries                                                                      *//*!   @{ *//*
- ******************************************************************************/
+/** @endcond @endprivate */
 
-/*---------------------------------------------------------------------------
- * TrieMapFindEntry
- *                                                                              *//*!
- *  Find or create in custom trie map the entry mapped to the given key.
+/* End of Nodes And Leaves *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Entries
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Find or create in custom trie map the entry mapped to the given key.
  *
- *  @retval entry   if found or created, depending on the value returned through
+ * @retval entry    if found or created, depending on the value returned through
  *                  **createPtr**.
- *  @retval nil     otherwise.
+ * @retval nil      otherwise.
  *
- *  @see TrieMapFindNode
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see TrieMapFindNode
+ */
 static Col_Word
 TrieMapFindEntry(
     Col_Word map,   /*!< Custom trie map to find or create entry into. */
@@ -868,20 +846,15 @@ TrieMapFindEntry(
     return entry;
 }
 
-/*---------------------------------------------------------------------------
- * StringTrieMapFindEntry
- *                                                                              *//*!
- *  Find or create in string trie map the entry mapped to the given key.
+/**
+ * Find or create in string trie map the entry mapped to the given key.
  *
- *  @retval entry   if found or created, depending on the value returned through
+ * @retval entry    if found or created, depending on the value returned through
  *                  **createPtr**.
- *  @retval nil     otherwise.
+ * @retval nil      otherwise.
  *
- *  @see StringTrieMapFindNode
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see StringTrieMapFindNode
+ */
 static Col_Word
 StringTrieMapFindEntry(
     Col_Word map,   /*!< String trie map to find or create entry into. */
@@ -1001,20 +974,15 @@ StringTrieMapFindEntry(
     return entry;
 }
 
-/*---------------------------------------------------------------------------
- * IntTrieMapFindEntry
- *                                                                              *//*!
- *  Find or create in integer trie map the entry mapped to the given key.
+/**
+ * Find or create in integer trie map the entry mapped to the given key.
  *
- *  @retval entry   if found or created, depending on the value returned through
+ * @retval entry    if found or created, depending on the value returned through
  *                  **createPtr**.
- *  @retval nil     otherwise.
+ * @retval nil      otherwise.
  *
- *  @see IntTrieMapFindNode
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see IntTrieMapFindNode
+ */
 static Col_Word
 IntTrieMapFindEntry(
     Col_Word map,   /*!< Integer trie map to find or create entry into. */
@@ -1131,37 +1099,40 @@ IntTrieMapFindEntry(
 
     return entry;
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Mutability
- *
- *  ### Mutable and Immutable Trie Entries
- *
- *  From an external point of view, trie maps, like generic maps, are a
- *  naturally mutable data type. However, internal structures like nodes or
- *  leaves are usually mutable but can become immutable through shared copying
- *  (see Col_CopyTrieMap()). This means that we have to turn immutable data
- *  mutable using copy-on-write semantics.
- *
- *  As nodes and leaves form binary trees, turning an immutable entry mutable
- *  again implies that all its predecessors are turned mutable before. The
- *  sibling nodes can remain immutable. This is the role of
- *  ConvertNodeToMutable(), ConvertStringNodeToMutable() and
- *  ConvertIntNodeToMutable().
- *
- *  This ensures that modified data is always mutable and that unmodified
- *  data remains shared as long as possible.                                    *//*!   @{ *//*
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
-/*---------------------------------------------------------------------------
- * FreezeSubtrie
- *                                                                              *//*!
- *  Convert mutable node and all all its descent to immutable.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/* End of Entries *//*!\}*/
 
+
+/***************************************************************************//*!
+ * \name Mutability
+ *
+ * \internal
+ *
+ * ### Mutable and Immutable Trie Entries
+ *
+ * From an external point of view, trie maps, like generic maps, are a
+ * naturally mutable data type. However, internal structures like nodes or
+ * leaves are usually mutable but can become immutable through shared copying
+ * (see Col_CopyTrieMap()). This means that we have to turn immutable data
+ * mutable using copy-on-write semantics.
+ *
+ * As nodes and leaves form binary trees, turning an immutable entry mutable
+ * again implies that all its predecessors are turned mutable before. The
+ * sibling nodes can remain immutable. This is the role of
+ * ConvertNodeToMutable(), ConvertStringNodeToMutable() and
+ * ConvertIntNodeToMutable().
+ *
+ * This ensures that modified data is always mutable and that unmodified
+ * data remains shared as long as possible.
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Convert mutable node and all all its descent to immutable.
+ */
 static void
 FreezeSubtrie(
     Col_Word node)  /*!< Root node of subtrie. */
@@ -1247,17 +1218,11 @@ start:
     }
 }
 
-/*---------------------------------------------------------------------------
- * ConvertNodeToMutable
- *                                                                              *//*!
- *  Convert immutable custom node and all all its ancestors to mutable.
+/**
+ * Convert immutable custom node and all all its ancestors to mutable.
  *
- *  @return
- *      The converted mutable node.
- *  
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @return The converted mutable node.
+ */
 static Col_Word
 ConvertNodeToMutable(
     Col_Word node,      /*!< Custom node to convert. */
@@ -1320,17 +1285,11 @@ ConvertNodeToMutable(
     }
 }
 
-/*---------------------------------------------------------------------------
- * ConvertStringNodeToMutable
- *                                                                              *//*!
- *  Convert immutable string node and all all its ancestors to mutable.
+/**
+ * Convert immutable string node and all all its ancestors to mutable.
  *
- *  @return
- *      The converted mutable node.
- *  
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @return The converted mutable node.
+ */
 static Col_Word
 ConvertStringNodeToMutable(
     Col_Word node,      /*!< String node to convert. */
@@ -1401,17 +1360,11 @@ ConvertStringNodeToMutable(
     }
 }
 
-/*---------------------------------------------------------------------------
- * ConvertIntNodeToMutable
- *                                                                              *//*!
- *  Convert immutable integer node and all all its ancestors to mutable.
+/**
+ * Convert immutable integer node and all all its ancestors to mutable.
  *
- *  @return
- *      The converted mutable node.
- *  
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @return The converted mutable node.
+ */
 static Col_Word
 ConvertIntNodeToMutable(
     Col_Word node,      /*!< Integer node to convert. */
@@ -1471,22 +1424,21 @@ ConvertIntNodeToMutable(
         }
     }
 }
-                                                                                /*!     @} */
+
+/** @endcond @endprivate */
+
+/* End of Mutability *//*!\}*/
 
 
-/****************************************************************************
+/*******************************************************************************
  * Trie Map Creation
- ****************************************************************************/
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_NewStringTrieMap
- *                                                                              *//*!
- *  Create a new string trie map word.
+/**
+ * Create a new string trie map word.
  *
- *  @return
- *      The new word.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The new word.
+ */
 Col_Word
 Col_NewStringTrieMap()
 {
@@ -1498,15 +1450,11 @@ Col_NewStringTrieMap()
     return map;
 }
 
-/*---------------------------------------------------------------------------
- * Col_NewIntTrieMap
- *                                                                              *//*!
- *  Create a new integer trie map word.
+/**
+ * Create a new integer trie map word.
  *
- *  @return
- *      The new word.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The new word.
+ */
 Col_Word
 Col_NewIntTrieMap()
 {
@@ -1518,22 +1466,18 @@ Col_NewIntTrieMap()
     return map;
 }
 
-/*---------------------------------------------------------------------------
- * Col_CopyTrieMap
- *                                                                              *//*!
- *  Create a new trie map word from an existing one.
+/**
+ * Create a new trie map word from an existing one.
  *
- *  @note
+ * @note
  *      Only the trie map structure is copied, the contained words are not
  *      (i.e. this is not a deep copy).
  *
- *  @return
- *      The new word.
+ * @return The new word.
  *
- *  @sideeffect
+ * @sideeffect
  *      Source map content is frozen.
- *//*-----------------------------------------------------------------------*/
-
+ */
 Col_Word
 Col_CopyTrieMap(
     Col_Word map)   /*!< Trie map to copy. */
@@ -1544,7 +1488,8 @@ Col_CopyTrieMap(
      * Check preconditions.
      */
 
-    TYPECHECK_TRIEMAP(map) return WORD_NIL;                                     /*!     @typecheck{COL_ERROR_TRIEMAP,map} */
+    /*! @typecheck{COL_ERROR_TRIEMAP,map} */
+    TYPECHECK_TRIEMAP(map) return WORD_NIL;
 
     /*
      * Copy word first.
@@ -1569,25 +1514,22 @@ Col_CopyTrieMap(
     return newMap;
 }
 
+/* End of Trie Map Creation */
 
-/****************************************************************************
+
+/*******************************************************************************
  * Trie Map Accessors
- ****************************************************************************/
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_TrieMapGet
- *                                                                              *//*!
- *    Get value mapped to the given key if present.
- *                                                                              *//*!
- *  Get value mapped to the given key if present.
+/**
+ * Get value mapped to the given key if present.
  *
- *  @retval 0               if the key wasn't found.
- *  @retval <>0             if the key was found, in this case the value is
- *                          returned through **valuePtr**.
+ * @retval 0    if the key wasn't found.
+ * @retval <>0  if the key was found, in this case the value is returned
+ *              through **valuePtr**.
  *
- *  @see Col_MapGet
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapGet
+ */
 int
 Col_TrieMapGet(
     Col_Word map,       /*!< Trie map to get entry for. */
@@ -1604,7 +1546,8 @@ Col_TrieMapGet(
      * Check preconditions.
      */
 
-    TYPECHECK_WORDTRIEMAP(map) return 0;                                        /*!     @typecheck{COL_ERROR_WORDTRIEMAP,map} */
+    /*! @typecheck{COL_ERROR_WORDTRIEMAP,map} */
+    TYPECHECK_WORDTRIEMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_STRTRIEMAP:
@@ -1631,18 +1574,15 @@ Col_TrieMapGet(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntTrieMapGet
- *                                                                              *//*!
- *  Get value mapped to the given integer key if present.
+/**
+ * Get value mapped to the given integer key if present.
  *
- *  @retval 0               if the key wasn't found.
- *  @retval <>0             if the key was found, in this case the value is
- *                          returned through **valuePtr**.
+ * @retval 0    if the key wasn't found.
+ * @retval <>0  if the key was found, in this case the value is returned
+ *              through **valuePtr**.
  *
- *  @see Col_IntMapGet
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_IntMapGet
+ */
 int
 Col_IntTrieMapGet(
     Col_Word map,       /*!< Integer trie map to get entry for. */
@@ -1657,7 +1597,8 @@ Col_IntTrieMapGet(
      * Check preconditions.
      */
 
-    TYPECHECK_INTTRIEMAP(map) return 0;                                         /*!     @typecheck{COL_ERROR_INTTRIEMAP,map} */
+    /*! @typecheck{COL_ERROR_INTTRIEMAP,map} */
+    TYPECHECK_INTTRIEMAP(map) return 0;
 
     entry = IntTrieMapFindEntry(map, key, 0, NULL, NULL, NULL);
     if (entry) {
@@ -1669,17 +1610,14 @@ Col_IntTrieMapGet(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_TrieMapSet
- *                                                                              *//*!
- *  Map the value to the key, replacing any existing.
+/**
+ * Map the value to the key, replacing any existing.
  *
- *  @retval 0       if an existing entry was updated with **value**.
- *  @retval <>0     if a new entry was created with **key** and **value**.
+ * @retval 0    if an existing entry was updated with **value**.
+ * @retval <>0  if a new entry was created with **key** and **value**.
  *
- *  @see Col_MapSet
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapSet
+ */
 int
 Col_TrieMapSet(
     Col_Word map,   /*!< Trie map to insert entry into. */
@@ -1695,7 +1633,8 @@ Col_TrieMapSet(
      * Check preconditions.
      */
 
-    TYPECHECK_WORDTRIEMAP(map) return 0;                                        /*!     @typecheck{COL_ERROR_WORDTRIEMAP,map} */
+    /*! @typecheck{COL_ERROR_WORDTRIEMAP,map} */
+    TYPECHECK_WORDTRIEMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_STRTRIEMAP:
@@ -1719,17 +1658,14 @@ Col_TrieMapSet(
     return create;
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntTrieMapSet
- *                                                                              *//*!
- *  Map the value to the integer key, replacing any existing.
+/**
+ * Map the value to the integer key, replacing any existing.
  *
- *  @retval 0       if an existing entry was updated with **value**.
- *  @retval <>0     if a new entry was created with **key** and **value**.
+ * @retval 0    if an existing entry was updated with **value**.
+ * @retval <>0  if a new entry was created with **key** and **value**.
  *
- *  @see Col_IntMapSet
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_IntMapSet
+ */
 int
 Col_IntTrieMapSet(
     Col_Word map,   /*!< Integer trie map to insert entry into. */
@@ -1743,7 +1679,8 @@ Col_IntTrieMapSet(
      * Check preconditions.
      */
 
-    TYPECHECK_INTTRIEMAP(map) return 0;                                         /*!     @typecheck{COL_ERROR_INTTRIEMAP,map} */
+    /*! @typecheck{COL_ERROR_INTTRIEMAP,map} */
+    TYPECHECK_INTTRIEMAP(map) return 0;
 
     entry = IntTrieMapFindEntry(map, key, 1, &create, NULL, NULL);
     ASSERT(entry);
@@ -1752,17 +1689,14 @@ Col_IntTrieMapSet(
     return create;
 }
 
-/*---------------------------------------------------------------------------
- * Col_TrieMapUnset
- *                                                                              *//*!
- *  Remove any value mapped to the given key.
+/**
+ * Remove any value mapped to the given key.
  *
- *  @retval 0       if no entry matching **key** was found.
- *  @retval <>0     if the existing entry was removed.
+ * @retval 0    if no entry matching **key** was found.
+ * @retval <>0  if the existing entry was removed.
  *
- *  @see Col_MapUnset
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapUnset
+ */
 int
 Col_TrieMapUnset(
     Col_Word map,   /*!< Trie map to remove entry from. */
@@ -1776,7 +1710,8 @@ Col_TrieMapUnset(
      * Check preconditions.
      */
 
-    TYPECHECK_WORDTRIEMAP(map) return 0;                                        /*!     @typecheck{COL_ERROR_WORDTRIEMAP,map} */
+    /*! @typecheck{COL_ERROR_WORDTRIEMAP,map} */
+    TYPECHECK_WORDTRIEMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_STRTRIEMAP:
@@ -1856,17 +1791,14 @@ Col_TrieMapUnset(
     return 1;
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntTrieMapUnset
- *                                                                              *//*!
- *  Remove any value mapped to the given integer key.
+/**
+ * Remove any value mapped to the given integer key.
  *
- *  @retval 0       if no entry matching **key** was found.
- *  @retval <>0     if the existing entry was removed.
+ * @retval 0    if no entry matching **key** was found.
+ * @retval <>0  if the existing entry was removed.
  *
- *  @see Col_IntMapUnset
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_IntMapUnset
+ */
 int
 Col_IntTrieMapUnset(
     Col_Word map,   /*!< Integer trie map to remove entry from. */
@@ -1878,7 +1810,8 @@ Col_IntTrieMapUnset(
      * Check preconditions.
      */
 
-    TYPECHECK_INTTRIEMAP(map) return 0;                                         /*!     @typecheck{COL_ERROR_INTTRIEMAP,map} */
+    /*! @typecheck{COL_ERROR_INTTRIEMAP,map} */
+    TYPECHECK_INTTRIEMAP(map) return 0;
 
     node = IntTrieMapFindNode(map, key, 0, NULL, &grandParent, &parent, NULL,
             NULL, NULL);
@@ -1942,20 +1875,19 @@ Col_IntTrieMapUnset(
     return 1;
 }
 
+/* End of Trie Map Accessors */
 
-/****************************************************************************
+
+/*******************************************************************************
  * Trie Map Iteration
- ****************************************************************************/
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_TrieMapIterFirst
- *                                                                              *//*!
- *  Initialize the map iterator so that it points to the first entry within
- *  the trie map.
+/**
+ * Initialize the map iterator so that it points to the first entry within
+ * the trie map.
  *
- *  @see Col_MapIterBegin
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapIterBegin
+ */
 void
 Col_TrieMapIterFirst(
     Col_MapIterator it, /*!< Iterator to initialize. */
@@ -1965,7 +1897,8 @@ Col_TrieMapIterFirst(
      * Check preconditions.
      */
 
-    TYPECHECK_TRIEMAP(map) {                                                    /*!     @typecheck{COL_ERROR_TRIEMAP,map} */
+    /*! @typecheck{COL_ERROR_TRIEMAP,map} */
+    TYPECHECK_TRIEMAP(map) {
         Col_MapIterSetNull(it);
         return;
     }
@@ -1975,13 +1908,10 @@ Col_TrieMapIterFirst(
     it->traversal.trie.prev = WORD_NIL;
 }
 
-/*---------------------------------------------------------------------------
- * Col_TrieMapIterLast
- *                                                                              *//*!
- *  Initialize the map iterator so that it points to the last entry within
- *  the trie map.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Initialize the map iterator so that it points to the last entry within
+ * the trie map.
+ */
 void
 Col_TrieMapIterLast(
     Col_MapIterator it, /*!< Iterator to initialize. */
@@ -1991,7 +1921,8 @@ Col_TrieMapIterLast(
      * Check preconditions.
      */
 
-    TYPECHECK_TRIEMAP(map) {                                                    /*!     @typecheck{COL_ERROR_TRIEMAP,map} */
+    /*! @typecheck{COL_ERROR_TRIEMAP,map} */
+    TYPECHECK_TRIEMAP(map) {
         Col_MapIterSetNull(it);
         return;
     }
@@ -2001,15 +1932,12 @@ Col_TrieMapIterLast(
     it->traversal.trie.next = WORD_NIL;
 }
 
-/*---------------------------------------------------------------------------
- * Col_TrieMapIterFind
- *                                                                              *//*!
- *  Initialize the map iterator so that it points to the entry with the
- *  given key within the trie map.
+/**
+ * Initialize the map iterator so that it points to the entry with the
+ * given key within the trie map.
  *
- *  @see Col_MapIterFind
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapIterFind
+ */
 void
 Col_TrieMapIterFind(
     Col_MapIterator it, /*!< Iterator to initialize. */
@@ -2025,7 +1953,8 @@ Col_TrieMapIterFind(
      * Check preconditions.
      */
 
-    TYPECHECK_WORDTRIEMAP(map) {                                                /*!     @typecheck{COL_ERROR_WORDTRIEMAP,map} */
+    /*! @typecheck{COL_ERROR_WORDTRIEMAP,map} */
+    TYPECHECK_WORDTRIEMAP(map) {
         Col_MapIterSetNull(it);
         return;
     }
@@ -2053,15 +1982,12 @@ Col_TrieMapIterFind(
     ASSERT(!it->entry || WORD_TYPE(it->entry) == WORD_TYPE_TRIELEAF || WORD_TYPE(it->entry) == WORD_TYPE_MTRIELEAF);
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntTrieMapIterFind
- *                                                                              *//*!
- *  Initialize the map iterator so that it points to the entry with the
- *  given integer key within the integer trie map.
+/**
+ * Initialize the map iterator so that it points to the entry with the
+ * given integer key within the integer trie map.
  *
- *  @see Col_IntMapIterFind
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_IntMapIterFind
+ */
 void
 Col_IntTrieMapIterFind(
     Col_MapIterator it, /*!< Iterator to initialize. */
@@ -2075,7 +2001,8 @@ Col_IntTrieMapIterFind(
      * Check preconditions.
      */
 
-    TYPECHECK_INTTRIEMAP(map) {                                                 /*!     @typecheck{COL_ERROR_INTTRIEMAP,map} */
+    /*! @typecheck{COL_ERROR_INTTRIEMAP,map} */
+    TYPECHECK_INTTRIEMAP(map) {
         Col_MapIterSetNull(it);
         return;
     }
@@ -2087,14 +2014,11 @@ Col_IntTrieMapIterFind(
     ASSERT(!it->entry || WORD_TYPE(it->entry) == WORD_TYPE_INTTRIELEAF || WORD_TYPE(it->entry) == WORD_TYPE_MINTTRIELEAF);
 }
 
-/*---------------------------------------------------------------------------
- * Col_TrieMapIterSetValue
- *                                                                              *//*!
- *  Set value of trie map iterator.
+/**
+ * Set value of trie map iterator.
  *
- *  @see Col_MapIterSetValue
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapIterSetValue
+ */
 void
 Col_TrieMapIterSetValue(
     Col_MapIterator it, /*!< Map iterator to set value for. */
@@ -2104,9 +2028,14 @@ Col_TrieMapIterSetValue(
      * Check preconditions.
      */
 
-    TYPECHECK_MAPITER(it) return;                                               /*!     @typecheck{COL_ERROR_MAPITER,it} */
-    TYPECHECK_TRIEMAP(it->map) return;                                          /*!     @typecheck{COL_ERROR_TRIEMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
-    VALUECHECK_MAPITER(it) return;                                              /*!     @valuecheck{COL_ERROR_MAPITER_END,it} */
+    /*! @typecheck{COL_ERROR_MAPITER,it} */
+    TYPECHECK_MAPITER(it) return;
+
+    /*! @typecheck{COL_ERROR_TRIEMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
+    TYPECHECK_TRIEMAP(it->map) return;
+
+    /*! @valuecheck{COL_ERROR_MAPITER_END,it} */
+    VALUECHECK_MAPITER(it) return;
 
     switch (WORD_TYPE(it->map)) {
     case WORD_TYPE_STRTRIEMAP:
@@ -2174,14 +2103,11 @@ Col_TrieMapIterSetValue(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_TrieMapIterNext
- *                                                                              *//*!
- *  Move the iterator to the next element.
+/**
+ * Move the iterator to the next element.
  *
- *  @see Col_MapIterNext
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapIterNext
+ */
 void
 Col_TrieMapIterNext(
     Col_MapIterator it) /*!< The iterator to move. */
@@ -2190,9 +2116,14 @@ Col_TrieMapIterNext(
      * Check preconditions.
      */
 
-    TYPECHECK_MAPITER(it) return;                                               /*!     @typecheck{COL_ERROR_MAPITER,it} */
-    TYPECHECK_TRIEMAP(it->map) return;                                          /*!     @typecheck{COL_ERROR_TRIEMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
-    VALUECHECK_MAPITER(it) return;                                              /*!     @valuecheck{COL_ERROR_MAPITER_END,it} */
+    /*! @typecheck{COL_ERROR_MAPITER,it} */
+    TYPECHECK_MAPITER(it) return;
+
+    /*! @typecheck{COL_ERROR_TRIEMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
+    TYPECHECK_TRIEMAP(it->map) return;
+    
+    /*! @valuecheck{COL_ERROR_MAPITER_END,it} */
+    VALUECHECK_MAPITER(it) return;
 
     ASSERT(it->entry);
 
@@ -2230,12 +2161,9 @@ Col_TrieMapIterNext(
     it->entry = LeftmostLeaf(it->traversal.trie.next, &it->traversal.trie.next);
 }
 
-/*---------------------------------------------------------------------------
- * Col_TrieMapIterPrevious
- *                                                                              *//*!
- *  Move the iterator to the previous element.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Move the iterator to the previous element.
+ */
 void
 Col_TrieMapIterPrevious(
     Col_MapIterator it) /*!< The iterator to move. */
@@ -2244,8 +2172,11 @@ Col_TrieMapIterPrevious(
      * Check preconditions.
      */
 
-    TYPECHECK_MAPITER(it) return;                                               /*!     @typecheck{COL_ERROR_MAPITER,it} */
-    TYPECHECK_TRIEMAP(it->map) return;                                          /*!     @typecheck{COL_ERROR_TRIEMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
+    /*! @typecheck{COL_ERROR_MAPITER,it} */
+    TYPECHECK_MAPITER(it) return;
+
+    /*! @typecheck{COL_ERROR_TRIEMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
+    TYPECHECK_TRIEMAP(it->map) return;
 
     if (Col_MapIterEnd(it)) {
         /*
@@ -2291,26 +2222,26 @@ Col_TrieMapIterPrevious(
             &it->traversal.trie.prev);
 }
 
-                                                                                /*!     @} */
+/* End of Trie Map Iteration */
+
+/* End of Trie Maps *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup customtriemap_words \
-Custom Trie Maps                                                                *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup customtriemap_words Custom Trie Maps
+\{*//*==========================================================================
 */
 
-/****************************************************************************
+/*******************************************************************************
  * Custom Trie Map Creation
- ****************************************************************************/
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_NewCustomTrieMap
- *                                                                              *//*!
- *  Create a new custom trie map word.
+/**
+ * Create a new custom trie map word.
  *
- *  @return
- *      A new custom trie map word of the given size.
- *//*-----------------------------------------------------------------------*/
-
+ * @return A new custom trie map word of the given size.
+ */
 Col_Word
 Col_NewCustomTrieMap(
     Col_CustomTrieMapType *type,    /*!< The trie map word type. */
@@ -2330,4 +2261,6 @@ Col_NewCustomTrieMap(
     return map;
 }
 
-                                                                                /*!     @} */
+/* End of Custom Trie Map Creation */
+
+/* End of Custom Trie Maps *//*!\}*/

@@ -1,12 +1,12 @@
-/*                                                                              *//*!   @file \
- * colWord.c
+/**
+ * @file colWord.c
  *
- *  This file implements the word handling features of Colibri.
+ * This file implements the word handling features of Colibri.
  *
- *  Words are a generic abstract datatype framework used in conjunction with
- *  the exact generational garbage collector and the cell-based allocator.
+ * Words are a generic abstract datatype framework used in conjunction with
+ * the exact generational garbage collector and the cell-based allocator.
  *
- *  @see colWord.h
+ * @see colWord.h
  */
 
 #include "include/colibri.h"
@@ -21,36 +21,34 @@
 
 #include <string.h>
 #include <limits.h>
-                                                                                #       ifndef DOXYGEN
+
 /*
  * Prototypes for functions used only in this file.
  */
 
+/*! \cond IGNORE */
 static int              HasSynonymField(Col_Word word);
 static void             AddSynonymField(Col_Word *wordPtr);
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
+
 
 /*
-================================================================================*//*!   @addtogroup words \
-Words                                                                           *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup words Words
+\{*//*==========================================================================
 */
 
 /*******************************************************************************
  * Word Creation
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_NewBoolWord
- *                                                                              *//*!
- *  Create a new boolean word.
+/**
+ * Create a new boolean word.
  *
- *  @return
- *      A new boolean word: either #WORD_TRUE or #WORD_FALSE.
+ * @return A new boolean word: either #WORD_TRUE or #WORD_FALSE.
  *
- *  @see Col_BoolWordValue
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_BoolWordValue
+ */
 Col_Word
 Col_NewBoolWord(
     int value)  /*!< Boolean value: zero for false, nonzero for true. */
@@ -58,23 +56,19 @@ Col_NewBoolWord(
     return (value ? WORD_TRUE : WORD_FALSE);
 }
 
-/*---------------------------------------------------------------------------
- * Col_NewIntWord
- *                                                                              *//*!
- *  Create a new integer word.
+/**
+ * Create a new integer word.
  *
- *  If the integer value is sufficiently small, return an immediate value
- *  instead of allocating memory.
+ * If the integer value is sufficiently small, return an immediate value
+ * instead of allocating memory.
  *
- *  @note
+ * @note
  *      Allocates memory cells if word is not immediate.
  *
- *  @return
- *      The new integer word.
+ * @return The new integer word.
  *
- *  @see Col_IntWordValue
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_IntWordValue
+ */
 Col_Word
 Col_NewIntWord(
     intptr_t value) /*!< Integer value of the word to create. */
@@ -99,22 +93,18 @@ Col_NewIntWord(
     return word;
 }
 
-/*---------------------------------------------------------------------------
- * Col_NewFloatWord
- *                                                                              *//*!
- *  Create a new floating point word.
+/**
+ * Create a new floating point word.
  *
- *  If the floating point value fits, return an immediate value instead of
- *  allocating memory. This includes IEEE 754 special values such as +/-0,
- *  +/-INF and NaN.
+ * If the floating point value fits, return an immediate value instead of
+ * allocating memory. This includes IEEE 754 special values such as +/-0,
+ * +/-INF and NaN.
  *
- *  @note
+ * @note
  *      Allocates memory cells if word is not immediate.
  *
- *  @return
- *      The new floating point word.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The new floating point word.
+ */
 Col_Word
 Col_NewFloatWord(
     double value)   /*!< Floating point value of the word to create. */
@@ -142,20 +132,19 @@ Col_NewFloatWord(
     return word;
 }
 
+/* End of Word Creation */
+
+
 /*******************************************************************************
  * Word Accessors
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_WordType
- *                                                                              *//*!
- *  Get word type. Actual value may be a combination of known @ref word_types
- *  "Word Types".
+/**
+ * Get word type. Actual value may be a combination of known @ref word_types
+ * "Word Types".
  *
- *  @return
- *      A combination of @ref word_types "Word Types".
- *//*-----------------------------------------------------------------------*/
-
+ * @return A combination of @ref word_types "Word Types".
+ */
 int
 Col_WordType(
     Col_Word word)  /*!< The word to get type for. */
@@ -257,22 +246,19 @@ Col_WordType(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_BoolWordValue
- *                                                                              *//*!
- *  Get value of boolean word.
+/**
+ * Get value of boolean word.
  *
- *  @return
- *      The boolean value: zero for false, nonzero for true.
+ * @return The boolean value: zero for false, nonzero for true.
  *
- *  @see Col_NewBoolWord
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NewBoolWord
+ */
 int
 Col_BoolWordValue(
     Col_Word word)  /*!< Boolean word to get value for. */
 {
-    TYPECHECK((Col_WordType(word) & COL_BOOL), COL_ERROR_BOOL, (word));         /*!     @typecheck{COL_ERROR_BOOL,word} */
+    /*! @typecheck{COL_ERROR_BOOL,word} */
+    TYPECHECK((Col_WordType(word) & COL_BOOL), COL_ERROR_BOOL, (word));
 
     WORD_UNWRAP(word);
 
@@ -280,17 +266,13 @@ Col_BoolWordValue(
 }
 
 
-/*---------------------------------------------------------------------------
- * Col_IntWordValue
- *                                                                              *//*!
- *  Get value of integer word.
+/**
+ * Get value of integer word.
  *
- *  @return
- *      The integer value.
+ * @return The integer value.
  *
- *  @see Col_NewIntWord
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NewIntWord
+ */
 intptr_t
 Col_IntWordValue(
     Col_Word word)  /*!< Integer word to get value for. */
@@ -305,21 +287,19 @@ Col_IntWordValue(
         }
     }
 
-    TYPECHECK(0, COL_ERROR_INT, word);                                          /*!     @typecheck{COL_ERROR_INT,word} */
+    /*! @typecheck{COL_ERROR_INT,word} */
+    TYPECHECK(0, COL_ERROR_INT, word);
+
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * Col_FloatWordValue
- *                                                                              *//*!
- *  Get value of floating point word.
+/**
+ * Get value of floating point word.
  *
- *  @return
- *      The floating point value.
+ * @return The floating point value.
  *
- *  @see Col_NewFloatWord
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NewFloatWord
+ */
 double
 Col_FloatWordValue(
     Col_Word word)  /*!< Floating point word to get value for. */
@@ -336,26 +316,26 @@ Col_FloatWordValue(
         }
     }
 
-    TYPECHECK(0, COL_ERROR_FLOAT, word);                                        /*!     @typecheck{COL_ERROR_FLOAT,word} */
+    /*! @typecheck{COL_ERROR_FLOAT,word} */
+    TYPECHECK(0, COL_ERROR_FLOAT, word);
+    
     return 0.0;
 }
+
+/* End of Word Accessors */
 
 
 /*******************************************************************************
  * Word Synonyms
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * HasSynonymField
- *                                                                              *//*!
- *  Test whether the word has a synonym field.
- *
- *  @return
- *      Whether the word has a synonym field.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Test whether the word has a synonym field.
+ *
+ * @return Whether the word has a synonym field.
+ */
 static int
 HasSynonymField(
     Col_Word word)  /*!< The word to test. */
@@ -376,18 +356,12 @@ HasSynonymField(
     }
 }
 
-/*---------------------------------------------------------------------------
- * AddSynonymField
- *                                                                              *//*!
- *  Return a word that is semantically identical to the given one and has
- *  a synonym field.
+/**
+ * Return a word that is semantically identical to the given one and has
+ * a synonym field.
  *
- *  @return
- *      A word with a synonym field.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @return A word with a synonym field.
+ */
 static void
 AddSynonymField(
     Col_Word *wordPtr)  /*!< Points to the word to convert. */
@@ -396,7 +370,11 @@ AddSynonymField(
 
     ASSERT(!HasSynonymField(*wordPtr));
 
-    converted = (Col_Word) AllocCells(1);                                       /*!     @sideeffect Allocates memory cells. */
+    /*!
+     * @sideeffect
+     * Allocates memory cells.
+     */
+    converted = (Col_Word) AllocCells(1);
     switch (WORD_TYPE(*wordPtr)) {
     /*
      * Some types have dedicated wrappers.
@@ -424,19 +402,17 @@ AddSynonymField(
     *wordPtr = converted;
 }
 
-/*---------------------------------------------------------------------------
- * Col_WordSynonym
- *                                                                              *//*!
- *  Get a synonym for the word.
- *
- *  Words may form chains of synonyms, i.e. circular linked lists. To
- *  iterate over the chain, simply call this function several times on the
- *  intermediary results until it returns nil or the first word.
- *
- *  @return
- *      The word synonym, which may be nil.
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
+/**
+ * Get a synonym for the word.
+ *
+ * Words may form chains of synonyms, i.e. circular linked lists. To
+ * iterate over the chain, simply call this function several times on the
+ * intermediary results until it returns nil or the first word.
+ *
+ * @return The word synonym, which may be nil.
+ */
 Col_Word
 Col_WordSynonym(
     Col_Word word)  /*!< The word to get synonym for. */
@@ -448,16 +424,13 @@ Col_WordSynonym(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_WordAddSynonym
- *                                                                              *//*!
- *  Add a synonym to a word.
+/**
+ * Add a synonym to a word.
  *
- *  @sideeffect
+ * @sideeffect
  *      Modifies the chain of synonyms.
  *      May allocate new words.
- *//*-----------------------------------------------------------------------*/
-
+ */
 void
 Col_WordAddSynonym(
     Col_Word *wordPtr,  /*!< Point to the word to add synonym to. May be
@@ -543,13 +516,10 @@ Col_WordAddSynonym(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_WordClearSynonym
- *                                                                              *//*!
- *  Clear a word's synonym. This removes the word from the synonym chain
- *  it belongs to.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Clear a word's synonym. This removes the word from the synonym chain
+ * it belongs to.
+ */
 void
 Col_WordClearSynonym(
     Col_Word word)  /*!< The word to clear synonym for. */
@@ -583,19 +553,18 @@ Col_WordClearSynonym(
     WORD_SYNONYM(word) = WORD_NIL;
 }
 
+/* End of Word Synonyms */
+
 
 /*******************************************************************************
  * Word Operations
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_SortWords
- *                                                                              *//*!
- *  Sort an array of words using the quicksort algorithm with 3-way
- *  partitioning given in "Quicksort is optimal" by Robert Sedgewick and
- *  Jon Bentley.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Sort an array of words using the quicksort algorithm with 3-way
+ * partitioning given in "Quicksort is optimal" by Robert Sedgewick and
+ * Jon Bentley.
+ */
 void
 Col_SortWords(
     Col_Word *first,            /*!< First word of array to sort. */
@@ -605,16 +574,20 @@ Col_SortWords(
 {
     Col_Word *i, *j, *k, *p, *q;
     Col_Word v;
-                                                                                #       ifndef DOXYGEN
+
+/*! \cond IGNORE */
 #define SWAP(a, b) {Col_Word tmp=b; b=a; a=tmp;}
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
+
     /*
      * Entry point for tail recursive calls.
      */
-                                                                                #       ifndef DOXYGEN
+
+/*! \cond IGNORE */
 #define TAIL_RECURSE(_first, _last) \
     first = (_first); last = (_last); goto start;
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
+
 start:
 
     if (last <= first) return;
@@ -693,26 +666,26 @@ start:
     }
 }
 
-                                                                                /*!     @} */
+/* End of Word Operations */
+
+/* End of Words *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup custom_words \
-Custom Words                                                                    *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup custom_words Custom Words
+\{*//*==========================================================================
 */
 
 /*******************************************************************************
  * Custom Word Creation
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_NewCustomWord
- *                                                                              *//*!
- *  Create a new custom word.
+/**
+ * Create a new custom word.
  *
- *  @return
- *      A new word of the given size.
- *//*-----------------------------------------------------------------------*/
-
+ * @return A new word of the given size.
+ */
 Col_Word
 Col_NewCustomWord(
     Col_CustomWordType *type,   /*!< The word type descriptor. */
@@ -756,22 +729,20 @@ Col_NewCustomWord(
     return word;
 }
 
+/* End of Custom Word Creation */
 
-/****************************************************************************
- * Group: Custom Word Accessors
- ****************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_CustomWordInfo
- *                                                                              *//*!
- *  Get custom word type and data.
+/*******************************************************************************
+ * Custom Word Accessors
+ ******************************************************************************/
+
+/**
+ * Get custom word type and data.
  *
- *  @return
- *      The custom word type descriptor.
+ * @return The custom word type descriptor.
  *
- *  @see Col_NewCustomWord
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NewCustomWord
+ */
 Col_CustomWordType *
 Col_CustomWordInfo(
     Col_Word word,      /*!< The word to get data for. */
@@ -782,7 +753,8 @@ Col_CustomWordInfo(
     Col_CustomWordType *type;
     size_t headerSize;
 
-    TYPECHECK(WORD_TYPE(word) == WORD_TYPE_CUSTOM, COL_ERROR_CUSTOMWORD, word) {/*!     @typecheck{COL_ERROR_CUSTOMWORD,word} */
+    /*! @typecheck{COL_ERROR_CUSTOMWORD,word} */
+    TYPECHECK(WORD_TYPE(word) == WORD_TYPE_CUSTOM, COL_ERROR_CUSTOMWORD, word) {
         return NULL;
     }
 
@@ -796,4 +768,6 @@ Col_CustomWordInfo(
     return type;
 }
 
-                                                                                /*!     @} */
+/* End of Custom Word Accessors */
+
+/* End of Words *//*!\}*/

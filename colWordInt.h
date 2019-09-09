@@ -1,12 +1,12 @@
-/*                                                                              *//*!   @cond PRIVATE @file \
- * colWordInt.h
+/**
+ * @file colWordInt.h
  *
- *  This header file defines the word internals of Colibri.
+ * This header file defines the word internals of Colibri.
  *
- *  @see colWord.c
- *  @see colWord.h
+ * @see colWord.c
+ * @see colWord.h
  *
- *  @private
+ * @beginprivate @cond PRIVATE
  */
 
 #ifndef _COLIBRI_WORD_INT
@@ -14,23 +14,24 @@
 
 
 /*
-================================================================================*//*!   @addtogroup words \
-Words                                                                           *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\internal \addtogroup words Words
+\{*//*==========================================================================
 */
-                                                                                /*!     @anchor word_type_ids */
-/********************************************************************************//*!   @name \
- * Word Type Identifiers
+
+/***************************************************************************//*!
+ * @anchor word_type_ids
+ * \name Word Type Identifiers
  *
- *  Internal word type identifiers.
+ * Internal word type identifiers.
  *
- *  Predefined type IDs for regular word types are chosen so that their bit
- *  0 is cleared, their bit 1 is set, and their value fit into a byte. This
- *  gives up to 64 predefined type IDs (2-254 with steps of 4).
+ * Predefined type IDs for regular word types are chosen so that their bit
+ * 0 is cleared, their bit 1 is set, and their value fit into a byte. This
+ * gives up to 64 predefined type IDs (2-254 with steps of 4).
  *
- *  Immediate word type IDs use negative values to avoid clashes with
- *  regular word type IDs.                                                      *//*!   @{ *//*
- ******************************************************************************/
+ * Immediate word type IDs use negative values to avoid clashes with
+ * regular word type IDs.
+ ***************************************************************************\{*/
 
 #define WORD_TYPE_NIL             0 /*!< Nil singleton. */
 
@@ -87,29 +88,26 @@ Words                                                                           
                                          specific code is needed. Search for
                                          this tag when adding new predefined
                                          word types. */
-                                                                                /*!     @} */
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_TYPE
+/* End of Word Type Identifiers *//*!\}*/
+
+
+/**
+ * Get word type identifier.
  *
- *  Get word type identifier.
+ * @param word  Word to get type for.
  *
- *  @param word     Word to get type for.
- *
- *  @warning
+ * @warning
  *      Argument **word** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @result
- *      Word type identifier.
+ * @return Word type identifier.
  *
- *  @see @ref word_type_ids "Word Type Identifiers"
- *  @see immediateWordTypes
- *  @see @ref immediate_words
- *  @see @ref regular_words
- *//*-----------------------------------------------------------------------*/
-
-/* Careful: don't give arguments with side effects! */
+ * @see @ref word_type_ids "Word Type Identifiers"
+ * @see immediateWordTypes
+ * @see @ref immediate_words
+ * @see @ref regular_words
+ */
 #define WORD_TYPE(word) \
     /* Nil? */                                                  \
     ((!(word))?                         WORD_TYPE_NIL           \
@@ -119,36 +117,36 @@ Words                                                                           
     :((((uint8_t *)(word))[0])&2)?      WORD_TYPEID(word)       \
     /* Custom Type */                                           \
     :                                   WORD_TYPE_CUSTOM)
-                                                                                /*!     @} */
+
+/* End of Words *//*!\}*/
+
 
 /*
-================================================================================*//*!   @addtogroup immediate_words \
-Immediate Words
-                                                                                        @ingroup words
-  Immediate words are immutable datatypes that store their value directly
-  in the word identifier, contrary to @ref regular_words whose identifier is a
-  pointer to a cell-based structure. As cells are aligned on a multiple of
-  their size (16 bytes on 32-bit systems), this means that a number of low
-  bits are always zero in regular word identifiers (4 bits on 32-bit
-  systems with 16-byte cells). Immediate values are distinguished from
-  regular pointers by setting one of these bits. Immediate word types are
-  identified by these bit patterns, called tags.                                *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\internal \defgroup immediate_words Immediate Words
+\ingroup words
+
+Immediate words are immutable datatypes that store their value directly
+in the word identifier, contrary to @ref regular_words whose identifier is a
+pointer to a cell-based structure. As cells are aligned on a multiple of
+their size (16 bytes on 32-bit systems), this means that a number of low
+bits are always zero in regular word identifiers (4 bits on 32-bit
+systems with 16-byte cells). Immediate values are distinguished from
+regular pointers by setting one of these bits. Immediate word types are
+identified by these bit patterns, called tags.
+\{*//*==========================================================================
 */
 
-/*---------------------------------------------------------------------------
- * immediateWordTypes
- *                                                                              *//*!
- *  Lookup table for immediate word types, gives the word type ID from the
- *  first 5 bits of the word value (= the tag).
+/**
+ * Lookup table for immediate word types, gives the word type ID from the
+ * first 5 bits of the word value (= the tag).
  *
- *  @note
+ * @note
  *      Defined as static so that all modules use their own instance for
  *      potential compiler optimizations.
  *
- *  @see WORD_TYPE
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_TYPE
+ */
 static const int immediateWordTypes[32] = {
     WORD_TYPE_NIL,      /* 00000 */
     WORD_TYPE_SMALLINT, /* 00001 */
@@ -183,24 +181,27 @@ static const int immediateWordTypes[32] = {
     WORD_TYPE_SMALLFP,  /* 11110 */
     WORD_TYPE_SMALLINT, /* 11111 */
 };
-                                                                                /*!     @} */
+
+/* End of Immediate Words *//*!\}*/
+
 
 /*
-================================================================================*//*!   @addtogroup smallint_words \
-Small Integer Words
-                                                                                        @ingroup immediate_words
-  Small integer words are @ref immediate_words storing integers whose width
-  is one bit less than machine integers.
+===========================================================================*//*!
+\internal \defgroup smallint_words Small Integer Words
+\ingroup immediate_words
 
-  Larger integers are stored in @ref int_wrappers.
+Small integer words are @ref immediate_words storing integers whose width
+is one bit less than machine integers.
 
-  @par Requirements
-  - Small integer words need to store the integer value in the word
-    identifier.
+Larger integers are stored in @ref int_wrappers.
 
-  @param Value      Integer value of word.
+@par Requirements
+    - Small integer words need to store the integer value in the word
+      identifier.
 
-  @par Word Layout
+    @param Value    Integer value of word.
+
+@par Word Layout
     On all architectures the *n*-bit word layout is as follows:
 
     @dot
@@ -220,88 +221,88 @@ Small Integer Words
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0 1                                                           n
           +-+-------------------------------------------------------------+
         0 |1|                            Value                            |
           +-+-------------------------------------------------------------+
-                                                                                        @endif
-  @see WORD_TYPE_SMALLINT
-  @see immediateWordTypes                                                       *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+@see WORD_TYPE_SMALLINT
+@see immediateWordTypes
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Small Integer Word Constants                                                 *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Small Integer Word Constants
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * SMALLINT_MIN
- *  Minimum value of small integer words.
- *                                                                              *//*!   @def \
- * SMALLINT_MAX
- *  Maximum value of small integer words.
- *//*-----------------------------------------------------------------------*/
-
+/** Minimum value of small integer words. */
 #define SMALLINT_MIN            (INTPTR_MIN>>1)
+
+/** Maximum value of small integer words. */
 #define SMALLINT_MAX            (INTPTR_MAX>>1)
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Small Integer Word Creation                                                  *//*!   @{ *//*
- ******************************************************************************/
+/* End of Small Integer Word Constants *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_SMALLINT_NEW
+
+/***************************************************************************//*!
+ * \name Small Integer Word Creation
+ ***************************************************************************\{*/
+
+/**
+ * Small integer word creation.
  *
- *  Small integer word creation.
- *
- *  @param value    Integer value. Must be between #SMALLINT_MIN and
+ * @param value     Integer value. Must be between #SMALLINT_MIN and
  *                  #SMALLINT_MAX.
  *
- *  @result
- *      The new small integer word.
+ * @return The new small integer word.
  *
- *  @see WORD_SMALLINT_VALUE
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_SMALLINT_VALUE
+ */
 #define WORD_SMALLINT_NEW(value) \
     ((Col_Word)((((intptr_t)(value))<<1)|1))
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Small Integer Word Accessors                                                 *//*!   @{ *//*
- ******************************************************************************/
+/* End of Small Integer Word Creation *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_SMALLINT_VALUE
- *  Get value of small integer word.
+
+/***************************************************************************//*!
+ * \name Small Integer Word Accessors
+ ***************************************************************************\{*/
+
+/**
+ * Get value of small integer word.
  *
- *  @param word     Word to access.
+ * @param word  Word to access.
  *
- *  @see WORD_SMALLINT_NEW
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_SMALLINT_NEW
+ */
 #define WORD_SMALLINT_VALUE(word)   (((intptr_t)(word))>>1)
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Small Integer Word Accessors *//*!\}*/
+
+/* End of Small Integer Words *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup smallfp_words \
-Small Floating Point Words
-                                                                                        @ingroup immediate_words
-  Small floating point words are @ref immediate_words storing floating points
-  whose lower 2 bits of the mantissa are zero, so that they are free for the
-  tag bits. This includes IEEE 754 special values such as +/-0, +/-INF and NaN.
+===========================================================================*//*!
+\internal \defgroup smallfp_words Small Floating Point Words
+\ingroup immediate_words
 
-  Other values are stored in @ref fp_wrappers.
+Small floating point words are @ref immediate_words storing floating points
+whose lower 2 bits of the mantissa are zero, so that they are free for the
+tag bits. This includes IEEE 754 special values such as +/-0, +/-INF and NaN.
 
-  @par Requirements
-  - Small floating point words need to store the floating point value in the
-    word identifier.
+Other values are stored in @ref fp_wrappers.
 
-  @param Value      Floating point value of word.
+@par Requirements
+    - Small floating point words need to store the floating point value in the
+      word identifier.
 
-  @par Word Layout
+    @param Value    Floating point value of word.
+
+@par Word Layout
     On all architectures the *n*-bit word layout is as follows:
 
     @dot
@@ -321,113 +322,111 @@ Small Floating Point Words
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            01 2                                                          n
           +--+------------------------------------------------------------+
         0 |01|                           Value                            |
           +--+------------------------------------------------------------+
-                                                                                        @endif
-  @see WORD_TYPE_SMALLFP
-  @see immediateWordTypes                                                       *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+@see WORD_TYPE_SMALLFP
+@see immediateWordTypes
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Small Floating Point Word Utilities                                          *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Small Floating Point Word Utilities
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * SMALLFP_TYPE
+/**
+ * C Type used by immediate floating point words.
  *
- *  C Type used by immediate floating point words.
- *
- *  @see FloatConvert
- *  @see WORD_SMALLFP_NEW
- *//*-----------------------------------------------------------------------*/
-
+ * @see FloatConvert
+ * @see WORD_SMALLFP_NEW
+ */
 #if SIZE_BIT == 32
 #   define SMALLFP_TYPE         float
 #elif SIZE_BIT == 64
 #   define SMALLFP_TYPE         double
 #endif
 
-/*---------------------------------------------------------------------------
- * FloatConvert
- *                                                                              *//*!
- *  Utility union type for immediate floating point words. Because of C
- *  language restrictions (bitwise operations on floating points are
- *  forbidden), we have to use this intermediary union type for conversions.
+/**
+ * Utility union type for immediate floating point words. Because of C
+ * language restrictions (bitwise operations on floating points are
+ * forbidden), we have to use this intermediary union type for conversions.
  *
- *  @see WORD_SMALLFP_VALUE
- *  @see WORD_SMALLFP_NEW
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_SMALLFP_VALUE
+ * @see WORD_SMALLFP_NEW
+ */
 typedef union {
     Col_Word w;     /*!< Word value.  */
     uintptr_t i;    /*!< Integer value used for bitwise operations. */
     SMALLFP_TYPE f; /*!< Floating point value.*/
 } FloatConvert;
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Small Floating Point Word Creation                                           *//*!   @{ *//*
- ******************************************************************************/
+/* End of Small Floating Point Word Utilities *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_SMALLFP_NEW
+
+/***************************************************************************//*!
+ * \name Small Floating Point Word Creation
+ ***************************************************************************\{*/
+
+/**
+ * Small floating point word creation.
  *
- *  Small floating point word creation.
+ * @param value     Floating point value.
+ * @param c         #FloatConvert conversion structure.
  *
- *  @param value    Floating point value.
- *  @param c        #FloatConvert conversion structure.
- *
- *  @warning
+ * @warning
  *      Argument **c** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @result
- *      The new small floating point word.
+ * @return The new small floating point word.
  *
- *  @see WORD_SMALLFP_VALUE
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_SMALLFP_VALUE
+ */
 #define WORD_SMALLFP_NEW(value, c) \
     ((c).f = (SMALLFP_TYPE)(value), (c).i &= ~3, (c).i |= 2, (c).w)
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Small Floating Point Word Accessors                                          *//*!   @{ *//*
- ******************************************************************************/
+/* End of Small Floating Point Word Creation *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_SMALLFP_VALUE
- *  Get value of small floating point word.
- *
- *  @param word     Word to access.
- *  @param c        #FloatConvert conversion structure.
- *
- *  @result
- *      The floating point value.
- *
- *  @see WORD_SMALLFP_NEW
- *//*-----------------------------------------------------------------------*/
 
+/***************************************************************************//*!
+ * \name Small Floating Point Word Accessors
+ ***************************************************************************\{*/
+
+/**
+ * Get value of small floating point word.
+ *
+ * @param word  Word to access.
+ * @param c     #FloatConvert conversion structure.
+ *
+ * @return The floating point value.
+ *
+ * @see WORD_SMALLFP_NEW
+ */
 #define WORD_SMALLFP_VALUE(word, c) \
     ((c).w = (word), (c).i &= ~3, (c).f)
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Small Floating Point Word Accessors *//*!\}*/
+
+/* End of Small Floating Point Words *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup bool_words \
-Boolean Words
-                                                                                        @ingroup immediate_words
-  Boolean words are @ref immediate_words taking only two values: true or false.
+===========================================================================*//*!
+\internal \defgroup bool_words Boolean Words
+\ingroup immediate_words
 
-  @par Requirements
-  - Boolean words need only one bit to distinguish between true and false.
+Boolean words are @ref immediate_words taking only two values: true or false.
 
-  @param Value(V)       Zero for false, nonzero for true.
+@par Requirements
+    - Boolean words need only one bit to distinguish between true and false.
 
-  @par Word Layout
+    @param Value(V)     Zero for false, nonzero for true.
+
+@par Word Layout
     On all architectures the *n*-bit word layout is as follows:
 
     @dot
@@ -449,76 +448,79 @@ Boolean Words
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0      7 8 9                                                  n
           +--------+-+----------------------------------------------------+
         0 |00100000|V|                       Unused                       |
           +--------+-+----------------------------------------------------+
-                                                                                        @endif
-  @see WORD_TYPE_CHARBOOL
-  @see immediateWordTypes                                                       *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+@see WORD_TYPE_CHARBOOL
+@see immediateWordTypes
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Boolean Word Creation                                                        *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Boolean Word Creation
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_BOOL_NEW
+/**
+ * Boolean word creation.
  *
- *  Boolean word creation.
+ * @param value     Boolean value: zero for false, nonzero for true.
  *
- *  @param value    Boolean value: zero for false, nonzero for true.
+ * @return The new boolean word.
  *
- *  @result
- *      The new boolean ord.
- *
- *  @see WORD_BOOL_VALUE
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_BOOL_VALUE
+ */
 #define WORD_BOOL_NEW(value) \
     ((value)?WORD_TRUE:WORD_FALSE)
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Boolean Word Accessors                                                       *//*!   @{ *//*
- ******************************************************************************/
+/* End of Boolean Word Creation *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_BOOL_VALUE
- *  Get value of boolean word: zero for false, nonzero for true.
+
+/***************************************************************************//*!
+ * \name Boolean Word Accessors
+ ***************************************************************************\{*/
+
+/**
+ * Get value of boolean word: zero for false, nonzero for true.
  *
- *  @param word     Word to access.
+ * @param word  Word to access.
  *
- *  @see WORD_BOOL_NEW
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_BOOL_NEW
+ */
 #define WORD_BOOL_VALUE(word)   (((uintptr_t)(word))&0x100)
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Boolean Word Accessors *//*!\}*/
+
+/* End of Boolean Words *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup char_words \
-Character Words
-                                                                                        @ingroup immediate_words rope_words
-  Character words are @ref immediate_words storing one Unicode character
-  codepoint.
+===========================================================================*//*!
+\internal \defgroup char_words Character Words
+\ingroup immediate_words rope_words
 
-  @par Requirements
-  - Character words need to store Unicode character codepoints up to
-    #COL_CHAR_MAX, i.e. at least 21 bits.
+Character words are @ref immediate_words storing one Unicode character
+codepoint.
 
-  - Character words also need to know the character format for string
-    normalization issues. For that the codepoint width is sufficient
-    (between 1 and 4, i.e. 3 bits).
+@par Requirements
+    - Character words need to store Unicode character codepoints up to
+      #COL_CHAR_MAX, i.e. at least 21 bits.
 
-  - As character and boolean words share the same tag, we distinguish
-    both types with boolean words having a zero width field.
+    - Character words also need to know the character format for string
+      normalization issues. For that the codepoint width is sufficient
+      (between 1 and 4, i.e. 3 bits).
 
-  @param Codepoint    Unicode codepoint of character word.
-  @param Width(W)     Character width set at creation time.
+    - As character and boolean words share the same tag, we distinguish
+      both types with boolean words having a zero width field.
 
-  @par Word Layout
+    @param Codepoint    Unicode codepoint of character word.
+    @param Width(W)     Character width set at creation time.
+
+@par Word Layout
     On all architectures the *n*-bit word layout is as follows:
 
     @dot
@@ -542,80 +544,83 @@ Character Words
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0   4 5 7 8                  31                             n
           +-----+---+---------------------+-------------------------------+
         0 |00100| W |       Codepoint     |        Unused (n > 32)        |
           +-----+---+ --------------------+-------------------------------+
-                                                                                        @endif
-  @see WORD_TYPE_CHARBOOL
-  @see immediateWordTypes                                                       *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+@see WORD_TYPE_CHARBOOL
+@see immediateWordTypes
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Character Word Creation                                                      *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Character Word Creation
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_CHAR_NEW
+/**
+ * Unicode char word creation.
  *
- *  Unicode char word creation.
+ * @param value     Unicode codepoint.
+ * @param width     Character width.
  *
- *  @param value        Unicode codepoint.
- *  @param width        Character width.
+ * @return The new character word.
  *
- *  @result
- *      The new character word.
- *
- *  @see WORD_CHAR_CP
- *  @see WORD_CHAR_WIDTH
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_CHAR_CP
+ * @see WORD_CHAR_WIDTH
+ */
 #define WORD_CHAR_NEW(value, width) \
     ((Col_Word)((((uintptr_t)(value))<<8)|(((uintptr_t)(width))<<5)|4))
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Character Word Accessors                                                     *//*!   @{ *//*
- ******************************************************************************/
+/* End of Character Word Creation *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_CHAR_CP
- *  Get Unicode codepoint of char word.
- *
- *  @param word     Word to access.
- *
- *  @see WORD_CHAR_NEW
- *
- *                                                                              *//*!   @def \
- * WORD_CHAR_WIDTH
- *  Get char width used at creation time.
- *
- *  @param word     Word to access.
- *
- *  @see WORD_CHAR_NEW
- *//*-----------------------------------------------------------------------*/
 
+/***************************************************************************//*!
+ * \name Character Word Accessors
+ ***************************************************************************\{*/
+
+/**
+ * Get Unicode codepoint of char word.
+ *
+ * @param word  Word to access.
+ *
+ * @see WORD_CHAR_NEW
+ */
 #define WORD_CHAR_CP(word)      ((Col_Char)(((uintptr_t)(word))>>8))
+
+/**
+ * Get char width used at creation time.
+ *
+ * @param word  Word to access.
+ *
+ * @see WORD_CHAR_NEW
+ */
 #define WORD_CHAR_WIDTH(word)   ((((uintptr_t)(word))>>5)&7)
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Character Word Accessors *//*!\}*/
+
+/* End of Character Words *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup smallstr_words \
-Small String Words
-                                                                                        @ingroup immediate_words rope_words
-  Small string words are @ref immediate_words storing short 8-bit strings.
-  Maximum capacity is the machine word size minus one (i.e. 3 on 32-bit,
-  7 on 64-bit). Larger strings are cell-based.
+===========================================================================*//*!
+\internal \defgroup smallstr_words Small String Words
+\ingroup immediate_words rope_words
 
-  @par Requirements
-  - Small string words need to store the characters and the length.
+Small string words are @ref immediate_words storing short 8-bit strings.
+Maximum capacity is the machine word size minus one (i.e. 3 on 32-bit,
+7 on 64-bit). Larger strings are cell-based.
 
-  @param Length(L)  Number of characters [0,7].
-  @param Data       Character data.
+@par Requirements
+    - Small string words need to store the characters and the length.
 
-  @par Word Layout
+    @param Length(L)    Number of characters [0,7].
+    @param Data         Character data.
+
+@par Word Layout
     On all architectures the *n*-bit word layout is as follows:
 
     @dot
@@ -637,89 +642,89 @@ Small String Words
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0   4 5 7 8                                                  n
           +-----+---+-----------------------------------------------------+
         0 |00110| L |                        Data                         |
           +-----+---+-----------------------------------------------------+
-                                                                                        @endif
-  @see WORD_TYPE_SMALLSTR
-  @see immediateWordTypes                                                       *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+@see WORD_TYPE_SMALLSTR
+@see immediateWordTypes
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Small String Word Constants                                                  *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Small String Word Constants
+ ***************************************************************************\{*/
 
- /*---------------------------------------------------------------------------   *//*!   @def \
- * SMALLSTR_MAX_LENGTH
- *  Maximum length of small string words.
- *//*-----------------------------------------------------------------------*/
-
+ /** Maximum length of small string words. */
 #define SMALLSTR_MAX_LENGTH     (sizeof(Col_Word)-1)
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_SMALLSTR_EMPTY
- *
- *  Empty string immediate singleton. This is simply a small string of zero
- *  length.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Empty string immediate singleton. This is simply a small string of zero
+ * length.
+ */
 #define WORD_SMALLSTR_EMPTY     ((Col_Word) 12)
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Small String Word Accessors                                                  *//*!   @{ *//*
- ******************************************************************************/
+/* End of Small String Word Constants *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_SMALLSTR_LENGTH
- *  Get small string length.
- *
- *  @param word     Word to access.
- *
- *  @see WORD_SMALLSTR_SET_LENGTH
- *
- *                                                                              *//*!   @def \
- * WORD_SMALLSTR_SET_LENGTH
- *  Set small string length.
- *
- *  @param word     Word to access.
- *  @param length   Length value.
- *
- *  @see WORD_SMALLSTR_LENGTH
- *
- *                                                                              *//*!   @def \
- * WORD_SMALLSTR_DATA
- *  Pointer to beginning of small string data.
- *
- *  @param word     Word to access.
- *//*-----------------------------------------------------------------------*/
 
+/***************************************************************************//*!
+ * \name Small String Word Accessors
+ ***************************************************************************\{*/
+
+/**
+ * Get small string length.
+ *
+ * @param word  Word to access.
+ *
+ * @see WORD_SMALLSTR_SET_LENGTH
+ */
 #define WORD_SMALLSTR_LENGTH(word)      ((((uintptr_t)(word))&0xFF)>>5)
+
+/**
+ * Set small string length.
+ *
+ * @param word      Word to access.
+ * @param length    Length value.
+ *
+ * @see WORD_SMALLSTR_LENGTH
+ */
 #define WORD_SMALLSTR_SET_LENGTH(word, length) (*((uintptr_t *)&(word)) = ((length)<<5)|12)
+
+/**
+ * Pointer to beginning of small string data.
+ *
+ * @param word  Word to access.
+ */
 #ifdef COL_BIGENDIAN
 #   define WORD_SMALLSTR_DATA(word)     ((Col_Char1  *)&(word))
 #else
 #   define WORD_SMALLSTR_DATA(word)     (((Col_Char1 *)&(word))+1)
 #endif
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Small String Word Accessors *//*!\}*/
+
+/* End of Small String Words *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup circlist_words \
-Circular List Words
-                                                                                        @ingroup immediate_words
-  Circular lists words are @ref immediate_words made of a core list that
-  repeats infinitely. Core lists can be either regular @ref list_words or
-  @ref voidlist_words.
+===========================================================================*//*!
+\internal \defgroup circlist_words Circular List Words
+\ingroup immediate_words
 
-  @par Requirements
-  - Circular list words need to store their core list word.
+Circular lists words are @ref immediate_words made of a core list that
+repeats infinitely. Core lists can be either regular @ref list_words or
+@ref voidlist_words.
 
-  @param Core       Core list word.
+@par Requirements
+    - Circular list words need to store their core list word.
 
-  @par Word Layout
+    @param Core     Core list word.
+
+@par Word Layout
     On all architectures the *n*-bit word layout is as follows:
 
     @dot
@@ -756,7 +761,8 @@ Circular List Words
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0  3 4                                                        n
           +----+----------------------------------------------------------+
         0 |0001|                    Core (regular list)                   |
@@ -766,70 +772,72 @@ Circular List Words
           +-----+---------------------------------------------------------+
         0 |00111|                Core length (void list)                  |
           +-----+---------------------------------------------------------+
-                                                                                        @endif
-  @see WORD_TYPE_CIRCLIST
-  @see @ref list_words
-  @see @ref voidlist_words
-  @see immediateWordTypes                                                       *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+@see WORD_TYPE_CIRCLIST
+@see @ref list_words
+@see @ref voidlist_words
+@see immediateWordTypes
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Core List Word Creation                                                      *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Core List Word Creation
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_CIRCLIST_NEW
+/**
+ * Circular list word creation.
  *
- *  Circular list word creation.
+ * @param core  Core list. Must be acyclic.
  *
- *  @param core     Core list. Must be acyclic.
+ * @return The new circular list word.
  *
- *  @result
- *      The new circular list word.
- *
- *  @see WORD_CIRCLIST_CORE
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_CIRCLIST_CORE
+ */
 #define WORD_CIRCLIST_NEW(core) \
     ((Col_Word)(((uintptr_t)(core))|8))
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Core List Word Accessors                                                     *//*!   @{ *//*
- ******************************************************************************/
+/* End of Core List Word Creation *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_CIRCLIST_CORE
- *  Get core list.
+
+/***************************************************************************//*!
+ * \name Core List Word Accessors
+ ***************************************************************************\{*/
+
+/**
+ * Get core list.
  *
- *  @param word     Word to access.
+ * @param word  Word to access.
  *
- *  @see WORD_CIRCLIST_NEW
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_CIRCLIST_NEW
+ */
 #define WORD_CIRCLIST_CORE(word)        ((Col_Word)(((uintptr_t)(word))&~8))
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Core List Word Accessors *//*!\}*/
+
+/* End of Circular List Words *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup voidlist_words \
-Void List Words
-                                                                                        @ingroup immediate_words
-  Void list words are @ref immediate_words representing lists whose elements
-  are all nil.
+===========================================================================*//*!
+\internal \defgroup voidlist_words Void List Words
+\ingroup immediate_words
 
-  @par Requirements
-  - Void list words need to know their length. Length width is the machine
-    word width minus 4 bits, so the maximum length is about 1/16th of the
-    theoretical maximum. Larger void lists are built by concatenating
-    several shorter immediate void lists.
+Void list words are @ref immediate_words representing lists whose elements
+are all nil.
 
-  - Void list tag bit comes after the circular list tag so that void lists
-    can be made circular. Void circular lists thus combine both tag bits.
+@par Requirements
+    - Void list words need to know their length. Length width is the machine
+      word width minus 4 bits, so the maximum length is about 1/16th of the
+      theoretical maximum. Larger void lists are built by concatenating
+      several shorter immediate void lists.
 
-  @param Length     List length.
+    - Void list tag bit comes after the circular list tag so that void lists
+      can be made circular. Void circular lists thus combine both tag bits.
 
-  @par Word Layout
+    @param Length   List length.
+
+@par Word Layout
     On all architectures the *n*-bit word layout is as follows:
 
     @dot
@@ -849,108 +857,102 @@ Void List Words
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0   4 5                                                       n
           +-----+---------------------------------------------------------+
         0 |00101|                         Length                          |
           +-----+---------------------------------------------------------+
-                                                                                        @endif
-  @see WORD_TYPE_VOIDLIST
-  @see immediateWordTypes                                                       *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+@see WORD_TYPE_VOIDLIST
+@see immediateWordTypes
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Void List Word Constants                                                     *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Void List Word Constants
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * VOIDLIST_MAX_LENGTH
- *  Maximum length of void list words.
- *//*-----------------------------------------------------------------------*/
-
+/** Maximum length of void list words. */
 #define VOIDLIST_MAX_LENGTH     (SIZE_MAX>>5)
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_LIST_EMPTY
- *
- *  Empty list immediate singleton. This is simply a void list of zero
- *  length.
- *//*-----------------------------------------------------------------------*/
-
+/** Empty list immediate singleton. This is simply a zero-length void list. */
 #define WORD_LIST_EMPTY         WORD_VOIDLIST_NEW(0)
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Void List Word Creation                                                      *//*!   @{ *//*
- ******************************************************************************/
+/* End of Void List Word Constants *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_VOIDLIST_NEW
- *
- *  Void list word creation.
- *
- *  @param length       Void list length. Must be less than
- *                      #VOIDLIST_MAX_LENGTH.
- *
- *  @result
- *      The new void list word.
- *
- *  @see WORD_VOIDLIST_LENGTH
- *//*-----------------------------------------------------------------------*/
 
+/***************************************************************************//*!
+ * \name Void List Word Creation
+ ***************************************************************************\{*/
+
+/**
+ * Void list word creation.
+ *
+ * @param length    Void list length. Must be less than #VOIDLIST_MAX_LENGTH.
+ *
+ * @return The new void list word.
+ *
+ * @see WORD_VOIDLIST_LENGTH
+ */
 #define WORD_VOIDLIST_NEW(length) \
     ((Col_Word)(intptr_t)((((size_t)(length))<<5)|20))
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Void List Word Accessors                                                     *//*!   @{ *//*
- ******************************************************************************/
+/* End of Void List Word Creation *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_VOIDLIST_LENGTH
- *  Get void list length.
+
+/***************************************************************************//*!
+ * \name Void List Word Accessors
+ ***************************************************************************\{*/
+
+/**
+ * Get void list length.
  *
- *  @param word     Word to access.
+ * @param word  Word to access.
  *
- *  @see WORD_VOIDLIST_NEW
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_VOIDLIST_NEW
+ */
 #define WORD_VOIDLIST_LENGTH(word)      (((size_t)(intptr_t)(word))>>5)
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Void List Word Accessors *//*!\}*/
+
+/* End of Void List Words *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup regular_words \
-Regular Words
-                                                                                        @ingroup words
-  Regular words are datatypes that store their structure in cells, and
-  are identified by their cell address.
+===========================================================================*//*!
+\internal \defgroup regular_words Regular Words
+\ingroup words
 
-  Regular words store their data in cells whose 1st machine word is used
-  for the word type field, which is either a numerical ID for predefined
-  types or a pointer to a Col_CustomWordType structure for custom types.
-  As such structures are always word-aligned, this means that the two
-  least significant bits of their pointer value are zero (for
-  architectures with at least 32 bit words) and are free for our purpose.
+Regular words are datatypes that store their structure in cells, and
+are identified by their cell address.
 
-  On little endian architectures, the LSB of the type pointer is the
-  cell's byte 0. On big endian architectures, we rotate the pointer value
-  one byte to the right so that the original LSB ends up on byte 0. That
-  way the two reserved bits are on byte 0 for both predefined type IDs and
-  type pointers.
+Regular words store their data in cells whose 1st machine word is used
+for the word type field, which is either a numerical ID for predefined
+types or a pointer to a Col_CustomWordType structure for custom types.
+As such structures are always word-aligned, this means that the two
+least significant bits of their pointer value are zero (for
+architectures with at least 32 bit words) and are free for our purpose.
 
-  We use bit 0 of the type field as the pinned flag for both predefined
-  type IDs and type pointers. Given the above, this bit is always on byte
-  0. When set, this means that the word isn't movable; its address remains
-  fixed as long as this flag is set. Words can normally be moved to the
-  upper generation pool during the compaction phase of the GC.
+On little endian architectures, the LSB of the type pointer is the
+cell's byte 0. On big endian architectures, we rotate the pointer value
+one byte to the right so that the original LSB ends up on byte 0. That
+way the two reserved bits are on byte 0 for both predefined type IDs and
+type pointers.
 
-  @par Requirements
-  - Regular words must store their type info and a pinned flag.
+We use bit 0 of the type field as the pinned flag for both predefined
+type IDs and type pointers. Given the above, this bit is always on byte
+0. When set, this means that the word isn't movable; its address remains
+fixed as long as this flag is set. Words can normally be moved to the
+upper generation pool during the compaction phase of the GC.
 
-  @param Pinned(P)     Pinned flag.
+@par Requirements
+    - Regular words must store their type info and a pinned flag.
 
-  @par Cell Layout
+    @param Pinned(P)    Pinned flag.
+
+@par Cell Layout
     On all architectures the cell layout is as follows:
 
     @dot
@@ -975,7 +977,8 @@ Regular Words
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0 1                                                           n
           +-+-------------------------------------------------------------+
         0 |P|                                                             |
@@ -984,76 +987,74 @@ Regular Words
           .                      Type-specific data                       .
         N |                                                               |
           +---------------------------------------------------------------+
-                                                                                        @endif
-                                                                                *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Regular Word Accessors                                                       *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Regular Word Accessors
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_SYNONYM
- *  Get/set synonym word for regular words having a synonym field. For
- *  performance and simplicity all word types with a synonym field use the
- *  same location (2nd word of cell).
+/**
+ * Get/set synonym word for regular words having a synonym field. For
+ * performance and simplicity all word types with a synonym field use the
+ * same location (2nd word of cell).
  *
- *  @param word     Word to access.
+ * @param word  Word to access.
  *
- *  @note
+ * @note
  *      Macro is L-Value and suitable for both read/write operations.
- *//*-----------------------------------------------------------------------*/
-
+ */
 #define WORD_SYNONYM(word)      (((Col_Word *)(word))[1])
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_PINNED
+/**
+ * Get pinned flag.
  *
- *  Get pinned flag.
- *
- *  @see WORD_SET_PINNED
- *  @see WORD_CLEAR_PINNED
- *
- *                                                                              *//*!   @def \
- * WORD_SET_PINNED
- *
- *  Set pinned flag.
- *
- *  @see WORD_PINNED
- *  @see WORD_CLEAR_PINNED
- *
- *                                                                              *//*!   @def \
- * WORD_CLEAR_PINNED
- *
- *  Clear pinned flag.
- *
- *  @see WORD_PINNED
- *  @see WORD_SET_PINNED
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_SET_PINNED
+ * @see WORD_CLEAR_PINNED
+ */
 #define WORD_PINNED(word)       (((uint8_t *)(word))[0] & 1)
+
+/**
+ * Set pinned flag.
+ *
+ * @see WORD_PINNED
+ * @see WORD_CLEAR_PINNED
+ */
 #define WORD_SET_PINNED(word)   (((uint8_t *)(word))[0] |= 1)
+
+/**
+ * Clear pinned flag.
+ *
+ * @see WORD_PINNED
+ * @see WORD_SET_PINNED
+ */
 #define WORD_CLEAR_PINNED(word) (((uint8_t *)(word))[0] &= ~1)
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Regular Word Accessors *//*!\}*/
+
+/* End of Regular Words *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup predefined_words \
-Predefined Words
-                                                                                        @ingroup regular_words
-  Predefined words are @ref regular_words that are identified by a fixed ID and
-  managed by hardwired internal code.
+===========================================================================*//*!
+\internal \defgroup predefined_words Predefined Words
+\ingroup regular_words
 
-  @ref word_type_ids "Predefined type IDs" for regular word types are chosen
-  so that their bit 0 is cleared and bit 1 is set, to distinguish them with
-  type pointers and avoid value clashes.
+Predefined words are @ref regular_words that are identified by a fixed ID and
+managed by hardwired internal code.
 
-  @par Requirements
-  - Regular words must store their type ID.
+@ref word_type_ids "Predefined type IDs" for regular word types are chosen
+so that their bit 0 is cleared and bit 1 is set, to distinguish them with
+type pointers and avoid value clashes.
 
-  @param Type       Type identifier.
+@par Requirements
+    - Regular words must store their type ID.
 
-  @par Cell Layout
+    @param Type     Type identifier.
+
+@par Cell Layout
     On all architectures the cell layout is as follows:
 
     @dot
@@ -1082,7 +1083,8 @@ Predefined Words
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0 1 2    7                                                    n
           +-+-+------+----------------------------------------------------+
         0 |P|1| Type |                                                    |
@@ -1093,75 +1095,68 @@ Predefined Words
           .                                                               .
         N |                                                               |
           +---------------------------------------------------------------+
-                                                                                        @endif
-  @see @ref word_type_ids "Word Type Identifiers"                               *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+@see @ref word_type_ids "Word Type Identifiers"
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Predefined Word Accessors                                                    *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Predefined Word Accessors
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_TYPEID
- *  Get type ID for predefined word type.
+/**
+ * Get type ID for predefined word type.
  *
- *  @param word     Word to access.
+ * @param word  Word to access.
  *
- *  @return
- *      Word type ID.
+ * @return Word type ID.
  *
- *  @see @ref word_type_ids "Word Type Identifiers"
- *  @see WORD_SET_TYPEID
+ * @see @ref word_type_ids "Word Type Identifiers"
+ * @see WORD_SET_TYPEID
+ */
+#define WORD_TYPEID(word)           ((((uint8_t *)(word))[0])&~1)
+
+/**
+ * Set type ID for predefined word type.
  *
- *                                                                              *//*!   @def \
- * WORD_SET_TYPEID
- *  Set type ID for predefined word type.
+ * @param word  Word to access.
+ * @param type  Type ID.
  *
- *  @param word     Word to access.
- *  @param type     Type ID.
- *
- *  @sideeffect
+ * @sideeffect
  *      This also clears the pinned flag.
  *
- *  @see WORD_TYPEID
- *  @see WORD_CLEAR_PINNED
- *//*-----------------------------------------------------------------------*/
-
-#define WORD_TYPEID(word)           ((((uint8_t *)(word))[0])&~1)
+ * @see WORD_TYPEID
+ * @see WORD_CLEAR_PINNED
+ */
 #define WORD_SET_TYPEID(word, type) (((uint8_t *)(word))[0] = (type))
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Predefined Word Accessors *//*!\}*/
+
+/* End of Predefined Words *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup custom_words \
-Custom Words
-                                                                                        @ingroup regular_words
-  Custom words are words defined by applicative code. They can extend existing
-  word types like ropes or maps, or define application-specific data types.
+===========================================================================*//*!
+\internal \addtogroup custom_words Custom Words
 
-  Custom words are described by a #Col_CustomWordType type descriptor structure
-  defined and managed by client code.
+@par Requirements
+    - Custom words must store a pointer to their #Col_CustomWordType.
 
-  As such type descriptor structures are machine word-aligned, this means
-  that the four lower bits of their address are cleared.
+    - Custom words can be part of a synonym chain.
 
-  @par Requirements
-  - Custom words must store a pointer to their #Col_CustomWordType.
+    - Some custom word types define cleanup procedures
+      (#Col_CustomWordType.freeProc), such words need to be traversed during the
+      sweep phase of the GC process. To do so, they are singly-linked together
+      and so need to store the next word in chain.
 
-  - Custom words can be part of a synonym chain.
-
-  - Some custom word types define cleanup procedures
-    (#Col_CustomWordType.freeProc), such words need to be traversed during the
-    sweep phase of the GC process. To do so, they are singly-linked together
-    and so need to store the next word in chain.
-
-  @param Type       Type descriptor.
-  @param Synonym    [Generic word synonym field] (@ref WORD_SYNONYM).
-  @param Next       Next word in custom cleanup chain (only when
+    @param Type     Type descriptor.
+    @param Synonym  [Generic word synonym field](@ref WORD_SYNONYM).
+    @param Next     Next word in custom cleanup chain (only when
                     #Col_CustomWordType.freeProc is non-NULL).
-  @param Data       Custom type payload.
+    @param Data     Custom type payload.
 
-  @par Cell Layout
+@par Cell Layout
     On all architectures the cell layout is as follows:
 
     @dot
@@ -1194,7 +1189,8 @@ Custom Words
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0 1                                                           n
           +-+-+-----------------------------------------------------------+
         0 |P|0|                         Type                              |
@@ -1209,180 +1205,197 @@ Custom Words
           .                                                               .
         N |                                                               |
           +---------------------------------------------------------------+
-                                                                                        @endif
-  @see WORD_TYPE_CUSTOM
-  @see Col_CustomWordType                                                       *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+@note
+    Custom words are described by a #Col_CustomWordType type descriptor. As such
+    structures are machine  word-aligned, this means that the four lower bits of
+    their address are cleared.
+
+@see WORD_TYPE_CUSTOM
+@see Col_CustomWordType
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Custom Word Constants                                                        *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Custom Word Constants
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * CUSTOM_HEADER_SIZE
- *  Byte size of custom word header.
- *//*-----------------------------------------------------------------------*/
-
+/** Byte size of custom word header. */
 #define CUSTOM_HEADER_SIZE              (sizeof(Col_CustomWordType *)+sizeof(Col_Word *))
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Custom Word Creation                                                         *//*!   @{ *//*
- ******************************************************************************/
+/* End of Custom Word Constants *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_CUSTOM_INIT
+
+/***************************************************************************//*!
+ * \name Custom Word Creation
+ ***************************************************************************\{*/
+
+/**
+ * Custom word initializer.
  *
- *  Custom word initializer.
+ * @param word      Word to initialize.
+ * @param typeInfo  #WORD_SET_TYPEINFO.
  *
- *  @param word         Word to initialize.
- *  @param typeInfo     #WORD_SET_TYPEINFO.
- *
- *  @warning
+ * @warning
  *      Argument **word** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @see WORD_TYPEINFO
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_TYPEINFO
+ */
 #define WORD_CUSTOM_INIT(word, typeInfo) \
     WORD_SET_TYPEINFO((word), (typeInfo)); \
     WORD_SYNONYM(word) = WORD_NIL;
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Custom Word Accessors                                                        *//*!   @{ *//*
- ******************************************************************************/
+/* End of Custom Word Creation *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_TYPEINFO
- *  Get #Col_CustomWordType custom type descriptor.
+
+/***************************************************************************//*!
+ * \name Custom Word Accessors
+ ***************************************************************************\{*/
+
+/**
+ * Rotate value left by one byte.
  *
- *  @param word         Word to access.
+ * @param value     Value to rotate.
  *
- *  @warning
+ * @warning
+ *      Argument **Value** is referenced several times by the macro. Make sure 
+ *      to avoid any side effect.
+ */
+#define ROTATE_LEFT(value) \
+    (((value)>>((sizeof(value)-1)*8)) | ((value)<<8))
+
+/**
+ * Rotate value right by one byte.
+ *
+ * @param value     Value to rotate.
+ *
+ * @warning
+ *      Argument **Value** is referenced several times by the macro. Make sure 
+ *      to avoid any side effect.
+ */
+#define ROTATE_RIGHT(value) \
+    (((value)<<((sizeof(value)-1)*8)) | ((value)>>8))
+
+/**
+ * Get #Col_CustomWordType custom type descriptor.
+ *
+ * @param word  Word to access.
+ *
+ * @warning
  *      Argument **word** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @see WORD_SET_TYPEINFO
- *
- *                                                                              *//*!   @def \
- * WORD_SET_TYPEINFO
- *  Set #Col_CustomWordType custom type descriptor.
- *
- *  @param word         Word to access.
- *  @param addr         Address of #Col_CustomWordType descriptor.
- *
- *  @warning
- *      Arguments are referenced several times by the macro. Make sure to
- *      avoid any side effect.
- *
- *  @sideeffect
- *      This also clears the pinned flag.
- *
- *  @see WORD_TYPEINFO
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_SET_TYPEINFO
+ */
 #ifdef COL_BIGENDIAN
-                                                                                #       ifndef DOXYGEN
-#   define ROTATE_LEFT(value) \
-        (((value)>>((sizeof(value)-1)*8)) | ((value)<<8))
-#   define ROTATE_RIGHT(value) \
-        (((value)<<((sizeof(value)-1)*8)) | ((value)>>8))
-                                                                                #       endif /* DOXYGEN */
 #   define WORD_TYPEINFO(word) \
         ((Col_CustomWordType *)(ROTATE_LEFT(*(uintptr_t *)(word))&~1))
-#   define WORD_SET_TYPEINFO(word, addr) \
-        (*(uintptr_t *)(word) = ROTATE_RIGHT(((uintptr_t)(addr))))
 #else
 #   define WORD_TYPEINFO(word) \
         ((Col_CustomWordType *)((*(uintptr_t *)(word))&~1))
+#endif
+
+/**
+ * Set #Col_CustomWordType custom type descriptor.
+ *
+ * @param word  Word to access.
+ * @param addr  Address of #Col_CustomWordType descriptor.
+ *
+ * @warning
+ *      Arguments are referenced several times by the macro. Make sure to
+ *      avoid any side effect.
+ *
+ * @sideeffect
+ *      This also clears the pinned flag.
+ *
+ * @see WORD_TYPEINFO
+ */
+#ifdef COL_BIGENDIAN
+#   define WORD_SET_TYPEINFO(word, addr) \
+        (*(uintptr_t *)(word) = ROTATE_RIGHT(((uintptr_t)(addr))))
+#else
 #   define WORD_SET_TYPEINFO(word, addr) \
         (*(uintptr_t *)(word) = ((uintptr_t)(addr)))
 #endif
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_CUSTOM_NEXT
+/**
+ * Get/set next word in custom cleanup chain.
  *
- *  Get/set next word in custom cleanup chain.
- *
- *  @warning
+ * @warning
  *      Only when #Col_CustomWordType.freeProc is non-NULL.
  *
- *  @note
+ * @note
  *      Macro is L-Value and suitable for both read/write operations.
- *//*-----------------------------------------------------------------------*/
-
+ */
 #define WORD_CUSTOM_NEXT(word, typeInfo, headerSize) (*(Col_Word *)(((char *)(word))+headerSize))
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_CUSTOM_DATA
- *
- *  Pointer to beginning of custom word data.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Pointer to beginning of custom word data.
+ */
 #define WORD_CUSTOM_DATA(word, typeInfo, headerSize) ((void *)(&WORD_CUSTOM_NEXT((word), (typeInfo), (headerSize))+((typeInfo)->freeProc?1:0)))
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_CUSTOM_SIZE
+/**
+ * Get number of cells taken by the custom word.
  *
- *  Get number of cells taken by the custom word.
+ * @param typeInfo      WORD_TYPEINFO
+ * @param headerSize    Byte size of predefined header.
+ * @param size          Byte size of custom word data.
  *
- *  @param typeInfo     WORD_TYPEINFO
- *  @param headerSize   Byte size of predefined header.
- *  @param size         Byte size of custom word data.
- *
- *  @result
- *      Number of cells taken by word.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Number of cells taken by word.
+ */
 #define WORD_CUSTOM_SIZE(typeInfo, headerSize, size) \
     (NB_CELLS((headerSize)+((typeInfo)->freeProc?sizeof(Cell *):0)+(size)))
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Custom Word Accessors *//*!\}*/
+
+/* End of Custom Words *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup wrap_words \
-Wrap Words
-                                                                                        @ingroup regular_words
-  Wrap words are generic wrappers for @ref words lacking specific features.
+===========================================================================*//*!
+\internal \defgroup wrap_words Wrap Words
+\ingroup regular_words
 
-  - Words may have synonyms that can take any accepted word value:
-    @ref immediate_words (e.g. Nil), or cell-based @ref regular_words. Words
-    can thus be part of chains of synonyms having different types, but with
-    semantically identical values. Such chains form a circular linked list
-    using this field. The order of words in a synonym chain has no importance.
+Wrap words are generic wrappers for @ref words lacking specific features.
 
-    Some word types have no synonym field (typically @ref immediate_words, but
-    also many @ref predefined_words), in this case they must be wrapped
-    into structures that have one when they are added to a chain of synonyms.
+- Words may have synonyms that can take any accepted word value:
+  @ref immediate_words (e.g. Nil), or cell-based @ref regular_words. Words
+  can thus be part of chains of synonyms having different types, but with
+  semantically identical values. Such chains form a circular linked list
+  using this field. The order of words in a synonym chain has no importance.
 
-  - @ref immediate_words storing native datatypes often cannot represent the
-    whole range of values. For example, @ref smallint_words lack one bit
-    (the MSB) compared to native integers. This means that larger values
-    cannot be represented as immediate word values. So these datatypes need
-    to use wrap words instead of immediate words to store these values. But
-    both representations remain semantically identical.
+  Some word types have no synonym field (typically @ref immediate_words, but
+  also many @ref predefined_words), in this case they must be wrapped
+  into structures that have one when they are added to a chain of synonyms.
 
-    For example, Col_NewIntWord() will create either @ref smallint_words or
-    @ref int_wrappers depending on the integer value.
+- @ref immediate_words storing native datatypes often cannot represent the
+  whole range of values. For example, @ref smallint_words lack one bit
+  (the MSB) compared to native integers. This means that larger values
+  cannot be represented as immediate word values. So these datatypes need
+  to use wrap words instead of immediate words to store these values. But
+  both representations remain semantically identical.
 
-  @par Requirements
-  - Wrap words must store wrapped data.
+  For example, Col_NewIntWord() will create either @ref smallint_words or
+  @ref int_wrappers depending on the integer value.
 
-  - Wrap words can be part of a synonym chain.
+@par Requirements
+    - Wrap words must store wrapped data.
 
-  - Wrap words must know the @ref word_types "word type" of the wrapped
-    data type.
+    - Wrap words can be part of a synonym chain.
 
-@todo - Wrap words have a flags field for future purposes.
+    - Wrap words must know the @ref word_types "word type" of the wrapped
+      data type.
 
-  @param WrappedType    Wrapped value @ref word_types "type".
-  @param Synonym        [Generic word synonym field] (@ref WORD_SYNONYM).
-  @param Data           Wrapped value payload.
-  @param Flags          Flags.
+    @todo - Wrap words have a flags field for future purposes.
 
-  @par Cell Layout
+    @param WrappedType  Wrapped value @ref word_types "type".
+    @param Synonym      [Generic word synonym field](@ref WORD_SYNONYM).
+    @param Data         Wrapped value payload.
+    @param Flags        Flags.
+
+@par Cell Layout
     On all architectures the single-cell layout is as follows:
 
     @dot
@@ -1413,7 +1426,8 @@ Wrap Words
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0     7 8    15 16           31                               n
           +-------+-------+---------------+-------------------------------+
         0 | Type  | Flags | Wrapped type  |        Unused (n > 32)        |
@@ -1424,62 +1438,68 @@ Wrap Words
           +                       Type-specific data                      +
         3 |                                                               |
           +---------------------------------------------------------------+
-                                                                                        @endif
-  @see WORD_TYPE_WRAP                                                           *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+@see WORD_TYPE_WRAP
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Wrap Word Constants                                                          *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Wrap Word Constants
+ ***************************************************************************\{*/
 
 #define WRAP_FLAG_MUTABLE       1   /*!< @todo */
 #define WRAP_FLAG_VARIANT       2   /*!< @todo */
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Wrap Word Accessors                                                          *//*!   @{ *//*
- ******************************************************************************/
+/* End of Wrap Word Constants *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_WRAP_FLAGS
- *  Get/set wrap word flags.
+
+/***************************************************************************//*!
+ * \name Wrap Word Accessors
+ ***************************************************************************\{*/
+
+/**
+ * Get/set wrap word flags.
  *
- *  @param word     Word to access.
+ * @param word  Word to access.
  *
- *  @note
+ * @note
  *      Macro is L-Value and suitable for both read/write operations.
  *
- *  @see WORD_WRAP_INIT
- *  @see WORD_INTWRAP_INIT
- *  @see WORD_FPWRAP_INIT
- *
- *                                                                              *//*!   @def \
- * WORD_WRAP_TYPE
- *  Get/set wrapped value @ref word_types "type".
- *
- *  @param word     Word to access.
- *
- *  @note
- *      Macro is L-Value and suitable for both read/write operations.
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_WRAP_INIT
+ * @see WORD_INTWRAP_INIT
+ * @see WORD_FPWRAP_INIT
+ */
 #define WORD_WRAP_FLAGS(word)   (((uint8_t *)(word))[1])
+
+/**
+ * Get/set wrapped value @ref word_types "type".
+ *
+ * @param word  Word to access.
+ *
+ * @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ */
 #define WORD_WRAP_TYPE(word)    (((uint16_t *)(word))[1])
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Wrap Word Accessors *//*!\}*/
+
+/* End of Wrap Words *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup word_wrappers \
-Word Wrappers
-                                                                                        @ingroup wrap_words
-  Word wrappers are @ref wrap_words that wrap a word lacking a synonym field.
+===========================================================================*//*!
+\internal \defgroup word_wrappers Word Wrappers
+\ingroup wrap_words
 
-  @par Requirements
-  - Word wrappers must store their source word.
+Word wrappers are @ref wrap_words that wrap a word lacking a synonym field.
 
-  @param Source     Wrapped word.
+@par Requirements
+    - Word wrappers must store their source word.
 
-  @par Cell Layout
+    @param Source   Wrapped word.
+
+@par Cell Layout
     On all architectures the single-cell layout is as follows:
 
     @dot
@@ -1512,7 +1532,8 @@ Word Wrappers
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0     7 8    15 16           31                               n
           +-------+-------+---------------+-------------------------------+
         0 | Type  | Flags | Wrapped type  |        Unused (n > 32)        |
@@ -1523,89 +1544,89 @@ Word Wrappers
           +---------------------------------------------------------------+
         3 |                            Unused                             |
           +---------------------------------------------------------------+
-                                                                                        @endif
-  @see WORD_TYPE_WRAP                                                           *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+@see WORD_TYPE_WRAP
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Word Wrapper Creation                                                        *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Word Wrapper Creation
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_WRAP_INIT
+/**
+ * Word wrapper initializer.
  *
- *  Word wrapper initializer.
+ * @param word      Word to initialize.
+ * @param flags     #WORD_WRAP_FLAGS.
+ * @param type      #WORD_WRAP_TYPE.
+ * @param source    #WORD_WRAP_SOURCE.
  *
- *  @param word     Word to initialize.
- *  @param flags    #WORD_WRAP_FLAGS.
- *  @param type     #WORD_WRAP_TYPE.
- *  @param source   #WORD_WRAP_SOURCE.
- *
- *  @warning
+ * @warning
  *      Argument **word** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @see WORD_TYPE_WRAP
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_TYPE_WRAP
+ */
 #define WORD_WRAP_INIT(word, flags, type, source) \
     WORD_SET_TYPEID((word), WORD_TYPE_WRAP); \
     WORD_WRAP_FLAGS(word) = (flags); \
     WORD_WRAP_TYPE(word) = (type); \
     WORD_SYNONYM(word) = WORD_NIL; \
     WORD_WRAP_SOURCE(word) = (source);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Word Wrapper Accessors                                                       *//*!   @{ *//*
- ******************************************************************************/
+/* End of Word Wrapper Creation *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_WRAP_SOURCE
- *  Get/set wrapped word.
+
+/***************************************************************************//*!
+ * \name Word Wrapper Accessors
+ ***************************************************************************\{*/
+
+/**
+ * Get/set wrapped word.
  *
- *  @param word     Word to access.
+ * @param word  Word to access.
  *
- *  @note
+ * @note
  *      Macro is L-Value and suitable for both read/write operations.
  *
- *  @see WORD_WRAP_INIT
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_WRAP_INIT
+ */
 #define WORD_WRAP_SOURCE(word)  (((Col_Word *)(word))[2])
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_UNWRAP
+/**
+ * If word is a word wrapper, get its source. Else do nothing.
  *
- *  If word is a word wrapper, get its source. Else do nothing.
+ * @param[in,out] word  Word to unwrap.
  *
- *  @param[in,out] word     Word to unwrap.
- *
- *  @sideeffect
+ * @sideeffect
  *      If **word** is wrapped, it gets replaced by its source.
- *//*-----------------------------------------------------------------------*/
-
+ */
 #define WORD_UNWRAP(word) \
     if (   WORD_TYPE(word) == WORD_TYPE_WRAP \
         && !(WORD_WRAP_TYPE(word) & (COL_INT|COL_FLOAT))) \
         (word) = WORD_WRAP_SOURCE(word);
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Word Wrapper Accessors *//*!\}*/
+
+/* End of Word Wrappers *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup int_wrappers \
-Integer Wrappers
-                                                                                        @ingroup wrap_words
-  Integer wrappers are @ref wrap_words that wrap an integer value, either
-  because the value wouldn't fit @ref smallint_words or the word would need a
-  synonym field.
+===========================================================================*//*!
+\internal \defgroup int_wrappers Integer Wrappers
+\ingroup wrap_words
 
-  @par Requirements
-  - Integer wrappers must store a native integer value.
+Integer wrappers are @ref wrap_words that wrap an integer value, either
+because the value wouldn't fit @ref smallint_words or the word would need a
+synonym field.
 
-  @param Value      Wrapped integer value.
+@par Requirements
+    - Integer wrappers must store a native integer value.
 
-  @par Cell Layout
+    @param Value    Wrapped integer value.
+
+@par Cell Layout
     On all architectures the single-cell layout is as follows:
 
     @dot
@@ -1638,7 +1659,8 @@ Integer Wrappers
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0     7 8    15 16           31                               n
           +-------+-------+---------------+-------------------------------+
         0 | Type  | Flags | Wrapped type  |        Unused (n > 32)        |
@@ -1649,72 +1671,75 @@ Integer Wrappers
           +---------------------------------------------------------------+
         3 |                            Unused                             |
           +---------------------------------------------------------------+
-                                                                                        @endif
-  @see WORD_TYPE_WRAP                                                           *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+@see WORD_TYPE_WRAP
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Integer Wrapper Creation                                                     *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Integer Wrapper Creation
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_INTWRAP_INIT
+/**
+ * Integer wrapper initializer.
  *
- *  Integer wrapper initializer.
+ * @param word      Word to initialize.
+ * @param flags     #WORD_WRAP_FLAGS.
+ * @param value     #WORD_INTWRAP_VALUE.
  *
- *  @param word     Word to initialize.
- *  @param flags    #WORD_WRAP_FLAGS.
- *  @param value    #WORD_INTWRAP_VALUE.
- *
- *  @warning
+ * @warning
  *      Argument **word** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @see WORD_TYPE_WRAP
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_TYPE_WRAP
+ */
 #define WORD_INTWRAP_INIT(word, flags, value) \
     WORD_SET_TYPEID((word), WORD_TYPE_WRAP); \
     WORD_WRAP_FLAGS(word) = (flags); \
     WORD_WRAP_TYPE(word) = COL_INT; \
     WORD_SYNONYM(word) = WORD_NIL; \
     WORD_INTWRAP_VALUE(word) = (value);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Integer Wrapper Accessors                                                    *//*!   @{ *//*
- ******************************************************************************/
+/* End of Integer Wrapper Creation *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_INTWRAP_VALUE
- *  Get/set wrapped integer value.
+
+/***************************************************************************//*!
+ * \name Integer Wrapper Accessors
+ ***************************************************************************\{*/
+
+/**
+ * Get/set wrapped integer value.
  *
- *  @param word     Word to access.
+ * @param word  Word to access.
  *
- *  @note
+ * @note
  *      Macro is L-Value and suitable for both read/write operations.
  *
- *  @see WORD_INTWRAP_INIT
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_INTWRAP_INIT
+ */
 #define WORD_INTWRAP_VALUE(word) (((intptr_t *)(word))[2])
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Integer Wrapper Accessors *//*!\}*/
+
+/* End of Integer Wrappers *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup fp_wrappers \
-Floating Point Wrappers
-                                                                                        @ingroup wrap_words
-  Floating point wrappers are @ref wrap_words that wrap a floating point value,
-  either because the value wouldn't fit @ref smallfp_words or the word would
-  need a synonym field.
+===========================================================================*//*!
+\internal \defgroup fp_wrappers Floating Point Wrappers
+\ingroup wrap_words
 
-  @par Requirements
-  - Floating point wrappers must store a native floating point value.
+Floating point wrappers are @ref wrap_words that wrap a floating point value,
+either because the value wouldn't fit @ref smallfp_words or the word would
+need a synonym field.
 
-  @param Value      Wrapped floating point value.
+@par Requirements
+    - Floating point wrappers must store a native floating point value.
 
-  @par Cell Layout
+    @param Value    Wrapped floating point value.
+
+@par Cell Layout
     On all architectures the single-cell layout is as follows:
 
     @dot
@@ -1747,7 +1772,8 @@ Floating Point Wrappers
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0     7 8    15 16           31                               n
           +-------+-------+---------------+-------------------------------+
         0 | Type  | Flags | Wrapped type  |        Unused (n > 32)        |
@@ -1758,76 +1784,79 @@ Floating Point Wrappers
           + - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +
         3 |                        Unused (n > 32)                        |
           +---------------------------------------------------------------+
-                                                                                        @endif
-  @see WORD_TYPE_WRAP                                                           *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+@see WORD_TYPE_WRAP
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Floating Point Wrapper Creation                                              *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Floating Point Wrapper Creation
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_FPWRAP_INIT
+/**
+ * Integer wrapper initializer.
  *
- *  Integer wrapper initializer.
+ * @param word      Word to initialize.
+ * @param flags     #WORD_WRAP_FLAGS.
+ * @param value     #WORD_FPWRAP_VALUE.
  *
- *  @param word     Word to initialize.
- *  @param flags    #WORD_WRAP_FLAGS.
- *  @param value    #WORD_FPWRAP_VALUE.
- *
- *  @warning
+ * @warning
  *      Argument **word** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @see WORD_TYPE_WRAP
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_TYPE_WRAP
+ */
 #define WORD_FPWRAP_INIT(word, flags, value) \
     WORD_SET_TYPEID((word), WORD_TYPE_WRAP); \
     WORD_WRAP_FLAGS(word) = (flags); \
     WORD_WRAP_TYPE(word) = COL_FLOAT; \
     WORD_SYNONYM(word) = WORD_NIL; \
     WORD_FPWRAP_VALUE(word) = (value);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Floating Point Wrapper Accessors                                             *//*!   @{ *//*
- ******************************************************************************/
+/* End of Floating Point Wrapper Creation *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_FPWRAP_VALUE
- *  Get/set wrapped floating point value.
+
+/***************************************************************************//*!
+ * \name Floating Point Wrapper Accessors
+ ***************************************************************************\{*/
+
+/**
+ * Get/set wrapped floating point value.
  *
- *  @param word     Word to access.
+ * @param word  Word to access.
  *
- *  @note
+ * @note
  *      Macro is L-Value and suitable for both read/write operations.
  *
- *  @see WORD_FPWRAP_INIT
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_FPWRAP_INIT
+ */
 #define WORD_FPWRAP_VALUE(word) (*(double *)(((intptr_t *)(word))+2))
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Floating Point Wrapper Accessors *//*!\}*/
+
+/* End of Floating Point Wrappers *//*!\}*/
+
+
 #ifdef PROMOTE_COMPACT
 /*
-================================================================================*//*!   @addtogroup redirect_words \
-Redirect Words
-                                                                                        @ingroup regular_words
-  Redirect words are temporary words used during GC compaction phase (see
-  #PROMOTE_COMPACT).
+===========================================================================*//*!
+\internal \defgroup redirect_words Redirect Words
+\ingroup regular_words
 
-  When a word is relocated, the original cell is overwritten by a redirect
-  word that points to the new cell, so that other words pointing to this word
-  can update their pointer.
+Redirect words are temporary words used during GC compaction phase (see
+#PROMOTE_COMPACT).
 
-  @par Requirements
-  - Redirect words must store the relocated source word.
+When a word is relocated, the original cell is overwritten by a redirect
+word that points to the new cell, so that other words pointing to this word
+can update their pointer.
 
-  @param Source     New location of the word.
+@par Requirements
+    - Redirect words must store the relocated source word.
 
-  @par Cell Layout
+    @param Source   New location of the word.
+
+@par Cell Layout
     On all architectures the single-cell layout is as follows:
 
     @dot
@@ -1854,7 +1883,8 @@ Redirect Words
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0     7                                                       n
           +-------+-------------------------------------------------------+
         0 | Type  |                        Unused                         |
@@ -1865,55 +1895,55 @@ Redirect Words
           +                            Unused                             +
         3 |                                                               |
           +---------------------------------------------------------------+
-                                                                                        @endif
-                                                                                *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Redirect Word Creation                                                       *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Redirect Word Creation
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_REDIRECT_INIT
+/**
+ * Redirect word initializer.
  *
- *  Redirect word initializer.
+ * @param word      Word to initialize.
+ * @param source    #WORD_REDIRECT_SOURCE.
  *
- *  @param word     Word to initialize.
- *  @param source   #WORD_REDIRECT_SOURCE.
- *
- *  @warning
+ * @warning
  *      Argument **word** is referenced several times by the macro. Make sure to
  *      avoid any side effect.
  *
- *  @see WORD_TYPE_REDIRECT
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_TYPE_REDIRECT
+ */
 #define WORD_REDIRECT_INIT(word, source) \
     WORD_SET_TYPEID((word), WORD_TYPE_REDIRECT); \
     WORD_REDIRECT_SOURCE(word) = (source);
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Redirect Word Accessors                                                      *//*!   @{ *//*
- ******************************************************************************/
+/* End of Redirect Word Creation *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_REDIRECT_SOURCE
- *  Get/set new location of the word.
+
+/***************************************************************************//*!
+ * \name Redirect Word Accessors
+ ***************************************************************************\{*/
+
+/**
+ * Get/set new location of the word.
  *
- *  @param word     Word to access.
+ * @param word  Word to access.
  *
- *  @note
+ * @note
  *      Macro is L-Value and suitable for both read/write operations.
  *
- *  @see WORD_REDIRECT_INIT
- *//*-----------------------------------------------------------------------*/
-
+ * @see WORD_REDIRECT_INIT
+ */
 #define WORD_REDIRECT_SOURCE(word)   (((Col_Word *)(word))[1])
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Redirect Word Accessors *//*!\}*/
+
+/* End of Redirect Words *//*!\}*/
+
 #endif /* PROMOTE_COMPACT*/
 
 #endif /* _COLIBRI_WORD_INT */
-                                                                                /*!     @endcond */
+/*! @endcond @endprivate */

@@ -1,14 +1,14 @@
-/*                                                                              *//*!   @file \
- * colVector.c
+/**
+ * @file colVector.c
  *
- *  This file implements the vector handling features of Colibri.
+ * This file implements the vector handling features of Colibri.
  *
- *  Vectors are arrays of words that are directly accessible through a
- *  pointer value.
+ * Vectors are arrays of words that are directly accessible through a
+ * pointer value.
  *
- *  They come in both immutable and mutable forms.
+ * They come in both immutable and mutable forms.
  *
- *  @see colVector.h
+ * @see colVector.h
  */
 
 #include "include/colibri.h"
@@ -23,39 +23,31 @@
 
 
 /*
-================================================================================*//*!   @addtogroup vector_words \
-Immutable Vectors                                                               *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup vector_words Immutable Vectors
+\{*//*==========================================================================
 */
 
 /*******************************************************************************
  * Immutable Vector Creation
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_MaxVectorLength
- *                                                                              *//*!
- *  Get the maximum length of a vector word.
+/**
+ * Get the maximum length of a vector word.
  *
- *  @return
- *    The max vector length.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The max vector length.
+ */
 size_t
 Col_MaxVectorLength()
 {
     return VECTOR_MAX_LENGTH(SIZE_MAX);
 }
 
-/*---------------------------------------------------------------------------
- * Col_NewVector
- *                                                                              *//*!
- *  Create a new vector word.
+/**
+ * Create a new vector word.
  *
- *  @return
- *      The new word.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The new word.
+ */
 Col_Word
 Col_NewVector(
     size_t length,              /*!< Length of below array. */
@@ -69,7 +61,8 @@ Col_NewVector(
      * Check preconditions.
      */
 
-    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX))                /*!     @valuecheck{COL_ERROR_VECTORLENGTH,length < Col_MaxVectorLength()} */
+    /*! @valuecheck{COL_ERROR_VECTORLENGTH,length < Col_MaxVectorLength()} */
+    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX))
             return WORD_NIL;
 
     if (length == 0) {
@@ -105,15 +98,11 @@ Col_NewVector(
     return vector;
 }
 
-/*---------------------------------------------------------------------------
- * Col_NewVectorNV
- *                                                                              *//*!
- *  Create a new vector word from a list of arguments.
+/**
+ * Create a new vector word from a list of arguments.
  *
- *  @return
- *      The new word.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The new word.
+ */
 Col_Word
 Col_NewVectorNV(
     size_t length,  /*!< Number of arguments following. */
@@ -127,7 +116,8 @@ Col_NewVectorNV(
      * Check preconditions.
      */
 
-    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX))                /*!     @valuecheck{COL_ERROR_VECTORLENGTH,length < Col_MaxVectorLength()} */
+    /*! @valuecheck{COL_ERROR_VECTORLENGTH,length < Col_MaxVectorLength()} */
+    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX))
             return WORD_NIL;
 
     if (length == 0) {
@@ -157,23 +147,21 @@ Col_NewVectorNV(
     return vector;
 }
 
+/* End of Immutable Vector Creation */
+
 
 /*******************************************************************************
  * Immutable Vector Accessors
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_VectorLength
- *                                                                              *//*!
- *  Get the length of the vector.
+/**
+ * Get the length of the vector.
  *
- *  @return
- *      The vector length.
+ * @return The vector length.
  *
- *  @see Col_NewVector
- *  @see Col_VectorElements
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NewVector
+ * @see Col_VectorElements
+ */
 size_t
 Col_VectorLength(
     Col_Word vector)    /*!< Vector to get length for. */
@@ -182,7 +170,8 @@ Col_VectorLength(
      * Check preconditions.
      */
 
-    TYPECHECK_VECTOR(vector) return 0;                                          /*!     @typecheck{COL_ERROR_VECTOR,vector} */
+    /*! @typecheck{COL_ERROR_VECTOR,vector} */
+    TYPECHECK_VECTOR(vector) return 0;
 
     WORD_UNWRAP(vector);
 
@@ -204,18 +193,14 @@ Col_VectorLength(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_VectorElements
- *                                                                              *//*!
- *  Get the vector element array.
+/**
+ * Get the vector element array.
  *
- *  @return
- *      The vector element array.
+ * @return The vector element array.
  *
- *  @see Col_NewVector
- *  @see Col_VectorLength
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NewVector
+ * @see Col_VectorLength
+ */
 const Col_Word *
 Col_VectorElements(
     Col_Word vector)    /*!< Vector to get elements for. */
@@ -224,7 +209,8 @@ Col_VectorElements(
      * Check preconditions.
      */
 
-    TYPECHECK_VECTOR(vector) return NULL;                                       /*!     @typecheck{COL_ERROR_VECTOR,vector} */
+    /*! @typecheck{COL_ERROR_VECTOR,vector} */
+    TYPECHECK_VECTOR(vector) return NULL;
 
     WORD_UNWRAP(vector);
 
@@ -246,46 +232,42 @@ Col_VectorElements(
     }
 }
 
-                                                                                /*!     @} */
+/* End of Immutable Vector Accessors */
+
+/* End of Immutable Vectors *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup mvector_words \
-Mutable Vectors                                                                 *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup mvector_words Mutable Vectors
+\{*//*==========================================================================
 */
 
 /*******************************************************************************
  * Mutable Vector Creation
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_MaxMVectorLength
- *                                                                              *//*!
- *  Get the maximum length of a mutable vector word.
+/**
+ * Get the maximum length of a mutable vector word.
  *
- *  @return
- *      The max vector length.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The max vector length.
+ */
 size_t
 Col_MaxMVectorLength()
 {
     return VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE);
 }
 
-/*---------------------------------------------------------------------------
- * Col_NewMVector
- *                                                                              *//*!
- *  Create a new mutable vector word, and optionally populate with the
- *  given elements.
+/**
+ * Create a new mutable vector word, and optionally populate with the
+ * given elements.
  *
- *  @note
+ * @note
  *      The actual maximum length will be rounded up to fit an even
  *      number of cells.
  *
- *  @return
- *      The new word.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The new word.
+ */
 Col_Word
 Col_NewMVector(
     size_t maxLength,           /*!< Maximum length of mutable vector. */
@@ -310,7 +292,8 @@ Col_NewMVector(
      * Check preconditions.
      */
 
-    VALUECHECK_VECTORLENGTH(maxLength,                                          /*!     @valuecheck{COL_ERROR_VECTORLENGTH,maxLength < Col_MaxMVectorLength()} */
+    /*! @valuecheck{COL_ERROR_VECTORLENGTH,maxLength < Col_MaxMVectorLength()} */
+    VALUECHECK_VECTORLENGTH(maxLength,
             VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE)) return WORD_NIL;
 
     /*
@@ -341,22 +324,20 @@ Col_NewMVector(
     return mvector;
 }
 
+/* End of Mutable Vector Creation */
+
 
 /*******************************************************************************
  * Mutable Vector Accessors
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_MVectorMaxLength
- *                                                                              *//*!
- *  Get the maximum length of the mutable vector.
+/**
+ * Get the maximum length of the mutable vector.
  *
- *  @return
- *      The mutable vector maximum length.
+ * @return The mutable vector maximum length.
  *
- *  @see Col_NewMVector
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NewMVector
+ */
 size_t
 Col_MVectorMaxLength(
     Col_Word mvector)   /*!< Mutable vector to get maximum length for. */
@@ -365,24 +346,21 @@ Col_MVectorMaxLength(
      * Check preconditions.
      */
 
-    TYPECHECK_MVECTOR(mvector) return 0;                                        /*!     @typecheck{COL_ERROR_MVECTOR,mvector} */
+    /*! @typecheck{COL_ERROR_MVECTOR,mvector} */
+    TYPECHECK_MVECTOR(mvector) return 0;
 
     WORD_UNWRAP(mvector);
 
     return VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(mvector) * CELL_SIZE);
 }
 
-/*---------------------------------------------------------------------------
- * Col_MVectorElements
- *                                                                              *//*!
- *  Get the mutable vector element array.
+/**
+ * Get the mutable vector element array.
  *
- *  @return
- *      The mutable vector element array.
+ * @return The mutable vector element array.
  *
- *  @see Col_VectorLength
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_VectorLength
+ */
 Col_Word *
 Col_MVectorElements(
     Col_Word mvector)   /*!< Mutable vector to get elements for. */
@@ -391,24 +369,24 @@ Col_MVectorElements(
      * Check preconditions.
      */
 
-    TYPECHECK_MVECTOR(mvector) return NULL;                                     /*!     @typecheck{COL_ERROR_MVECTOR,mvector} */
+    /*! @typecheck{COL_ERROR_MVECTOR,mvector} */
+    TYPECHECK_MVECTOR(mvector) return NULL;
 
     WORD_UNWRAP(mvector);
 
     return WORD_VECTOR_ELEMENTS(mvector);
 }
 
+/* End of Mutable Vector Accessors */
+
 
 /*******************************************************************************
  * Mutable Vector Operations
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_MVectorSetLength
- *                                                                              *//*!
- *  Resize the mutable vector. Newly added elements are set to nil.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Resize the mutable vector. Newly added elements are set to nil.
+ */
 void
 Col_MVectorSetLength(
     Col_Word mvector,   /*!< Mutable vector to resize. */
@@ -421,12 +399,14 @@ Col_MVectorSetLength(
      * Check preconditions.
      */
 
-    TYPECHECK_MVECTOR(mvector) return;                                          /*!     @typecheck{COL_ERROR_MVECTOR,mvector} */
+    /*! @typecheck{COL_ERROR_MVECTOR,mvector} */
+    TYPECHECK_MVECTOR(mvector) return;
 
     WORD_UNWRAP(mvector);
 
+    /*! @valuecheck{COL_ERROR_VECTORLENGTH,length < [Col_MVectorMaxLength(mvector)](@ref Col_MVectorMaxLength).} */
     maxLength = VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(mvector) * CELL_SIZE);
-    VALUECHECK_VECTORLENGTH(length, maxLength) return;                          /*!     @valuecheck{COL_ERROR_VECTORLENGTH,length < [Col_MVectorMaxLength(mvector)](@ref Col_MVectorMaxLength).} */
+    VALUECHECK_VECTORLENGTH(length, maxLength) return;
 
     oldLength = WORD_VECTOR_LENGTH(mvector);
     if (length > oldLength) {
@@ -440,12 +420,9 @@ Col_MVectorSetLength(
     WORD_VECTOR_LENGTH(mvector) = length;
 }
 
-/*---------------------------------------------------------------------------
- * Col_MVectorFreeze
- *                                                                              *//*!
- *  Turn a mutable vector immutable. Does nothing on immutable vectors.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Turn a mutable vector immutable. Does nothing on immutable vectors.
+ */
 void
 Col_MVectorFreeze(
     Col_Word mvector)   /*!< Mutable vector to freeze. */
@@ -454,7 +431,8 @@ Col_MVectorFreeze(
      * Check preconditions.
      */
 
-    TYPECHECK_VECTOR(mvector) return;                                           /*!     @typecheck{COL_ERROR_MVECTOR,mvector} */
+    /*! @typecheck{COL_ERROR_MVECTOR,mvector} */
+    TYPECHECK_VECTOR(mvector) return;
 
     for (;;) {
         switch (WORD_TYPE(mvector)) {
@@ -493,4 +471,6 @@ Col_MVectorFreeze(
     }
 }
 
-                                                                                /*!     @} */
+/* End of Mutable Vector Operations */
+
+/* End of Immutable Vectors *//*!\}*/

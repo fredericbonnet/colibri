@@ -1,15 +1,15 @@
-/*                                                                              *//*!   @file \
- * colMap.c
+/**
+ * @file colMap.c
  *
- *  This file implements the generic map handling features of Colibri.
+ * This file implements the generic map handling features of Colibri.
  *
- *  Maps are an associative collection datatype that associates keys to
- *  values. Keys can be integers, strings or generic words. Values are
- *  arbitrary words.
+ * Maps are an associative collection datatype that associates keys to
+ * values. Keys can be integers, strings or generic words. Values are
+ * arbitrary words.
  *
- *  They are always mutable.
+ * They are always mutable.
  *
- *  @see colMap.h
+ * @see colMap.h
  */
 
 #include "include/colibri.h"
@@ -22,27 +22,20 @@
 
 
 /*
-================================================================================*//*!   @addtogroup map_words \
-Maps                                                                            *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup map_words Maps
+\{*//*==========================================================================
 */
 
 /*******************************************************************************
  * Map Accessors
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_MapSize
- *                                                                              *//*!
- *  Get the size of the map, i.e.\ the number of entries.
+/**
+ * Get the size of the map, i.e.\ the number of entries.
  *
- *  @return
- *      The map size.
- *
- *  @return
- *  The map size.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The map size.
+ */
 size_t
 Col_MapSize(
     Col_Word map)   /*!< Map to get size for. */
@@ -51,7 +44,8 @@ Col_MapSize(
      * Check preconditions.
      */
 
-    TYPECHECK_MAP(map) return 0;                                                /*!     @typecheck{COL_ERROR_MAP,map} */
+    /*! @typecheck{COL_ERROR_MAP,map} */
+    TYPECHECK_MAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_STRHASHMAP:
@@ -80,18 +74,15 @@ Col_MapSize(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_MapGet
- *                                                                              *//*!
- *  Get value mapped to the given key if present.
+/**
+ * Get value mapped to the given key if present.
  *
- *  Generic interface to map get, calls actual function depending on type.
+ * Generic interface to map get, calls actual function depending on type.
  *
- *  @retval 0               if the key wasn't found.
- *  @retval <>0             if the key was found, in this case the value is
- *                          returned through **valuePtr**.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval 0    if the key wasn't found.
+ * @retval <>0  if the key was found, in this case the value is returned 
+ *              through **valuePtr**.
+ */
 int
 Col_MapGet(
     Col_Word map,       /*!< Map to get entry for. */
@@ -108,7 +99,8 @@ Col_MapGet(
      * Check preconditions.
      */
 
-    TYPECHECK_WORDMAP(map) return 0;                                            /*!     @typecheck{COL_ERROR_WORDMAP,map} */
+    /*! @typecheck{COL_ERROR_WORDMAP,map} */
+    TYPECHECK_WORDMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_STRHASHMAP:
@@ -140,19 +132,16 @@ Col_MapGet(
     return proc(map, key, valuePtr);
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntMapGet
- *                                                                              *//*!
- *  Get value mapped to the given integer key if present.
+/**
+ * Get value mapped to the given integer key if present.
  *
- *  Generic interface to integer map get, calls actual function depending on
- *  type.
+ * Generic interface to integer map get, calls actual function depending on
+ * type.
  *
- *  @retval 0               if the key wasn't found.
- *  @retval <>0             if the key was found, in this case the value is
- *                          returned through **valuePtr**.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval 0    if the key wasn't found.
+ * @retval <>0  if the key was found, in this case the value is returned 
+ *              through **valuePtr**.
+ */
 int
 Col_IntMapGet(
     Col_Word map,       /*!< Integer map to get entry for. */
@@ -167,7 +156,8 @@ Col_IntMapGet(
      * Check preconditions.
      */
 
-    TYPECHECK_INTMAP(map) return 0;                                             /*!     @typecheck{COL_ERROR_INTMAP,map} */
+    /*! @typecheck{COL_ERROR_INTMAP,map} */
+    TYPECHECK_INTMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_INTHASHMAP:
@@ -194,17 +184,14 @@ Col_IntMapGet(
     return proc(map, key, valuePtr);
 }
 
-/*---------------------------------------------------------------------------
- * Col_MapSet
- *                                                                              *//*!
- *  Map the value to the key, replacing any existing.
+/**
+ * Map the value to the key, replacing any existing.
  *
- *  Generic interface to map set, calls actual function depending on type.
+ * Generic interface to map set, calls actual function depending on type.
  *
- *  @retval 0       if an existing entry was updated with **value**.
- *  @retval <>0     if a new entry was created with **key** and **value**.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval 0    if an existing entry was updated with **value**.
+ * @retval <>0  if a new entry was created with **key** and **value**.
+ */
 int
 Col_MapSet(
     Col_Word map,   /*!< Map to insert entry into. */
@@ -219,7 +206,8 @@ Col_MapSet(
      * Check preconditions.
      */
 
-    TYPECHECK_WORDMAP(map) return 0;                                            /*!     @typecheck{COL_ERROR_WORDMAP,map} */
+    /*! @typecheck{COL_ERROR_WORDMAP,map} */
+    TYPECHECK_WORDMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_STRHASHMAP:
@@ -251,18 +239,15 @@ Col_MapSet(
     return proc(map, key, value);
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntMapSet
- *                                                                              *//*!
- *  Map the value to the integer key, replacing any existing.
+/**
+ * Map the value to the integer key, replacing any existing.
  *
- *  Generic interface to integer map set, calls actual function depending on
- *  type.
+ * Generic interface to integer map set, calls actual function depending on
+ * type.
  *
- *  @retval 0       if an existing entry was updated with **value**.
- *  @retval <>0     if a new entry was created with **key** and **value**.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval 0    if an existing entry was updated with **value**.
+ * @retval <>0  if a new entry was created with **key** and **value**.
+ */
 int
 Col_IntMapSet(
     Col_Word map,   /*!< Integer map to insert entry into. */
@@ -275,7 +260,8 @@ Col_IntMapSet(
      * Check preconditions.
      */
 
-    TYPECHECK_INTMAP(map) return 0;                                             /*!     @typecheck{COL_ERROR_INTMAP,map} */
+    /*! @typecheck{COL_ERROR_INTMAP,map} */
+    TYPECHECK_INTMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_INTHASHMAP:
@@ -302,17 +288,14 @@ Col_IntMapSet(
     return proc(map, key, value);
 }
 
-/*---------------------------------------------------------------------------
- * Col_MapUnset
- *                                                                              *//*!
- *  Remove any value mapped to the given key.
+/**
+ * Remove any value mapped to the given key.
  *
- *  Generic interface to map unset, calls actual function depending on type.
+ * Generic interface to map unset, calls actual function depending on type.
  *
- *  @retval 0       if no entry matching **key** was found.
- *  @retval <>0     if the existing entry was removed.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval 0    if no entry matching **key** was found.
+ * @retval <>0  if the existing entry was removed.
+ */
 int
 Col_MapUnset(
     Col_Word map,   /*!< Map to remove entry from. */
@@ -326,7 +309,8 @@ Col_MapUnset(
      * Check preconditions.
      */
 
-    TYPECHECK_WORDMAP(map) return 0;                                            /*!     @typecheck{COL_ERROR_WORDMAP,map} */
+    /*! @typecheck{COL_ERROR_WORDMAP,map} */
+    TYPECHECK_WORDMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_STRHASHMAP:
@@ -358,18 +342,15 @@ Col_MapUnset(
     return proc(map, key);
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntMapUnset
- *                                                                              *//*!
- *  Remove any value mapped to the given integer key.
+/**
+ * Remove any value mapped to the given integer key.
  *
- *  Generic interface to integer map unset, calls actual function depending
- *  on type.
+ * Generic interface to integer map unset, calls actual function depending
+ * on type.
  *
- *  @retval 0       if no entry matching **key** was found.
- *  @retval <>0     if the existing entry was removed.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval 0    if no entry matching **key** was found.
+ * @retval <>0  if the existing entry was removed.
+ */
 int
 Col_IntMapUnset(
     Col_Word map,   /*!< Integer map to remove entry fromo. */
@@ -381,7 +362,8 @@ Col_IntMapUnset(
      * Check preconditions.
      */
 
-    TYPECHECK_INTMAP(map) return 0;                                             /*!     @typecheck{COL_ERROR_INTMAP,map} */
+    /*! @typecheck{COL_ERROR_INTMAP,map} */
+    TYPECHECK_INTMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_INTHASHMAP:
@@ -408,21 +390,20 @@ Col_IntMapUnset(
     return proc(map, key);
 }
 
+/* End of Map Accessors */
+
 
 /*******************************************************************************
  * Map Iteration
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_MapIterBegin
- *                                                                              *//*!
- *  Initialize the map iterator so that it points to the first entry within
- *  the map.
+/**
+ * Initialize the map iterator so that it points to the first entry within
+ * the map.
  *
- *  Generic interface to map iteration, calls actual function depending
- *  on type.
- *//*-----------------------------------------------------------------------*/
-
+ * Generic interface to map iteration, calls actual function depending
+ * on type.
+ */
 void
 Col_MapIterBegin(
     Col_MapIterator it, /*!< Iterator to initialize. */
@@ -432,7 +413,8 @@ Col_MapIterBegin(
      * Check preconditions.
      */
 
-    TYPECHECK_MAP(map) {                                                        /*!     @typecheck{COL_ERROR_MAP,map} */
+    /*! @typecheck{COL_ERROR_MAP,map} */
+    TYPECHECK_MAP(map) {
         Col_MapIterSetNull(it);
         return;
     }
@@ -473,16 +455,13 @@ Col_MapIterBegin(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_MapIterFind
- *                                                                              *//*!
- *  Initialize the map iterator so that it points to the entry with the
- *  given key within the map.
+/**
+ * Initialize the map iterator so that it points to the entry with the
+ * given key within the map.
  *
- *  Generic interface to map iteration, calls actual function depending
- *  on type.
- *//*-----------------------------------------------------------------------*/
-
+ * Generic interface to map iteration, calls actual function depending
+ * on type.
+ */
 void
 Col_MapIterFind(
     Col_MapIterator it, /*!< Iterator to initialize. */
@@ -498,7 +477,8 @@ Col_MapIterFind(
      * Check preconditions.
      */
 
-    TYPECHECK_WORDMAP(map) {                                                    /*!     @typecheck{COL_ERROR_WORDMAP,map} */
+    /*! @typecheck{COL_ERROR_WORDMAP,map} */
+    TYPECHECK_WORDMAP(map) {
         Col_MapIterSetNull(it);
         return;
     }
@@ -536,16 +516,13 @@ Col_MapIterFind(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntMapIterFind
- *                                                                              *//*!
- *  Initialize the map iterator so that it points to the entry with the
- *  given integer key within the map.
+/**
+ * Initialize the map iterator so that it points to the entry with the
+ * given integer key within the map.
  *
- *  Generic interface to integer map iteration, calls actual function depending
- *  on type.
- *//*-----------------------------------------------------------------------*/
-
+ * Generic interface to integer map iteration, calls actual function depending
+ * on type.
+ */
 void
 Col_IntMapIterFind(
     Col_MapIterator it, /*!< Iterator to initialize. */
@@ -559,7 +536,8 @@ Col_IntMapIterFind(
      * Check preconditions.
      */
 
-    TYPECHECK_INTMAP(map) {                                                     /*!     @typecheck{COL_ERROR_INTMAP,map} */
+    /*! @typecheck{COL_ERROR_INTMAP,map} */
+    TYPECHECK_INTMAP(map) {
         Col_MapIterSetNull(it);
         return;
     }
@@ -593,12 +571,9 @@ Col_IntMapIterFind(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_MapIterGet
- *                                                                              *//*!
- *  Get key & value from map iterator.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Get key & value from map iterator.
+ */
 void
 Col_MapIterGet(
     Col_MapIterator it, /*!< Map iterator to get key & value from. */
@@ -613,9 +588,14 @@ Col_MapIterGet(
      * Check preconditions.
      */
 
-    TYPECHECK_MAPITER(it) return;                                               /*!     @typecheck{COL_ERROR_MAPITER,it} */
-    TYPECHECK_WORDMAP(it->map) return;                                          /*!     @typecheck{COL_ERROR_WORDMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
-    VALUECHECK_MAPITER(it) return;                                              /*!     @valuecheck{COL_ERROR_MAPITER_END,it} */
+    /*! @typecheck{COL_ERROR_MAPITER,it} */
+    TYPECHECK_MAPITER(it) return;
+
+    /*! @typecheck{COL_ERROR_WORDMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
+    TYPECHECK_WORDMAP(it->map) return;
+
+    /*! @valuecheck{COL_ERROR_MAPITER_END,it} */
+    VALUECHECK_MAPITER(it) return;
 
     ASSERT(it->entry);
 
@@ -644,12 +624,9 @@ Col_MapIterGet(
     *valuePtr = WORD_MAPENTRY_VALUE(it->entry);
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntMapIterGet
- *                                                                              *//*!
- *  Get key & value from integer map iterator.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Get key & value from integer map iterator.
+ */
 void
 Col_IntMapIterGet(
     Col_MapIterator it, /*!< Integer map iterator to get key & value from. */
@@ -664,9 +641,14 @@ Col_IntMapIterGet(
      * Check preconditions.
      */
 
-    TYPECHECK_MAPITER(it) return;                                               /*!     @typecheck{COL_ERROR_MAPITER,it} */
-    TYPECHECK_INTMAP(it->map) return;                                           /*!     @typecheck{COL_ERROR_INTMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
-    VALUECHECK_MAPITER(it) return;                                              /*!     @valuecheck{COL_ERROR_MAPITER_END,it} */
+    /*! @typecheck{COL_ERROR_MAPITER,it} */
+    TYPECHECK_MAPITER(it) return;
+
+    /*! @typecheck{COL_ERROR_INTMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
+    TYPECHECK_INTMAP(it->map) return;
+
+    /*! @valuecheck{COL_ERROR_MAPITER_END,it} */
+    VALUECHECK_MAPITER(it) return;
 
     ASSERT(it->entry);
 
@@ -688,15 +670,11 @@ Col_IntMapIterGet(
     *valuePtr = WORD_MAPENTRY_VALUE (it->entry);
 }
 
-/*---------------------------------------------------------------------------
- * Col_MapIterGetKey
- *                                                                              *//*!
- *  Get key from map iterator.
+/**
+ * Get key from map iterator.
  *
- *  @return
- *      Entry key.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Entry key.
+ */
 Col_Word
 Col_MapIterGetKey(
     Col_MapIterator it) /*!< Map iterator to get key from. */
@@ -705,9 +683,14 @@ Col_MapIterGetKey(
      * Check preconditions.
      */
 
-    TYPECHECK_MAPITER(it) return WORD_NIL;                                      /*!     @typecheck{COL_ERROR_MAPITER,it} */
-    TYPECHECK_WORDMAP(it->map) return WORD_NIL;                                 /*!     @typecheck{COL_ERROR_WORDMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
-    VALUECHECK_MAPITER(it) return WORD_NIL;                                     /*!     @valuecheck{COL_ERROR_MAPITER_END,it} */
+    /*! @typecheck{COL_ERROR_MAPITER,it} */
+    TYPECHECK_MAPITER(it) return WORD_NIL;
+
+    /*! @typecheck{COL_ERROR_WORDMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
+    TYPECHECK_WORDMAP(it->map) return WORD_NIL;
+
+    /*! @valuecheck{COL_ERROR_MAPITER_END,it} */
+    VALUECHECK_MAPITER(it) return WORD_NIL;
 
     ASSERT(it->entry);
 
@@ -729,15 +712,11 @@ Col_MapIterGetKey(
     return WORD_MAPENTRY_KEY(it->entry);
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntMapIterGetKey
- *                                                                              *//*!
- *  Get integer key from integer map iterator.
+/**
+ * Get integer key from integer map iterator.
  *
- *  @return
- *      Integer entry key.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Integer entry key.
+ */
 intptr_t
 Col_IntMapIterGetKey(
     Col_MapIterator it) /*!< Integer map iterator to get key from. */
@@ -746,9 +725,14 @@ Col_IntMapIterGetKey(
      * Check preconditions.
      */
 
-    TYPECHECK_MAPITER(it) return 0;                                             /*!     @typecheck{COL_ERROR_MAPITER,it} */
-    TYPECHECK_INTMAP(it->map) return 0;                                         /*!     @typecheck{COL_ERROR_INTMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
-    VALUECHECK_MAPITER(it) return 0;                                            /*!     @valuecheck{COL_ERROR_MAPITER_END,it} */
+    /*! @typecheck{COL_ERROR_MAPITER,it} */
+    TYPECHECK_MAPITER(it) return 0;
+
+    /*! @typecheck{COL_ERROR_INTMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
+    TYPECHECK_INTMAP(it->map) return 0;
+
+    /*! @valuecheck{COL_ERROR_MAPITER_END,it} */
+    VALUECHECK_MAPITER(it) return 0;
 
     ASSERT(it->entry);
 
@@ -765,15 +749,11 @@ Col_IntMapIterGetKey(
     return WORD_INTMAPENTRY_KEY(it->entry);
 }
 
-/*---------------------------------------------------------------------------
- * Col_MapIterGetValue
- *                                                                              *//*!
- *  Get value from map iterator.
+/**
+ * Get value from map iterator.
  *
- *  @return
- *      Entry value.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Entry value.
+ */
 Col_Word
 Col_MapIterGetValue(
     Col_MapIterator it) /*!< Map iterator to get value from. */
@@ -782,8 +762,11 @@ Col_MapIterGetValue(
      * Check preconditions.
      */
 
-    TYPECHECK_MAPITER(it) return WORD_NIL;                                      /*!     @typecheck{COL_ERROR_MAPITER,it} */
-    VALUECHECK_MAPITER(it) return WORD_NIL;                                     /*!     @valuecheck{COL_ERROR_MAPITER_END,it} */
+    /*! @typecheck{COL_ERROR_MAPITER,it} */
+    TYPECHECK_MAPITER(it) return WORD_NIL;
+    
+    /*! @valuecheck{COL_ERROR_MAPITER_END,it} */
+    VALUECHECK_MAPITER(it) return WORD_NIL;
 
     ASSERT(it->entry);
 
@@ -810,15 +793,12 @@ Col_MapIterGetValue(
     return WORD_MAPENTRY_VALUE(it->entry);
 }
 
-/*---------------------------------------------------------------------------
- * Col_MapIterSetValue
- *                                                                              *//*!
- *  Set value of map iterator.
+/**
+ * Set value of map iterator.
  *
- *  Generic interface to map iteration, calls actual function depending
- *  on type.
- *//*-----------------------------------------------------------------------*/
-
+ * Generic interface to map iteration, calls actual function depending
+ * on type.
+ */
 void
 Col_MapIterSetValue(
     Col_MapIterator it, /*!< Map iterator to set value for. */
@@ -828,8 +808,11 @@ Col_MapIterSetValue(
      * Check preconditions.
      */
 
-    TYPECHECK_MAPITER(it) return;                                               /*!     @typecheck{COL_ERROR_MAPITER,it} */
-    VALUECHECK_MAPITER(it) return;                                              /*!     @valuecheck{COL_ERROR_MAPITER_END,it} */
+    /*! @typecheck{COL_ERROR_MAPITER,it} */
+    TYPECHECK_MAPITER(it) return;
+
+    /*! @valuecheck{COL_ERROR_MAPITER_END,it} */
+    VALUECHECK_MAPITER(it) return;
 
     switch (WORD_TYPE(it->map)) {
     case WORD_TYPE_STRHASHMAP:
@@ -859,15 +842,12 @@ Col_MapIterSetValue(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_MapIterNext
- *                                                                              *//*!
- *  Move the iterator to the next element.
+/**
+ * Move the iterator to the next element.
  *
- *  Generic interface to map iteration, calls actual function depending
- *  on type.
- *//*-----------------------------------------------------------------------*/
-
+ * Generic interface to map iteration, calls actual function depending
+ * on type.
+ */
 void
 Col_MapIterNext(
     Col_MapIterator it) /*!< The iterator to move. */
@@ -876,8 +856,11 @@ Col_MapIterNext(
      * Check preconditions.
      */
 
-    TYPECHECK_MAPITER(it) return;                                               /*!     @typecheck{COL_ERROR_MAPITER,it} */
-    VALUECHECK_MAPITER(it) return;                                              /*!     @valuecheck{COL_ERROR_MAPITER_END,it} */
+    /*! @typecheck{COL_ERROR_MAPITER,it} */
+    TYPECHECK_MAPITER(it) return;
+
+    /*! @valuecheck{COL_ERROR_MAPITER_END,it} */
+    VALUECHECK_MAPITER(it) return;
 
     switch (WORD_TYPE(it->map)) {
     case WORD_TYPE_STRHASHMAP:
@@ -914,4 +897,7 @@ Col_MapIterNext(
     }
 }
 
-                                                                                /*!     @} */
+/* End of Map Iteration */
+
+/* End of Maps *//*\}*/
+

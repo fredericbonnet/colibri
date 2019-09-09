@@ -1,15 +1,15 @@
-/*                                                                              *//*!   @file \
- * colRope.c
+/**
+ * @file colRope.c
  *
- *  This file implements the rope handling features of Colibri.
+ * This file implements the rope handling features of Colibri.
  *
- *  Ropes are a string datatype that allows for fast insertion, extraction
- *  and composition of strings. Internally they use self-balanced binary
- *  trees.
+ * Ropes are a string datatype that allows for fast insertion, extraction
+ * and composition of strings. Internally they use self-balanced binary
+ * trees.
  *
- *  They are always immutable.
+ * They are always immutable.
  *
- *  @see colRope.h
+ * @see colRope.h
  */
 
 #include "include/colibri.h"
@@ -22,15 +22,16 @@
 #include <string.h>
 #include <limits.h>
 #include <malloc.h> /* For alloca */
-                                                                                #       ifndef DOXYGEN
+
 /*
  * Prototypes for functions used only in this file.
  */
 
+/*! \cond IGNORE */
 static Col_RopeChunksTraverseProc Ucs1ComputeLengthProc, Ucs2ComputeLengthProc,
         Utf8ComputeByteLengthProc, Utf16ComputeByteLengthProc,
         UcsComputeFormatProc, Ucs1CopyDataProc, Ucs2CopyDataProc,
-        Ucs4CopyDataProc, Utf8CopyDataProc, Utf16CopyDataProc, 
+        Ucs4CopyDataProc, Utf8CopyDataProc, Utf16CopyDataProc,
         MergeRopeChunksProc, FindCharProc, SearchSubropeProc, CompareChunksProc;
 static ColRopeIterLeafAtProc IterAtChar, IterAtSmallStr;
 typedef struct RopeChunkTraverseInfo *pRopeChunkTraverseInfo;
@@ -42,32 +43,31 @@ static void             GetChunk(struct RopeChunkTraverseInfo *info,
                             Col_RopeChunk *chunkPtr, int reverse);
 static void             NextChunk(struct RopeChunkTraverseInfo *info,
                             size_t nb, int reverse);
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
+
 
 /*
-================================================================================*//*!   @addtogroup rope_words \
-Ropes
+===========================================================================*//*!
+\weakgroup rope_words Ropes
 
-  Ropes are a string datatype that allows for fast insertion, extraction
-  and composition of strings.
-                                                                                        @anchor rope_tree_balancing
-  ###  Rope Tree Balancing ###
+@anchor rope_tree_balancing
+### Rope Tree Balancing
 
-  Large ropes are built by concatenating several subropes, forming a
-  balanced binary tree. A balanced tree is one where the depth of the
-  left and right arms do not differ by more than one level.
+Large ropes are built by concatenating several subropes, forming a
+balanced binary tree. A balanced tree is one where the depth of the
+left and right arms do not differ by more than one level.
 
-  Rope trees are self-balanced by construction: when two ropes are
-  concatenated, if their respective depths differ by more than 1, then
-  the tree is recursively rebalanced by splitting and merging subarms.
-  There are four major cases, two if we consider symmetry:
+Rope trees are self-balanced by construction: when two ropes are
+concatenated, if their respective depths differ by more than 1, then
+the tree is recursively rebalanced by splitting and merging subarms.
+There are four major cases, two if we consider symmetry:
 
-    - Deepest subtree is an outer branch (i.e. the left resp. right child of
-      the left resp. right arm). In this case the tree is rotated: the
-      opposite child is moved and concatenated with the opposite arm.
-      For example, with left being deepest:
+  - Deepest subtree is an outer branch (i.e. the left resp. right child of
+    the left resp. right arm). In this case the tree is rotated: the
+    opposite child is moved and concatenated with the opposite arm.
+    For example, with left being deepest:
 
-    @dot
+  @dot
     digraph {
         fontname="Helvetica";
         node [fontname="Helvetica" fontsize=10 shape="box" style="rounded" height=0 width=0];
@@ -126,9 +126,10 @@ Ropes
             }
         }
     }
-    @enddot
-                                                                                        @if IGNORE
-    Before:
+  @enddot
+
+  @begindiagram
+    Before rotation:
               concat = (left1 + left2) + right
              /      \
            left    right
@@ -138,20 +139,20 @@ Ropes
      ?       ?
 
 
-    After:
+    After rotation:
              concat = left1 + (left2 + right)
             /      \
        left1        concat
       /     \      /      \
      ?       ?   left2   right
-   (end)
-                                                                                        @endif
+  @enddiagram
 
-    - Deepest subtree is an inner branch (i.e. the right resp. left child of
-      the left resp. right arm). In this case the subtree is split
-      between both arms. For example, with left being deepest:
 
-    @dot
+  - Deepest subtree is an inner branch (i.e. the right resp. left child of
+    the left resp. right arm). In this case the subtree is split
+    between both arms. For example, with left being deepest:
+
+  @dot
     digraph {
         fontname="Helvetica";
         node [fontname="Helvetica" fontsize=10 shape="box" style="rounded" height=0 width=0];
@@ -210,9 +211,10 @@ Ropes
             }
         }
     }
-    @enddot
-                                                                                        @if IGNORE
-    Before:
+  @enddot
+
+  @begindiagram
+    Before splitting:
             concat = (left1 + (left21+left22)) + right
            /      \
          left    right
@@ -222,51 +224,44 @@ Ropes
         left21  left22
 
 
-    After:
+    After splitting:
                 concat = (left1 + left21) + (left22 + right)
                /      \
          concat        concat
         /      \      /      \
      left1  left21  left22  right
-                                                                                        @endif
-  @see Col_ConcatRopes                                                          *//*!   @{ *//*
-================================================================================
+  @enddiagram
+                                                                                        
+@see Col_ConcatRopes
+\{*//*==========================================================================
 */
 
 /*******************************************************************************
  * Rope Creation
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_EmptyRope
- *                                                                              *//*!
- *  Return an empty rope. The returned word is immediate and constant,
- *  which means that it consumes no memory and its value can be safely
- *  compared and stored in static storage.
+/**
+ * Return an empty rope. The returned word is immediate and constant,
+ * which means that it consumes no memory and its value can be safely
+ * compared and stored in static storage.
  *
- *  @return
- *      The empty rope.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The empty rope.
+ */
 Col_Word
 Col_EmptyRope()
 {
     return WORD_SMALLSTR_EMPTY;
 }
 
-/*---------------------------------------------------------------------------
- * Col_NewRopeFromString
- *                                                                              *//*!
- *  Create a new rope from a C string. The string is treated as an UCS1
- *  character buffer whose length is computed with **strlen()** and is passed to
- *  Col_NewRope.
+/**
+ * Create a new rope from a C string. The string is treated as an UCS1
+ * character buffer whose length is computed with **strlen()** and is passed to
+ * Col_NewRope.
  *
- *  @return
- *      A new rope containing the character data.
+ * @return A new rope containing the character data.
  *
- *  @see Col_NewRope
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NewRope
+ */
 Col_Word
 Col_NewRopeFromString(
     const char *string)     /*!< C string to build rope from. */
@@ -274,18 +269,14 @@ Col_NewRopeFromString(
     return Col_NewRope(COL_UCS1, string, strlen(string));
 }
 
-/*---------------------------------------------------------------------------
- * Col_NewCharWord
- *                                                                              *//*!
- *  Create a new rope from a single character. Use adaptive format.
+/**
+ * Create a new rope from a single character. Use adaptive format.
  *
- *  @return
- *      A new rope made of the single character.
+ * @return A new rope made of the single character.
  *
- *  @see Col_NewRope
- *  @see Col_CharWordValue
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NewRope
+ * @see Col_CharWordValue
+ */
 Col_Word
 Col_NewCharWord(
     Col_Char c)     /*!< Character. */
@@ -317,25 +308,21 @@ Col_NewCharWord(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_NewRope
- *                                                                              *//*!
- *  Create a new rope from flat character data. This can either be a
- *  single leaf rope containing the whole data, or a concatenation of
- *  leaves if data is too large.
+/**
+ * Create a new rope from flat character data. This can either be a
+ * single leaf rope containing the whole data, or a concatenation of
+ * leaves if data is too large.
  *
- *  If the string contains a single Unicode char, or if the string is
- *  8-bit clean and is sufficiently small, return an immediate value
- *  instead of allocating memory.
+ * If the string contains a single Unicode char, or if the string is
+ * 8-bit clean and is sufficiently small, return an immediate value
+ * instead of allocating memory.
  *
- *  If the original string is too large, data may span several
- *  multi-cell leaf ropes. In this case we recursively split the data in
- *  half and build a concat tree.
+ * If the original string is too large, data may span several
+ * multi-cell leaf ropes. In this case we recursively split the data in
+ * half and build a concat tree.
  *
- *  @return
- *      A new rope containing the character data.
- *//*-----------------------------------------------------------------------*/
-
+ * @return A new rope containing the character data.
+ */
 Col_Word
 Col_NewRope(
     Col_StringFormat format,    /*!< Format of data in buffer. if #COL_UCS,
@@ -518,20 +505,16 @@ Col_NewRope(
             Col_NewRope(format, (const char *) data+half, byteLength-half));
 }
 
-/*---------------------------------------------------------------------------
- * Ucs1ComputeLengthProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_NormalizeRope() to compute length of
- *  ropes normalized to UCS-1. Follows Col_RopeChunksTraverseProc() signature.
- *
- *  @return
- *      Always 0.
- *
- *  @see Col_NormalizeRope
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Rope traversal procedure used by Col_NormalizeRope() to compute length of
+ * ropes normalized to UCS-1. Follows Col_RopeChunksTraverseProc() signature.
+ *
+ * @return Always 0.
+ *
+ * @see Col_NormalizeRope
+ */
 static int
 Ucs1ComputeLengthProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -561,20 +544,14 @@ Ucs1ComputeLengthProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * Ucs2ComputeLengthProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_NormalizeRope() to compute length of
- *  ropes normalized to UCS-2. Follows Col_RopeChunksTraverseProc() signature.
+/**
+ * Rope traversal procedure used by Col_NormalizeRope() to compute length of
+ * ropes normalized to UCS-2. Follows Col_RopeChunksTraverseProc() signature.
  *
- *  @return
- *      Always 0.
+ * @return Always 0.
  *
- *  @see Col_NormalizeRope
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NormalizeRope
+ */
 static int
 Ucs2ComputeLengthProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -605,18 +582,13 @@ Ucs2ComputeLengthProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * Utf8ComputeByteLengthProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_NormalizeRope() to compute byte length
- *  of ropes normalized to UTF-8. Follows Col_RopeChunksTraverseProc()
- *  signature.
+/**
+ * Rope traversal procedure used by Col_NormalizeRope() to compute byte length
+ * of ropes normalized to UTF-8. Follows Col_RopeChunksTraverseProc()
+ * signature.
  *
- *  @see Col_NormalizeRope
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NormalizeRope
+ */
 static int
 Utf8ComputeByteLengthProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -655,18 +627,13 @@ Utf8ComputeByteLengthProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * Utf16ComputeByteLengthProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_NormalizeRope() to compute byte length
- *  of ropes normalized to UTF-16. Follows Col_RopeChunksTraverseProc()
- *  signature.
+/**
+ * Rope traversal procedure used by Col_NormalizeRope() to compute byte length
+ * of ropes normalized to UTF-16. Follows Col_RopeChunksTraverseProc()
+ * signature.
  *
- *  @see Col_NormalizeRope
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NormalizeRope
+ */
 static int
 Utf16ComputeByteLengthProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -705,18 +672,13 @@ Utf16ComputeByteLengthProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * UcsComputeFormatProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_NormalizeRope() to compute actual
- *  format of ropes normalized to UCS. Follows Col_RopeChunksTraverseProc()
- *  signature.
+/**
+ * Rope traversal procedure used by Col_NormalizeRope() to compute actual
+ * format of ropes normalized to UCS. Follows Col_RopeChunksTraverseProc()
+ * signature.
  *
- *  @see Col_NormalizeRope
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NormalizeRope
+ */
 static int
 UcsComputeFormatProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -758,38 +720,27 @@ UcsComputeFormatProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * CopyDataInfo
- *                                                                              *//*!
- *  Structure used to copy data during the traversal of ropes when
- *  normalizing data.
+/**
+ * Structure used to copy data during the traversal of ropes when
+ * normalizing data.
  *
- *  @see Col_NormalizeRope
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NormalizeRope
+ */
 typedef struct CopyDataInfo {
     char *data;         /*!< Buffer storing the normalized data. */
     Col_Char replace;   /*!< Replacement character for unrepresentable
                              codepoints. */
 } CopyDataInfo;
 
-/*---------------------------------------------------------------------------
- * Ucs1CopyDataProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_NormalizeRope() to copy normalized data
- *  from a rope using the UCS-1 format. Follows Col_RopeChunksTraverseProc()
- *  signature.
+/**
+ * Rope traversal procedure used by Col_NormalizeRope() to copy normalized data
+ * from a rope using the UCS-1 format. Follows Col_RopeChunksTraverseProc()
+ * signature.
  *
- *  @return
- *      Always 0.
+ * @return Always 0.
  *
- *  @see Col_NormalizeRope
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NormalizeRope
+ */
 static int
 Ucs1CopyDataProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -821,21 +772,15 @@ Ucs1CopyDataProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * Ucs2CopyDataProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_NormalizeRope() to copy normalized data
- *  from a rope using the UCS-2 format. Follows Col_RopeChunksTraverseProc()
- *  signature.
+/**
+ * Rope traversal procedure used by Col_NormalizeRope() to copy normalized data
+ * from a rope using the UCS-2 format. Follows Col_RopeChunksTraverseProc()
+ * signature.
  *
- *  @return
- *      Always 0.
+ * @return Always 0.
  *
- *  @see Col_NormalizeRope
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NormalizeRope
+ */
 static int
 Ucs2CopyDataProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -867,21 +812,15 @@ Ucs2CopyDataProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * Ucs4CopyDataProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_NormalizeRope() to copy normalized data
- *  from a rope using the UCS-4 format. Follows Col_RopeChunksTraverseProc()
- *  signature.
+/**
+ * Rope traversal procedure used by Col_NormalizeRope() to copy normalized data
+ * from a rope using the UCS-4 format. Follows Col_RopeChunksTraverseProc()
+ * signature.
  *
- *  @return
- *      Always 0.
+ * @return Always 0.
  *
- *  @see Col_NormalizeRope
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NormalizeRope
+ */
 static int
 Ucs4CopyDataProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -909,21 +848,15 @@ Ucs4CopyDataProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * Utf8CopyDataProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_NormalizeRope() to copy normalized data
- *  from a rope using the UTF-8 format. Follows Col_RopeChunksTraverseProc()
- *  signature.
+/**
+ * Rope traversal procedure used by Col_NormalizeRope() to copy normalized data
+ * from a rope using the UTF-8 format. Follows Col_RopeChunksTraverseProc()
+ * signature.
  *
- *  @return
- *      Always 0.
+ * @return Always 0.
  *
- *  @see Col_NormalizeRope
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NormalizeRope
+ */
 static int
 Utf8CopyDataProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -951,21 +884,15 @@ Utf8CopyDataProc(
 }
 
 
-/*---------------------------------------------------------------------------
- * Utf16CopyDataProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_NormalizeRope() to copy normalized data
- *  from a rope using the UTF-16 format. Follows Col_RopeChunksTraverseProc()
- *  signature.
+/**
+ * Rope traversal procedure used by Col_NormalizeRope() to copy normalized data
+ * from a rope using the UTF-16 format. Follows Col_RopeChunksTraverseProc()
+ * signature.
  *
- *  @return
- *      Always 0.
+ * @return Always 0.
  *
- *  @see Col_NormalizeRope
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NormalizeRope
+ */
 static int
 Utf16CopyDataProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -992,23 +919,18 @@ Utf16CopyDataProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * IsCompatible
- *                                                                              *//*!
- *  Check whether rope is compatible with the given format.
+/**
+ * Check whether rope is compatible with the given format.
  *
- *  @retval <>0 if compatible
- *  @retval 0   if incompatible.
+ * @retval <>0  if compatible
+ * @retval 0    if incompatible.
  *
- *  @note
+ * @note
  *      Custom ropes are always considered incompatible so that they are
  *      flattened in any case.
  *
- *  @see Col_NormalizeRope
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NormalizeRope
+ */
 static int
 IsCompatible(
     Col_Word rope,              /*!< The rope to check. */
@@ -1044,26 +966,24 @@ IsCompatible(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_NormalizeRope
- *                                                                              *//*!
- *  Create a copy of a rope using a given target format. Unrepresentable
- *  characters (i.e. whose codepoint is too large to fit the target
- *  representation) can be skipped or replaced by a replacement character.
- *  The rope is converted chunk-wise (i.e. subropes that have the right
- *  format remain unchanged) but can optionally be flattened to form a
- *  single chunk (or several concatenated chunks for larger strings).
- *
- *  Immediate representations are used as long as they match the format.
- *
- *  Custom ropes are always converted whatever their format.
- *
- *  @return
- *      A new rope containing the character data in the target format.
- *
- *  @see Col_NewRope
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
+/**
+ * Create a copy of a rope using a given target format. Unrepresentable
+ * characters (i.e. whose codepoint is too large to fit the target
+ * representation) can be skipped or replaced by a replacement character.
+ * The rope is converted chunk-wise (i.e. subropes that have the right
+ * format remain unchanged) but can optionally be flattened to form a
+ * single chunk (or several concatenated chunks for larger strings).
+ *
+ * Immediate representations are used as long as they match the format.
+ *
+ * Custom ropes are always converted whatever their format.
+ *
+ * @return A new rope containing the character data in the target format.
+ *
+ * @see Col_NewRope
+ */
 Col_Word
 Col_NormalizeRope(
     Col_Word rope,          /*!< Rope to copy. */
@@ -1086,7 +1006,8 @@ Col_NormalizeRope(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_ROPE,rope} */
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) return WORD_NIL;
 
     length = Col_RopeLength(rope);
     if (length == 0) return WORD_SMALLSTR_EMPTY;
@@ -1416,22 +1337,20 @@ Col_NormalizeRope(
     }
 }
 
+/* End of Rope Creation */
+
 
 /*******************************************************************************
  * Rope Accessors
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_CharWordValue
- *                                                                              *//*!
- *  Get codepoint value of character word.
+/**
+ * Get codepoint value of character word.
  *
- *  @return
- *      The codepoint.
+ * @return The codepoint.
  *
- *  @see Col_NewCharWord
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_NewCharWord
+ */
 Col_Char
 Col_CharWordValue(
     Col_Word ch)    /*!< Character word to get value for. */
@@ -1440,25 +1359,22 @@ Col_CharWordValue(
      * Check preconditions.
      */
 
-    TYPECHECK_CHAR(ch) return COL_CHAR_INVALID;                                 /*!     @typecheck{COL_ERROR_CHAR,ch} */
+    /*! @typecheck{COL_ERROR_CHAR,ch} */
+    TYPECHECK_CHAR(ch) return COL_CHAR_INVALID;
 
     WORD_UNWRAP(ch);
 
     return WORD_CHAR_CP(ch);
 }
 
-/*---------------------------------------------------------------------------
- * Col_StringWordFormat
- *                                                                              *//*!
- *  Get format of string word.
+/**
+ * Get format of string word.
  *
- *  A string word is a rope made of a single leaf, i.e. a flat character
- *  array and not a binary tree of subropes and concat nodes.
+ * A string word is a rope made of a single leaf, i.e. a flat character
+ * array and not a binary tree of subropes and concat nodes.
  *
- *  @return
- *      The format.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The format.
+ */
 Col_StringFormat
 Col_StringWordFormat(
     Col_Word string)    /*!< String word to get format for. */
@@ -1467,7 +1383,8 @@ Col_StringWordFormat(
      * Check preconditions.
      */
 
-    TYPECHECK_STRING(string) return (Col_StringFormat) 0;                       /*!     @typecheck{COL_ERROR_STRING,string} */
+    /*! @typecheck{COL_ERROR_STRING,string} */
+    TYPECHECK_STRING(string) return (Col_StringFormat) 0;
 
     WORD_UNWRAP(string);
 
@@ -1494,15 +1411,11 @@ Col_StringWordFormat(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeLength
- *                                                                              *//*!
- *  Get the length of the rope.
+/**
+ * Get the length of the rope.
  *
- *  @return
- *      The rope length.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The rope length.
+ */
 size_t
 Col_RopeLength(
     Col_Word rope)  /*!< Rope to get length for. */
@@ -1511,7 +1424,8 @@ Col_RopeLength(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope) return 0;                                              /*!     @typecheck{COL_ERROR_ROPE,rope} */
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) return 0;
 
     WORD_UNWRAP(rope);
 
@@ -1551,15 +1465,12 @@ Col_RopeLength(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeAt
- *                                                                              *//*!
- *  Get the character codepoint of a rope at a given position.
+/**
+ * Get the character codepoint of a rope at a given position.
  *
- *  @retval COL_CHAR_INVALID    if **index** past end of **rope**.
- *  @retval code                Unicode codepoint of the character otherwise.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval COL_CHAR_INVALID     if **index** past end of **rope**.
+ * @retval code                 Unicode codepoint of the character otherwise.
+ */
 Col_Char
 Col_RopeAt(
     Col_Word rope,  /*!< Rope to get character from. */
@@ -1571,46 +1482,41 @@ Col_RopeAt(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope) return COL_CHAR_INVALID;                               /*!     @typecheck{COL_ERROR_ROPE,rope} */
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) return COL_CHAR_INVALID;
 
     Col_RopeIterBegin(it, rope, index);
     return Col_RopeIterEnd(it) ? COL_CHAR_INVALID : Col_RopeIterAt(it);
 }
+
+/* End of Rope Accessors */
 
 
 /*******************************************************************************
  * Rope Search and Comparison
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * FindCharInfo
- *                                                                              *//*!
- *  Structure used to collect data during character search.
- *
- *  @see FindCharProc
- *  @see Col_RopeFind
- *
- *  @private
-*//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Structure used to collect data during character search.
+ *
+ * @see FindCharProc
+ * @see Col_RopeFind
+*/
 typedef struct FindCharInfo {
     Col_Char c;     /*!< Character to search for. */
     int reverse;    /*!< Whether to traverse in reverse order. */
     size_t pos;     /*!< Upon return, position of character if found. */
 } FindCharInfo;
 
-/*---------------------------------------------------------------------------
- * FindCharProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_RopeFind() to find characters in ropes.
- *  Follows Col_RopeChunksTraverseProc() signature.
+/**
+ * Rope traversal procedure used by Col_RopeFind() to find characters in ropes.
+ * Follows Col_RopeChunksTraverseProc() signature.
  *
- *  @see FindCharInfo
- *  @see Col_RopeFind
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see FindCharInfo
+ * @see Col_RopeFind
+ */
 static int
 FindCharProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -1663,17 +1569,16 @@ FindCharProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeFind
- *                                                                              *//*!
- *  Find first occurrence of a character in a rope.
+/** @endcond @endprivate */
+
+/**
+ * Find first occurrence of a character in a rope.
  *
- *  @retval SIZE_MAX    if not found (which is an invalid character index since
+ * @retval SIZE_MAX     if not found (which is an invalid character index since
  *                      this is the maximum rope length, and indices are
  *                      zero-based)
- *  @retval index       position of **c** in **rope**.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval index        position of **c** in **rope**.
+ */
 size_t
 Col_RopeFind(
     Col_Word rope,      /*!< Rope to search character into. */
@@ -1688,7 +1593,8 @@ Col_RopeFind(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope) return SIZE_MAX;                                       /*!     @typecheck{COL_ERROR_ROPE,rope} */
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) return SIZE_MAX;
 
     info.c = c;
     info.reverse = reverse;
@@ -1699,17 +1605,14 @@ Col_RopeFind(
     return info.pos;
 }
 
-/*---------------------------------------------------------------------------
- * SearchSubropeInfo
- *                                                                              *//*!
- *  Structure used to collect data during subrope search.
- *
- *  @see SearchSubropeProc
- *  @see Col_RopeSearch
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Structure used to collect data during subrope search.
+ *
+ * @see SearchSubropeProc
+ * @see Col_RopeSearch
+ */
 typedef struct SearchSubropeInfo {
     Col_Word rope;      /*!< Rope to search subrope into. */
     Col_Word subrope;   /*!< Subrope to search for. */
@@ -1718,15 +1621,10 @@ typedef struct SearchSubropeInfo {
     size_t pos;         /*!< Upon return, position of character if found. */
 } SearchSubropeInfo;
 
-/*---------------------------------------------------------------------------
- * SearchSubropeProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_RopeSearch() to find subrope in ropes.
- *  Follows Col_RopeChunksTraverseProc() signature.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Rope traversal procedure used by Col_RopeSearch() to find subrope in ropes.
+ * Follows Col_RopeChunksTraverseProc() signature.
+ */
 static int
 SearchSubropeProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -1791,17 +1689,16 @@ SearchSubropeProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeSearch
- *                                                                              *//*!
- *  Find first occurrence of a subrope in a rope.
+/** @endcond @endprivate */
+
+/**
+ * Find first occurrence of a subrope in a rope.
  *
- *  @retval SIZE_MAX    if not found (which is an invalid character index since
+ * @retval SIZE_MAX     if not found (which is an invalid character index since
  *                      this is the maximum rope length, and indices are
  *                      zero-based)
- *  @retval index       position of **subrope** in **rope**.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval index        position of **subrope** in **rope**.
+ */
 size_t
 Col_RopeSearch(
     Col_Word rope,      /*!< Rope to search subrope into. */
@@ -1817,8 +1714,11 @@ Col_RopeSearch(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope) return SIZE_MAX;                                       /*!     @typecheck{COL_ERROR_ROPE,rope} */
-    TYPECHECK_ROPE(subrope) return SIZE_MAX;                                    /*!     @typecheck{COL_ERROR_ROPE,subrope} */
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) return SIZE_MAX;
+
+    /*! @typecheck{COL_ERROR_ROPE,subrope} */
+    TYPECHECK_ROPE(subrope) return SIZE_MAX;
 
     info.rope = rope;
     info.subrope = subrope;
@@ -1878,17 +1778,14 @@ Col_RopeSearch(
     return info.pos;
 }
 
-/*---------------------------------------------------------------------------
- * CompareChunksInfo
- *                                                                              *//*!
- *  Structure used to collect data during rope comparison.
- *
- *  @see CompareChunksProc
- *  @see Col_CompareRopesL
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Structure used to collect data during rope comparison.
+ *
+ * @see CompareChunksProc
+ * @see Col_CompareRopesL
+ */
 typedef struct CompareChunksInfo {
     size_t *posPtr;     /*!< If non-NULL, position of the first differing
                              character. */
@@ -1898,19 +1795,14 @@ typedef struct CompareChunksInfo {
                              second chunk. */
 } CompareChunksInfo;
 
-/*---------------------------------------------------------------------------
- * CompareChunksProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_CompareRopesL() to compare rope
- *  chunks. Follows Col_RopeChunksTraverseProc() signature.
+/**
+ * Rope traversal procedure used by Col_CompareRopesL() to compare rope
+ * chunks. Follows Col_RopeChunksTraverseProc() signature.
  *
- *  @retval -1 stops traversal if first chunk is lexically before second chunk.
- *  @retval 1  stops traversal if first chunk is lexically after second chunk.
- *  @retval 0  will continue traversal if chunks are identical.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @retval -1   stops traversal if first chunk is lexically before second chunk.
+ * @retval 1    stops traversal if first chunk is lexically after second chunk.
+ * @retval 0    will continue traversal if chunks are identical.
+ */
 static int
 CompareChunksProc(
     size_t index,               /*!< Rope-relative index where chunks begin. */
@@ -1991,17 +1883,16 @@ CompareChunksProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * Col_CompareRopesL
- *                                                                              *//*!
- *  Compare two ropes and find the first differing characters if any. This
- *  is the rope counterpart to C's **strncmp** with extra features.
- *
- *  @retval 0       if both ropes are identical
- *  @retval <0      if first rope is lexically before second rope.
- *  @retval >0      if first rope is lexically after second rope.
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
+/**
+ * Compare two ropes and find the first differing characters if any. This
+ * is the rope counterpart to C's **strncmp** with extra features.
+ *
+ * @retval 0    if both ropes are identical.
+ * @retval <0   if first rope is lexically before second rope.
+ * @retval >0   if first rope is lexically after second rope.
+ */
 int
 Col_CompareRopesL(
     Col_Word rope1,     /*!< First rope to compare. */
@@ -2025,8 +1916,11 @@ Col_CompareRopesL(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope1) return 1;                                             /*!     @typecheck{COL_ERROR_ROPE,rope1} */
-    TYPECHECK_ROPE(rope2) return -1;                                            /*!     @typecheck{COL_ERROR_ROPE,rope2} */
+    /*! @typecheck{COL_ERROR_ROPE,rope1} */
+    TYPECHECK_ROPE(rope1) return 1;
+
+    /*! @typecheck{COL_ERROR_ROPE,rope2} */
+    TYPECHECK_ROPE(rope2) return -1;
 
     WORD_UNWRAP(rope1);
     WORD_UNWRAP(rope2);
@@ -2055,35 +1949,30 @@ Col_CompareRopesL(
             &info, NULL);
 }
 
+/* End of Rope Search and Comparison */
+
+
 /*******************************************************************************
  * Rope Operations
  ******************************************************************************/
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------   *//*!   @def \
- * MAX_SHORT_LEAF_SIZE
- *
- *  Maximum number of bytes a short leaf can take. This constant controls
- *  the creation of short leaves during subrope/concatenation. Ropes built
- *  this way normally use subrope and concat nodes, but to avoid
- *  fragmentation, multiple short ropes are flattened into a single flat
- *  string.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Maximum number of bytes a short leaf can take. This constant controls
+ * the creation of short leaves during subrope/concatenation. Ropes built
+ * this way normally use subrope and concat nodes, but to avoid
+ * fragmentation, multiple short ropes are flattened into a single flat
+ * string.
+ */
 #define MAX_SHORT_LEAF_SIZE     (3*CELL_SIZE)
-                                                                                /*!     @endcond */
-/*---------------------------------------------------------------------------
- * MergeRopeChunksInfo
- *                                                                              *//*!
- *  Structure used to collect data during the traversal of ropes when merged
- *  into one string.
- *
- *  @see MergeRopeChunksProc
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/**
+ * Structure used to collect data during the traversal of ropes when merged
+ * into one string.
+ *
+ * @see MergeRopeChunksProc
+ */
 typedef struct MergeRopeChunksInfo {
     Col_StringFormat format;        /*!< Character format in buffer. */
     char data[MAX_SHORT_LEAF_SIZE]; /*!< Buffer storing the flattened data. */
@@ -2091,23 +1980,18 @@ typedef struct MergeRopeChunksInfo {
     size_t byteLength;              /*!< Byte length so far. */
 } MergeRopeChunksInfo;
 
-/*---------------------------------------------------------------------------
- * MergeRopeChunksProc
- *                                                                              *//*!
- *  Rope traversal procedure used by Col_Subrope() and Col_ConcatRopes() to
- *  concatenate all portions of ropes to fit within one leaf rope. Follows
- *  Col_RopeChunksTraverseProc() signature.
+/**
+ * Rope traversal procedure used by Col_Subrope() and Col_ConcatRopes() to
+ * concatenate all portions of ropes to fit within one leaf rope. Follows
+ * Col_RopeChunksTraverseProc() signature.
  *
- *  @retval -1  stops traversal if incompatible formats or data wouldn't fit
+ * @retval -1   stops traversal if incompatible formats or data wouldn't fit
  *              into a short leaf rope.
- *  @retval 0   will continue traversal.
+ * @retval 0    will continue traversal.
  *
- *  @see MAX_SHORT_LEAF_SIZE
- *  @see MergeRopeChunksInfo
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see MAX_SHORT_LEAF_SIZE
+ * @see MergeRopeChunksInfo
+ */
 static int
 MergeRopeChunksProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -2306,19 +2190,13 @@ MergeRopeChunksProc(
     }
 }
 
-/*---------------------------------------------------------------------------
- * GetDepth
- *                                                                              *//*!
- *  Get the depth of the rope.
+/**
+ * Get the depth of the rope.
  *
- *  @return
- *      Depth of rope.
+ * @return Depth of rope.
  *
- *  @see Col_ConcatRopes
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_ConcatRopes
+ */
 static unsigned char
 GetDepth(
     Col_Word rope)  /*!< Rope node to get depth from. */
@@ -2339,17 +2217,12 @@ GetDepth(
     }
 }
 
-/*---------------------------------------------------------------------------
- * GetArms
- *                                                                              *//*!
- *  Get the left and right arms of a rope, i.e.\ a concat or one of its
- *  subropes.
+/**
+ * Get the left and right arms of a rope, i.e.\ a concat or one of its
+ * subropes.
  *
- *  @see Col_ConcatRopes
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_ConcatRopes
+ */
 static void
 GetArms(
     Col_Word rope,          /*!< Rope to extract arms from. Either a subrope or
@@ -2362,9 +2235,10 @@ GetArms(
     Col_Word * rightPtr)
 {
     if (WORD_TYPE(rope) == WORD_TYPE_SUBROPE) {
-        /*                                                                      *//*!   @sideeffect
-         * If given a subrope of a concat node, create one subrope
-         * for each concat arm.
+        /*!
+         * @sideeffect
+         * If given a subrope of a concat node, create one subrope for each 
+         * concat arm.
          */
 
         Col_Word source = WORD_SUBROPE_SOURCE(rope);
@@ -2391,23 +2265,21 @@ GetArms(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_Subrope
- *                                                                              *//*!
- *  Create a new rope that is a subrope of another.
+/** @endcond @endprivate */
+
+/**
+ * Create a new rope that is a subrope of another.
  *
- *  We try to minimize the overhead as much as possible, such as:
- *   - identity.
- *   - create leaf ropes for small subropes.
- *   - subropes of subropes point to original data.
- *   - subropes of concats point to the deepest superset subrope.
+ * We try to minimize the overhead as much as possible, such as:
+ * - identity.
+ * - create leaf ropes for small subropes.
+ * - subropes of subropes point to original data.
+ * - subropes of concats point to the deepest superset subrope.
  *
- *  @return
- *      When **first** is past the end of the rope, or **last** is before 
+ * @return When **first** is past the end of the rope, or **last** is before
  *      **first**, an empty rope.
  *      Else, a rope representing the subrope.
- *//*-----------------------------------------------------------------------*/
-
+ */
 Col_Word
 Col_Subrope(
     Col_Word rope,              /*!< The rope to extract the subrope from. */
@@ -2423,7 +2295,8 @@ Col_Subrope(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_ROPE,rope} */
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) return WORD_NIL;
 
     WORD_UNWRAP(rope);
 
@@ -2586,18 +2459,14 @@ Col_Subrope(
     return subrope;
 }
 
-/*---------------------------------------------------------------------------
- * Col_ConcatRopes
- *                                                                              *//*!
- *  Concatenate ropes.
+/**
+ * Concatenate ropes.
  *
- *  Concatenation forms self-balanced binary trees. See @ref rope_tree_balancing
- *  "Rope Tree Balancing" for more information.
+ * Concatenation forms self-balanced binary trees. See @ref rope_tree_balancing
+ * "Rope Tree Balancing" for more information.
  *
- *  @return
- *      A rope representing the concatenation of both ropes.
- *//*-----------------------------------------------------------------------*/
-
+ * @return A rope representing the concatenation of both ropes.
+ */
 Col_Word
 Col_ConcatRopes(
     Col_Word left,              /*!< Left part. */
@@ -2613,12 +2482,16 @@ Col_ConcatRopes(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(left) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_ROPE,left} */
-    TYPECHECK_ROPE(right) return WORD_NIL;                                      /*!     @typecheck{COL_ERROR_ROPE,right} */
+    /*! @typecheck{COL_ERROR_ROPE,left} */
+    TYPECHECK_ROPE(left) return WORD_NIL;
 
+    /*! @typecheck{COL_ERROR_ROPE,right} */
+    TYPECHECK_ROPE(right) return WORD_NIL;
+
+    /*! @valuecheck{COL_ERROR_ROPELENGTH_CONCAT,length(left+right)} */
     leftLength = Col_RopeLength(left);
     rightLength = Col_RopeLength(right);
-    VALUECHECK_ROPELENGTH_CONCAT(leftLength, rightLength) return WORD_NIL;      /*!     @valuecheck{COL_ERROR_ROPELENGTH_CONCAT,length(left+right)} */
+    VALUECHECK_ROPELENGTH_CONCAT(leftLength, rightLength) return WORD_NIL;
 
     WORD_UNWRAP(left);
     WORD_UNWRAP(right);
@@ -2784,17 +2657,13 @@ Col_ConcatRopes(
     return concatRope;
 }
 
-/*---------------------------------------------------------------------------
- * Col_ConcatRopesA
- *                                                                              *//*!
- *  Concatenate several ropes given in an array. Concatenation is done
- *  recursively, by halving the array until it contains one or two elements,
- *  at this point we respectively return the element or use Col_ConcatRopes().
+/**
+ * Concatenate several ropes given in an array. Concatenation is done
+ * recursively, by halving the array until it contains one or two elements,
+ * at this point we respectively return the element or use Col_ConcatRopes().
  *
- *  @return
- *      A rope representing the concatenation of all ropes.
- *//*-----------------------------------------------------------------------*/
-
+ * @return A rope representing the concatenation of all ropes.
+ */
 Col_Word
 Col_ConcatRopesA(
     size_t number,              /*!< Size of **ropes** array. */
@@ -2806,7 +2675,8 @@ Col_ConcatRopesA(
      * Check preconditions.
      */
 
-    VALUECHECK(number != 0, COL_ERROR_GENERIC) return WORD_NIL;                 /*!     @valuecheck{COL_ERROR_GENERIC,number == 0} */
+    /*! @valuecheck{COL_ERROR_GENERIC,number == 0} */
+    VALUECHECK(number != 0, COL_ERROR_GENERIC) return WORD_NIL;
 
     /*
      * Quick cases.
@@ -2825,19 +2695,15 @@ Col_ConcatRopesA(
             Col_ConcatRopesA(number-half, ropes+half));
 }
 
-/*---------------------------------------------------------------------------
- * Col_ConcatRopesNV
- *                                                                              *//*!
- *  Concatenate ropes given as arguments. The argument list is first
- *  copied into a stack-allocated array then passed to Col_ConcatRopesA().
+/**
+ * Concatenate ropes given as arguments. The argument list is first
+ * copied into a stack-allocated array then passed to Col_ConcatRopesA().
  *
- *  @return
- *      A rope representing the concatenation of all ropes.
+ * @return A rope representing the concatenation of all ropes.
  *
- *  @see Col_ConcatRopesA
- *  @see Col_ConcatRopesV
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_ConcatRopesA
+ * @see Col_ConcatRopesV
+ */
 Col_Word
 Col_ConcatRopesNV(
     size_t number,  /*!< Number of arguments following. */
@@ -2851,7 +2717,8 @@ Col_ConcatRopesNV(
      * Check preconditions.
      */
 
-    VALUECHECK(number != 0, COL_ERROR_GENERIC) return WORD_NIL;                 /*!     @valuecheck{COL_ERROR_GENERIC,number == 0} */
+    /*! @valuecheck{COL_ERROR_GENERIC,number == 0} */
+    VALUECHECK(number != 0, COL_ERROR_GENERIC) return WORD_NIL;
 
     /*
      * Convert vararg list to array. Use alloca since a vararg list is
@@ -2867,23 +2734,19 @@ Col_ConcatRopesNV(
     return Col_ConcatRopesA(number, ropes);
 }
 
-/*---------------------------------------------------------------------------
- * Col_RepeatRope
- *                                                                              *//*!
- *  Create a rope formed by the repetition of a source rope.
+/**
+ * Create a rope formed by the repetition of a source rope.
  *
- *  This method is based on recursive concatenations of the rope
- *  following the bit pattern of the count factor. Doubling a rope simply
- *  consists of a concat with itself. In the end the resulting tree is
- *  very compact, and only a minimal number of extraneous cells are
- *  allocated during the balancing process (and will be eventually
- *  collected).
+ * This method is based on recursive concatenations of the rope
+ * following the bit pattern of the count factor. Doubling a rope simply
+ * consists of a concat with itself. In the end the resulting tree is
+ * very compact, and only a minimal number of extraneous cells are
+ * allocated during the balancing process (and will be eventually
+ * collected).
  *
- *  @return
- *      A rope representing the repetition of the source rope. A rope repeated
- *      zero times is empty.
- *//*-----------------------------------------------------------------------*/
-
+ * @return A rope representing the repetition of the source rope. A rope
+ *      repeated zero times is empty.
+ */
 Col_Word
 Col_RepeatRope(
     Col_Word rope,      /*!< The rope to repeat. */
@@ -2895,10 +2758,12 @@ Col_RepeatRope(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_ROPE,rope} */
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) return WORD_NIL;
 
+    /*! @valuecheck{COL_ERROR_ROPELENGTH_REPEAT,length(rope)*count} */
     length = Col_RopeLength(rope);
-    VALUECHECK_ROPELENGTH_REPEAT(length, count) return WORD_NIL;                /*!     @valuecheck{COL_ERROR_ROPELENGTH_REPEAT,length(rope)*count} */
+    VALUECHECK_ROPELENGTH_REPEAT(length, count) return WORD_NIL;
 
     /* Quick cases. */
     if (count == 0) {return WORD_SMALLSTR_EMPTY;}
@@ -2914,22 +2779,18 @@ Col_RepeatRope(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeInsert
- *                                                                              *//*!
- *  Insert a rope into another one, just before the given insertion point.
- *  As target rope is immutable, this results in a new rope.
+/**
+ * Insert a rope into another one, just before the given insertion point.
+ * As target rope is immutable, this results in a new rope.
  *
- *  Insertion past the end of the rope results in a concatenation.
+ * Insertion past the end of the rope results in a concatenation.
  *
- *  @note
+ * @note
  *      Only perform minimal tests to prevent overflow, basic ops should
  *      perform further optimizations anyway.
  *
- *  @return
- *      The resulting rope.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The resulting rope.
+ */
 Col_Word
 Col_RopeInsert(
     Col_Word into,  /*!< Target rope to insert into. */
@@ -2942,8 +2803,11 @@ Col_RopeInsert(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(into) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_ROPE,into} */
-    TYPECHECK_ROPE(rope) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_ROPE,rope} */
+    /*! @typecheck{COL_ERROR_ROPE,into} */
+    TYPECHECK_ROPE(into) return WORD_NIL;
+
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) return WORD_NIL;
 
     /*
      * Quick cases.
@@ -2983,20 +2847,16 @@ Col_RopeInsert(
             Col_Subrope(into, index, length-1));
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeRemove
- *                                                                              *//*!
- *  Remove a range of characters from a rope. As target rope is immutable,
- *  this results in a new rope.
+/**
+ * Remove a range of characters from a rope. As target rope is immutable,
+ * this results in a new rope.
  *
- *  @note
+ * @note
  *      Only perform minimal tests to prevent overflow, basic ops should
  *      perform further optimizations anyway.
  *
- *  @return
- *      The resulting rope.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The resulting rope.
+ */
 Col_Word
 Col_RopeRemove(
     Col_Word rope,  /*!< Rope to remove sequence from. */
@@ -3009,7 +2869,8 @@ Col_RopeRemove(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_ROPE,rope} */
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) return WORD_NIL;
 
     /*
      * Quick cases.
@@ -3046,25 +2907,21 @@ Col_RopeRemove(
             Col_Subrope(rope, last+1, length-1));
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeReplace
- *                                                                              *//*!
- *  Replace a range of characters in a rope with another. As target rope is
- *  immutable, this results in a new rope.
+/**
+ * Replace a range of characters in a rope with another. As target rope is
+ * immutable, this results in a new rope.
  *
- *  Replacement is a combination of Col_RopeRemove() and Col_RopeInsert().
+ * Replacement is a combination of Col_RopeRemove() and Col_RopeInsert().
  *
- *  @note
+ * @note
  *      Only perform minimal tests to prevent overflow, basic ops should
  *      perform further optimizations anyway.
  *
- *  @return
- *      The resulting rope.
+ * @return The resulting rope.
  *
- *  @see Col_RopeInsert
- *  @see Col_RopeRemove
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_RopeInsert
+ * @see Col_RopeRemove
+ */
 Col_Word
 Col_RopeReplace(
     Col_Word rope,  /*!< Original rope. */
@@ -3076,8 +2933,11 @@ Col_RopeReplace(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_ROPE,rope} */
-    TYPECHECK_ROPE(with) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_ROPE,with} */
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) return WORD_NIL;
+
+    /*! @typecheck{COL_ERROR_ROPE,with} */
+    TYPECHECK_ROPE(with) return WORD_NIL;
 
     /*
      * Quick cases.
@@ -3098,25 +2958,24 @@ Col_RopeReplace(
     return Col_RopeInsert(Col_RopeRemove(rope, first, last), first, with);
 }
 
+/* End of Rope Operations */
+
 
 /*******************************************************************************
  * Rope Traversal
  ******************************************************************************/
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------
- * RopeChunkTraverseInfo
- *                                                                              *//*!
- *  Structure used during recursive rope chunk traversal. This avoids
- *  recursive procedure calls thanks to a pre-allocated backtracking
- *  structure: since the algorithms only recurse on concat nodes and since
- *  we know their depth, we can allocate the needed space once and for all.
- *
- *  @see Col_TraverseRopeChunksN
- *  @see Col_TraverseRopeChunks
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Structure used during recursive rope chunk traversal. This avoids
+ * recursive procedure calls thanks to a pre-allocated backtracking
+ * structure: since the algorithms only recurse on concat nodes and since
+ * we know their depth, we can allocate the needed space once and for all.
+ *
+ * @see Col_TraverseRopeChunksN
+ * @see Col_TraverseRopeChunks
+ */
 typedef struct RopeChunkTraverseInfo {
     /*! Pre-allocated backtracking structure. */
     struct {
@@ -3134,24 +2993,19 @@ typedef struct RopeChunkTraverseInfo {
     int maxDepth;       /*!< Depth of toplevel concat node. */
     int prevDepth;      /*!< Depth of next concat node for backtracking. */
 } RopeChunkTraverseInfo;
-                                                                                /*!     @endcond */
-/*---------------------------------------------------------------------------
- * GetChunk
- *                                                                              *//*!
- *  Get chunk from given traversal info.
+
+/**
+ * Get chunk from given traversal info.
  *
- *  @note
+ * @note
  *      This doesn't compute the chunk bytelength as it depends on the
  *      algorithm (for example, Col_TraverseRopeChunksN() truncates chunks to
  *      the shortest one in the group of traversed ropes).
  *
- *  @see RopeChunkTraverseInfo
- *  @see Col_TraverseRopeChunksN
- *  @see Col_TraverseRopeChunks
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see RopeChunkTraverseInfo
+ * @see Col_TraverseRopeChunksN
+ * @see Col_TraverseRopeChunks
+ */
 static void
 GetChunk(
     RopeChunkTraverseInfo *info,    /*!< Traversal info. */
@@ -3394,18 +3248,13 @@ GetChunk(
     }
 }
 
-/*---------------------------------------------------------------------------
- * NextChunk
- *                                                                              *//*!
- *  Get next chunk in traversal order.
+/**
+ * Get next chunk in traversal order.
  *
- *  @see RopeChunkTraverseInfo
- *  @see Col_TraverseRopeChunksN
- *  @see Col_TraverseRopeChunks
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see RopeChunkTraverseInfo
+ * @see Col_TraverseRopeChunksN
+ * @see Col_TraverseRopeChunks
+ */
 static void
 NextChunk(
     RopeChunkTraverseInfo *info,    /*!< Traversal info. */
@@ -3443,23 +3292,22 @@ NextChunk(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_TraverseRopeChunksN
- *                                                                              *//*!
- *  Iterate over the chunks of a number of ropes.
+/** @endcond @endprivate */
+
+/**
+ * Iterate over the chunks of a number of ropes.
  *
- *  For each traversed chunk, **proc** is called back with the opaque data as
- *  well as the position within the ropes. If it returns a nonzero result
- *  then the iteration ends.
+ * For each traversed chunk, **proc** is called back with the opaque data as
+ * well as the position within the ropes. If it returns a nonzero result
+ * then the iteration ends.
  *
- *  @note
+ * @note
  *      The algorithm is naturally recursive but this implementation avoids
  *      recursive calls thanks to a stack-allocated backtracking structure.
  *
- *  @retval -1      if no traversal was performed.
- *  @retval int     last returned value of **proc** otherwise.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval -1   if no traversal was performed.
+ * @retval int  last returned value of **proc** otherwise.
+ */
 int
 Col_TraverseRopeChunksN(
     size_t number,                      /*!< Number of ropes to traverse. */
@@ -3486,7 +3334,8 @@ Col_TraverseRopeChunksN(
      */
 
     for (i=0; i < number; i++) {
-        TYPECHECK_ROPE(ropes[i]) return -1;                                     /*!     @typecheck{COL_ERROR_ROPE,ropes[i]} */
+        /*! @typecheck{COL_ERROR_ROPE,ropes[i]} */
+        TYPECHECK_ROPE(ropes[i]) return -1;
     }
 
     info = (RopeChunkTraverseInfo *) alloca(sizeof(*info) * number);
@@ -3629,25 +3478,22 @@ Col_TraverseRopeChunksN(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_TraverseRopeChunks
- *                                                                              *//*!
- *  Iterate over the chunks of a rope.
+/**
+ * Iterate over the chunks of a rope.
  *
- *  For each traversed chunk, **proc** is called back with the opaque data as
- *  well as the position within the rope. If it returns a nonzero result
- *  then the iteration ends.
+ * For each traversed chunk, **proc** is called back with the opaque data as
+ * well as the position within the rope. If it returns a nonzero result
+ * then the iteration ends.
  *
- *  @note
+ * @note
  *      The algorithm is naturally recursive but this implementation avoids
  *      recursive calls thanks to a stack-allocated backtracking structure.
  *      This procedure is an optimized version of Col_TraverseRopeChunksN()
  *      that also supports reverse traversal.
  *
- *  @retval -1      if no traversal was performed.
- *  @retval int     last returned value of **proc** otherwise.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval -1   if no traversal was performed.
+ * @retval int  last returned value of **proc** otherwise.
+ */
 int
 Col_TraverseRopeChunks(
     Col_Word rope,                      /*!< Rope to traverse. */
@@ -3673,7 +3519,8 @@ Col_TraverseRopeChunks(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope) return -1;                                             /*!     @typecheck{COL_ERROR_ROPE,rope} */
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) return -1;
 
     WORD_UNWRAP(rope);
 
@@ -3803,27 +3650,25 @@ Col_TraverseRopeChunks(
     }
 }
 
+/* End of Rope Traversal */
+
 
 /*******************************************************************************
  * Rope Iteration
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * IterAtChar
- *                                                                              *//*!
- *  Character access proc for immediate char leaves from iterators. Follows
- *  ColRopeIterLeafAtProc() signature.
- *
- *  @return
- *      Character at given index.
- *
- *  @see ColRopeIterLeafAtProc
- *  @see ColRopeIterator
- *  @see ColRopeIterUpdateTraversalInfo
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Character access proc for immediate char leaves from iterators. Follows
+ * ColRopeIterLeafAtProc() signature.
+ *
+ * @return Character at given index.
+ *
+ * @see ColRopeIterLeafAtProc
+ * @see ColRopeIterator
+ * @see ColRopeIterUpdateTraversalInfo
+ */
 static Col_Char IterAtChar(
     Col_Word leaf,  /*!< Leaf node. */
     size_t index    /*!< Leaf-relative index of character. Always zero. */
@@ -3833,22 +3678,16 @@ static Col_Char IterAtChar(
     return WORD_CHAR_CP(leaf);
 }
 
-/*---------------------------------------------------------------------------
- * IterAtSmallStr
- *                                                                              *//*!
- *  Character access proc for immediate string leaves from iterators.
- *  Follows ColRopeIterLeafAtProc() signature.
+/**
+ * Character access proc for immediate string leaves from iterators.
+ * Follows ColRopeIterLeafAtProc() signature.
  *
- *  @return
- *      Character at given index.
+ * @return Character at given index.
  *
- *  @see ColRopeIterLeafAtProc
- *  @see ColRopeIterator
- *  @see ColRopeIterUpdateTraversalInfo
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see ColRopeIterLeafAtProc
+ * @see ColRopeIterator
+ * @see ColRopeIterUpdateTraversalInfo
+ */
 static Col_Char IterAtSmallStr(
     Col_Word leaf,  /*!< Leaf node. */
     size_t index    /*!< Leaf-relative index of character. */
@@ -3857,22 +3696,16 @@ static Col_Char IterAtSmallStr(
     return WORD_SMALLSTR_DATA(leaf)[index];
 }
 
-/*---------------------------------------------------------------------------
- * ColRopeIterUpdateTraversalInfo
- *                                                                              *//*!
- *  Get the chunk containing the character at the current iterator position.
+/**
+ * Get the chunk containing the character at the current iterator position.
  *
- *  Traversal info is updated lazily, each time actual character data needs
- *  to be retrieved. This means that a blind iteration over an arbitrarily
- *  complex rope is on average no more computationally intensive than over
- *  a flat string (chunk retrieval is O(log n)).
+ * Traversal info is updated lazily, each time actual character data needs
+ * to be retrieved. This means that a blind iteration over an arbitrarily
+ * complex rope is on average no more computationally intensive than over
+ * a flat string (chunk retrieval is O(log n)).
  *
- *  @return
- *      Current character.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @return Current character.
+ */
 Col_Char
 ColRopeIterUpdateTraversalInfo(
     ColRopeIterator *it)    /*!< The iterator to update. */
@@ -3886,7 +3719,8 @@ ColRopeIterUpdateTraversalInfo(
      * Check preconditions.
      */
 
-    VALUECHECK_ROPEITER(it) return COL_CHAR_INVALID;                            /*!     @valuecheck{COL_ERROR_ROPEITER_END,it} */
+    /*! @valuecheck{COL_ERROR_ROPEITER_END,it} */
+    VALUECHECK_ROPEITER(it) return COL_CHAR_INVALID;
 
     ASSERT(it->length);
 
@@ -4079,14 +3913,13 @@ ColRopeIterUpdateTraversalInfo(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeIterBegin
- *                                                                              *//*!
- *  Initialize the rope iterator so that it points to the **index**-th
- *  character within the rope. If **index** points past the end of the rope, the
- *  iterator is initialized to the end iterator.
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
+/**
+ * Initialize the rope iterator so that it points to the **index**-th
+ * character within the rope. If **index** points past the end of the rope, the
+ * iterator is initialized to the end iterator.
+ */
 void
 Col_RopeIterBegin(
     Col_RopeIterator it,    /*!< Iterator to initialize. */
@@ -4097,7 +3930,8 @@ Col_RopeIterBegin(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope) {                                                      /*!     @typecheck{COL_ERROR_ROPE,rope} */
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) {
         Col_RopeIterSetNull(it);
         return;
     }
@@ -4120,14 +3954,11 @@ Col_RopeIterBegin(
     it->chunk.first = SIZE_MAX;
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeIterFirst
- *                                                                              *//*!
- *  Initialize the rope iterator so that it points to the first
- *  character within the rope. If rope is empty, the iterator is initialized
- *  to the end iterator.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Initialize the rope iterator so that it points to the first
+ * character within the rope. If rope is empty, the iterator is initialized
+ * to the end iterator.
+ */
 void
 Col_RopeIterFirst(
     Col_RopeIterator it,    /*!< Iterator to initialize. */
@@ -4137,7 +3968,8 @@ Col_RopeIterFirst(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope) {                                                      /*!     @typecheck{COL_ERROR_ROPE,rope} */
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) {
         Col_RopeIterSetNull(it);
         return;
     }
@@ -4153,14 +3985,11 @@ Col_RopeIterFirst(
     it->chunk.first = SIZE_MAX;
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeIterLast
- *                                                                              *//*!
- *  Initialize the rope iterator so that it points to the last
- *  character within the rope. If rope is empty, the iterator is initialized
- *  to the end iterator.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Initialize the rope iterator so that it points to the last
+ * character within the rope. If rope is empty, the iterator is initialized
+ * to the end iterator.
+ */
 void
 Col_RopeIterLast(
     Col_RopeIterator it,    /*!< Iterator to initialize. */
@@ -4170,7 +3999,8 @@ Col_RopeIterLast(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPE(rope) {                                                      /*!     @typecheck{COL_ERROR_ROPE,rope} */
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) {
         Col_RopeIterSetNull(it);
         return;
     }
@@ -4194,13 +4024,10 @@ Col_RopeIterLast(
     it->chunk.first = SIZE_MAX;
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeIterString
- *                                                                              *//*!
- *  Initialize the rope iterator so that it points to the first character
- *  in a string.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Initialize the rope iterator so that it points to the first character
+ * in a string.
+ */
 void
 Col_RopeIterString(
     Col_RopeIterator it,        /*!< Iterator to initialize. */
@@ -4220,12 +4047,9 @@ Col_RopeIterString(
     it->chunk.current.direct.address = data;
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeIterCompare
- *                                                                              *//*!
- *  Compare two iterators by their respective positions.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Compare two iterators by their respective positions.
+ */
 int
 Col_RopeIterCompare(
     const Col_RopeIterator it1, /*!< First iterator. */
@@ -4235,8 +4059,11 @@ Col_RopeIterCompare(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPEITER(it1) return 1;                                           /*!     @typecheck{COL_ERROR_ROPEITER,it1} */
-    TYPECHECK_ROPEITER(it2) return -1;                                          /*!     @typecheck{COL_ERROR_ROPEITER,it2} */
+    /*! @typecheck{COL_ERROR_ROPEITER,it1} */
+    TYPECHECK_ROPEITER(it1) return 1;
+
+    /*! @typecheck{COL_ERROR_ROPEITER,it2} */
+    TYPECHECK_ROPEITER(it2) return -1;
 
     if (it1->index < it2->index) {
         /*! @retval -1 if **it1** before **it2**. */
@@ -4250,12 +4077,9 @@ Col_RopeIterCompare(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeIterMoveTo
- *                                                                              *//*!
- *  Move the iterator to the given absolute position.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Move the iterator to the given absolute position.
+ */
 void
 Col_RopeIterMoveTo(
     Col_RopeIterator it,    /*!< The iterator to move. */
@@ -4268,15 +4092,12 @@ Col_RopeIterMoveTo(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeIterForward
- *                                                                              *//*!
- *  Move the iterator forward to the **nb**-th next character.
+/**
+ * Move the iterator forward to the **nb**-th next character.
  *
- *  @note
+ * @note
  *      If moved past the end of rope, **it** is set at end.
- *//*-----------------------------------------------------------------------*/
-
+ */
 void
 Col_RopeIterForward(
     Col_RopeIterator it,    /*!< The iterator to move. */
@@ -4286,7 +4107,8 @@ Col_RopeIterForward(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPEITER(it) return;                                              /*!     @typecheck{COL_ERROR_ROPEITER,it} */
+    /*! @typecheck{COL_ERROR_ROPEITER,it} */
+    TYPECHECK_ROPEITER(it) return;
 
     if (nb == 0) {
         /*
@@ -4296,7 +4118,8 @@ Col_RopeIterForward(
         return;
     }
 
-    VALUECHECK_ROPEITER(it) return;                                             /*!     @valuecheck{COL_ERROR_ROPEITER_END,it} (only when **nb** != 0) */
+    /*! @valuecheck{COL_ERROR_ROPEITER_END,it} (only when **nb** != 0) */
+    VALUECHECK_ROPEITER(it) return;
 
     if (nb >= it->length - it->index) {
         /*
@@ -4342,17 +4165,14 @@ Col_RopeIterForward(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_RopeIterBackward
- *                                                                              *//*!
- *  Move the iterator backward to the **nb**-th previous character.
+/**
+ * Move the iterator backward to the **nb**-th previous character.
  *
- *  @note
+ * @note
  *      If moved before the beginning of rope, **it** is set at end. This means
  *      that backward iterators will loop forever if unchecked against
  *      Col_RopeIterEnd().
- *//*-----------------------------------------------------------------------*/
-
+ */
 void
 Col_RopeIterBackward(
     Col_RopeIterator it,    /*!< The iterator to move. */
@@ -4362,7 +4182,8 @@ Col_RopeIterBackward(
      * Check preconditions.
      */
 
-    TYPECHECK_ROPEITER(it) return;                                              /*!     @typecheck{COL_ERROR_ROPEITER,it} */
+    /*! @typecheck{COL_ERROR_ROPEITER,it} */
+    TYPECHECK_ROPEITER(it) return;
 
     if (nb == 0) {
         /*
@@ -4432,4 +4253,6 @@ Col_RopeIterBackward(
     }
 }
 
-                                                                                /*!     @} */
+/* End of Rope Iteration */
+
+/* End of Ropes *//*!\}*/

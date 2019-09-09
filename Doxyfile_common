@@ -242,6 +242,10 @@ ALIASES                += typecheck{1}="@exception #\1 @link COL_TYPECHECK [T]@e
 ALIASES                += typecheck{2}="@exception #\1 @link COL_TYPECHECK [T]@endlink <b>\2</b>: @copybrief \1 "
 ALIASES                += valuecheck{1}="@exception #\1 @link COL_VALUECHECK [V]@endlink @copybrief \1 "
 ALIASES                += valuecheck{2}="@exception #\1 @link COL_VALUECHECK [V]@endlink <b>\2</b>: @copybrief \1 "
+ALIASES                += beginprivate="@privatesection"
+ALIASES                += endprivate="@publicsection"
+ALIASES                += begindiagram="@if IGNORE"
+ALIASES                += enddiagram="@endif"
 
 # This tag can be used to specify a number of word-keyword mappings (TCL only).
 # A mapping has the form "name=value". For example adding "class=itcl::class"
@@ -2262,7 +2266,7 @@ INTERACTIVE_SVG        = NO
 # found. If left blank, it is assumed the dot tool can be found in the path.
 # This tag requires that the tag HAVE_DOT is set to YES.
 
-DOT_PATH               = "C:\Program Files (x86)\Graphviz2.38\bin"
+DOT_PATH               = 
 
 # The DOTFILE_DIRS tag can be used to specify one or more directories that
 # contain dot files that are included in the documentation (see the \dotfile

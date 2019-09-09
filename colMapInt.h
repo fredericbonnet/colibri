@@ -1,18 +1,18 @@
-/*                                                                              *//*!   @cond PRIVATE @file \
- * colMapInt.h
+/**
+ * @file colMapInt.h
  *
- *  This header file defines the generic map word internals of Colibri.
+ * This header file defines the generic map word internals of Colibri.
  *
- *  Maps are an associative collection datatype that associates keys to
- *  values. Keys can be integers, strings or generic words. Values are
- *  arbitrary words.
+ * Maps are an associative collection datatype that associates keys to
+ * values. Keys can be integers, strings or generic words. Values are
+ * arbitrary words.
  *
- *  They are always mutable.
+ * They are always mutable.
  *
- *  @see colMap.c
- *  @see colMap.h
+ * @see colMap.c
+ * @see colMap.h
  *
- *  @private
+ * @beginprivate @cond PRIVATE
  */
 
 #ifndef _COLIBRI_MAP_INT
@@ -20,22 +20,23 @@
 
 
 /*
-================================================================================*//*!   @addtogroup mapentry_words \
-Map Entries
-                                                                                        @ingroup predefined_words map_words
-  Generic map entries are key-value pairs. Type-specific entries extend this
-  generic type with implementation-dependent data.
+===========================================================================*//*!
+\internal \defgroup mapentry_words Map Entries
+\ingroup predefined_words map_words
 
-  @par Requirements
-  - Map entry words use one single cell.
+Generic map entries are key-value pairs. Type-specific entries extend this
+generic type with implementation-dependent data.
 
-  - Map entries must store at least a key and a value.
+@par Requirements
+    - Map entry words use one single cell.
 
-  @param Key    A word in the general case but can be a native integer for
-                integer maps.
-  @param Value  A word.
+    - Map entries must store at least a key and a value.
 
-  @par Cell Layout
+    @param Key      A word in the general case but can be a native integer for
+                    integer maps.
+    @param Value    A word.
+
+@par Cell Layout
     On all architectures the single-cell layout is as follows:
 
     @dot
@@ -64,7 +65,8 @@ Map Entries
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0     7 8                                                     n
           +-------+-------------------------------------------------------+
         0 | Type  |                                                       |
@@ -75,132 +77,127 @@ Map Entries
           +---------------------------------------------------------------+
         3 |                             Value                             |
           +---------------------------------------------------------------+
-                                                                                        @endif
-                                                                                *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Map Entry Accessors                                                          *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Map Entry Accessors
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_MAPENTRY_KEY
- *  Get/set word key of word-based map entry (string or custom).
+/**
+ * Get/set word key of word-based map entry (string or custom).
  *
- *  @param word     Word to access.
+ * @param word  Word to access.
  *
- *  @note
+ * @note
  *      Macro is L-Value and suitable for both read/write operations.
- *
- *                                                                              *//*!   @def \
- * WORD_MAPENTRY_VALUE
- *  Get/set value of map entry.
- *
- *  @param word     Word to access.
- *
- *  @note
- *      Macro is L-Value and suitable for both read/write operations.
- *//*-----------------------------------------------------------------------*/
-
+ */
 #define WORD_MAPENTRY_KEY(word)         (((Col_Word *)(word))[2])
+
+/**
+ * Get/set value of map entry.
+ *
+ * @param word  Word to access.
+ *
+ * @note
+ *      Macro is L-Value and suitable for both read/write operations.
+ */
 #define WORD_MAPENTRY_VALUE(word)       (((Col_Word *)(word))[3])
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Map Entry Exceptions                                                         *//*!   @{ *//*
- ******************************************************************************/
+/* End of Map Entry Accessors *//*!\}*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * TYPECHECK_MAP
- *                                                                                      @hideinitializer
- *  Type checking macro for maps.
+
+/***************************************************************************//*!
+ * \name Map Entry Exceptions
+ ***************************************************************************\{*/
+
+/**
+ * Type checking macro for maps.
  *
- *  @param word     Checked word.
+ * @param word  Checked word.
  *
- *  @typecheck{COL_ERROR_MAP,word}
- *//*-----------------------------------------------------------------------*/
-
+ * @typecheck{COL_ERROR_MAP,word}
+ * @hideinitializer
+ */
 #define TYPECHECK_MAP(word) \
     TYPECHECK((Col_WordType(word) & (COL_MAP | COL_INTMAP)), COL_ERROR_MAP, \
             (word))
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * TYPECHECK_WORDMAP
- *                                                                                      @hideinitializer
- *  Type checking macro for word-based maps (string or custom).
+/**
+ * Type checking macro for word-based maps (string or custom).
  *
- *  @param word     Checked word.
+ * @param word  Checked word.
  *
- *  @typecheck{COL_ERROR_WORDMAP,word}
- *//*-----------------------------------------------------------------------*/
-
+ * @typecheck{COL_ERROR_WORDMAP,word}
+ * @hideinitializer
+ */
 #define TYPECHECK_WORDMAP(word) \
     TYPECHECK(((Col_WordType(word) & (COL_MAP | COL_INTMAP)) == COL_MAP), \
             COL_ERROR_WORDMAP, (word))
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * TYPECHECK_INTMAP
- *                                                                                      @hideinitializer
- *  Type checking macro for integer maps.
+/**
+ * Type checking macro for integer maps.
  *
- *  @param word     Checked word.
+ * @param word  Checked word.
  *
- *  @typecheck{COL_ERROR_INTMAP,word}
- *//*-----------------------------------------------------------------------*/
-
+ * @typecheck{COL_ERROR_INTMAP,word}
+ * @hideinitializer
+ */
 #define TYPECHECK_INTMAP(word) \
     TYPECHECK((Col_WordType(word) & COL_INTMAP), COL_ERROR_INTMAP, (word))
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * TYPECHECK_MAPITER
- *                                                                                      @hideinitializer
- *  Type checking macro for map iterators.
+/**
+ * Type checking macro for map iterators.
  *
- *  @param it   Checked iterator.
+ * @param it    Checked iterator.
  *
- *  @typecheck{COL_ERROR_MAPITER,it}
+ * @typecheck{COL_ERROR_MAPITER,it}
  *
- *  @see Col_MapIterNull
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapIterNull
+ * @hideinitializer
+ */
 #define TYPECHECK_MAPITER(it) \
     TYPECHECK(!Col_MapIterNull(it), COL_ERROR_MAPITER, (it))
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * VALUECHECK_MAPITER
- *                                                                                      @hideinitializer
- *  Value checking macro for map iterators, ensures that iterator is not
- *  at end.
+/**
+ * Value checking macro for map iterators, ensures that iterator is not
+ * at end.
  *
- *  @param it   Checked iterator.
+ * @param it    Checked iterator.
  *
- *  @valuecheck{COL_ERROR_MAPITER_END,it}
+ * @valuecheck{COL_ERROR_MAPITER_END,it}
  *
- *  @see Col_MapIterEnd
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapIterEnd
+ * @hideinitializer
+ */
 #define VALUECHECK_MAPITER(it) \
     VALUECHECK(!Col_MapIterEnd(it), COL_ERROR_MAPITER_END, (it))
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Map Entry Exceptions *//*!\}*/
+
+/* End of Map Entries *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup intmapentry_words \
-Integer Map Entries
-                                                                                        @ingroup predefined_words map_words
-  Generic integer map entries are key-value pairs. Type-specific entries extend 
-  this generic type with implementation-dependent data.
+===========================================================================*//*!
+\internal \defgroup intmapentry_words Integer Map Entries
+\ingroup predefined_words map_words
 
-  @par Requirements
-  - Map entry words use one single cell.
+Generic integer map entries are key-value pairs. Type-specific entries extend
+this generic type with implementation-dependent data.
 
-  - Map entries must store at least a key and a value.
+@par Requirements
+    - Map entry words use one single cell.
 
-  @param Key    A word in the general case but can be a native integer for
-                integer maps.
-  @param Value  A word.
+    - Map entries must store at least a key and a value.
 
-  @par Cell Layout
+    @param Key      A word in the general case but can be a native integer for
+                    integer maps.
+    @param Value    A word.
+
+@par Cell Layout
     On all architectures the single-cell layout is as follows:
 
     @dot
@@ -229,7 +226,8 @@ Integer Map Entries
         >]
     }
     @enddot
-                                                                                        @if IGNORE
+
+    @begindiagram
            0     7 8                                                     n
           +-------+-------------------------------------------------------+
         0 | Type  |                                                       |
@@ -240,27 +238,28 @@ Integer Map Entries
           +---------------------------------------------------------------+
         3 |                             Value                             |
           +---------------------------------------------------------------+
-                                                                                        @endif
-                                                                                *//*!   @{ *//*
-================================================================================
+    @enddiagram
+
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Integer Map Entry Accessors                                                  *//*!   @{ *//*
- ******************************************************************************/
+/***************************************************************************//*!
+ * \name Integer Map Entry Accessors
+ ***************************************************************************\{*/
 
-/*---------------------------------------------------------------------------   *//*!   @def \
- * WORD_INTMAPENTRY_KEY
- *  Get/set key of integer map entry.
+/**
+ * Get/set key of integer map entry.
  *
- *  @param word     Word to access.
+ * @param word  Word to access.
  *
- *  @note
+ * @note
  *      Macro is L-Value and suitable for both read/write operations.
- *//*-----------------------------------------------------------------------*/
-
+ */
 #define WORD_INTMAPENTRY_KEY(word)      (((intptr_t *)(word))[2])
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/* End of Integer Map Entry Accessors *//*!\}*/
+
+/* End of Integer Map Entries *//*!\}*/
+
 #endif /* _COLIBRI_MAP_INT */
-                                                                                /*!     @endcond */
+/*! @endcond @endprivate */

@@ -1,20 +1,20 @@
-/*                                                                              *//*!   @file \
- * colList.c
+/**
+ * @file colList.c
  *
- *  This file implements the list handling features of Colibri.
+ * This file implements the list handling features of Colibri.
  *
- *  Lists are a linear collection datatype that allows for fast insertion,
- *  extraction and composition of other lists. Internally they use
- *  self-balanced binary trees, like ropes, except that they use vectors
- *  as basic containers instead of character arrays.
+ * Lists are a linear collection datatype that allows for fast insertion,
+ * extraction and composition of other lists. Internally they use
+ * self-balanced binary trees, like ropes, except that they use vectors
+ * as basic containers instead of character arrays.
  *
- *  They come in both immutable and mutable forms.
+ * They come in both immutable and mutable forms.
  *
- *  @note
+ * @note
  *      The present code is largely adapted from the rope implementation.
  *
- *  @see colList.h
- *  @see colRope.c
+ * @see colList.h
+ * @see colRope.c
  */
 
 #include "include/colibri.h"
@@ -28,11 +28,12 @@
 #include <string.h>
 #include <limits.h>
 #include <malloc.h> /* For alloca */
-                                                                                #       ifndef DOXYGEN
+
 /*
  * Prototypes for functions used only in this file.
  */
 
+/*! \cond IGNORE */
 typedef struct ListChunkTraverseInfo *pListChunkTraverseInfo;
 static Col_ListChunksTraverseProc MergeListChunksProc;
 static unsigned char    GetDepth(Col_Word list);
@@ -54,31 +55,31 @@ static void             GetChunk(struct ListChunkTraverseInfo *info,
                             const Col_Word **chunkPtr, int reverse);
 static void             NextChunk(struct ListChunkTraverseInfo *info,
                             size_t nb, int reverse);
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
+
 
 /*
-================================================================================*//*!   @addtogroup list_words \
-Immutable Lists
+===========================================================================*//*!
+\weakgroup list_words Immutable Lists
 
-  Immutable lists are constant, arbitrary-sized, linear collections of words.
-                                                                                        @anchor list_tree_balancing 
-  ### List Tree Balancing ###
+@anchor list_tree_balancing
+### List Tree Balancing
 
-  Large lists are built by concatenating several sublists, forming a
-  balanced binary tree. A balanced tree is one where the depth of the
-  left and right arms do not differ by more than one level.
+Large lists are built by concatenating several sublists, forming a
+balanced binary tree. A balanced tree is one where the depth of the
+left and right arms do not differ by more than one level.
 
-  List trees are self-balanced by construction: when two lists are
-  concatenated, if their respective depths differ by more than 1, then
-  the tree is recursively rebalanced by splitting and merging subarms.
-  There are four major cases, two if we consider symmetry:
+List trees are self-balanced by construction: when two lists are
+concatenated, if their respective depths differ by more than 1, then
+the tree is recursively rebalanced by splitting and merging subarms.
+There are four major cases, two if we consider symmetry:
 
-    - Deepest subtree is an outer branch (i.e. the left resp. right child of
-      the left resp. right arm). In this case the tree is rotated: the
-      opposite child is moved and concatenated with the opposite arm.
-      For example, with left being deepest:
+- Deepest subtree is an outer branch (i.e. the left resp. right child of
+  the left resp. right arm). In this case the tree is rotated: the
+  opposite child is moved and concatenated with the opposite arm.
+  For example, with left being deepest:
 
-    @dot
+  @dot
     digraph {
         fontname="Helvetica";
         node [fontname="Helvetica" fontsize=10 shape="box" style="rounded" height=0 width=0];
@@ -137,9 +138,10 @@ Immutable Lists
             }
         }
     }
-    @enddot
-                                                                                        @if IGNORE
-    Before:
+  @enddot
+
+  @begindiagram
+    Before rotation:
               concat = (left1 + left2) + right
              /      \
            left    right
@@ -149,20 +151,20 @@ Immutable Lists
      ?       ?
 
 
-    After:
+    After rotation:
              concat = left1 + (left2 + right)
             /      \
        left1        concat
       /     \      /      \
      ?       ?   left2   right
-   (end)
-                                                                                        @endif
+  @enddiagram
 
-    - Deepest subtree is an inner branch (i.e. the right resp. left child of
-      the left resp. right arm). In this case the subtree is split
-      between both arms. For example, with left being deepest:
 
-    @dot
+- Deepest subtree is an inner branch (i.e. the right resp. left child of
+  the left resp. right arm). In this case the subtree is split
+  between both arms. For example, with left being deepest:
+
+  @dot
     digraph {
         fontname="Helvetica";
         node [fontname="Helvetica" fontsize=10 shape="box" style="rounded" height=0 width=0];
@@ -221,9 +223,10 @@ Immutable Lists
             }
         }
     }
-    @enddot
-                                                                                        @if IGNORE
-    Before:
+  @enddot
+
+  @begindiagram
+    Before splitting:
             concat = (left1 + (left21+left22)) + right
            /      \
          left    right
@@ -233,50 +236,43 @@ Immutable Lists
         left21  left22
 
 
-    After:
+    After splitting:
                 concat = (left1 + left21) + (left22 + right)
                /      \
          concat        concat
         /      \      /      \
      left1  left21  left22  right
-                                                                                        @endif
-  @see Col_ConcatLists                                                          *//*!   @{ *//*
-================================================================================
+  @enddiagram
+
+@see Col_ConcatLists
+\{*//*==========================================================================
 */
 
 /*******************************************************************************
  * Immutable List Creation
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_EmptyList
- *                                                                              *//*!
- *  Return an empty list. The returned word is immediate and constant,
- *  which means that it consumes no memory and its value can be safely
- *  compared and stored in static storage.
+/**
+ * Return an empty list. The returned word is immediate and constant,
+ * which means that it consumes no memory and its value can be safely
+ * compared and stored in static storage.
  *
- *  @return
- *      The empty list.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The empty list.
+ */
 Col_Word
 Col_EmptyList()
 {
     return WORD_LIST_EMPTY;
 }
 
-/*---------------------------------------------------------------------------
- * Col_NewList
- *                                                                              *//*!
- *  Create a new list word.
+/**
+ * Create a new list word.
  *
- *  Short lists are created as vectors. Larger lists are recursively split
- *  in half and assembled in a tree.
+ * Short lists are created as vectors. Larger lists are recursively split
+ * in half and assembled in a tree.
  *
- *  @return
- *      A new list.
- *//*-----------------------------------------------------------------------*/
-
+ * @return A new list.
+ */
 Col_Word
 Col_NewList(
     size_t length,              /*!< Length of below array. */
@@ -315,21 +311,19 @@ Col_NewList(
     return Col_NewVector(length, elements);
 }
 
+/* End of Immutable List Creation */
+
 
 /*******************************************************************************
  * Immutable List Accessors
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_ListLength
- *                                                                              *//*!
- *  Get the length of the list. Also works with vectors. If the list is
- *  cyclic, only give the core length.
+/**
+ * Get the length of the list. Also works with vectors. If the list is
+ * cyclic, only give the core length.
  *
- *  @return
- *      The list length.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The list length.
+ */
 size_t
 Col_ListLength(
     Col_Word list)  /*!< List to get length for. */
@@ -338,7 +332,8 @@ Col_ListLength(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(list) return 0;                                              /*!     @typecheck{COL_ERROR_LIST,list} */
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(list) return 0;
 
     WORD_UNWRAP(list);
 
@@ -376,15 +371,12 @@ Col_ListLength(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_ListLoopLength
- *                                                                              *//*!
- *  Get the loop length of the list.
+/**
+ * Get the loop length of the list.
  *
- *  @retval 0       for non-cyclic lists
- *  @retval <>0     length of terminal loop for cyclic lists.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval 0    for non-cyclic lists
+ * @retval <>0  length of terminal loop for cyclic lists.
+ */
 size_t
 Col_ListLoopLength(
     Col_Word list)  /*!< List to get loop length for. */
@@ -393,7 +385,8 @@ Col_ListLoopLength(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(list) return 0;                                              /*!     @typecheck{COL_ERROR_LIST,list} */
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(list) return 0;
 
     WORD_UNWRAP(list);
 
@@ -427,15 +420,12 @@ Col_ListLoopLength(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_ListAt
- *                                                                              *//*!
- *  Get the element of a list at a given position.
+/**
+ * Get the element of a list at a given position.
  *
- *  @retval nil         if **index** past end of **list**.
- *  @retval element     at given index otherwise.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval nil      if **index** past end of **list**.
+ * @retval element  at given index otherwise.
+ */
 Col_Word
 Col_ListAt(
     Col_Word list,  /*!< List to get element from. */
@@ -447,103 +437,74 @@ Col_ListAt(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(list) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_LIST,list} */
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(list) return WORD_NIL;
 
     Col_ListIterBegin(it, list, index);
     return Col_ListIterEnd(it) ? WORD_NIL : Col_ListIterAt(it);
 }
 
+/* End of Immutable List Accessors */
+
 
 /*******************************************************************************
  * Immutable List Operations
  ******************************************************************************/
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------   *//*!   @def \
- * MAX_SHORT_LIST_SIZE
- *
- *  Maximum number of cells a short list can take. This constant controls
- *  the creation of short leaves during sublist/concatenation. Lists built
- *  this way normally use sublist and concat nodes, but to avoid
- *  fragmentation, multiple short lists are flattened into a single vector.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Maximum number of cells a short list can take. This constant controls
+ * the creation of short leaves during sublist/concatenation. Lists built
+ * this way normally use sublist and concat nodes, but to avoid
+ * fragmentation, multiple short lists are flattened into a single vector.
+ */
 #define MAX_SHORT_LIST_SIZE     3
-                                                                                /*!     @endcond */
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------   *//*!   @def \
- * MAX_SHORT_LIST_LENGTH
- *
- *  Maximum number of elements a short list can take.
- *
- *  @see MAX_SHORT_LIST_SIZE
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/**
+ * Maximum number of elements a short list can take.
+ *
+ * @see MAX_SHORT_LIST_SIZE
+ */
 #define MAX_SHORT_LIST_LENGTH   VECTOR_MAX_LENGTH(MAX_SHORT_LIST_SIZE*CELL_SIZE)
-                                                                                /*!     @endcond */
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------   *//*!   @def \
- * MAX_SHORT_MVECTOR_SIZE
- *
- *  Maximum number of cells a short mutable vector can take. This constant
- *  controls the creation of short mutable vectors during immutable list
- *  conversions. When setting an element of a mutable list, if the leaf node
- *  containing this element is immutable we convert it to a mutable node of
- *  this size in case nearby elements get modified later. This amortizes the
- *  conversion overhead over time.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/**
+ * Maximum number of cells a short mutable vector can take. This constant
+ * controls the creation of short mutable vectors during immutable list
+ * conversions. When setting an element of a mutable list, if the leaf node
+ * containing this element is immutable we convert it to a mutable node of
+ * this size in case nearby elements get modified later. This amortizes the
+ * conversion overhead over time.
+ */
 #define MAX_SHORT_MVECTOR_SIZE      10
-                                                                                /*!     @endcond */
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------   *//*!   @def \
- * MAX_SHORT_MVECTOR_LENGTH
- *
- *  Maximum number of elements a short mutable vector can take.
- *
- *  @see MAX_SHORT_MVECTOR_SIZE
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/**
+ * Maximum number of elements a short mutable vector can take.
+ *
+ * @see MAX_SHORT_MVECTOR_SIZE
+ */
 #define MAX_SHORT_MVECTOR_LENGTH    VECTOR_MAX_LENGTH(MAX_SHORT_MVECTOR_SIZE*CELL_SIZE)
-                                                                                /*!     @endcond */
-/*---------------------------------------------------------------------------
- * MergeListChunksInfo
- *                                                                              *//*!
- *  Structure used to collect data during the traversal of lists when merged
- *  into one vector.
- *
- *  @see MergeListChunksProc
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/**
+ * Structure used to collect data during the traversal of lists when merged
+ * into one vector.
+ *
+ * @see MergeListChunksProc
+ */
 typedef struct MergeListChunksInfo {
     size_t length;      /*!< Length so far. */
     Col_Word vector;    /*!< Vector word to copy elements into. */
 } MergeListChunksInfo;
 
-/*---------------------------------------------------------------------------
- * MergeListChunksProc
- *                                                                              *//*!
- *  List traversal procedure used to concatenate all portions of lists into
- *  one to fit wthin one vector word. Follows Col_ListChunksTraverseProc()
- *  signature.
+/**
+ * List traversal procedure used to concatenate all portions of lists into
+ * one to fit wthin one vector word. Follows Col_ListChunksTraverseProc()
+ * signature.
  *
- *  @return
- *      Always zero, info returned through **clientData**.
+ * @return Always zero, info returned through **clientData**.
  *
- *  @see MergeListChunksInfo
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see MergeListChunksInfo
+ */
 static int
 MergeListChunksProc(
     size_t index,               /*!< List-relative index where chunks begin. */
@@ -592,19 +553,13 @@ MergeListChunksProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * GetDepth
- *                                                                              *//*!
- *  Get the depth of the list.
+/**
+ * Get the depth of the list.
  *
- *  @return
- *      Depth of list.
+ * @return Depth of list.
  *
- *  @see Col_ConcatLists
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_ConcatLists
+ */
 static unsigned char
 GetDepth(
     Col_Word list)  /*!< List node to get depth from. */
@@ -630,17 +585,12 @@ GetDepth(
     }
 }
 
-/*---------------------------------------------------------------------------
- * GetArms
- *                                                                              *//*!
- *  Get the left and right arms of a list, i.e.\ a concat or one of its
- *  sublists.
+/**
+ * Get the left and right arms of a list, i.e.\ a concat or one of its
+ * sublists.
  *
- *  @see Col_ConcatLists
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_ConcatLists
+ */
 static void
 GetArms(
     Col_Word node,          /*!< List node to extract arms from. Either a
@@ -679,25 +629,23 @@ GetArms(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_Sublist
- *                                                                              *//*!
- *  Create a new list that is a sublist of another.
+/** @endcond @endprivate */
+
+/**
+ * Create a new list that is a sublist of another.
  *
- *  We try to minimize the overhead as much as possible, such as:
- *   - identity.
- *   - create vectors for small sublists.
- *   - sublists of sublists point to original list.
- *   - sublists of concats point to the deepest superset sublist.
+ * We try to minimize the overhead as much as possible, such as:
+ * - identity.
+ * - create vectors for small sublists.
+ * - sublists of sublists point to original list.
+ * - sublists of concats point to the deepest superset sublist.
  *
- *  @return
- *      When first is past the end of the (acyclic) list, or **last** is before
- *      **first**, an empty list.
+ * @return When first is past the end of the (acyclic) list, or **last** is
+ *      before **first**, an empty list.
  *      Else, a list representing the sublist.
  *
- *  In any case the resulting sublist is never cyclic.
- *//*-----------------------------------------------------------------------*/
-
+ * In any case the resulting sublist is never cyclic.
+ */
 Col_Word
 Col_Sublist(
     Col_Word list,              /*!< The list to extract the sublist from. */
@@ -714,7 +662,8 @@ Col_Sublist(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(list) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_LIST,list} */
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(list) return WORD_NIL;
 
     WORD_UNWRAP(list);
 
@@ -898,18 +847,14 @@ Col_Sublist(
     return sublist;
 }
 
-/*---------------------------------------------------------------------------
- * Col_ConcatLists
- *                                                                              *//*!
- *  Concatenate lists.
+/**
+ * Concatenate lists.
  *
- *  Concatenation forms self-balanced binary trees. See @ref list_tree_balancing
- *  "List Tree Balancing" for more information.
+ * Concatenation forms self-balanced binary trees. See @ref list_tree_balancing
+ * "List Tree Balancing" for more information.
  *
- *  @return
- *      A list representing the concatenation of both lists.
- *//*-----------------------------------------------------------------------*/
-
+ * @return A list representing the concatenation of both lists.
+ */
 Col_Word
 Col_ConcatLists(
     Col_Word left,              /*!< Left part. */
@@ -926,12 +871,16 @@ Col_ConcatLists(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(left) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_LIST,left} */
-    TYPECHECK_LIST(right) return WORD_NIL;                                      /*!     @typecheck{COL_ERROR_LIST,right} */
+    /*! @typecheck{COL_ERROR_LIST,left} */
+    TYPECHECK_LIST(left) return WORD_NIL;
 
+    /*! @typecheck{COL_ERROR_LIST,right} */
+    TYPECHECK_LIST(right) return WORD_NIL;
+
+    /*! @valuecheck{COL_ERROR_LISTLENGTH_CONCAT,length(left+right)} */
     leftLength = Col_ListLength(left);
     rightLength = Col_ListLength(right);
-    VALUECHECK_LISTLENGTH_CONCAT(leftLength, rightLength) return WORD_NIL;      /*!     @valuecheck{COL_ERROR_LISTLENGTH_CONCAT,length(left+right)} */
+    VALUECHECK_LISTLENGTH_CONCAT(leftLength, rightLength) return WORD_NIL;
 
     WORD_UNWRAP(left);
     WORD_UNWRAP(right);
@@ -1162,17 +1111,13 @@ Col_ConcatLists(
     return concatNode;
 }
 
-/*---------------------------------------------------------------------------
- * Col_ConcatListsA
- *                                                                              *//*!
- *  Concatenate several lists given in an array. Concatenation is done
- *  recursively, by halving the array until it contains one or two elements,
- *  at this point we respectively return the element or use Col_ConcatLists().
+/**
+ * Concatenate several lists given in an array. Concatenation is done
+ * recursively, by halving the array until it contains one or two elements,
+ * at this point we respectively return the element or use Col_ConcatLists().
  *
- *  @return
- *      A list representing the concatenation of all lists.
- *//*-----------------------------------------------------------------------*/
-
+ * @return A list representing the concatenation of all lists.
+ */
 Col_Word
 Col_ConcatListsA(
     size_t number,              /*!< Size of **lists** array. */
@@ -1185,7 +1130,8 @@ Col_ConcatListsA(
      * Check preconditions.
      */
 
-    VALUECHECK(number != 0, COL_ERROR_GENERIC) return WORD_NIL;                 /*!     @valuecheck{COL_ERROR_GENERIC,number == 0} */
+    /*! @valuecheck{COL_ERROR_GENERIC,number == 0} */
+    VALUECHECK(number != 0, COL_ERROR_GENERIC) return WORD_NIL;
 
     /*
      * Quick cases.
@@ -1213,19 +1159,15 @@ Col_ConcatListsA(
 }
 
 
-/*---------------------------------------------------------------------------
- * Col_ConcatListsNV
- *                                                                              *//*!
- *  Concatenate lists given as arguments. The argument list is first
- *  copied into a stack-allocated array then passed to Col_ConcatListsA().
+/**
+ * Concatenate lists given as arguments. The argument list is first
+ * copied into a stack-allocated array then passed to Col_ConcatListsA().
  *
- *  @return
- *      A list representing the concatenation of all lists.
+ * @return A list representing the concatenation of all lists.
  *
- *  @see Col_ConcatListsA
- *  @see Col_ConcatListsV
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_ConcatListsA
+ * @see Col_ConcatListsV
+ */
 Col_Word
 Col_ConcatListsNV(
     size_t number,  /*!< Number of arguments following. */
@@ -1239,7 +1181,8 @@ Col_ConcatListsNV(
      * Check preconditions.
      */
 
-    VALUECHECK(number != 0, COL_ERROR_GENERIC) return WORD_NIL;                 /*!     @valuecheck{COL_ERROR_GENERIC,number == 0} */
+    /*! @valuecheck{COL_ERROR_GENERIC,number == 0} */
+    VALUECHECK(number != 0, COL_ERROR_GENERIC) return WORD_NIL;
 
     /*
      * Convert vararg list to array. Use alloca since a vararg list is
@@ -1255,23 +1198,20 @@ Col_ConcatListsNV(
     return Col_ConcatListsA(number, lists);
 }
 
-/*---------------------------------------------------------------------------
- * Col_RepeatList
- *                                                                              *//*!
- *  Create a list formed by the repetition of a source list.
+/**
+ * Create a list formed by the repetition of a source list.
  *
- *  This method is based on recursive concatenations of the list
- *  following the bit pattern of the count factor. Doubling a list simply
- *  consists of a concat with itself. In the end the resulting tree is
- *  very compact, and only a minimal number of extraneous cells are
- *  allocated during the balancing process (and will be eventually
- *  collected).
+ * This method is based on recursive concatenations of the list
+ * following the bit pattern of the count factor. Doubling a list simply
+ * consists of a concat with itself. In the end the resulting tree is
+ * very compact, and only a minimal number of extraneous cells are
+ * allocated during the balancing process (and will be eventually
+ * collected).
  *
- *  @return
- *      A list representing the repetition of the source list. A list repeated
- *      zero times is empty. A cyclic list repeated more than once is identity.
- *//*-----------------------------------------------------------------------*/
-
+ * @return A list representing the repetition of the source list. A list
+ *      repeated zero times is empty. A cyclic list repeated more than once is
+ *      identity.
+ */
 Col_Word
 Col_RepeatList(
     Col_Word list,      /*!< The list to repeat. */
@@ -1283,7 +1223,8 @@ Col_RepeatList(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(list) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_LIST,list} */
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(list) return WORD_NIL;
 
     if (Col_ListLoopLength(list) && count > 1) {
         /*
@@ -1293,8 +1234,9 @@ Col_RepeatList(
         count = 1;
     }
 
+    /*! @valuecheck{COL_ERROR_LISTLENGTH_REPEAT,length(list)*count} */
     length = Col_ListLength(list);
-    VALUECHECK_LISTLENGTH_REPEAT(length, count) return WORD_NIL;                /*!     @valuecheck{COL_ERROR_LISTLENGTH_REPEAT,length(list)*count} */
+    VALUECHECK_LISTLENGTH_REPEAT(length, count) return WORD_NIL;
 
     /*
      * Quick cases.
@@ -1313,16 +1255,12 @@ Col_RepeatList(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_CircularList
- *                                                                              *//*!
- *  Create a circular list from a regular list.
+/**
+ * Create a circular list from a regular list.
  *
- *  @return
- *      If the list is empty or cyclic, identity. Else a new circular list from
- *      the given core.
- *//*-----------------------------------------------------------------------*/
-
+ * @return If the list is empty or cyclic, identity. Else a new circular list
+ *      from the given core.
+ */
 Col_Word
 Col_CircularList(
     Col_Word core)  /*!< The core list. */
@@ -1331,7 +1269,8 @@ Col_CircularList(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(core) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_LIST,list} */
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(core) return WORD_NIL;
 
     if (Col_ListLength(core) == 0) {
         /*
@@ -1354,26 +1293,21 @@ Col_CircularList(
     return WORD_CIRCLIST_NEW(core);
 }
 
-/*---------------------------------------------------------------------------
- * Col_ListInsert
- *                                                                              *//*!
- *  Insert a list into another one, just before the given insertion point,
- *  taking cyclicity into account. As target list is immutable, this results
- *  in a new list.
+/**
+ * Insert a list into another one, just before the given insertion point,
+ * taking cyclicity into account. As target list is immutable, this results
+ * in a new list.
  *
- *  Insertion past the end of the list results in a concatenation.
+ * Insertion past the end of the list results in a concatenation.
  *
- *  @note
+ * @note
  *      Only perform minimal tests to prevent overflow, basic ops should
  *      perform further optimizations anyway.
  *
- *  @return
- *      The resulting list.
+ * @return The resulting list.
  *
- *  @return
- *      The resulting list.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The resulting list.
+ */
 Col_Word
 Col_ListInsert(
     Col_Word into,  /*!< Target list to insert into. */
@@ -1386,8 +1320,11 @@ Col_ListInsert(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(into) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_LIST,into} */
-    TYPECHECK_LIST(list) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_LIST,list} */
+    /*! @typecheck{COL_ERROR_LIST,into} */
+    TYPECHECK_LIST(into) return WORD_NIL;
+
+    /*! @typecheck{COL_ERROR_LIST,list} */                                       
+    TYPECHECK_LIST(list) return WORD_NIL;
 
     if (Col_ListLength(list) == 0) {
         /*
@@ -1462,20 +1399,16 @@ Col_ListInsert(
             Col_Sublist(into, index, length-1));
 }
 
-/*---------------------------------------------------------------------------
- * Col_ListRemove
- *                                                                              *//*!
- *  Remove a range of elements from a list, taking cyclicity into account.
- *  As target list is immutable, this results in a new list.
+/**
+ * Remove a range of elements from a list, taking cyclicity into account.
+ * As target list is immutable, this results in a new list.
  *
- *  @note
+ * @note
  *      Only perform minimal tests to prevent overflow, basic ops should
  *      perform further optimizations anyway.
  *
- *  @return
- *      The resulting list.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The resulting list.
+ */
 Col_Word
 Col_ListRemove(
     Col_Word list,  /*!< List to remove sequence from. */
@@ -1488,7 +1421,8 @@ Col_ListRemove(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(list) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_LIST,list} */
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(list) return WORD_NIL;
 
     /*
      * Quick cases.
@@ -1613,25 +1547,21 @@ Col_ListRemove(
             Col_Sublist(list, last+1, length-1));
 }
 
-/*---------------------------------------------------------------------------
- * Col_ListReplace
- *                                                                              *//*!
- *  Replace a range of elements in a list with another, taking cyclicity
- *  into account. As target list is immutable, this results in a new list.
+/**
+ * Replace a range of elements in a list with another, taking cyclicity
+ * into account. As target list is immutable, this results in a new list.
  *
- *  Replacement is a combination of Col_ListRemove() and Col_ListInsert().
+ * Replacement is a combination of Col_ListRemove() and Col_ListInsert().
  *
- *  @note
+ * @note
  *      Only perform minimal tests to prevent overflow, basic ops should
  *      perform further optimizations anyway.
  *
- *  @return
- *      The resulting list.
+ * @return The resulting list.
  *
- *  @see Col_ListInsert
- *  @see Col_ListRemove
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_ListInsert
+ * @see Col_ListRemove
+ */
 Col_Word
 Col_ListReplace(
     Col_Word list,  /*!< Original list. */
@@ -1646,8 +1576,11 @@ Col_ListReplace(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(list) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_LIST,list} */
-    TYPECHECK_LIST(with) return WORD_NIL;                                       /*!     @typecheck{COL_ERROR_LIST,with} */
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(list) return WORD_NIL;
+
+    /*! @typecheck{COL_ERROR_LIST,with} */
+    TYPECHECK_LIST(with) return WORD_NIL;
 
     /*
      * Quick cases.
@@ -1692,34 +1625,24 @@ Col_ListReplace(
     return Col_ListInsert(result, first, with);
 }
 
+/* End of Immutable List Operations */
+
 
 /*******************************************************************************
  * Immutable List Traversal
  ******************************************************************************/
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------
- * ListChunkTraverseInfo
- *                                                                              *//*!
- *  Structure used during recursive list chunk traversal. This avoids
- *  recursive procedure calls thanks to a pre-allocated backtracking
- *  structure: since the algorithms only recurse on concat nodes and since
- *  we know their depth, we can allocate the needed space once for all.
- *
- * Fields:
- *  list              - Currently traversed list.
- *  e         - Element used as buffer for single element lists (e.g.
- *              element-based custom lists).
- *  start             - Index of first element traversed in list.
- *  max               - Max number of elements traversed in list.
- *  maxDepth  - Depth of toplevel concat node.
- *  prevDepth - Depth of next concat node for backtracking.
- *
- *  @see Col_TraverseListChunksN
- *  @see Col_TraverseListChunks
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Structure used during recursive list chunk traversal. This avoids
+ * recursive procedure calls thanks to a pre-allocated backtracking
+ * structure: since the algorithms only recurse on concat nodes and since
+ * we know their depth, we can allocate the needed space once for all.
+ *
+ * @see Col_TraverseListChunksN
+ * @see Col_TraverseListChunks
+ */
 typedef struct ListChunkTraverseInfo {
     /*! Pre-allocated backtracking structure. */
     struct {
@@ -1736,19 +1659,14 @@ typedef struct ListChunkTraverseInfo {
     int maxDepth;       /*!< Depth of toplevel concat node. */
     int prevDepth;      /*!< Depth of next concat node for backtracking. */
 } ListChunkTraverseInfo;
-                                                                                /*!     @endcond */
-/*---------------------------------------------------------------------------
- * GetChunk
- *                                                                              *//*!
- *  Get chunk from given traversal info.
- *
- *  @see ListChunkTraverseInfo
- *  @see Col_TraverseListChunksN
- *  @see Col_TraverseListChunks
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/**
+ * Get chunk from given traversal info.
+ *
+ * @see ListChunkTraverseInfo
+ * @see Col_TraverseListChunksN
+ * @see Col_TraverseListChunks
+ */
 static void
 GetChunk(
     ListChunkTraverseInfo *info,    /*!< Traversal info. */
@@ -1913,18 +1831,13 @@ GetChunk(
     }
 }
 
-/*---------------------------------------------------------------------------
- * NextChunk
- *                                                                              *//*!
- *  Get next chunk in traversal order.
+/**
+ * Get next chunk in traversal order.
  *
- *  @see ListChunkTraverseInfo
- *  @see Col_TraverseListChunksN
- *  @see Col_TraverseListChunks
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see ListChunkTraverseInfo
+ * @see Col_TraverseListChunksN
+ * @see Col_TraverseListChunks
+ */
 static void
 NextChunk(
     ListChunkTraverseInfo *info,    /*!< Traversal info. */
@@ -1962,23 +1875,22 @@ NextChunk(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_TraverseListChunksN
- *                                                                              *//*!
- *  Iterate over the chunks of a number of lists.
+/** @endcond @endprivate */
+
+/**
+ * Iterate over the chunks of a number of lists.
  *
- *  For each traversed chunk, **proc** is called back with the opaque data as
- *  well as the position within the lists. If it returns a nonzero result
- *  then the iteration ends.
+ * For each traversed chunk, **proc** is called back with the opaque data as
+ * well as the position within the lists. If it returns a nonzero result
+ * then the iteration ends.
  *
- *  @note
+ * @note
  *      The algorithm is naturally recursive but this implementation avoids
  *      recursive calls thanks to a stack-allocated backtracking structure.
  *
- *  @retval -1      if no traversal was performed.
- *  @retval int     last returned value of **proc** otherwise.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval -1   if no traversal was performed.
+ * @retval int  last returned value of **proc** otherwise.
+ */
 int
 Col_TraverseListChunksN(
     size_t number,                      /*!< Number of lists to traverse. */
@@ -2005,7 +1917,8 @@ Col_TraverseListChunksN(
      */
 
     for (i=0; i < number; i++) {
-        TYPECHECK_LIST(lists[i]) return -1;                                     /*!     @typecheck{COL_ERROR_LIST,lists[i]} */
+        /*! @typecheck{COL_ERROR_LIST,lists[i]} */
+        TYPECHECK_LIST(lists[i]) return -1;
     }
 
     info = (ListChunkTraverseInfo *) alloca(sizeof(*info) * number);
@@ -2115,25 +2028,22 @@ Col_TraverseListChunksN(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_TraverseListChunks
- *                                                                              *//*!
- *  Iterate over the chunks of a list.
+/**
+ * Iterate over the chunks of a list.
  *
- *  For each traversed chunk, **proc** is called back with the opaque data as
- *  well as the position within the list. If it returns a nonzero result
- *  then the iteration ends.
+ * For each traversed chunk, **proc** is called back with the opaque data as
+ * well as the position within the list. If it returns a nonzero result
+ * then the iteration ends.
  *
- *  @note
+ * @note
  *      The algorithm is naturally recursive but this implementation avoids
  *      recursive calls thanks to a stack-allocated backtracking structure.
  *      This procedure is an optimized version of Col_TraverseListChunksN()
  *      that also supports reverse traversal.
  *
- *  @retval -1      if no traversal was performed.
- *  @retval int     last returned value of **proc** otherwise.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval -1   if no traversal was performed.
+ * @retval int  last returned value of **proc** otherwise.
+ */
 int
 Col_TraverseListChunks(
     Col_Word list,                      /*!< List to traverse. */
@@ -2159,7 +2069,8 @@ Col_TraverseListChunks(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(list) return -1;                                             /*!     @typecheck{COL_ERROR_LIST,list} */
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(list) return -1;
 
     WORD_UNWRAP(list);
 
@@ -2259,25 +2170,25 @@ Col_TraverseListChunks(
     }
 }
 
+/* End of Immutable List Traversal */
+
 
 /*******************************************************************************
  * Immutable List Iteration
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * ColListIterUpdateTraversalInfo
- *                                                                              *//*!
- *  Get the chunk containing the element at the current iterator position.
- *
- *  Traversal info is updated lazily, each time element data needs to
- *  be retrieved. This means that a blind iteration over an arbitrarily
- *  complex list is on average no more computationally intensive than over
- *  a flat array (chunk retrieval is O(log n)).
- *
- *  @return
- *      Current element.
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Get the chunk containing the element at the current iterator position.
+ *
+ * Traversal info is updated lazily, each time element data needs to
+ * be retrieved. This means that a blind iteration over an arbitrarily
+ * complex list is on average no more computationally intensive than over
+ * a flat array (chunk retrieval is O(log n)).
+ *
+ * @return Current element.
+ */
 Col_Word
 ColListIterUpdateTraversalInfo(
     ColListIterator *it)    /*!< The iterator to update. */
@@ -2291,7 +2202,8 @@ ColListIterUpdateTraversalInfo(
      * Check preconditions.
      */
 
-    VALUECHECK_LISTITER(it) return COL_CHAR_INVALID;                            /*!     @valuecheck{COL_ERROR_LISTITER_END,it} */
+    /*! @valuecheck{COL_ERROR_LISTITER_END,it} */
+    VALUECHECK_LISTITER(it) return COL_CHAR_INVALID;
 
     ASSERT(it->length);
 
@@ -2421,17 +2333,16 @@ ColListIterUpdateTraversalInfo(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_ListIterBegin
- *                                                                              *//*!
- *  Initialize the list iterator so that it points to the **index**-th
- *  element within the list. If **index** points past the end of the list, the
- *  iterator is initialized to the end iterator.
- *
- *  @retval <>0     if the iterator looped over the cyclic list.
- *  @retval 0       in all other cases.
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
+/**
+ * Initialize the list iterator so that it points to the **index**-th
+ * element within the list. If **index** points past the end of the list, the
+ * iterator is initialized to the end iterator.
+ *
+ * @retval <>0  if the iterator looped over the cyclic list.
+ * @retval 0    in all other cases.
+ */
 int
 Col_ListIterBegin(
     Col_ListIterator it,    /*!< Iterator to initialize. */
@@ -2444,7 +2355,8 @@ Col_ListIterBegin(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(list) {                                                      /*!     @typecheck{COL_ERROR_LIST,list} */
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(list) {
         Col_ListIterSetNull(it);
         return 0;
     }
@@ -2479,14 +2391,11 @@ Col_ListIterBegin(
     return looped;
 }
 
-/*---------------------------------------------------------------------------
- * Col_ListIterFirst
- *                                                                              *//*!
- *  Initialize the list iterator so that it points to the first
- *  character within the list. If list is empty, the iterator is initialized
- *  to the end iterator.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Initialize the list iterator so that it points to the first
+ * character within the list. If list is empty, the iterator is initialized
+ * to the end iterator.
+ */
 void
 Col_ListIterFirst(
     Col_ListIterator it,    /*!< Iterator to initialize. */
@@ -2496,7 +2405,8 @@ Col_ListIterFirst(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(list) {                                                      /*!     @typecheck{COL_ERROR_LIST,list} */
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(list) {
         Col_ListIterSetNull(it);
         return;
     }
@@ -2512,17 +2422,14 @@ Col_ListIterFirst(
     it->chunk.first = SIZE_MAX;
 }
 
-/*---------------------------------------------------------------------------
- * Col_ListIterLast
- *                                                                              *//*!
- *  Initialize the list iterator so that it points to the last
- *  character within the list. If list is empty, the iterator is initialized
- *  to the end iterator.
+/**
+ * Initialize the list iterator so that it points to the last
+ * character within the list. If list is empty, the iterator is initialized
+ * to the end iterator.
  *
- *  @note
+ * @note
  *      If the list is cyclic, will point to the last character of the core.
- *//*-----------------------------------------------------------------------*/
-
+ */
 void
 Col_ListIterLast(
     Col_ListIterator it,    /*!< Iterator to initialize. */
@@ -2532,7 +2439,8 @@ Col_ListIterLast(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(list) {                                                      /*!     @typecheck{COL_ERROR_LIST,list} */
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(list) {
         Col_ListIterSetNull(it);
         return;
     }
@@ -2556,13 +2464,10 @@ Col_ListIterLast(
     it->chunk.first = SIZE_MAX;
 }
 
-/*---------------------------------------------------------------------------
- * Col_ListIterArray
- *                                                                              *//*!
- *  Initialize the list iterator so that it points to the first element
- *  in an array.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Initialize the list iterator so that it points to the first element
+ * in an array.
+ */
 void
 Col_ListIterArray(
     Col_ListIterator it,        /*!< Iterator to initialize. */
@@ -2579,12 +2484,9 @@ Col_ListIterArray(
     it->chunk.current.direct = elements;
 }
 
-/*---------------------------------------------------------------------------
- * Col_ListIterCompare
- *                                                                              *//*!
- *  Compare two iterators by their respective positions.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Compare two iterators by their respective positions.
+ */
 int
 Col_ListIterCompare(
     const Col_ListIterator it1, /*!< First iterator. */
@@ -2594,8 +2496,11 @@ Col_ListIterCompare(
      * Check preconditions.
      */
 
-    TYPECHECK_LISTITER(it1) return 1;                                           /*!     @typecheck{COL_ERROR_LISTITER,it1} */
-    TYPECHECK_LISTITER(it2) return -1;                                          /*!     @typecheck{COL_ERROR_LISTITER,it2} */
+    /*! @typecheck{COL_ERROR_LISTITER,it1} */
+    TYPECHECK_LISTITER(it1) return 1;
+
+    /*! @typecheck{COL_ERROR_LISTITER,it2} */
+    TYPECHECK_LISTITER(it2) return -1;
 
     if (it1->index < it2->index) {
         /*! @retval -1 if **it1** before **it2**. */
@@ -2609,15 +2514,12 @@ Col_ListIterCompare(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_ListIterMoveTo
- *                                                                              *//*!
- *  Move the iterator to the given absolute position.
+/**
+ * Move the iterator to the given absolute position.
  *
- *  @retval <>0     if the iterator looped over the cyclic list.
- *  @retval 0       in all other cases.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval <>0  if the iterator looped over the cyclic list.
+ * @retval 0    in all other cases.
+ */
 int
 Col_ListIterMoveTo(
     Col_ListIterator it,    /*!< The iterator to move. */
@@ -2633,15 +2535,12 @@ Col_ListIterMoveTo(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_ListIterForward
- *                                                                              *//*!
- *  Move the iterator to the **nb**-th next element.
+/**
+ * Move the iterator to the **nb**-th next element.
  *
- *  @retval <>0     if the iterator looped over the cyclic list.
- *  @retval 0       in all other cases.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval <>0  if the iterator looped over the cyclic list.
+ * @retval 0    in all other cases.
+ */
 int
 Col_ListIterForward(
     Col_ListIterator it,    /*!< The iterator to move. */
@@ -2653,7 +2552,8 @@ Col_ListIterForward(
      * Check preconditions.
      */
 
-    TYPECHECK_LISTITER(it) return 0;                                            /*!     @typecheck{COL_ERROR_LISTITER,it} */
+    /*! @typecheck{COL_ERROR_LISTITER,it} */
+    TYPECHECK_LISTITER(it) return 0;
 
     if (nb == 0) {
         /*
@@ -2663,7 +2563,8 @@ Col_ListIterForward(
         return 0;
     }
 
-    VALUECHECK_LISTITER(it) return 0;                                           /*!     @valuecheck{COL_ERROR_LISTITER_END,it} (only when **nb** != 0) */
+    /*! @valuecheck{COL_ERROR_LISTITER_END,it} (only when **nb** != 0) */
+    VALUECHECK_LISTITER(it) return 0;
 
     if (nb >= it->length - it->index) {
         size_t loop;
@@ -2719,17 +2620,14 @@ Col_ListIterForward(
     return looped;
 }
 
-/*---------------------------------------------------------------------------
- * Col_ListIterBackward
- *                                                                              *//*!
- *  Move the iterator backward to the **nb**-th previous element.
+/**
+ * Move the iterator backward to the **nb**-th previous element.
  *
- *  @note
+ * @note
  *      If moved before the beginning of list, **it** is set at end. This means
  *      that backward iterators will loop forever if unchecked against
  *      Col_ListIterEnd().
- *//*-----------------------------------------------------------------------*/
-
+ */
 void
 Col_ListIterBackward(
     Col_ListIterator it,    /*!< The iterator to move. */
@@ -2739,7 +2637,8 @@ Col_ListIterBackward(
      * Check preconditions.
      */
 
-    TYPECHECK_LISTITER(it) return;                                              /*!     @typecheck{COL_ERROR_LISTITER,it} */
+    /*! @typecheck{COL_ERROR_LISTITER,it} */
+    TYPECHECK_LISTITER(it) return;
 
     if (nb == 0) {
         /*
@@ -2784,26 +2683,26 @@ Col_ListIterBackward(
     }
 }
 
-                                                                                /*!     @} */
+/* End of Immutable List Iteration */
+
+/* End of Immutable Lists *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup mlist_words \
-Mutable Lists                                                                   *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup mlist_words Mutable Lists
+\{*//*==========================================================================
 */
 
 /*******************************************************************************
  * Mutable List Creation
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_NewMList
- *                                                                              *//*!
- *  Create a new mutable list word.
+/**
+ * Create a new mutable list word.
  *
- *  @return
- *      The new word.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The new word.
+ */
 Col_Word
 Col_NewMList()
 {
@@ -2815,17 +2714,13 @@ Col_NewMList()
     return mlist;
 }
 
-/*---------------------------------------------------------------------------
- * Col_CopyMList
- *                                                                              *//*!
- *  Create an immutable list from a mutable list. If an immutable list is
- *  given, it is simply returned. If a mutable list is given, its content
- *  is frozen and shared with the new one.
+/**
+ * Create an immutable list from a mutable list. If an immutable list is
+ * given, it is simply returned. If a mutable list is given, its content
+ * is frozen and shared with the new one.
  *
- *  @return
- *      Immutable copy of the mutable list.
- *//*-----------------------------------------------------------------------*/
-
+ * @return Immutable copy of the mutable list.
+ */
 Col_Word
 Col_CopyMList(
     Col_Word mlist) /*!< Mutable list to copy. */
@@ -2834,7 +2729,8 @@ Col_CopyMList(
      * Check preconditions.
      */
 
-    TYPECHECK_LIST(mlist) return WORD_NIL;                                      /*!     @typecheck{COL_ERROR_LIST,mlist} */
+    /*! @typecheck{COL_ERROR_LIST,mlist} */
+    TYPECHECK_LIST(mlist) return WORD_NIL;
 
     if (Col_ListLength(mlist) == 0) {
         /*
@@ -2846,7 +2742,8 @@ Col_CopyMList(
 
     WORD_UNWRAP(mlist);
 
-    /*                                                                          *//*!   @sideeffect
+    /*!
+     * @sideeffect
      * Freeze mutable list content and turn mutable vectors immutable.
      */
 
@@ -2854,15 +2751,14 @@ Col_CopyMList(
     return mlist;
 }
 
-/*---------------------------------------------------------------------------
- * FreezeMList
- *                                                                              *//*!
- *  Freeze mutable list recursively. This changes mutable words to immutable
- *  versions inplace.
- *
- *  @see Col_CopyMList
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Freeze mutable list recursively. This changes mutable words to immutable
+ * versions inplace.
+ *
+ * @see Col_CopyMList
+ */
 static void
 FreezeMList(
     Col_Word mlist) /*!< Mutable list to freeze. */
@@ -2882,11 +2778,14 @@ start:
         goto start;
 
     case WORD_TYPE_MVECTOR: {
-        /*                                                                      *//*!   @sideeffect
+        /*!
+         * @sideeffect
          * Turn mutable vectors immutable. This is done by simply changing the
          * type ID.
-         *                                                                      *//*
-         * Don't mark extraneous cells, they will be collected during GC.
+         */
+
+        /*
+         * Note: Don't mark extraneous cells, they will be collected during GC.
          */
 
         int pinned = WORD_PINNED(mlist);
@@ -2898,7 +2797,8 @@ start:
     }
 
     case WORD_TYPE_MCONCATLIST: {
-        /*                                                                      *//*!   @sideeffect
+        /*!
+         * @sideeffect
          * Freeze mutable concat list node. This is done by changing the type
          * ID and recursing on child nodes.
          */
@@ -2927,18 +2827,19 @@ start:
     }
 }
 
+/** @endcond @endprivate */
+
+/* End of Mutable List Creation */
+
 
 /*******************************************************************************
  * Mutable List Operations
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_MListSetLength
- *                                                                              *//*!
- *  Resize the mutable list. Newly added elements are set to nil. Removed
- *  elements are simply discarded.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Resize the mutable list. Newly added elements are set to nil. Removed
+ * elements are simply discarded.
+ */
 void
 Col_MListSetLength(
     Col_Word mlist, /*!< Mutable list to resize. */
@@ -2951,7 +2852,8 @@ Col_MListSetLength(
      * Check preconditions.
      */
 
-    TYPECHECK_MLIST(mlist) return;                                              /*!     @typecheck{COL_ERROR_MLIST,mlist} */
+    /*! @typecheck{COL_ERROR_MLIST,mlist} */
+    TYPECHECK_MLIST(mlist) return;
 
     ASSERT(WORD_TYPE(mlist) == WORD_TYPE_WRAP);
     root = WORD_WRAP_SOURCE(mlist);
@@ -3056,13 +2958,10 @@ Col_MListSetLength(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_MListLoop
- *                                                                              *//*!
- *  Make a mutable list circular. Do nothing if cyclic (not necessarily
- *  circular).
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Make a mutable list circular. Do nothing if cyclic (not necessarily
+ * circular).
+ */
 void
 Col_MListLoop(
     Col_Word mlist) /*!< Mutable list to make circular. */
@@ -3072,7 +2971,8 @@ Col_MListLoop(
      * Check preconditions.
      */
 
-    TYPECHECK_MLIST(mlist) return;                                              /*!     @typecheck{COL_ERROR_MLIST,mlist} */
+    /*! @typecheck{COL_ERROR_MLIST,mlist} */
+    TYPECHECK_MLIST(mlist) return;
 
     if (Col_ListLength(mlist) == 0) {
         /*
@@ -3098,12 +2998,9 @@ Col_MListLoop(
     WORD_WRAP_SOURCE(mlist) = WORD_CIRCLIST_NEW(WORD_WRAP_SOURCE(mlist));
 }
 
-/*---------------------------------------------------------------------------
- * Col_MListSetAt
- *                                                                              *//*!
- *  Set the element of a mutable list at a given position.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Set the element of a mutable list at a given position.
+ */
 void
 Col_MListSetAt(
     Col_Word mlist,     /*!< Mutable list to modify. */
@@ -3116,11 +3013,13 @@ Col_MListSetAt(
      * Check preconditions.
      */
 
-    TYPECHECK_MLIST(mlist) return;                                              /*!     @typecheck{COL_ERROR_MLIST,mlist} */
+    /*! @typecheck{COL_ERROR_MLIST,mlist} */
+    TYPECHECK_MLIST(mlist) return;
 
+    /*! @valuecheck{COL_ERROR_LISTINDEX,index < [Col_ListLength(mlist)](@ref Col_ListLength)} */
     length = Col_ListLength(mlist);
     loop = Col_ListLoopLength(mlist);
-    if (!loop) VALUECHECK_BOUNDS(index, length) return;                         /*!     @valuecheck{COL_ERROR_LISTINDEX,index < [Col_ListLength(mlist)](@ref Col_ListLength)} */
+    if (!loop) VALUECHECK_BOUNDS(index, length) return;
 
     if (loop && index >= length) {
         /*
@@ -3134,16 +3033,15 @@ Col_MListSetAt(
     MListSetAt(&WORD_WRAP_SOURCE(mlist), index, element);
 }
 
-/*---------------------------------------------------------------------------
- * MListSetAt
- *                                                                              *//*!
- *  Set the element of a mutable list at a given position, converting nodes
- *  to mutable forms in the process.
- *
- *  @note
- *      Bounds checking is done upfront.
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Set the element of a mutable list at a given position, converting nodes
+ * to mutable forms in the process.
+ *
+ * @note
+ *      Bounds checking is done upfront.
+ */
 static void
 MListSetAt(
     Col_Word * nodePtr, /*!< [in,out] Mutable list node to modify. May be
@@ -3229,17 +3127,16 @@ start:
     }
 }
 
-#if 0
-/*---------------------------------------------------------------------------
- * Col_MListSort
- *                                                                              *//*!
- *  Sort a mutable list. Circular lists have their core list sorted.
- *
- *  @todo
- *
- *  @see Col_MVectorSort
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
+#if 0
+/**
+ * Sort a mutable list. Circular lists have their core list sorted.
+ *
+ * @todo
+ *
+ * @see Col_MVectorSort
+ */
 void
 Col_MListSort(
     Col_Word mlist,             /*!< Mutable list to sort. */
@@ -3254,7 +3151,8 @@ Col_MListSort(
      * Check preconditions.
      */
 
-    TYPECHECK_MLIST(mlist) return;                                              /*!     @typecheck{COL_ERROR_LIST,mlist} */
+    /*! @typecheck{COL_ERROR_LIST,mlist} */
+    TYPECHECK_MLIST(mlist) return;
 
     ASSERT(WORD_TYPE(mlist) == WORD_TYPE_WRAP);
     root = WORD_WRAP_SOURCE(mlist);
@@ -3309,15 +3207,13 @@ transfo totale mutable:
 }
 #endif
 
-/*---------------------------------------------------------------------------
- * NewMConcatList
- *                                                                              *//*!
- *  Create a new mutable concat list word.
- *
- *  @return
- *      The new word.
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Create a new mutable concat list word.
+ *
+ * @return The new word.
+ */
 static Col_Word
 NewMConcatList(
     Col_Word left,  /*!< Left part. */
@@ -3333,16 +3229,13 @@ NewMConcatList(
     return mconcatNode;
 }
 
-/*---------------------------------------------------------------------------
- * ConvertToMutableAt
- *                                                                              *//*!
- *  Convert an immutable node (vector, void list or sublist) to mutable
- *  around a given index.
+/**
+ * Convert an immutable node (vector, void list or sublist) to mutable
+ * around a given index.
  *
- *  @note
+ * @note
  *      The original is not modified, a mutable copy is made.
- *//*-----------------------------------------------------------------------*/
-
+ */
 static void
 ConvertToMutableAt(
     Col_Word *nodePtr,  /*!< [in,out] Mutable list node to convert. Gets
@@ -3411,15 +3304,12 @@ ConvertToMutableAt(
     }
 }
 
-/*---------------------------------------------------------------------------
- * ConvertToMConcatNode
- *                                                                              *//*!
- *  Convert an immutable node (concat or sublist) to a mutable concat list.
+/**
+ * Convert an immutable node (concat or sublist) to a mutable concat list.
  *
- *  @note
+ * @note
  *      The original is not modified, a mutable copy is made.
- *//*-----------------------------------------------------------------------*/
-
+ */
 static void
 ConvertToMConcatNode(
     Col_Word *nodePtr)  /*!< [in,out] Mutable list node to convert. Gets
@@ -3464,20 +3354,17 @@ ConvertToMConcatNode(
     *nodePtr = converted;
 }
 
-/*---------------------------------------------------------------------------
- * UpdateMConcatNode
- *                                                                              *//*!
- *  Update (depth, left length...) & rebalance mutable concat list node.
+/**
+ * Update (depth, left length...) & rebalance mutable concat list node.
  *
- *  @note
+ * @note
  *      Rebalancing of mutable lists works as for immutable lists (see
  *      Col_ConcatLists()) except that it is done in-place, whereas for the
  *      latter new concat nodes are created in the process. Consequently no
  *      extraneous word is created here.
  *
- *  @see @ref list_tree_balancing "List Tree Balancing"
- *//*-----------------------------------------------------------------------*/
-
+ * @see @ref list_tree_balancing "List Tree Balancing"
+ */
 static void
 UpdateMConcatNode(
     Col_Word node)  /*!< Mutable concat list node. */
@@ -3721,13 +3608,12 @@ UpdateMConcatNode(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_MListInsert
- *                                                                              *//*!
- *  Insert a list into a mutable list, just before the given insertion
- *  point, taking cyclicity into account.
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
+/**
+ * Insert a list into a mutable list, just before the given insertion
+ * point, taking cyclicity into account.
+ */
 void
 Col_MListInsert(
     Col_Word into,  /*!< Target mutable list to insert into. */
@@ -3740,12 +3626,16 @@ Col_MListInsert(
      * Check preconditions.
      */
 
-    TYPECHECK_MLIST(into) return;                                               /*!     @typecheck{COL_ERROR_MLIST,into} */
-    TYPECHECK_LIST(list) return;                                                /*!     @typecheck{COL_ERROR_LIST,list} */
+    /*! @typecheck{COL_ERROR_MLIST,into} */
+    TYPECHECK_MLIST(into) return;
 
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(list) return;
+
+    /*! @valuecheck{COL_ERROR_LISTLENGTH_CONCAT,length(into+list)} */
     length = Col_ListLength(into);
     listLength = Col_ListLength(list);
-    VALUECHECK_LISTLENGTH_CONCAT(length, listLength) return;                    /*!     @valuecheck{COL_ERROR_LISTLENGTH_CONCAT,length(into+list)} */
+    VALUECHECK_LISTLENGTH_CONCAT(length, listLength) return;
 
     ASSERT(WORD_TYPE(into) == WORD_TYPE_WRAP);
 
@@ -3899,15 +3789,14 @@ Col_MListInsert(
     MListInsert(&WORD_WRAP_SOURCE(into), index, list);
 }
 
-/*---------------------------------------------------------------------------
- * MListInsert
- *                                                                              *//*!
- *  Insert a list into a mutable list node, just before the given insertion
- *  point. Recursively descends into containing node.
- *
- *  @see Col_MListInsert
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Insert a list into a mutable list node, just before the given insertion
+ * point. Recursively descends into containing node.
+ *
+ * @see Col_MListInsert
+ */
 static void
 MListInsert(
     Col_Word * nodePtr, /*!< [in,out] Mutable list node to insert into. May be
@@ -4108,12 +3997,9 @@ start:
     }
 }
 
-/*---------------------------------------------------------------------------
- * SplitMutableAt
- *                                                                              *//*!
- *  Split a mutable list node at a given index.
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Split a mutable list node at a given index.
+ */
 static void
 SplitMutableAt(
     Col_Word *nodePtr,  /*!< [in,out] Mutable list node to split. Gets
@@ -4218,12 +4104,11 @@ SplitMutableAt(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_MListRemove
- *                                                                              *//*!
- *  Remove a range of elements from a mutable list.
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
+/**
+ * Remove a range of elements from a mutable list.
+ */
 void
 Col_MListRemove(
     Col_Word mlist, /*!< Mutable list to remove sequence from. */
@@ -4237,7 +4122,8 @@ Col_MListRemove(
      * Check preconditions.
      */
 
-    TYPECHECK_MLIST(mlist) return;                                              /*!     @typecheck{COL_ERROR_MLIST,mlist} */
+    /*! @typecheck{COL_ERROR_MLIST,mlist} */
+    TYPECHECK_MLIST(mlist) return;
 
     if (first > last) {
         /*
@@ -4414,15 +4300,14 @@ Col_MListRemove(
     MListRemove(&WORD_WRAP_SOURCE(mlist), first, last);
 }
 
-/*---------------------------------------------------------------------------
- * MListRemove
- *                                                                              *//*!
- *  Remove a range of elements from a mutable list. Recursively descends into
- *  containing nodes.
- *
- *  @see Col_MListRemove
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Remove a range of elements from a mutable list. Recursively descends into
+ * containing nodes.
+ *
+ * @see Col_MListRemove
+ */
 static void
 MListRemove(
     Col_Word * nodePtr, /*!< [in,out] Mutable list node to modify. May be
@@ -4604,22 +4489,21 @@ start:
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_MListReplace
- *                                                                              *//*!
- *  Replace a range of elements in a mutable list with another, taking cyclicity
- *  into account.
+/** @endcond @endprivate */
+
+/**
+ * Replace a range of elements in a mutable list with another, taking cyclicity
+ * into account.
  *
- *  Replacement is a combination of Col_MListRemove() and Col_MListInsert().
+ * Replacement is a combination of Col_MListRemove() and Col_MListInsert().
  *
- *  @note
+ * @note
  *      Only perform minimal tests to prevent overflow, basic ops should
  *      perform further optimizations anyway.
  *
- *  @see Col_MListInsert
- *  @see Col_MListRemove
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MListInsert
+ * @see Col_MListRemove
+ */
 void
 Col_MListReplace(
     Col_Word mlist, /*!< Mutable list to modify. */
@@ -4633,8 +4517,11 @@ Col_MListReplace(
      * Check preconditions.
      */
 
-    TYPECHECK_MLIST(mlist) return;                                              /*!     @typecheck{COL_ERROR_MLIST,mlist} */
-    TYPECHECK_LIST(with) return;                                                /*!     @typecheck{COL_ERROR_LIST,with} */
+    /*! @typecheck{COL_ERROR_MLIST,mlist} */
+    TYPECHECK_MLIST(mlist) return;
+
+    /*! @typecheck{COL_ERROR_LIST,with} */
+    TYPECHECK_LIST(with) return;
 
     if (first > last) {
         /*
@@ -4675,4 +4562,6 @@ Col_MListReplace(
     Col_MListInsert(mlist, first, with);
 }
 
-                                                                                /*!     @} */
+/* End of Mutable List Operations */
+
+/* End of Mutable Lists *//*!\}*/

@@ -1,13 +1,13 @@
-/*                                                                              *//*!   @cond PRIVATE @file \
- * colUnixPlatform.c
+/**
+ * @file colUnixPlatform.c
  *
- *  This file provides Unix implementations of generic primitives needing
- *  platform-specific implementations, as well as Unix-specific primitives.
+ * This file provides Unix implementations of generic primitives needing
+ * platform-specific implementations, as well as Unix-specific primitives.
  *
- *  @see colPlatform.h
- *  @see colUnixPlatform.h
+ * @see colPlatform.h
+ * @see colUnixPlatform.h
  *
- *  @private
+ * @beginprivate @cond PRIVATE
  */
 
 #include "../../include/colibri.h"
@@ -20,63 +20,67 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
-                                                                                #       ifndef DOXYGEN
+
 /*
  * Prototypes for functions used only in this file.
  */
 
+/*! \cond IGNORE */
 static struct UnixGroupData * AllocGroupData(unsigned int model);
 static void             FreeGroupData(struct UnixGroupData *groupData);
 static void *           GcThreadProc(void *arg);
 static void             Init(void);
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
+
 
 /*
-================================================================================*//*!   @addtogroup arch_unix \
-System and Architecture (Unix-specific)                                         *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\internal \weakgroup arch_unix System and Architecture (Unix-specific)
+\{*//*==========================================================================
 */
-                                                                                #       ifndef DOXYGEN
+
+/** @beginprivate @cond PRIVATE */
+
 /*
  * Bit twiddling hack for computing the log2 of a power of 2.
  * See: http://www-graphics.stanford.edu/~seander/bithacks.html#IntegerLogDeBruijn
  */
 
+/*! \cond IGNORE */
 static const int MultiplyDeBruijnBitPosition2[32] =
 {
   0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8,
   31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
 };
 #define LOG2(v) MultiplyDeBruijnBitPosition2[(uint32_t)(v * 0x077CB531U) >> 27]
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
 
-/********************************************************************************//*!   @name \
- * Thread-Local Storage                                                         *//*!   @{ *//*
- ******************************************************************************/
+/** @endcond @endprivate */
 
-/*---------------------------------------------------------------------------
- * tsdKey
- *                                                                              *//*!
- *      Thread-speficic data identifier. Used to get thread-specific data.
+
+/***************************************************************************//*!
+ * \name Thread-Local Storage
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Thread-speficic data identifier. Used to get thread-specific data.
  *
- *  @see ThreadData
- *  @see Init
- *//*-----------------------------------------------------------------------*/
-
+ * @see ThreadData
+ * @see Init
+ */
 pthread_key_t tsdKey;
 
-/*---------------------------------------------------------------------------
- * UnixGroupData
- *                                                                              *//*!
- *  Platform-specific group data.
+/**
+ * Platform-specific group data.
  *
- *  @see ThreadData
- *  @see GroupData
- *  @see Init
- *  @see AllocGroupData
- *  @see FreeGroupData
- *//*-----------------------------------------------------------------------*/
-
+ * @see ThreadData
+ * @see GroupData
+ * @see Init
+ * @see AllocGroupData
+ * @see FreeGroupData
+ */
 typedef struct UnixGroupData {
     GroupData data;                 /*!< Generic #GroupData structure. */
     struct UnixGroupData *next;     /*!< Next active group in list. */
@@ -92,44 +96,34 @@ typedef struct UnixGroupData {
     pthread_t threadGc;             /*!< GC thread. */
 } UnixGroupData;
 
-/*---------------------------------------------------------------------------
- * sharedGroups
- *                                                                              *//*!
- *  List of active groups in process.
+/**
+ * List of active groups in process.
  *
- *  @see UnixGroupData
- *  @see AllocGroupData
- *  @see FreeGroupData
- *//*-----------------------------------------------------------------------*/
-
+ * @see UnixGroupData
+ * @see AllocGroupData
+ * @see FreeGroupData
+ */
 static UnixGroupData *sharedGroups;
 
-/*---------------------------------------------------------------------------
- * mutexSharedGroups
- *                                                                              *//*!
- *  Mutex protecting #sharedGroups.
+/**
+ * Mutex protecting #sharedGroups.
  *
- *  @see sharedGroups
- *//*-----------------------------------------------------------------------*/
-
+ * @see sharedGroups
+ */
 static pthread_mutex_t mutexSharedGroups = PTHREAD_MUTEX_INITIALIZER;
 
-/*---------------------------------------------------------------------------
- * AllocGroupData
- *                                                                              *//*!
- *  Allocate and initialize a thread group data structure.
+/**
+ * Allocate and initialize a thread group data structure.
  *
- *  @return
- *      The newly allocated structure.
+ * @return The newly allocated structure.
  *
- *  @sideeffect
+ * @sideeffect
  *      Memory allocated and system objects created.
  *
- *  @see @ref threading_models "Threading Model Constants"
- *  @see UnixGroupData
- *  @see FreeGroupData
- *//*-----------------------------------------------------------------------*/
-
+ * @see @ref threading_models "Threading Model Constants"
+ * @see UnixGroupData
+ * @see FreeGroupData
+ */
 static UnixGroupData *
 AllocGroupData(
     unsigned int model)     /*!< Threading model. */
@@ -161,18 +155,15 @@ AllocGroupData(
     return groupData;
 }
 
-/*---------------------------------------------------------------------------
- * FreeGroupData
- *                                                                              *//*!
- *  Free a thread group data structure.
+/**
+ * Free a thread group data structure.
  *
- *  @sideeffect
+ * @sideeffect
  *      Memory freed and system objects deleted.
  *
- *  @see UnixGroupData
- *  @see AllocGroupData
- *//*-----------------------------------------------------------------------*/
-
+ * @see UnixGroupData
+ * @see AllocGroupData
+ */
 static void
 FreeGroupData(
     UnixGroupData *groupData)   /*!< Structure to free. */
@@ -205,39 +196,39 @@ FreeGroupData(
     GcCleanupGroup((GroupData *) groupData);
     free(groupData);
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Process & Threads                                                            *//*!   @{ *//*
- ******************************************************************************/
+/** @endcond @endprivate */
 
-/*---------------------------------------------------------------------------
- * once
- *                                                                              *//*!
- *  Ensure that per-process initialization only occurs once.
+/* End of Thread-Local Storage *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Process & Threads
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Ensure that per-process initialization only occurs once.
  *
- *  @see PlatEnter
- *  @see Init
- *//*-----------------------------------------------------------------------*/
-
+ * @see PlatEnter
+ * @see Init
+ */
 static pthread_once_t once = PTHREAD_ONCE_INIT;
 
-/*---------------------------------------------------------------------------
- * PlatEnter
- *                                                                              *//*!
- *  Enter the thread. If this is the first nested call, initialize thread data.
- *  If this is the first thread in its group, initialize group data as well.
+/**
+ * Enter the thread. If this is the first nested call, initialize thread data.
+ * If this is the first thread in its group, initialize group data as well.
  *
- *  @retval nonzero     if this is the first nested call.
- *  @retval zero        otherwise.
+ * @retval <>0  if this is the first nested call.
+ * @retval 0    otherwise.
  *
- *  @see @ref threading_models "Threading Model Constants"
- *  @see ThreadData
- *  @see UnixGroupData
- *  @see PlatLeave
- *  @see Col_Init
- *//*-----------------------------------------------------------------------*/
-
+ * @see @ref threading_models "Threading Model Constants"
+ * @see ThreadData
+ * @see UnixGroupData
+ * @see PlatLeave
+ * @see Col_Init
+ */
 int
 PlatEnter(
     unsigned int model) /*!< Threading model. */
@@ -319,21 +310,18 @@ PlatEnter(
     return 1;
 }
 
-/*---------------------------------------------------------------------------
- * PlatLeave
- *                                                                              *//*!
- *  Leave the thread. If this is the first nested call, cleanup thread data.
- *  If this is the last thread in its group, cleanup group data as well.
+/**
+ * Leave the thread. If this is the first nested call, cleanup thread data.
+ * If this is the last thread in its group, cleanup group data as well.
  *
- *  @retval nonzero     if this is the last nested call.
- *  @retval zero        otherwise.
+ * @retval <>0  if this is the last nested call.
+ * @retval 0    otherwise.
  *
- *  @see ThreadData
- *  @see UnixGroupData
- *  @see PlatEnter
- *  @see Col_Cleanup
- *//*-----------------------------------------------------------------------*/
-
+ * @see ThreadData
+ * @see UnixGroupData
+ * @see PlatEnter
+ * @see Col_Cleanup
+ */
 int
 PlatLeave()
 {
@@ -398,22 +386,18 @@ PlatLeave()
     return 1;
 }
 
-/*---------------------------------------------------------------------------
- * GcThreadProc
- *                                                                              *//*!
- *  Thread dedicated to the GC process. Activated when one of the worker threads
- *  in the group triggers the GC.
+/**
+ * Thread dedicated to the GC process. Activated when one of the worker threads
+ * in the group triggers the GC.
  *
- *  @return
- *      Always zero.
+ * @return Always zero.
  *
- *  @sideeffect
+ * @sideeffect
  *      Calls #PerformGC.
  *
- *  @see AllocGroupData
- *  @see PerformGC
- *//*-----------------------------------------------------------------------*/
-
+ * @see AllocGroupData
+ * @see PerformGC
+ */
 static void *
 GcThreadProc(
     void *arg)  /*!< #UnixGroupData. */
@@ -436,19 +420,16 @@ GcThreadProc(
     }
 }
 
-/*---------------------------------------------------------------------------
- * PlatSyncPauseGC
- *                                                                              *//*!
- *  Called when a worker thread calls the outermost Col_PauseGC().
+/**
+ * Called when a worker thread calls the outermost Col_PauseGC().
  *
- *  @sideeffect
+ * @sideeffect
  *      May block as long as a GC is underway.
  *
- *  @see GcThreadProc
- *  @see SyncPauseGC
- *  @see Col_PauseGC
- *//*-----------------------------------------------------------------------*/
-
+ * @see GcThreadProc
+ * @see SyncPauseGC
+ * @see Col_PauseGC
+ */
 void
 PlatSyncPauseGC(
     GroupData *data)    /*!< Group-specific data. */
@@ -464,19 +445,16 @@ PlatSyncPauseGC(
     pthread_mutex_unlock(&groupData->mutexGc);
 }
 
-/*---------------------------------------------------------------------------
- * PlatTrySyncPauseGC
- *                                                                              *//*!
- *  Called when a worker thread calls the outermost Col_TryPauseGC().
+/**
+ * Called when a worker thread calls the outermost Col_TryPauseGC().
  *
- *  @return
- *      Nonzero if successful.
+ * @retval <>0  if successful.
+ * @retval 0    if call would block.
  *
- *  @see GcThreadProc
- *  @see TrySyncPauseGC
- *  @see Col_TryPauseGC
- *//*-----------------------------------------------------------------------*/
-
+ * @see GcThreadProc
+ * @see TrySyncPauseGC
+ * @see Col_TryPauseGC
+ */
 int
 PlatTrySyncPauseGC(
     GroupData *data)    /*!< Group-specific data. */
@@ -494,21 +472,18 @@ PlatTrySyncPauseGC(
     return 1;
 }
 
-/*---------------------------------------------------------------------------
- * PlatSyncResumeGC
- *                                                                              *//*!
- *  Called when a worker thread calls the outermost Col_ResumeGC().
+/**
+ * Called when a worker thread calls the outermost Col_ResumeGC().
  *
- *  @sideeffect
+ * @sideeffect
  *      If last thread in group, may trigger the GC in the dedicated thread if
  *      previously scheduled. This will block further calls to
  *      Col_PauseGC() / PlatSyncPauseGC().
  *
- *  @see GcThreadProc
- *  @see SyncResumeGC
- *  @see Col_ResumeGC
- *//*-----------------------------------------------------------------------*/
-
+ * @see GcThreadProc
+ * @see SyncResumeGC
+ * @see Col_ResumeGC
+ */
 void
 PlatSyncResumeGC(
     GroupData *data,    /*!< Group-specific data. */
@@ -528,18 +503,15 @@ PlatSyncResumeGC(
     pthread_mutex_unlock(&groupData->mutexGc);
 }
 
-/*---------------------------------------------------------------------------
- * PlatEnterProtectRoots
- *                                                                              *//*!
- *  Enter protected section around root management structures.
+/**
+ * Enter protected section around root management structures.
  *
- *  @sideeffect
+ * @sideeffect
  *      Blocks until no thread owns the section.
  *
- *  @see PlatLeaveProtectRoots
- *  @see EnterProtectRoots
- *//*-----------------------------------------------------------------------*/
-
+ * @see PlatLeaveProtectRoots
+ * @see EnterProtectRoots
+ */
 void
 PlatEnterProtectRoots(
     GroupData *data)    /*!< Group-specific data. */
@@ -548,18 +520,15 @@ PlatEnterProtectRoots(
     pthread_mutex_lock(&groupData->mutexRoots);
 }
 
-/*---------------------------------------------------------------------------
- * PlatLeaveProtectRoots
- *                                                                              *//*!
- *  Leave protected section around root management structures.
+/**
+ * Leave protected section around root management structures.
  *
- *  @sideeffect
+ * @sideeffect
  *      May unblock any thread waiting for the section.
  *
- *  @see PlatEnterProtectRoots
- *  @see LeaveProtectRoots
- *//*-----------------------------------------------------------------------*/
-
+ * @see PlatEnterProtectRoots
+ * @see LeaveProtectRoots
+ */
 void
 PlatLeaveProtectRoots(
     GroupData *data)    /*!< Group-specific data. */
@@ -567,35 +536,34 @@ PlatLeaveProtectRoots(
     UnixGroupData *groupData = (UnixGroupData *) data;
     pthread_mutex_unlock(&groupData->mutexRoots);
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * System Page Allocation                                                       *//*!   @{ *//*
- ******************************************************************************/
+/** @endcond @endprivate */
 
-/*---------------------------------------------------------------------------
- * mutexRange
- *                                                                              *//*!
- *  Mutex protecting address range management.
+/* End of Process & Threads *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name System Page Allocation
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Mutex protecting address range management.
  *
- *  - #ranges:          Reserved address ranges for general purpose.
- *  - #dedicatedRanges: Dedicated address ranges for large pages.
+ * - #ranges:          Reserved address ranges for general purpose.
+ * - #dedicatedRanges: Dedicated address ranges for large pages.
  *
- *  @see PlatEnterProtectAddressRanges
- *  @see PlatLeaveProtectAddressRanges
- *//*-----------------------------------------------------------------------*/
-
+ * @see PlatEnterProtectAddressRanges
+ * @see PlatLeaveProtectAddressRanges
+ */
 pthread_mutex_t mutexRange = PTHREAD_MUTEX_INITIALIZER;
 
-/*---------------------------------------------------------------------------
- * PlatReserveRange
- *                                                                              *//*!
- *  Reserve an address range.
+/**
+ * Reserve an address range.
  *
- *  @return
- *      The reserved range's base address, or NULL if failure.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The reserved range's base address, or NULL if failure.
+ */
 void *
 PlatReserveRange(
     size_t size,    /*!< Number of pages to reserve. */
@@ -607,15 +575,12 @@ PlatReserveRange(
     return (addr == MAP_FAILED ? NULL : addr);
 }
 
-/*---------------------------------------------------------------------------
- * PlatReleaseRange
- *                                                                              *//*!
- *  Release an address range.
+/**
+ * Release an address range.
  *
- *  @return
- *      Nonzero for success.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval <>0  for success.
+ * @retval 0    for failure.
+ */
 int
 PlatReleaseRange(
     void *base,     /*!< Base address of range to release. */
@@ -624,15 +589,12 @@ PlatReleaseRange(
     return !munmap(base, size << shiftPage);
 }
 
-/*---------------------------------------------------------------------------
- * PlatAllocPages
- *                                                                              *//*!
- *  Allocate pages in reserved range.
+/**
+ * Allocate pages in reserved range.
  *
- *  @return
- *      Nonzero for success.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval <>0  for success.
+ * @retval 0    for failure.
+ */
 int
 PlatAllocPages(
     void *addr,     /*!< Address of first page to allocate. */
@@ -641,15 +603,12 @@ PlatAllocPages(
     return !mprotect(addr, number << shiftPage, PROT_READ | PROT_WRITE);
 }
 
-/*---------------------------------------------------------------------------
- * PlatFreePages
- *                                                                              *//*!
- *  Free pages in reserved range.
+/**
+ * Free pages in reserved range.
  *
- *  @return
- *      Nonzero for success.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval <>0  for success.
+ * @retval 0    for failure.
+ */
 int
 PlatFreePages(
     void *addr,     /*!< Address of first page to free. */
@@ -658,15 +617,12 @@ PlatFreePages(
     return !mprotect(addr, number << shiftPage, PROT_NONE);
 }
 
-/*---------------------------------------------------------------------------
- * PlatProtectPages
- *                                                                              *//*!
- *  Protect/unprotect pages in reserved range.
+/**
+ * Protect/unprotect pages in reserved range.
  *
- *  @return
- *      Nonzero for success.
- *//*-----------------------------------------------------------------------*/
-
+ * @retval <>0  for success.
+ * @retval 0    for failure.
+ */
 int
 PlatProtectPages(
     void *addr,     /*!< Address of first page to protect/unprotect */
@@ -677,14 +633,11 @@ PlatProtectPages(
             PROT_READ | (protect ? 0 : PROT_WRITE));
 }
 
-/*---------------------------------------------------------------------------
- * PageProtectSigAction
- *                                                                              *//*!
- *  Called upon memory protection signal (SIGSEGV).
+/**
+ * Called upon memory protection signal (SIGSEGV).
  *
- *  @see SysPageProtect
- *//*-----------------------------------------------------------------------*/
-
+ * @see SysPageProtect
+ */
 static void
 PageProtectSigAction(
     int signo,          /*!< Signal number caught. */
@@ -705,25 +658,28 @@ PageProtectSigAction(
 
     SysPageProtect(info->si_addr, 0);
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Initialization/Cleanup                                                       *//*!   @{ *//*
- ******************************************************************************/
+/** @endcond @endprivate */
 
-/*---------------------------------------------------------------------------
- * Init
- *                                                                              *//*!
- *  Initialization routine. Called through DllMain().
+/* End of System Page Allocation *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Initialization/Cleanup
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Initialization routine. Called through DllMain().
  *
- *  @sideeffect
+ * @sideeffect
  *      - Create thread-specific data key #tsdKey (never freed).
  *      - Install memory protection signal handler PageProtectSigAction() for
  *        parent tracking.
  *
- *  @see PlatEnter
- *//*-----------------------------------------------------------------------*/
-
+ * @see PlatEnter
+ */
 static void
 Init()
 {
@@ -741,6 +697,10 @@ Init()
     sa.sa_flags = SA_SIGINFO | SA_RESTART;
     sigaction(SIGSEGV, &sa, NULL);
 }
-                                                                                /*!     @} */
-                                                                                /*!     @} */
-                                                                                /*!     @endcond */
+
+/** @endcond @endprivate */
+
+/* End of Initialization/Cleanup *//*!\}*/
+
+/* End of System and Architecture (Unix-specific) *//*!\}*/
+/*! @endcond @endprivate */

@@ -1,22 +1,22 @@
-/*                                                                              *//*!   @file \
- * colGc.c
+/**
+ * @file colGc.c
  *
- *  This file implements the mark-and-sweep, generational, exact GC that is
- *  at the heart of Colibri.
+ * This file implements the mark-and-sweep, generational, exact GC that is
+ * at the heart of Colibri.
  *
- *  Newer cells are born in "Eden", i.e. generation 1 pool, and are promoted
- *  to older pools when they survive more than one collection.
+ * Newer cells are born in "Eden", i.e. generation 1 pool, and are promoted
+ * to older pools when they survive more than one collection.
  *
- *  A GC is triggered after a number of page allocations have been made
- *  resulting from cell allocation failures. They are only triggered outside
- *  of GC-protected sections to avoid collecting the newly allocated cells.
+ * A GC is triggered after a number of page allocations have been made
+ * resulting from cell allocation failures. They are only triggered outside
+ * of GC-protected sections to avoid collecting the newly allocated cells.
  *
- *  Younger pools are collected more often than older ones. Completing a
- *  given number of GCs on a pool will include the previous generation to
- *  the next GC. For example, if this generational factor is 10, then
- *  generation x will be collected every 10 collections of generation x-1.
- *  So gen-x collections will occur every 10 gen-(x-1) collection, i.e.
- *  every 10^x gen-0 collection.
+ * Younger pools are collected more often than older ones. Completing a
+ * given number of GCs on a pool will include the previous generation to
+ * the next GC. For example, if this generational factor is 10, then
+ * generation x will be collected every 10 collections of generation x-1.
+ * So gen-x collections will occur every 10 gen-(x-1) collection, i.e.
+ * every 10^x gen-0 collection.
  */
 
 #include "include/colibri.h"
@@ -35,11 +35,12 @@
 #include <memory.h>
 #include <limits.h>
 #include <malloc.h>
-                                                                                #       ifndef DOXYGEN
+
 /*
  * Prototypes for functions used only in this file.
  */
 
+/*! \cond IGNORE */
 static size_t           GetNbCells(Col_Word word);
 static void             ClearPoolBitmasks(MemoryPool *pool);
 static void             MarkReachableCellsFromRoots(GroupData *data);
@@ -52,39 +53,38 @@ static void             SweepUnreachableCells(GroupData *data,
 static void             PromotePages(GroupData *data, MemoryPool *pool);
 static void             ResetPool(MemoryPool *pool);
 static Col_CustomWordChildEnumProc MarkWordChild;
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
+
 
 /*
-================================================================================*//*!   @addtogroup gc \
-Garbage Collection                                                              *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup gc Garbage Collection
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * GC Exceptions                                                                *//*!   @{ *//*
- ******************************************************************************/
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------   *//*!   @def \
- * PRECONDITION_GCPROTECTED
- *                                                                                      @hideinitializer
- *  Precondition macro checking that the call is performed within a
- *  GC-protected section (i.e.\ between Col_PauseGC() / Col_TryPauseGC() and
- *  Col_ResumeGC()).
- *
- *  May be followed by a return block.
- *
- *  @param data     #ThreadData
- *
- *  @error{COL_ERROR_GCPROTECT}
- *
- *  @see Col_Error
- *  @see ThreadData
- *
- *  @private
- *
- *  @todo rewrite with #COL_RUNTIMECHECK
- *//*-----------------------------------------------------------------------*/
+/***************************************************************************//*!
+ * \name GC Exceptions
+ ***************************************************************************\{*/
 
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Precondition macro checking that the call is performed within a
+ * GC-protected section (i.e.\ between Col_PauseGC() / Col_TryPauseGC() and
+ * Col_ResumeGC()).
+ *
+ * May be followed by a return block.
+ *
+ * @param data  #ThreadData
+ *
+ * @error{COL_ERROR_GCPROTECT}
+ *
+ * @see Col_Error
+ * @see ThreadData
+ *
+ * @todo rewrite with #COL_RUNTIMECHECK
+ * @hideinitializer
+ */
 #define PRECONDITION_GCPROTECTED(data) \
     if (!(data)->pauseGC) { \
         Col_Error(COL_ERROR, ColibriDomain, COL_ERROR_GCPROTECT); \
@@ -92,25 +92,26 @@ Garbage Collection                                                              
     } \
     if (0) \
 PRECONDITION_GCPROTECTED_FAILED:
-                                                                                /*!     @endcond */
-                                                                                /*!     @} */
-/********************************************************************************//*!   @name \
- * Process & Threads                                                            *//*!   @{ *//*
+
+/** @endcond @endprivate */
+
+/* End of GC Exceptions *//*!\}*/
+
+
+/*******************************************************************************
+ * Process & Threads
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * GcInitThread
- *                                                                              *//*!
- *  Per-thread GC-related initialization.
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Per-thread GC-related initialization.
  *
- *  @sideeffect
+ * @sideeffect
  *      Initialize the eden pool (which is always thread-specific).
  *
- *  @see ThreadData
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see ThreadData
+ */
 void
 GcInitThread(
     ThreadData *data)   /*!< Thread-specific data. */
@@ -118,19 +119,14 @@ GcInitThread(
     PoolInit(&data->eden, 1);
 }
 
-/*---------------------------------------------------------------------------
- * GcInitGroup
- *                                                                              *//*!
- *  Per-group GC-related initialization.
+/**
+ * Per-group GC-related initialization.
  *
- *  @sideeffect
+ * @sideeffect
  *      Initialize all memory pools but eden.
  *
- *  @see GroupData
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see GroupData
+ */
 void
 GcInitGroup(
     GroupData *data)    /*!< Group-specific data. */
@@ -142,19 +138,14 @@ GcInitGroup(
     }
 }
 
-/*---------------------------------------------------------------------------
- * GcCleanupThread
- *                                                                              *//*!
- *  Per-thread GC-related cleanup.
+/**
+ * Per-thread GC-related cleanup.
  *
- *  @sideeffect
+ * @sideeffect
  *      Cleanup the eden pool (which is always thread-specific).
  *
- *  @see ThreadData
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see ThreadData
+ */
 void
 GcCleanupThread(
     ThreadData *data)   /*!< Thread-specific data. */
@@ -162,19 +153,14 @@ GcCleanupThread(
     PoolCleanup(&data->eden);
 }
 
-/*---------------------------------------------------------------------------
- * GcCleanupGroup
- *                                                                              *//*!
- *  Per-group GC-related cleanup.
+/**
+ * Per-group GC-related cleanup.
  *
- *  @sideeffect
+ * @sideeffect
  *      Cleanup all memory pools but eden.
  *
- *  @see GroupData
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see GroupData
+ */
 void
 GcCleanupGroup(
     GroupData *data)    /*!< Group-specific data. */
@@ -185,23 +171,126 @@ GcCleanupGroup(
         PoolCleanup(&data->pools[generation-2]);
     }
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Word Lifetime Management                                                     *//*!   @{ *//*
+/** @endcond @endprivate */
+
+/* End of Process & Threads */
+
+
+/***************************************************************************//*!
+ * \name GC-Protected Sections
+ ***************************************************************************\{*/
+
+/**
+ * Pause the automatic garbage collection. Calls can be nested. Code
+ * between the outermost pause and resume calls define a GC-protected
+ * section.
+ *
+ * When the threading model isn't #COL_SINGLE, blocks as long as a GC is
+ * underway.
+ *
+ * @see Col_TryPauseGC
+ * @see Col_ResumeGC
+ */
+void
+Col_PauseGC()
+{
+    ThreadData *data = PlatGetThreadData();
+    if (data->pauseGC == 0) {
+        SyncPauseGC(data->groupData);
+    }
+    data->pauseGC++;
+}
+
+/**
+ * Try to pause the automatic garbage collection. Calls can be nested.
+ *
+ * @retval 1    if successful
+ * @retval 0    if a GC is underway (this implies the threading model isn't
+ *              #COL_SINGLE). In this case the caller must try again later
+ *              or use the blocking version.
+ *
+ * @see Col_PauseGC
+ * @see Col_ResumeGC
+ */
+int
+Col_TryPauseGC()
+{
+    ThreadData *data = PlatGetThreadData();
+    if (data->pauseGC || TrySyncPauseGC(data->groupData)) {
+        data->pauseGC++;
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+/**
+ * Resume the automatic garbage collection. Calls can be nested.
+ *
+ * Leaving a GC-protected section potentially triggers a GC.
+ *
+ * @pre
+ *      Must be called within a GC-protected section.
+ *
+ * @sideeffect
+ *      May trigger the garbage collection.
+ *
+ * @see Col_PauseGC
+ * @see Col_TryPauseGC
+ */
+void
+Col_ResumeGC()
+{
+    ThreadData *data = PlatGetThreadData();
+
+    /*
+     * Check preconditions.
+     */
+
+    /*! @error{COL_ERROR_GCPROTECT} */
+    PRECONDITION_GCPROTECTED(data) return;
+
+    if (data->pauseGC > 1) {
+        /*
+         * Within nested sections.
+         */
+
+        data->pauseGC--;
+        return;
+    } else {
+        /*
+         * Leaving protected section.
+         */
+
+        size_t threshold = data->groupData->pools[0].nbPages / GC_GEN_FACTOR;
+
+        /*
+         * GC is needed when the number of pages allocated since the last GC
+         * exceed a given threshold.
+         */
+
+        int performGc = (data->eden.nbAlloc >= GC_THRESHOLD(threshold));
+        ASSERT(data->pauseGC == 1);
+        SyncResumeGC(data->groupData, performGc);
+        data->pauseGC = 0;
+    }
+}
+
+/* End of GC-Protected Sections *//*!\}*/
+
+
+/*******************************************************************************
+ * Mark & Sweep Algorithm
  ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * GetNbCells
- *                                                                              *//*!
- *  Get the number of cells taken by a word.
- *
- *  @return
- *      The number of cells.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Get the number of cells taken by a word.
+ *
+ * @return The number of cells.
+ */
 static size_t
 GetNbCells(
     Col_Word word)  /*!< The word. */
@@ -251,558 +340,20 @@ GetNbCells(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_WordPreserve
- *                                                                              *//*!
- *  Preserve a persistent reference to a word, making it a root. This allows
- *  words to be safely stored in external structures regardless of memory
- *  management cycles. More specifically, they can't be collected and their
- *  address remains constant.
+/**
+ * Perform a garbage collection.
  *
- *  Calls can be nested. A reference count is updated accordingly.
- *
- *  Roots are stored in a trie indexed by the root source addresses.
- *
- *  @pre
- *      Must be called within a GC-protected section.
- *
- *  @sideeffect
- *      May allocate memory cells. Marks word as pinned.
- *
- *  @see Col_WordRelease
- *//*-----------------------------------------------------------------------*/
-
-void
-Col_WordPreserve(
-    Col_Word word)  /*!< The word to preserve. */
-{
-    ThreadData *data = PlatGetThreadData();
-    Cell *node, *leaf, *parent, *newParent;
-    Col_Word leafSource;
-    uintptr_t mask;
-
-    /*
-     * Check preconditions.
-     */
-
-    PRECONDITION_GCPROTECTED(data) return;                                      /*!     @error{COL_ERROR_GCPROTECT} */
-
-    /*
-     * Rule out immediate values.
-     */
-
-    switch (WORD_TYPE(word)) {
-    case WORD_TYPE_NIL:
-    case WORD_TYPE_SMALLINT:
-    case WORD_TYPE_SMALLFP:
-    case WORD_TYPE_CHARBOOL:
-    case WORD_TYPE_SMALLSTR:
-    case WORD_TYPE_VOIDLIST:
-        /*
-         * Immediate values.
-         */
-
-        return;
-
-    case WORD_TYPE_CIRCLIST:
-        /*
-         * Preserve core list.
-         */
-
-        Col_WordPreserve(WORD_CIRCLIST_CORE(word));
-        return;
-
-        /* WORD_TYPE_UNKNOWN */
-    }
-
-    /*
-     * Search for matching entry in root trie.
-     */
-
-    EnterProtectRoots(data->groupData);
-    {
-        node = data->groupData->roots;
-        while (node) {
-            if (!ROOT_IS_LEAF(node)) {
-                if ((uintptr_t) word & ROOT_NODE_MASK(node)) {
-                    /*
-                     * Recurse on right.
-                     */
-
-                    node = ROOT_NODE_RIGHT(node);
-                } else {
-                    /*
-                     * Recurse on left.
-                     */
-
-                    node = ROOT_NODE_LEFT(node);
-                }
-                continue;
-            }
-
-            /*
-             * Leaf node.
-             */
-
-            ASSERT(ROOT_IS_LEAF(node));
-            node = ROOT_GET_NODE(node);
-            leafSource = ROOT_LEAF_SOURCE(node);
-            if (word == leafSource) {
-                /*
-                 * Found! Increment reference count.
-                 */
-
-                ASSERT(WORD_PINNED(word));
-                ROOT_LEAF_REFCOUNT(node)++;
-                goto end;
-            }
-            break;
-        }
-
-        /*
-         * Not found, insert. Pin the word so that its address doesn't change
-         * during compaction.
-         */
-
-        WORD_SET_PINNED(word);
-
-        leaf = PoolAllocCells(&data->groupData->rootPool, 1);
-        ROOT_LEAF_INIT(leaf, NULL, PAGE_GENERATION(CELL_PAGE(word)), 1, word);
-
-        if (!data->groupData->roots) {
-            /*
-             * First leaf.
-             */
-
-            data->groupData->roots = ROOT_GET_LEAF(leaf);
-            goto end;
-        }
-
-        /*
-         * Get diff mask between inserted key and existing leaf key, i.e. only
-         * keep the highest bit set.
-         * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
-         */
-
-        mask = (uintptr_t) word ^ (uintptr_t) leafSource;
-        ASSERT(mask);
-        mask |= mask >> 1;
-        mask |= mask >> 2;
-        mask |= mask >> 4;
-        mask |= mask >> 8;
-        mask |= mask >> 16;
-        mask >>= 1;
-        mask++;
-        ASSERT(mask);
-
-        /*
-         * Find insertion point.
-         */
-
-        node = data->groupData->roots;
-        while (node) {
-            if (!ROOT_IS_LEAF(node) && mask < ROOT_NODE_MASK(node)) {
-                if ((uintptr_t) word & ROOT_NODE_MASK(node)) {
-                    /*
-                     * Recurse on right.
-                     */
-
-                    node = ROOT_NODE_RIGHT(node);
-                } else {
-                    /*
-                     * Recurse on left.
-                     */
-
-                    node = ROOT_NODE_LEFT(node);
-                }
-                continue;
-            }
-            break;
-        }
-        ASSERT(node);
-
-        /*
-         * Insert leaf here.
-         */
-
-        parent = ROOT_PARENT(ROOT_GET_NODE(node));
-        newParent = PoolAllocCells(&data->groupData->rootPool, 1);
-        if ((uintptr_t) word & mask) {
-            /*
-             * Leaf is right.
-             */
-
-            ROOT_NODE_INIT(newParent, parent, mask, node, ROOT_GET_LEAF(leaf));
-        } else {
-            /*
-             * Leaf is left.
-             */
-
-            ROOT_NODE_INIT(newParent, parent, mask, ROOT_GET_LEAF(leaf), node);
-        }
-        ROOT_PARENT(leaf) = newParent;
-        ROOT_PARENT(ROOT_GET_NODE(node)) = newParent;
-        if (!parent) {
-            /*
-             * Leaf was trie root.
-             */
-
-            data->groupData->roots = newParent;
-        } else if ((uintptr_t) word & ROOT_NODE_MASK(parent)) {
-            ROOT_NODE_RIGHT(parent) = newParent;
-        } else {
-            ROOT_NODE_LEFT(parent) = newParent;
-        }
-    }
-end:
-    LeaveProtectRoots(data->groupData);
-}
-
-/*---------------------------------------------------------------------------
- * Col_WordRelease
- *                                                                              *//*!
- *  Release a root word previously made by Col_WordPreserve().
- *
- *  Calls can be nested. A reference count is updated accordingly. Once the
- *  count drops below 1, the root becomes stale.
- *
- *  @pre
- *      Must be called within a GC-protected section.
- *
- *  @sideeffect
- *      May release memory cells. Unpin word.
- *
- *  @see Col_WordPreserve
- *//*-----------------------------------------------------------------------*/
-
-void
-Col_WordRelease(
-    Col_Word word)  /*!< The root word to release. */
-{
-    ThreadData *data = PlatGetThreadData();
-    Cell *node, *sibling, *parent, *grandParent;
-
-    /*
-     * Check preconditions.
-     */
-
-    PRECONDITION_GCPROTECTED(data) return;                                      /*!     @error{COL_ERROR_GCPROTECT} */
-
-    /*
-     * Rule out immediate values.
-     */
-
-    switch (WORD_TYPE(word)) {
-    case WORD_TYPE_NIL:
-    case WORD_TYPE_SMALLINT:
-    case WORD_TYPE_SMALLFP:
-    case WORD_TYPE_CHARBOOL:
-    case WORD_TYPE_SMALLSTR:
-    case WORD_TYPE_VOIDLIST:
-        /*
-         * Immediate values.
-         */
-
-        return;
-
-    case WORD_TYPE_CIRCLIST:
-        /*
-         * Release core list.
-         */
-
-        Col_WordRelease(WORD_CIRCLIST_CORE(word));
-        return;
-
-        /* WORD_TYPE_UNKNOWN */
-    }
-
-    EnterProtectRoots(data->groupData);
-    {
-        if (!WORD_PINNED(word)) {
-            /*
-             * Roots are always pinned.
-             */
-
-            goto end;
-        }
-
-        /*
-         * Search for matching entry.
-         */
-
-        if (!data->groupData->roots) {
-            goto end;
-        }
-        node = data->groupData->roots;
-        while (node) {
-            if (!ROOT_IS_LEAF(node)) {
-                if ((uintptr_t) word & ROOT_NODE_MASK(node)) {
-                    /*
-                     * Recurse on right.
-                     */
-
-                    node = ROOT_NODE_RIGHT(node);
-                } else {
-                    /*
-                     * Recurse on left.
-                     */
-
-                    node = ROOT_NODE_LEFT(node);
-                }
-                continue;
-            }
-
-            /*
-             * Leaf node.
-             */
-
-            ASSERT(ROOT_IS_LEAF(node));
-            node = ROOT_GET_NODE(node);
-            if (word != ROOT_LEAF_SOURCE(node)) {
-                /*
-                 * Source doesn't match.
-                 */
-
-                goto end;
-            }
-            break;
-        }
-        ASSERT(node);
-
-        /*
-         * Decrement reference count.
-         */
-
-        if (--ROOT_LEAF_REFCOUNT(node)) {
-            /*
-             * Root is still valid.
-             */
-
-            goto end;
-        }
-
-        /*
-         * Remove leaf. Unpin word as well.
-         */
-
-        ASSERT(TestCell(CELL_PAGE(node), CELL_INDEX(node)));
-        ClearCells(CELL_PAGE(node), CELL_INDEX(node), 1);
-        WORD_CLEAR_PINNED(word);
-
-        parent = ROOT_PARENT(node);
-        if (!parent) {
-            /*
-             * Leaf was trie root.
-             */
-
-            data->groupData->roots = NULL;
-            goto end;
-        }
-
-        /*
-         * Remove parent and replace by sibling.
-         */
-
-        ASSERT(TestCell(CELL_PAGE(parent), CELL_INDEX(parent)));
-        ClearCells(CELL_PAGE(parent), CELL_INDEX(parent), 1);
-        if ((uintptr_t) word & ROOT_NODE_MASK(parent)) {
-            sibling = ROOT_NODE_LEFT(parent);
-        } else {
-            sibling = ROOT_NODE_RIGHT(parent);
-        }
-
-        grandParent = ROOT_PARENT(parent);
-        if (!grandParent) {
-            /*
-             * Parent was trie root.
-             */
-
-            data->groupData->roots = sibling;
-        } else if ((uintptr_t) word & ROOT_NODE_MASK(grandParent)) {
-            ROOT_NODE_RIGHT(grandParent) = sibling;
-        } else {
-            ROOT_NODE_LEFT(grandParent) = sibling;
-        }
-        ROOT_PARENT(ROOT_GET_NODE(sibling)) = grandParent;
-    }
-end:
-    LeaveProtectRoots(data->groupData);
-}
-                                                                                /*!     @} */
-
-/********************************************************************************//*!   @name \
- * Cell Allocation                                                              *//*!   @{ *//*
- ******************************************************************************/
-
-/*---------------------------------------------------------------------------
- * AllocCells
- *                                                                              *//*!
- *  Allocate cells in the eden pool.
- *
- *  @pre
- *      Must be called within a GC-protected section.
- *
- *  @retval pointer     to the first allocated cell if successful.
- *  @retval NULL        otherwise.
- *
- *  @see PoolAllocCells
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
-Cell *
-AllocCells(
-    size_t number)  /*!< Number of cells to allocate. */
-{
-    ThreadData *data = PlatGetThreadData();
-
-    /*
-     * Check preconditions.
-     */
-
-    PRECONDITION_GCPROTECTED(data) return NULL;                                 /*!     @error{COL_ERROR_GCPROTECT} */
-
-    /*
-     * Alloc cells; alloc pages if needed.
-     */
-
-    return PoolAllocCells(&data->eden, number);
-}
-                                                                                /*!     @} */
-
-/********************************************************************************//*!   @name \
- * GC-Protected Sections                                                        *//*!   @{ *//*
- ******************************************************************************/
-
-/*---------------------------------------------------------------------------
- * Col_PauseGC
- *                                                                              *//*!
- *  Pause the automatic garbage collection. Calls can be nested. Code
- *  between the outermost pause and resume calls define a GC-protected
- *  section.
- *
- *  When the threading model isn't #COL_SINGLE, blocks as long as a GC is
- *  underway.
- *
- *  @see Col_TryPauseGC
- *  @see Col_ResumeGC
- *//*-----------------------------------------------------------------------*/
-
-void
-Col_PauseGC()
-{
-    ThreadData *data = PlatGetThreadData();
-    if (data->pauseGC == 0) {
-        SyncPauseGC(data->groupData);
-    }
-    data->pauseGC++;
-}
-
-/*---------------------------------------------------------------------------
- * Col_TryPauseGC
- *                                                                              *//*!
- *  Try to pause the automatic garbage collection. Calls can be nested.
- *
- *  @retval 1   if successful
- *  @retval 0   if a GC is underway (this implies the threading model isn't
- *              #COL_SINGLE). In this case the caller must try again later
- *              or use the blocking version.
- *
- *  @see Col_PauseGC
- *  @see Col_ResumeGC
- *//*-----------------------------------------------------------------------*/
-
-int
-Col_TryPauseGC()
-{
-    ThreadData *data = PlatGetThreadData();
-    if (data->pauseGC || TrySyncPauseGC(data->groupData)) {
-        data->pauseGC++;
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-/*---------------------------------------------------------------------------
- * Col_ResumeGC
- *                                                                              *//*!
- *  Resume the automatic garbage collection. Calls can be nested.
- *
- *  Leaving a GC-protected section potentially triggers a GC.
- *
- *  @pre
- *      Must be called within a GC-protected section.
- *
- *  @sideeffect
- *      May trigger the garbage collection.
- *
- *  @see Col_PauseGC
- *  @see Col_TryPauseGC
- *//*-----------------------------------------------------------------------*/
-
-void
-Col_ResumeGC()
-{
-    ThreadData *data = PlatGetThreadData();
-
-    /*
-     * Check preconditions.
-     */
-
-    PRECONDITION_GCPROTECTED(data) return;                                      /*!     @error{COL_ERROR_GCPROTECT} */
-
-    if (data->pauseGC > 1) {
-        /*
-         * Within nested sections.
-         */
-
-        data->pauseGC--;
-        return;
-    } else {
-        /*
-         * Leaving protected section.
-         */
-
-        size_t threshold = data->groupData->pools[0].nbPages / GC_GEN_FACTOR;
-
-        /*
-         * GC is needed when the number of pages allocated since the last GC
-         * exceed a given threshold.
-         */
-
-        int performGc = (data->eden.nbAlloc >= GC_THRESHOLD(threshold));
-        ASSERT(data->pauseGC == 1);
-        SyncResumeGC(data->groupData, performGc);
-        data->pauseGC = 0;
-    }
-}
-                                                                                /*!     @} */
-                                                                                
-/********************************************************************************//*!   @name \
- * Mark & Sweep Algorithm                                                       *//*!   @{ *//*
- ******************************************************************************/
-
- /*---------------------------------------------------------------------------
- * PerformGC
- *                                                                              *//*!
- *  Perform a garbage collection.
- *
- *  @sideeffect
+ * @sideeffect
  *      May free cells or pages, promote words across pools, or allocate new
  *      pages during promotion.
  *
- *  @see ClearPoolBitmasks
- *  @see MarkReachableCellsFromRoots
- *  @see MarkReachableCellsFromParents
- *  @see SweepUnreachableCells
- *  @see PromotePages
- *  @see ResetPool
-  *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
-
+ * @see ClearPoolBitmasks
+ * @see MarkReachableCellsFromRoots
+ * @see MarkReachableCellsFromParents
+ * @see SweepUnreachableCells
+ * @see PromotePages
+ * @see ResetPool
+ */
 void
 PerformGC(
     GroupData *data)    /*!< Group-specific data. */
@@ -961,14 +512,9 @@ PerformGC(
     }
 }
 
-/*---------------------------------------------------------------------------
- * ClearPoolBitmasks
- *                                                                              *//*!
- *  Unprotect and clear all bitmasks in the pool's pages.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Unprotect and clear all bitmasks in the pool's pages.
+ */
 static void
 ClearPoolBitmasks(
     MemoryPool *pool)   /*!< The pool to traverse. */
@@ -984,20 +530,15 @@ ClearPoolBitmasks(
     }
 }
 
-/*---------------------------------------------------------------------------
- * MarkReachableCellsFromRoots
- *                                                                              *//*!
- *  Mark all cells reachable from the valid roots.
+/**
+ * Mark all cells reachable from the valid roots.
  *
- *  Traversal will stop at cells from uncollected pools. Cells from these
- *  pools having children in collected pools will be traversed in the
- *  next phase (MarkReachableCellsFromParents()).
+ * Traversal will stop at cells from uncollected pools. Cells from these
+ * pools having children in collected pools will be traversed in the
+ * next phase (MarkReachableCellsFromParents()).
  *
- *  @see MarkWord
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see MarkWord
+ */
 static void
 MarkReachableCellsFromRoots(
     GroupData *data)    /*!< Group-specific data. */
@@ -1049,17 +590,12 @@ MarkReachableCellsFromRoots(
     }
 }
 
-/*---------------------------------------------------------------------------
- * MarkReachableCellsFromParents
- *                                                                              *//*!
- *  Mark all cells reachable from cells in pages with potentially younger
- *  children.
+/**
+ * Mark all cells reachable from cells in pages with potentially younger
+ * children.
  *
- *  @see MarkWord
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see MarkWord
+ */
 static void
 MarkReachableCellsFromParents(
     GroupData *data)    /*!< Group-specific data. */
@@ -1115,14 +651,9 @@ MarkReachableCellsFromParents(
     }
 }
 
-/*---------------------------------------------------------------------------
- * PurgeParents
- *                                                                              *//*!
- *  Purge all parent nodes whose page is not marked as parent.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Purge all parent nodes whose page is not marked as parent.
+ */
 static void
 PurgeParents(
     GroupData *data)    /*!< Group-specific data. */
@@ -1180,20 +711,15 @@ PurgeParents(
     }
 }
 
-/*---------------------------------------------------------------------------
- * MarkWordChild
- *                                                                              *//*!
- *  Word children enumeration function used to follow all children of a
- *  reachable word during GC. Follows Col_CustomWordChildEnumProc()
- *  signature.
+/**
+ * Word children enumeration function used to follow all children of a
+ * reachable word during GC. Follows Col_CustomWordChildEnumProc()
+ * signature.
  *
- *  @see Col_CustomWordType
- *  @see Col_CustomWordChildrenProc
- *  @see MarkWord
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CustomWordType
+ * @see Col_CustomWordChildrenProc
+ * @see MarkWord
+ */
 static void
 MarkWordChild(
     Col_Word word,              /*!< Custom word whose child is being
@@ -1205,21 +731,16 @@ MarkWordChild(
     MarkWord((GroupData *) clientData, childPtr, CELL_PAGE(word));
 }
 
-/*---------------------------------------------------------------------------
- * MarkWord
- *                                                                              *//*!
- *  Mark word and all its children as reachable.
+/**
+ * Mark word and all its children as reachable.
  *
- *  The algorithm is recursive and stops when it reaches an already set
- *  cell. This handles loops and references to older pools, where cells are
- *  already set.
+ * The algorithm is recursive and stops when it reaches an already set
+ * cell. This handles loops and references to older pools, where cells are
+ * already set.
  *
- *  To limit stack growth, tail recurses when possible using an infinite
- *  loop with conditional return.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * To limit stack growth, tail recurses when possible using an infinite
+ * loop with conditional return.
+ */
 static void
 MarkWord(
     GroupData *data,    /*!< Group-specific data. */
@@ -1235,10 +756,12 @@ MarkWord(
     /*
      * Entry point for tail recursive calls.
      */
-                                                                                #       ifndef DOXYGEN
+
+/*! \cond IGNORE */
 #define TAIL_RECURSE(_wordPtr, _parentPage) \
     wordPtr = (_wordPtr); parentPage = (_parentPage); goto start;
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
+
 start:
 
     type = WORD_TYPE(*wordPtr);
@@ -1552,21 +1075,16 @@ start:
     }
 }
 
-/*---------------------------------------------------------------------------
- * RememberSweepable
- *                                                                              *//*!
- *  Remember custom words needing cleanup upon deletion. Such words are
- *  chained in their order of creation, latest being inserted at the head of
- *  the list. This implies that cleanup can stop traversing the list at the
- *  first custom word that belongs to a non GC'd pool.
+/**
+ * Remember custom words needing cleanup upon deletion. Such words are
+ * chained in their order of creation, latest being inserted at the head of
+ * the list. This implies that cleanup can stop traversing the list at the
+ * first custom word that belongs to a non GC'd pool.
  *
- *  @see Col_CustomWordType
- *  @see Col_CustomWordFreeProc
- *  @see Col_NewCustomWord
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CustomWordType
+ * @see Col_CustomWordFreeProc
+ * @see Col_NewCustomWord
+ */
 void
 RememberSweepable(
     Col_Word word,              /*!< The word to declare. */
@@ -1587,21 +1105,16 @@ RememberSweepable(
     data->eden.sweepables = word;
 }
 
-/*---------------------------------------------------------------------------
- * SweepUnreachableCells
- *                                                                              *//*!
- *  Perform cleanup for all collected custom words that need sweeping.
+/**
+ * Perform cleanup for all collected custom words that need sweeping.
  *
- *  @sideeffect
+ * @sideeffect
  *      Calls each cleaned word's freeProc.
  *
- *  @see Col_CustomWordType
- *  @see Col_CustomWordFreeProc
- *  @see WORD_CUSTOM_NEXT
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CustomWordType
+ * @see Col_CustomWordFreeProc
+ * @see WORD_CUSTOM_NEXT
+ */
 static void
 SweepUnreachableCells(
     GroupData *data,    /*!< Group-specific data. */
@@ -1673,23 +1186,18 @@ SweepUnreachableCells(
     }
 }
 
-/*---------------------------------------------------------------------------
- * CleanupSweepables
- *                                                                              *//*!
- *  Perform cleanup for all custom words that need sweeping. Called during
- *  global cleanup.
+/**
+ * Perform cleanup for all custom words that need sweeping. Called during
+ * global cleanup.
  *
- *  @sideeffect
+ * @sideeffect
  *      Calls each cleaned word's freeProc.
  *
- *  @see Col_CustomWordType
- *  @see Col_CustomWordFreeProc
- *  @see WORD_CUSTOM_NEXT
- *  @see PoolCleanup
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_CustomWordType
+ * @see Col_CustomWordFreeProc
+ * @see WORD_CUSTOM_NEXT
+ * @see PoolCleanup
+ */
 void
 CleanupSweepables(
     MemoryPool *pool)   /*!< The pool to cleanup. */
@@ -1716,15 +1224,10 @@ CleanupSweepables(
     }
 }
 
-/*---------------------------------------------------------------------------
- * PromotePages
- *                                                                              *//*!
- *  Promote non-empty pages to the next pool. This simply move the pool's
- *  pages to the target pool.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Promote non-empty pages to the next pool. This simply move the pool's
+ * pages to the target pool.
+ */
 static void
 PromotePages(
     GroupData *data,    /*!< Group-specific data. */
@@ -1803,14 +1306,9 @@ PromotePages(
     pool->nbSetCells = 0;
 }
 
-/*---------------------------------------------------------------------------
- * ResetPool
- *                                                                              *//*!
- *  Reset GC-related info and fast cell pointers.
- *  
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+/**
+ * Reset GC-related info and fast cell pointers.
+ */
 static void
 ResetPool(
     MemoryPool *pool)   /*!< The pool to reset fields for. */
@@ -1823,5 +1321,448 @@ ResetPool(
         pool->lastFreeCell[i] = PAGE_CELL(pool->pages, 0);
     }
 }
-                                                                                /*!     @} */
-                                                                                /*!     @} */
+
+/** @endcond @endprivate */
+
+/* End of Mark & Sweep Algorithm */
+
+/* End of Garbage Collection *//*!\}*/
+
+
+/*
+===========================================================================*//*!
+\weakgroup words Words
+\{*//*==========================================================================
+*/
+
+/*******************************************************************************
+ * Word Lifetime Management
+ ******************************************************************************/
+
+/**
+ * Preserve a persistent reference to a word, making it a root. This allows
+ * words to be safely stored in external structures regardless of memory
+ * management cycles. More specifically, they can't be collected and their
+ * address remains constant.
+ *
+ * Calls can be nested. A reference count is updated accordingly.
+ *
+ * Roots are stored in a trie indexed by the root source addresses.
+ *
+ * @pre
+ *      Must be called within a GC-protected section.
+ *
+ * @sideeffect
+ *      May allocate memory cells. Marks word as pinned.
+ *
+ * @see Col_WordRelease
+ */
+void
+Col_WordPreserve(
+    Col_Word word)  /*!< The word to preserve. */
+{
+    ThreadData *data = PlatGetThreadData();
+    Cell *node, *leaf, *parent, *newParent;
+    Col_Word leafSource;
+    uintptr_t mask;
+
+    /*
+     * Check preconditions.
+     */
+
+    /*! @error{COL_ERROR_GCPROTECT} */
+    PRECONDITION_GCPROTECTED(data) return;
+
+    /*
+     * Rule out immediate values.
+     */
+
+    switch (WORD_TYPE(word)) {
+    case WORD_TYPE_NIL:
+    case WORD_TYPE_SMALLINT:
+    case WORD_TYPE_SMALLFP:
+    case WORD_TYPE_CHARBOOL:
+    case WORD_TYPE_SMALLSTR:
+    case WORD_TYPE_VOIDLIST:
+        /*
+         * Immediate values.
+         */
+
+        return;
+
+    case WORD_TYPE_CIRCLIST:
+        /*
+         * Preserve core list.
+         */
+
+        Col_WordPreserve(WORD_CIRCLIST_CORE(word));
+        return;
+
+        /* WORD_TYPE_UNKNOWN */
+    }
+
+    /*
+     * Search for matching entry in root trie.
+     */
+
+    EnterProtectRoots(data->groupData);
+    {
+        node = data->groupData->roots;
+        while (node) {
+            if (!ROOT_IS_LEAF(node)) {
+                if ((uintptr_t) word & ROOT_NODE_MASK(node)) {
+                    /*
+                     * Recurse on right.
+                     */
+
+                    node = ROOT_NODE_RIGHT(node);
+                } else {
+                    /*
+                     * Recurse on left.
+                     */
+
+                    node = ROOT_NODE_LEFT(node);
+                }
+                continue;
+            }
+
+            /*
+             * Leaf node.
+             */
+
+            ASSERT(ROOT_IS_LEAF(node));
+            node = ROOT_GET_NODE(node);
+            leafSource = ROOT_LEAF_SOURCE(node);
+            if (word == leafSource) {
+                /*
+                 * Found! Increment reference count.
+                 */
+
+                ASSERT(WORD_PINNED(word));
+                ROOT_LEAF_REFCOUNT(node)++;
+                goto end;
+            }
+            break;
+        }
+
+        /*
+         * Not found, insert. Pin the word so that its address doesn't change
+         * during compaction.
+         */
+
+        WORD_SET_PINNED(word);
+
+        leaf = PoolAllocCells(&data->groupData->rootPool, 1);
+        ROOT_LEAF_INIT(leaf, NULL, PAGE_GENERATION(CELL_PAGE(word)), 1, word);
+
+        if (!data->groupData->roots) {
+            /*
+             * First leaf.
+             */
+
+            data->groupData->roots = ROOT_GET_LEAF(leaf);
+            goto end;
+        }
+
+        /*
+         * Get diff mask between inserted key and existing leaf key, i.e. only
+         * keep the highest bit set.
+         * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+         */
+
+        mask = (uintptr_t) word ^ (uintptr_t) leafSource;
+        ASSERT(mask);
+        mask |= mask >> 1;
+        mask |= mask >> 2;
+        mask |= mask >> 4;
+        mask |= mask >> 8;
+        mask |= mask >> 16;
+        mask >>= 1;
+        mask++;
+        ASSERT(mask);
+
+        /*
+         * Find insertion point.
+         */
+
+        node = data->groupData->roots;
+        while (node) {
+            if (!ROOT_IS_LEAF(node) && mask < ROOT_NODE_MASK(node)) {
+                if ((uintptr_t) word & ROOT_NODE_MASK(node)) {
+                    /*
+                     * Recurse on right.
+                     */
+
+                    node = ROOT_NODE_RIGHT(node);
+                } else {
+                    /*
+                     * Recurse on left.
+                     */
+
+                    node = ROOT_NODE_LEFT(node);
+                }
+                continue;
+            }
+            break;
+        }
+        ASSERT(node);
+
+        /*
+         * Insert leaf here.
+         */
+
+        parent = ROOT_PARENT(ROOT_GET_NODE(node));
+        newParent = PoolAllocCells(&data->groupData->rootPool, 1);
+        if ((uintptr_t) word & mask) {
+            /*
+             * Leaf is right.
+             */
+
+            ROOT_NODE_INIT(newParent, parent, mask, node, ROOT_GET_LEAF(leaf));
+        } else {
+            /*
+             * Leaf is left.
+             */
+
+            ROOT_NODE_INIT(newParent, parent, mask, ROOT_GET_LEAF(leaf), node);
+        }
+        ROOT_PARENT(leaf) = newParent;
+        ROOT_PARENT(ROOT_GET_NODE(node)) = newParent;
+        if (!parent) {
+            /*
+             * Leaf was trie root.
+             */
+
+            data->groupData->roots = newParent;
+        } else if ((uintptr_t) word & ROOT_NODE_MASK(parent)) {
+            ROOT_NODE_RIGHT(parent) = newParent;
+        } else {
+            ROOT_NODE_LEFT(parent) = newParent;
+        }
+    }
+end:
+    LeaveProtectRoots(data->groupData);
+}
+
+/**
+ * Release a root word previously made by Col_WordPreserve().
+ *
+ * Calls can be nested. A reference count is updated accordingly. Once the
+ * count drops below 1, the root becomes stale.
+ *
+ * @pre
+ *      Must be called within a GC-protected section.
+ *
+ * @sideeffect
+ *      May release memory cells. Unpin word.
+ *
+ * @see Col_WordPreserve
+ */
+void
+Col_WordRelease(
+    Col_Word word)  /*!< The root word to release. */
+{
+    ThreadData *data = PlatGetThreadData();
+    Cell *node, *sibling, *parent, *grandParent;
+
+    /*
+     * Check preconditions.
+     */
+
+    /*! @error{COL_ERROR_GCPROTECT} */
+    PRECONDITION_GCPROTECTED(data) return;
+
+    /*
+     * Rule out immediate values.
+     */
+
+    switch (WORD_TYPE(word)) {
+    case WORD_TYPE_NIL:
+    case WORD_TYPE_SMALLINT:
+    case WORD_TYPE_SMALLFP:
+    case WORD_TYPE_CHARBOOL:
+    case WORD_TYPE_SMALLSTR:
+    case WORD_TYPE_VOIDLIST:
+        /*
+         * Immediate values.
+         */
+
+        return;
+
+    case WORD_TYPE_CIRCLIST:
+        /*
+         * Release core list.
+         */
+
+        Col_WordRelease(WORD_CIRCLIST_CORE(word));
+        return;
+
+        /* WORD_TYPE_UNKNOWN */
+    }
+
+    EnterProtectRoots(data->groupData);
+    {
+        if (!WORD_PINNED(word)) {
+            /*
+             * Roots are always pinned.
+             */
+
+            goto end;
+        }
+
+        /*
+         * Search for matching entry.
+         */
+
+        if (!data->groupData->roots) {
+            goto end;
+        }
+        node = data->groupData->roots;
+        while (node) {
+            if (!ROOT_IS_LEAF(node)) {
+                if ((uintptr_t) word & ROOT_NODE_MASK(node)) {
+                    /*
+                     * Recurse on right.
+                     */
+
+                    node = ROOT_NODE_RIGHT(node);
+                } else {
+                    /*
+                     * Recurse on left.
+                     */
+
+                    node = ROOT_NODE_LEFT(node);
+                }
+                continue;
+            }
+
+            /*
+             * Leaf node.
+             */
+
+            ASSERT(ROOT_IS_LEAF(node));
+            node = ROOT_GET_NODE(node);
+            if (word != ROOT_LEAF_SOURCE(node)) {
+                /*
+                 * Source doesn't match.
+                 */
+
+                goto end;
+            }
+            break;
+        }
+        ASSERT(node);
+
+        /*
+         * Decrement reference count.
+         */
+
+        if (--ROOT_LEAF_REFCOUNT(node)) {
+            /*
+             * Root is still valid.
+             */
+
+            goto end;
+        }
+
+        /*
+         * Remove leaf. Unpin word as well.
+         */
+
+        ASSERT(TestCell(CELL_PAGE(node), CELL_INDEX(node)));
+        ClearCells(CELL_PAGE(node), CELL_INDEX(node), 1);
+        WORD_CLEAR_PINNED(word);
+
+        parent = ROOT_PARENT(node);
+        if (!parent) {
+            /*
+             * Leaf was trie root.
+             */
+
+            data->groupData->roots = NULL;
+            goto end;
+        }
+
+        /*
+         * Remove parent and replace by sibling.
+         */
+
+        ASSERT(TestCell(CELL_PAGE(parent), CELL_INDEX(parent)));
+        ClearCells(CELL_PAGE(parent), CELL_INDEX(parent), 1);
+        if ((uintptr_t) word & ROOT_NODE_MASK(parent)) {
+            sibling = ROOT_NODE_LEFT(parent);
+        } else {
+            sibling = ROOT_NODE_RIGHT(parent);
+        }
+
+        grandParent = ROOT_PARENT(parent);
+        if (!grandParent) {
+            /*
+             * Parent was trie root.
+             */
+
+            data->groupData->roots = sibling;
+        } else if ((uintptr_t) word & ROOT_NODE_MASK(grandParent)) {
+            ROOT_NODE_RIGHT(grandParent) = sibling;
+        } else {
+            ROOT_NODE_LEFT(grandParent) = sibling;
+        }
+        ROOT_PARENT(ROOT_GET_NODE(sibling)) = grandParent;
+    }
+end:
+    LeaveProtectRoots(data->groupData);
+}
+
+/* End of Word Lifetime Management */
+
+/* End of Words *//*!\}*/
+
+
+/*
+===========================================================================*//*!
+\internal \weakgroup alloc Memory Allocation
+\{*//*==========================================================================
+*/
+
+/** @beginprivate @cond PRIVATE */
+
+/*******************************************************************************
+ * Cell Allocation
+ ******************************************************************************/
+
+/**
+ * Allocate cells in the eden pool.
+ *
+ * @pre
+ *      Must be called within a GC-protected section.
+ *
+ * @retval pointer  to the first allocated cell if successful.
+ * @retval NULL     otherwise.
+ *
+ * @see PoolAllocCells
+ */
+Cell *
+AllocCells(
+    size_t number)  /*!< Number of cells to allocate. */
+{
+    ThreadData *data = PlatGetThreadData();
+
+    /*
+     * Check preconditions.
+     */
+
+    /*! @error{COL_ERROR_GCPROTECT} */
+    PRECONDITION_GCPROTECTED(data) return NULL;
+
+    /*
+     * Alloc cells; alloc pages if needed.
+     */
+
+    return PoolAllocCells(&data->eden, number);
+}
+
+/* End of Cell Allocation */
+
+/** @endcond @endprivate */
+
+/* End of Memory Allocation *//*!\}*/

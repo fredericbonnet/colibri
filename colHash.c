@@ -1,15 +1,15 @@
-/*                                                                              *//*!   @file \
- * colHash.c
+/**
+ * @file colHash.c
  *
- *  This file implements the hash map handling features of Colibri.
+ * This file implements the hash map handling features of Colibri.
  *
- *  Hash maps are an implementation of generic @ref map_words that use key
- *  hashing and flat bucket arrays for string, integer and custom keys.
+ * Hash maps are an implementation of generic @ref map_words that use key
+ * hashing and flat bucket arrays for string, integer and custom keys.
  *
- *  They are always mutable.
+ * They are always mutable.
  *
- *  @see colHash.h
- *  @see colMap.h
+ * @see colHash.h
+ * @see colMap.h
  */
 
 #include "include/colibri.h"
@@ -23,11 +23,12 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <string.h>
-                                                                                #       ifndef DOXYGEN
+
 /*
  * Prototypes for functions used only in this file.
  */
 
+/*! \cond IGNORE */
 static Col_RopeChunksTraverseProc HashChunkProc;
 static Col_HashProc HashString;
 static Col_HashCompareKeysProc CompareStrings;
@@ -44,99 +45,87 @@ static Col_Word         ConvertEntryToMutable(Col_Word entry,
                             Col_Word *prevPtr);
 static Col_Word         ConvertIntEntryToMutable(Col_Word entry,
                             Col_Word *prevPtr);
-                                                                                #       endif /* DOXYGEN */
+/*! \endcond *//* IGNORE */
+
 
 /*
-================================================================================*//*!   @addtogroup hashmap_words \
-Hash Maps                                                                       *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup hashmap_words Hash Maps
+\{*//*==========================================================================
 */
 
-/********************************************************************************//*!   @name \
- * Key Hashing
+/***************************************************************************//*!
+ * \name Key Hashing
  *
- *  ### Hashing Algorithms
+ * \internal
  *
- *  For each entry in a hash map, an integer hash value is computed from
- *  the key, and this hash value is used to select a "bucket", i.e. an
- *  insertion point in a dynamic array. As several entries with distinct
- *  keys can share a single bucket, their keys are compared against the
- *  searched key until the correct entry is found or not.
+ * ### Hashing Algorithms
  *
- *  The choice of a good hashing algorithm is crucial for hash table
- *  performances. This algorithm must minimize collisions. A collision
- *  occurs when two distinct keys give the same hash value or end up in the
- *  same bucket.
+ * For each entry in a hash map, an integer hash value is computed from
+ * the key, and this hash value is used to select a "bucket", i.e. an
+ * insertion point in a dynamic array. As several entries with distinct
+ * keys can share a single bucket, their keys are compared against the
+ * searched key until the correct entry is found or not.
  *
- *  @par Integer keys
+ * The choice of a good hashing algorithm is crucial for hash table
+ * performances. This algorithm must minimize collisions. A collision
+ * occurs when two distinct keys give the same hash value or end up in the
+ * same bucket.
  *
- *  Integer keys are hashed by multiplying to a large prime number to get
- *  a pseudorandom distribution (see #RANDOMIZE_KEY).
+ * @par Integer keys
  *
- *  @par String keys
+ * Integer keys are hashed by multiplying to a large prime number to get
+ * a pseudorandom distribution (see #RANDOMIZE_KEY).
  *
- *  String keys are hashed using the same algorithm as Tcl, i.e. a
- *  cumulative shift+add of character codepoints (see #STRING_HASH,
- *  HashChunkProc(), HashString()).
+ * @par String keys
  *
- *  @par Custom keys
+ * String keys are hashed using the same algorithm as Tcl, i.e. a
+ * cumulative shift+add of character codepoints (see #STRING_HASH,
+ * HashChunkProc(), HashString()).
  *
- *  Custom keys are hashed using a custom hash proc as well as a custom key
- *  comparison proc (see Col_CustomHashMapType(), Col_HashProc(),
- *  Col_HashCompareKeysProc()).                                                 *//*!   @{ *//*
- ******************************************************************************/
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------   *//*!   @def \
- * RANDOMIZE_KEY
+ * @par Custom keys
  *
- *  Integer key "randomization" by multiplication with a large prime. Given
- *  that multiplication by an odd number is reversible on 2's complement
- *  integer representations, this guarantees no collision.
- *
- *  @param i    Integer value to randomize.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+ * Custom keys are hashed using a custom hash proc as well as a custom key
+ * comparison proc (see Col_CustomHashMapType(), Col_HashProc(),
+ * Col_HashCompareKeysProc()).
+ ***************************************************************************\{*/
 
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Integer key "randomization" by multiplication with a large prime. Given
+ * that multiplication by an odd number is reversible on 2's complement
+ * integer representations, this guarantees no collision.
+ *
+ * @param i     Integer value to randomize.
+ */
 #define RANDOMIZE_KEY(i)        (((uintptr_t) (i))*1610612741)
-                                                                                /*!     @endcond */
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------   *//*!   @def \
- * STRING_HASH
+
+/**
+ * String hash value computation. Uses the same algorithm as Tcl's string
+ * hash tables (HashStringKey).
  *
- *  String hash value computation. Uses the same algorithm as Tcl's string
- *  hash tables (HashStringKey).
+ * @param[in,out] hash  Hash value.
+ * @param c             Character codepoint.
  *
- *  @param[in,out] hash     Hash value.
- *  @param c                Character codepoint.
- *
- *  @sideeffect
+ * @sideeffect
  *      Value of variable **hash** is modified.
  *
- *  @see HashChunkProc
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see HashChunkProc
+ */
 #define STRING_HASH(hash, c) \
     (hash) += ((hash)<<3)+(c)
-                                                                                /*!     @endcond */
-/*---------------------------------------------------------------------------
- * HashChunkProc
- *                                                                              *//*!
- *  Rope traversal proc that computes its hash value. Called on
- *  Col_TraverseRopeChunks() by HashString(). Follows
- *  Col_RopeChunksTraverseProc() signature.
- *
- *  @return
- *      Always 0.
- *
- *  @see STRING_HASH
- *  @see HashString
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/**
+ * Rope traversal proc that computes its hash value. Called on
+ * Col_TraverseRopeChunks() by HashString(). Follows
+ * Col_RopeChunksTraverseProc() signature.
+ *
+ * @return Always 0.
+ *
+ * @see STRING_HASH
+ * @see HashString
+ */
 static int
 HashChunkProc(
     size_t index,                   /*!< Rope-relative index where chunks
@@ -162,20 +151,14 @@ HashChunkProc(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * HashString
- *                                                                              *//*!
- *  Compute a string key hash value. Uses Col_TraverseRopeChunks() with
- *  traversal proc HashChunkProc(). Follows Col_HashProc() signature.
+/**
+ * Compute a string key hash value. Uses Col_TraverseRopeChunks() with
+ * traversal proc HashChunkProc(). Follows Col_HashProc() signature.
  *
- *  @return
- *      The key hash value.
+ * @return The key hash value.
  *
- *  @see HashChunkProc
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @see HashChunkProc
+ */
 static uintptr_t
 HashString(
     Col_Word map,   /*!< Hash map the key belongs to. */
@@ -189,18 +172,13 @@ HashString(
     return hash;
 }
 
-/*---------------------------------------------------------------------------
- * CompareStrings
- *                                                                              *//*!
- *  Compare string hash keys. Follows Col_HashCompareKeysProc() signature.
+/**
+ * Compare string hash keys. Follows Col_HashCompareKeysProc() signature.
  *
- *  @retval <0          if **key1** is less than **key2**.
- *  @retval >0          if **key1** is greater than **key2**.
- *  @retval 0           if both keys are equal.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @retval <0   if **key1** is less than **key2**.
+ * @retval >0   if **key1** is greater than **key2**.
+ * @retval 0    if both keys are equal.
+ */
 static int
 CompareStrings(
     Col_Word map,   /*!< Hash map the keys belong to. */
@@ -212,74 +190,70 @@ CompareStrings(
 
     return Col_CompareRopes(key1, key2);
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Buckets
- *
- *  ### Hash Map Bucket Management
- *
- *  @par Bucket storage
- *
- *  Buckets are stored as flat arrays. The bucket index is computed from the
- *  hash value. Bucket size is always a power of 2, so we use the lower bits
- *  of the hash value to select the bucket index.
- *
- *  @par Growth and rehashing
- *
- *  When two entries end up in the same bucket, there is a collision. When
- *  the map exceeds a certain size (see #LOAD_FACTOR), the table is resized
- *  (see #GROW_FACTOR) and entries are rehashed (all entries are moved from
- *  the old bucket container to the new one according to their hash value,
- *  see GrowHashMap() and GrowIntHashMap()).
- *
- *  Given that hash entries store high order bits of the hash value (all but
- *  the lower byte), this means that we can get back the full hash value by
- *  combining these high bits with the bucket index when the bucket size is
- *  at least one byte wide (see #WORD_HASHENTRY_HASH). This saves having to
- *  recompute the hash value during rehashing.                                  *//*!   @{ *//*
- ******************************************************************************/
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------   *//*!   @def \
- * LOAD_FACTOR
- *
- *  Grow bucket container when size exceeds bucket size times this load factor.
- *
- *  @see GrowHashMap
- *  @see GrowIntHashMap
- *
- *  @private
- *
- *                                                                              *//*!   @def \
- * GROW_FACTOR
- *  
- *  When growing bucket container, multiply current size by this grow factor.
- *
- *  @see GrowHashMap
- *  @see GrowIntHashMap
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
+/* End of Key Hashing *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Buckets
+ *
+ * \internal
+ *
+ * ### Hash Map Bucket Management
+ *
+ * @par Bucket storage
+ *
+ * Buckets are stored as flat arrays. The bucket index is computed from the
+ * hash value. Bucket size is always a power of 2, so we use the lower bits
+ * of the hash value to select the bucket index.
+ *
+ * @par Growth and rehashing
+ *
+ * When two entries end up in the same bucket, there is a collision. When
+ * the map exceeds a certain size (see #LOAD_FACTOR), the table is resized
+ * (see #GROW_FACTOR) and entries are rehashed (all entries are moved from
+ * the old bucket container to the new one according to their hash value,
+ * see GrowHashMap() and GrowIntHashMap()).
+ *
+ * Given that hash entries store high order bits of the hash value (all but
+ * the lower byte), this means that we can get back the full hash value by
+ * combining these high bits with the bucket index when the bucket size is
+ * at least one byte wide (see #WORD_HASHENTRY_HASH). This saves having to
+ * recompute the hash value during rehashing.
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Grow bucket container when size exceeds bucket size times this load factor.
+ *
+ * @see GrowHashMap
+ * @see GrowIntHashMap
+ */
 #define LOAD_FACTOR             1
-#define GROW_FACTOR             4
-                                                                                /*!     @endcond */
-                                                                                /*!     @cond PRIVATE */
-/*---------------------------------------------------------------------------   *//*!   @def \
- * GET_BUCKETS
- *                                                                                      @hideinitializer
- *  Bucket access. Get bucket array regardless of whether it is stored in
- *  static space or in a separate vector word.
- *
- *  @param map              Hash map to get bucket array for.
- *  @param mutable          If true, ensure that entry is mutable.
- *
- *  @param[out] nbBuckets   Size of bucket array.
- *  @param[out] buckets     Bucket array.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/**
+ * When growing bucket container, multiply current size by this grow factor.
+ *
+ * @see GrowHashMap
+ * @see GrowIntHashMap
+ */
+#define GROW_FACTOR             4
+
+/**
+ * Bucket access. Get bucket array regardless of whether it is stored in
+ * static space or in a separate vector word.
+ *
+ * @param map               Hash map to get bucket array for.
+ * @param mutable           If true, ensure that entry is mutable.
+ *
+ * @param[out] nbBuckets    Size of bucket array.
+ * @param[out] buckets      Bucket array.
+ *
+ * @hideinitializer
+ */
 #define GET_BUCKETS(map, mutable, nbBuckets, buckets) \
     switch (WORD_TYPE(WORD_HASHMAP_BUCKETS(map))) { \
     case WORD_TYPE_VECTOR: \
@@ -299,20 +273,15 @@ CompareStrings(
         (nbBuckets) = HASHMAP_STATICBUCKETS_SIZE; \
         (buckets) = WORD_HASHMAP_STATICBUCKETS(map); \
     }
-                                                                                /*!     @endcond */
-/*---------------------------------------------------------------------------
- * GrowHashMap
- *                                                                              *//*!
- *  Resize a hash map bucket container. Size won't grow past a given limit.
- *  As the bucket container is a mutable vector, this limit matches the
- *  maximum mutable vector length.
- *
- *  @retval <>0     if bucket container was resised.
- *  @retval 0       otherwise.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
 
+/**
+ * Resize a hash map bucket container. Size won't grow past a given limit.
+ * As the bucket container is a mutable vector, this limit matches the
+ * maximum mutable vector length.
+ *
+ * @retval <>0  if bucket container was resised.
+ * @retval 0    otherwise.
+ */
 static int
 GrowHashMap(
     Col_Word map,           /*!< Hash map to grow. */
@@ -404,26 +373,21 @@ GrowHashMap(
 
             entry = next;
         }
-}
+    }
 
     WORD_HASHMAP_BUCKETS(map) = newBucketContainer;
 
     return 1;
 }
 
-/*---------------------------------------------------------------------------
- * GrowIntHashMap
- *                                                                              *//*!
- *  Resize an integer hash map bucket container. Size won't grow past a given
- *  limit. As the bucket container is a mutable vector, this limit matches the
- *  maximum mutable vector length.
+/**
+ * Resize an integer hash map bucket container. Size won't grow past a given
+ * limit. As the bucket container is a mutable vector, this limit matches the
+ * maximum mutable vector length.
  *
- *  @retval <>0     if bucket container was resised.
- *  @retval 0       otherwise.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @retval <>0  if bucket container was resised.
+ * @retval 0    otherwise.
+ */
 static int
 GrowIntHashMap(
     Col_Word map)   /*!< Integer hash map to grow. */
@@ -511,24 +475,25 @@ GrowIntHashMap(
 
     return 1;
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Entries                                                                      *//*!   @{ *//*
- ******************************************************************************/
+/** @endcond @endprivate */
 
-/*---------------------------------------------------------------------------
- * HashMapFindEntry
- *                                                                              *//*!
- *  Find or create in hash map the entry mapped to the given key.
+/* End of Buckets *//*!\}*/
+
+
+/***************************************************************************//*!
+ * \name Entries
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Find or create in hash map the entry mapped to the given key.
  *
- *  @retval entry   if found or created, in this case the bucket is returned
+ * @retval entry    if found or created, in this case the bucket is returned
  *                  through **bucketPtr**.
- *  @retval nil     otherwise.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @retval nil      otherwise.
+ */
 static Col_Word
 HashMapFindEntry(
     Col_Word map,               /*!< Hash map to find or create entry into. */
@@ -621,18 +586,13 @@ start:
     return entry;
 }
 
-/*---------------------------------------------------------------------------
- * IntHashMapFindEntry
- *                                                                              *//*!
- *  Find or create in integer hash map the entry mapped to the given key.
+/**
+ * Find or create in integer hash map the entry mapped to the given key.
  *
- *  @retval entry   if found or created, in this case the bucket is returned
+ * @retval entry    if found or created, in this case the bucket is returned
  *                  through **bucketPtr**.
- *  @retval nil     otherwise.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @retval nil      otherwise.
+ */
 static Col_Word
 IntHashMapFindEntry(
     Col_Word map,               /*!< Integer hash map to find or create entry
@@ -720,45 +680,47 @@ start:
     if (bucketPtr) *bucketPtr = index;
     return entry;
 }
-                                                                                /*!     @} */
 
-/********************************************************************************//*!   @name \
- * Mutability
- *
- *  ### Mutable and Immutable Hash Entries
- *
- *  From an external point of view, hash maps, like generic maps, are a
- *  naturally mutable data type. However, internal structures like bucket
- *  containers or entries are usually mutable but can become immutable
- *  through shared copying (see Col_CopyHashMap()). This means that we have
- *  to turn immutable data mutable using copy-on-write semantics.
- *
- *  Small hash tables store their buckets inline and so don't share them.
- *  Larger hash tables store their buckets in a vector, which can be shared
- *  when copied. Turning an immutable vector again mutable only implies creating
- *  a new mutable copy of this vector. This is done transparently by
- *  GET_BUCKETS() when passed a true **mutable** parameter.
- *
- *  As entries form linked lists in each bucket, turning an immutable
- *  entry mutable again implies that all its predecessors are turned mutable
- *  before. The trailing entries can remain immutable. This is the role
- *  of ConvertEntryToMutable() and ConvertIntEntryToMutable().
- *
- *  This ensures that modified data is always mutable and that unmodified
- *  data remains shared as long as possible.                                    *//*!   @{ *//*
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
-/*---------------------------------------------------------------------------
- * ConvertEntryToMutable
- *                                                                              *//*!
- *  Convert immutable entry and all all its predecessors to mutable.
- *
- *  @return
- *      The converted mutable entry.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/* End of Entries *//*!\}*/
 
+
+/***************************************************************************//*!
+ * \name Mutability
+ *
+ * \internal
+ *
+ * ### Mutable and Immutable Hash Entries
+ *
+ * From an external point of view, hash maps, like generic maps, are a
+ * naturally mutable data type. However, internal structures like bucket
+ * containers or entries are usually mutable but can become immutable
+ * through shared copying (see Col_CopyHashMap()). This means that we have
+ * to turn immutable data mutable using copy-on-write semantics.
+ *
+ * Small hash tables store their buckets inline and so don't share them.
+ * Larger hash tables store their buckets in a vector, which can be shared
+ * when copied. Turning an immutable vector again mutable only implies creating
+ * a new mutable copy of this vector. This is done transparently by
+ * GET_BUCKETS() when passed a true **mutable** parameter.
+ *
+ * As entries form linked lists in each bucket, turning an immutable
+ * entry mutable again implies that all its predecessors are turned mutable
+ * before. The trailing entries can remain immutable. This is the role
+ * of ConvertEntryToMutable() and ConvertIntEntryToMutable().
+ *
+ * This ensures that modified data is always mutable and that unmodified
+ * data remains shared as long as possible.
+ ***************************************************************************\{*/
+
+/** @beginprivate @cond PRIVATE */
+
+/**
+ * Convert immutable entry and all all its predecessors to mutable.
+ *
+ * @return The converted mutable entry.
+* */
 static Col_Word
 ConvertEntryToMutable(
     Col_Word entry,     /*!< Entry to convert (inclusive). */
@@ -788,17 +750,11 @@ ConvertEntryToMutable(
     }
 }
 
-/*---------------------------------------------------------------------------
- * ConvertIntEntryToMutable
- *                                                                              *//*!
- *  Convert immutable integer entry and all all its predecessors to mutable.
+/**
+ * Convert immutable integer entry and all all its predecessors to mutable.
  *
- *  @return
- *      The converted mutable entry.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
-
+ * @return The converted mutable entry.
+ */
 static Col_Word
 ConvertIntEntryToMutable(
     Col_Word entry,     /*!< Integer entry to convert (inclusive). */
@@ -827,21 +783,22 @@ ConvertIntEntryToMutable(
         prevPtr = &WORD_HASHENTRY_NEXT(*prevPtr);
     }
 }
-                                                                                /*!     @} */
 
-/****************************************************************************
+/** @endcond @endprivate */
+
+/* End of Mutability *//*!\}*/
+
+
+/*******************************************************************************
  * Hash Map Creation
- ****************************************************************************/
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * AllocBuckets
- *                                                                              *//*!
- *  Allocate bucket container having the given minimum capacity, rounded
- *  up to a power of 2.
- *
- *  @private
- *//*-----------------------------------------------------------------------*/
+/** @beginprivate @cond PRIVATE */
 
+/**
+ * Allocate bucket container having the given minimum capacity, rounded
+ * up to a power of 2.
+ */
 static void
 AllocBuckets(
     Col_Word map,       /*!< Map to allocate buckets for. */
@@ -874,15 +831,13 @@ AllocBuckets(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_NewStringHashMap
- *                                                                              *//*!
- *  Create a new string hash map word.
- *
- *  @return
- *      The new word.
- *//*-----------------------------------------------------------------------*/
+/** @endcond @endprivate */
 
+/**
+ * Create a new string hash map word.
+ *
+ * @return The new word.
+ */
 Col_Word
 Col_NewStringHashMap(
     size_t capacity)    /*!< Initial bucket size. Rounded up to the next power
@@ -897,15 +852,11 @@ Col_NewStringHashMap(
     return map;
 }
 
-/*---------------------------------------------------------------------------
- * Col_NewIntHashMap
- *                                                                              *//*!
- *  Create a new integer hash map word.
+/**
+ * Create a new integer hash map word.
  *
- *  @return
- *      The new word.
- *//*-----------------------------------------------------------------------*/
-
+ * @return The new word.
+ */
 Col_Word
 Col_NewIntHashMap(
     size_t capacity)    /*!< Initial bucket size. Rounded up to the next power
@@ -920,22 +871,18 @@ Col_NewIntHashMap(
     return map;
 }
 
-/*---------------------------------------------------------------------------
- * Col_CopyHashMap
- *                                                                              *//*!
- *  Create a new hash map word from an existing one.
+/**
+ * Create a new hash map word from an existing one.
  *
- *  @note
+ * @note
  *      Only the hash map structure is copied, the contained words are not
  *      (i.e. this is not a deep copy).
  *
- *  @return
- *      The new word.
+ * @return The new word.
  *
- *  @sideeffect
+ * @sideeffect
  *      Source map content is frozen.
- *//*-----------------------------------------------------------------------*/
-
+ */
 Col_Word
 Col_CopyHashMap(
     Col_Word map)   /*!< Hash map to copy. */
@@ -949,7 +896,8 @@ Col_CopyHashMap(
      * Check preconditions.
      */
 
-    TYPECHECK_HASHMAP(map) return WORD_NIL;                                     /*!     @typecheck{COL_ERROR_HASHMAP,map} */
+    /*! @typecheck{COL_ERROR_HASHMAP,map} */
+    TYPECHECK_HASHMAP(map) return WORD_NIL;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_STRHASHMAP:
@@ -1023,23 +971,22 @@ Col_CopyHashMap(
     return newMap;
 }
 
+/* End of Hash Map Creation */
 
-/****************************************************************************
+
+/*******************************************************************************
  * Hash Map Accessors
- ****************************************************************************/
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_HashMapGet
- *                                                                              *//*!
- *  Get value mapped to the given key if present.
+/**
+ * Get value mapped to the given key if present.
  *
- *  @retval 0               if the key wasn't found.
- *  @retval <>0             if the key was found, in this case the value is
- *                          returned through **valuePtr**.
+ * @retval 0    if the key wasn't found.
+ * @retval <>0  if the key was found, in this case the value is returned 
+ *              through **valuePtr**.
  *
- *  @see Col_MapGet
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapGet
+ */
 int
 Col_HashMapGet(
     Col_Word map,       /*!< Hash map to get entry for. */
@@ -1058,7 +1005,8 @@ Col_HashMapGet(
      * Check preconditions.
      */
 
-    TYPECHECK_WORDHASHMAP(map) return 0;                                        /*!     @typecheck{COL_ERROR_WORDHASHMAP,map} */
+    /*! @typecheck{COL_ERROR_WORDHASHMAP,map} */
+    TYPECHECK_WORDHASHMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_STRHASHMAP:
@@ -1093,18 +1041,15 @@ Col_HashMapGet(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntHashMapGet
- *                                                                              *//*!
- *  Get value mapped to the given integer key if present.
+/**
+ * Get value mapped to the given integer key if present.
  *
- *  @retval 0               if the key wasn't found.
- *  @retval <>0             if the key was found, in this case the value is
- *                          returned through **valuePtr**.
+ * @retval 0    if the key wasn't found.
+ * @retval <>0  if the key was found, in this case the value is returned
+ *              through **valuePtr**.
  *
- *  @see Col_IntMapGet
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_IntMapGet
+ */
 int
 Col_IntHashMapGet(
     Col_Word map,       /*!< Integer hash map to get entry for. */
@@ -1119,7 +1064,8 @@ Col_IntHashMapGet(
      * Check preconditions.
      */
 
-    TYPECHECK_INTHASHMAP(map) return 0;                                         /*!     @typecheck{COL_ERROR_INTHASHMAP,map} */
+    /*! @typecheck{COL_ERROR_INTHASHMAP,map} */
+    TYPECHECK_INTHASHMAP(map) return 0;
 
     entry = IntHashMapFindEntry(map, key, 0, NULL, NULL);
     if (entry) {
@@ -1131,17 +1077,14 @@ Col_IntHashMapGet(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_HashMapSet
- *                                                                              *//*!
- *  Map the value to the key, replacing any existing.
+/**
+ * Map the value to the key, replacing any existing.
  *
- *  @retval 0       if an existing entry was updated with **value**.
- *  @retval <>0     if a new entry was created with **key** and **value**.
+ * @retval 0    if an existing entry was updated with **value**.
+ * @retval <>0  if a new entry was created with **key** and **value**.
  *
- *  @see Col_MapSet
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapSet
+ */
 int
 Col_HashMapSet(
     Col_Word map,   /*!< Hash map to insert entry into. */
@@ -1159,7 +1102,8 @@ Col_HashMapSet(
      * Check preconditions.
      */
 
-    TYPECHECK_WORDHASHMAP(map) return 0;                                        /*!     @typecheck{COL_ERROR_WORDHASHMAP,map} */
+    /*! @typecheck{COL_ERROR_WORDHASHMAP,map} */
+    TYPECHECK_WORDHASHMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_STRHASHMAP:
@@ -1191,17 +1135,14 @@ Col_HashMapSet(
     return create;
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntHashMapSet
- *                                                                              *//*!
- *  Map the value to the integer key, replacing any existing.
+/**
+ * Map the value to the integer key, replacing any existing.
  *
- *  @retval 0       if an existing entry was updated with **value**.
- *  @retval <>0     if a new entry was created with **key** and **value**.
+ * @retval 0    if an existing entry was updated with **value**.
+ * @retval <>0  if a new entry was created with **key** and **value**.
  *
- *  @see Col_IntMapSet
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_IntMapSet
+ */
 int
 Col_IntHashMapSet(
     Col_Word map,   /*!< Integer hash map to insert entry into. */
@@ -1215,7 +1156,8 @@ Col_IntHashMapSet(
      * Check preconditions.
      */
 
-    TYPECHECK_INTHASHMAP(map) return 0;                                         /*!     @typecheck{COL_ERROR_INTHASHMAP,map} */
+    /*! @typecheck{COL_ERROR_INTHASHMAP,map} */
+    TYPECHECK_INTHASHMAP(map) return 0;
 
     entry = IntHashMapFindEntry(map, key, 1, &create, NULL);
     ASSERT(entry);
@@ -1224,17 +1166,14 @@ Col_IntHashMapSet(
     return create;
 }
 
-/*---------------------------------------------------------------------------
- * Col_HashMapUnset
- *                                                                              *//*!
- *  Remove any value mapped to the given key.
+/**
+ * Remove any value mapped to the given key.
  *
- *  @retval 0       if no entry matching **key** was found.
- *  @retval <>0     if the existing entry was removed.
+ * @retval 0    if no entry matching **key** was found.
+ * @retval <>0  if the existing entry was removed.
  *
- *  @see Col_MapUnset
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapUnset
+ */
 int
 Col_HashMapUnset(
     Col_Word map,   /*!< Hash map to remove entry from. */
@@ -1252,7 +1191,8 @@ Col_HashMapUnset(
      * Check preconditions.
      */
 
-    TYPECHECK_WORDHASHMAP(map) return 0;                                        /*!     @typecheck{COL_ERROR_WORDHASHMAP,map} */
+    /*! @typecheck{COL_ERROR_WORDHASHMAP,map} */
+    TYPECHECK_WORDHASHMAP(map) return 0;
 
     switch (WORD_TYPE(map)) {
     case WORD_TYPE_STRHASHMAP:
@@ -1338,17 +1278,14 @@ Col_HashMapUnset(
     return 0;
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntHashMapUnset
- *                                                                              *//*!
- *  Remove any value mapped to the given integer key.
+/**
+ * Remove any value mapped to the given integer key.
  *
- *  @retval 0       if no entry matching **key** was found.
- *  @retval <>0     if the existing entry was removed.
+ * @retval 0    if no entry matching **key** was found.
+ * @retval <>0  if the existing entry was removed.
  *
- *  @see Col_IntMapUnset
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_IntMapUnset
+ */
 int
 Col_IntHashMapUnset(
     Col_Word map,   /*!< Integer hash map to remove entry from. */
@@ -1362,7 +1299,8 @@ Col_IntHashMapUnset(
      * Check preconditions.
      */
 
-    TYPECHECK_INTHASHMAP(map) return 0;                                         /*!     @typecheck{COL_ERROR_INTHASHMAP,map} */
+    /*! @typecheck{COL_ERROR_INTHASHMAP,map} */
+    TYPECHECK_INTHASHMAP(map) return 0;
 
     /*
      * Search for matching entry.
@@ -1424,20 +1362,19 @@ Col_IntHashMapUnset(
     return 0;
 }
 
+/* End of Hash Map Accessors */
 
-/****************************************************************************
+
+/*******************************************************************************
  * Hash Map Iteration
- ****************************************************************************/
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_HashMapIterBegin
- *                                                                              *//*!
- *  Initialize the map iterator so that it points to the first entry within
- *  the hash map.
+/**
+ * Initialize the map iterator so that it points to the first entry within
+ * the hash map.
  *
- *  @see Col_MapIterBegin
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapIterBegin
+ */
 void
 Col_HashMapIterBegin(
     Col_MapIterator it, /*!< Iterator to initialize. */
@@ -1450,7 +1387,8 @@ Col_HashMapIterBegin(
      * Check preconditions.
      */
 
-    TYPECHECK_HASHMAP(map) {                                                    /*!     @typecheck{COL_ERROR_HASHMAP,map} */
+    /*! @typecheck{COL_ERROR_HASHMAP,map} */
+    TYPECHECK_HASHMAP(map) {
         Col_MapIterSetNull(it);
         return;
     }
@@ -1483,15 +1421,12 @@ Col_HashMapIterBegin(
     Col_MapIterSetNull(it);
 }
 
-/*---------------------------------------------------------------------------
- * Col_HashMapIterFind
- *                                                                              *//*!
- *  Initialize the map iterator so that it points to the entry with the
- *  given key within the hash map.
+/**
+ * Initialize the map iterator so that it points to the entry with the
+ * given key within the hash map.
  *
- *  @see Col_MapIterFind
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapIterFind
+ */
 void
 Col_HashMapIterFind(
     Col_MapIterator it, /*!< Iterator to initialize. */
@@ -1510,7 +1445,8 @@ Col_HashMapIterFind(
      * Check preconditions.
      */
 
-    TYPECHECK_WORDHASHMAP(map) {                                                /*!     @typecheck{COL_ERROR_WORDHASHMAP,map} */
+    /*! @typecheck{COL_ERROR_WORDHASHMAP,map} */
+    TYPECHECK_WORDHASHMAP(map) {
         Col_MapIterSetNull(it);
         return;
     }
@@ -1536,15 +1472,12 @@ Col_HashMapIterFind(
             createPtr, &it->traversal.hash.bucket);
 }
 
-/*---------------------------------------------------------------------------
- * Col_IntHashMapIterFind
- *                                                                              *//*!
- *  Initialize the map iterator so that it points to the entry with the
- *  given integer key within the integer hash map.
+/**
+ * Initialize the map iterator so that it points to the entry with the
+ * given integer key within the integer hash map.
  *
- *  @see Col_IntMapIterFind
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_IntMapIterFind
+ */
 void
 Col_IntHashMapIterFind(
     Col_MapIterator it, /*!< Iterator to initialize. */
@@ -1558,7 +1491,8 @@ Col_IntHashMapIterFind(
      * Check preconditions.
      */
 
-    TYPECHECK_INTHASHMAP(map) {                                                 /*!     @typecheck{COL_ERROR_INTHASHMAP,map} */
+    /*! @typecheck{COL_ERROR_INTHASHMAP,map} */
+    TYPECHECK_INTHASHMAP(map) {
         Col_MapIterSetNull(it);
         return;
     }
@@ -1568,14 +1502,11 @@ Col_IntHashMapIterFind(
             &it->traversal.hash.bucket);
 }
 
-/*---------------------------------------------------------------------------
- * Col_HashMapIterSetValue
- *                                                                              *//*!
- *  Set value of hash map iterator.
+/**
+ * Set value of hash map iterator.
  *
- *  @see Col_MapIterSetValue
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapIterSetValue
+ */
 void
 Col_HashMapIterSetValue(
     Col_MapIterator it, /*!< Map iterator to set value for. */
@@ -1588,9 +1519,14 @@ Col_HashMapIterSetValue(
      * Check preconditions.
      */
 
-    TYPECHECK_MAPITER(it) return;                                               /*!     @typecheck{COL_ERROR_MAPITER,it} */
-    TYPECHECK_HASHMAP(it->map) return;                                          /*!     @typecheck{COL_ERROR_HASHMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
-    VALUECHECK_MAPITER(it) return;                                              /*!     @valuecheck{COL_ERROR_MAPITER_END,it} */
+    /*! @typecheck{COL_ERROR_MAPITER,it} */
+    TYPECHECK_MAPITER(it) return;
+    
+    /*! @typecheck{COL_ERROR_HASHMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
+    TYPECHECK_HASHMAP(it->map) return;
+
+    /*! @valuecheck{COL_ERROR_MAPITER_END,it} */
+    VALUECHECK_MAPITER(it) return;
 
     ASSERT(it->entry);
 
@@ -1644,14 +1580,11 @@ Col_HashMapIterSetValue(
     }
 }
 
-/*---------------------------------------------------------------------------
- * Col_HashMapIterNext
- *                                                                              *//*!
- *  Move the iterator to the next element.
+/**
+ * Move the iterator to the next element.
  *
- *  @see Col_MapIterNext
- *//*-----------------------------------------------------------------------*/
-
+ * @see Col_MapIterNext
+ */
 void
 Col_HashMapIterNext(
     Col_MapIterator it) /*!< The iterator to move. */
@@ -1663,9 +1596,14 @@ Col_HashMapIterNext(
      * Check preconditions.
      */
 
-    TYPECHECK_MAPITER(it) return;                                               /*!     @typecheck{COL_ERROR_MAPITER,it} */
-    TYPECHECK_HASHMAP(it->map) return;                                          /*!     @typecheck{COL_ERROR_HASHMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
-    VALUECHECK_MAPITER(it) return;                                              /*!     @valuecheck{COL_ERROR_MAPITER_END,it} */
+    /*! @typecheck{COL_ERROR_MAPITER,it} */
+    TYPECHECK_MAPITER(it) return;
+    
+    /*! @typecheck{COL_ERROR_HASHMAP,[Col_MapIterMap(it)](@ref Col_MapIterMap)} */
+    TYPECHECK_HASHMAP(it->map) return;
+
+    /*! @valuecheck{COL_ERROR_MAPITER_END,it} */
+    VALUECHECK_MAPITER(it) return;
 
     ASSERT(it->entry);
 
@@ -1703,26 +1641,26 @@ Col_HashMapIterNext(
     it->entry = WORD_NIL;
 }
 
-                                                                                /*!     @} */
+/* End of Hash Map Iteration */
+
+/* End of Hash Maps *//*!\}*/
+
+
 /*
-================================================================================*//*!   @addtogroup customhashmap_words \
-Custom Hash Maps                                                                *//*!   @{ *//*
-================================================================================
+===========================================================================*//*!
+\weakgroup customhashmap_words Custom Hash Maps
+\{*//*==========================================================================
 */
 
-/****************************************************************************
+/*******************************************************************************
  * Custom Hash Map Creation
- ****************************************************************************/
+ ******************************************************************************/
 
-/*---------------------------------------------------------------------------
- * Col_NewCustomHashMap
- *                                                                              *//*!
- *  Create a new custom hash map word.
+/**
+ * Create a new custom hash map word.
  *
- *  @return
- *      A new custom hash map word of the given size and capacity.
- *//*-----------------------------------------------------------------------*/
-
+ * @return A new custom hash map word of the given size and capacity.
+ */
 Col_Word
 Col_NewCustomHashMap(
     Col_CustomHashMapType *type,    /*!< The hash map word type. */
@@ -1745,4 +1683,7 @@ Col_NewCustomHashMap(
     return map;
 }
 
-                                                                                /*!     @} */
+/* End of Custom Hash Map Creation */
+
+/* End of Custom Hash Maps *//*!\}*/
+
