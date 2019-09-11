@@ -120,9 +120,6 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    printf("Hit return...\n");
-    getc(stdin);
-
     if (argc <= 1) {
         /* Execute all tests. */
         fail = testColibri(NULL);
@@ -134,9 +131,6 @@ int main(int argc, char* argv[]) {
             fail += testColibri(name);
         }
     }
-
-    printf("Hit return...\n");
-    getc(stdin);
     
     exit(fail);
 }
