@@ -749,6 +749,7 @@ MarkWord(
     Page *parentPage)   /*!< Page containing wordPtr, will be set as modified
                              if overwritten. */
 {
+/*! \cond IGNORE */
     int type;
     size_t nbCells, index;
     Page *page;
@@ -757,10 +758,8 @@ MarkWord(
      * Entry point for tail recursive calls.
      */
 
-/*! \cond IGNORE */
 #define TAIL_RECURSE(_wordPtr, _parentPage) \
     wordPtr = (_wordPtr); parentPage = (_parentPage); goto start;
-/*! \endcond *//* IGNORE */
 
 start:
 
@@ -1073,6 +1072,9 @@ start:
         ASSERT(0);
         return;
     }
+
+#undef TAIL_RECURSE
+/*! \endcond *//* IGNORE */
 }
 
 /**

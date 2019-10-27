@@ -1305,8 +1305,6 @@ Col_CircularList(
  *      perform further optimizations anyway.
  *
  * @return The resulting list.
- *
- * @return The resulting list.
  */
 Col_Word
 Col_ListInsert(

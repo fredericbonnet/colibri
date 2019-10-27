@@ -572,21 +572,18 @@ Col_SortWords(
     Col_WordCompareProc *proc,  /*!< Comparison proc for sorting. */
     Col_ClientData clientData)  /*!< Opaque data passed as is to **proc**. */
 {
+/*! \cond IGNORE */
     Col_Word *i, *j, *k, *p, *q;
     Col_Word v;
 
-/*! \cond IGNORE */
 #define SWAP(a, b) {Col_Word tmp=b; b=a; a=tmp;}
-/*! \endcond *//* IGNORE */
 
     /*
      * Entry point for tail recursive calls.
      */
 
-/*! \cond IGNORE */
 #define TAIL_RECURSE(_first, _last) \
     first = (_first); last = (_last); goto start;
-/*! \endcond *//* IGNORE */
 
 start:
 
@@ -664,6 +661,10 @@ start:
         Col_SortWords(i, last, proc, clientData);
         TAIL_RECURSE(first, j);
     }
+
+#undef TAIL_RECURSE
+#undef SWAP
+/*! \endcond *//* IGNORE */
 }
 
 /* End of Word Operations */
