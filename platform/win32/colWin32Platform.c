@@ -202,6 +202,16 @@ FreeGroupData(
 
 /** @beginprivate @cond PRIVATE */
 
+#ifdef STATIC_BUILD
+/**
+ * Ensure that per-process initialization only occurs once.
+ *
+ * @see PlatEnter
+ * @see Init
+ */
+static LONG once = 0;
+#endif /* STATIC_BUILD */
+
 /**
  * Enter the thread. If this is the first nested call, initialize thread data.
  * If this is the first thread in its group, initialize group data as well.
@@ -219,7 +229,17 @@ int
 PlatEnter(
     unsigned int model) /*!< Threading model. */
 {
-    ThreadData *data = PlatGetThreadData();
+    ThreadData *data;
+    
+#ifdef STATIC_BUILD
+    /*
+     * Ensures that the TLS key is created once.
+     */
+
+    if (InterlockedIncrement(&once) == 1) Init();
+#endif /* STATIC_BUILD */
+
+    data = PlatGetThreadData();
     if (data) {
         /*
          * Increment nest count.
@@ -658,6 +678,7 @@ PageProtectVectoredHandler(
 
 /** @beginprivate @cond PRIVATE */
 
+#ifndef STATIC_BUILD
 /**
  * Windows DLL entry point.
  *
@@ -682,6 +703,7 @@ DllMain(
     }
     return TRUE;
 }
+#endif /* !STATIC_BUILD */
 
 /**
  * Initialization routine. Called through DllMain().

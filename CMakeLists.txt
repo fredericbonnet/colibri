@@ -2,13 +2,20 @@ cmake_minimum_required(VERSION 3.15)
 
 project(colibri LANGUAGES C)
 
+option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
+
 find_package(PicoTest)
 
 # Colibri library
-add_library(colibri SHARED)
+add_library(colibri)
 target_compile_definitions(colibri
 	PRIVATE BUILD_colibri
 )
+if (NOT BUILD_SHARED_LIBS)
+	target_compile_definitions(colibri
+		PUBLIC STATIC_BUILD
+	)
+endif()
 target_include_directories(colibri
 	PUBLIC
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

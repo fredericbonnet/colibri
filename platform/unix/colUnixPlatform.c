@@ -236,7 +236,7 @@ PlatEnter(
     ThreadData *data;
 
     /*
-     * Ensures that the TLS key is created once.
+     * Ensures that the TSD key is created once.
      */
 
     pthread_once(&once, Init);
@@ -671,7 +671,7 @@ PageProtectSigAction(
 /** @beginprivate @cond PRIVATE */
 
 /**
- * Initialization routine. Called through DllMain().
+ * Initialization routine. Called through pthread_once().
  *
  * @sideeffect
  *      - Create thread-specific data key #tsdKey (never freed).

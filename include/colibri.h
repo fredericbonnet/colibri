@@ -100,10 +100,14 @@ extern "C" {
  */
 
 #undef COL_STORAGE_CLASS
-#ifdef BUILD_colibri
-#   define COL_STORAGE_CLASS DLLEXPORT
+#ifdef STATIC_BUILD
+#   define COL_STORAGE_CLASS
 #else
-#   define COL_STORAGE_CLASS DLLIMPORT
+#   ifdef BUILD_colibri
+#       define COL_STORAGE_CLASS DLLEXPORT
+#   else
+#       define COL_STORAGE_CLASS DLLIMPORT
+#   endif
 #endif
 
 /*
