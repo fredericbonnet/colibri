@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.15)
 project(colibri LANGUAGES C)
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
+option(USE_THREADS "Build with thread support" ON)
 
 find_package(PicoTest)
 
@@ -13,7 +14,12 @@ target_compile_definitions(colibri
 )
 if (NOT BUILD_SHARED_LIBS)
 	target_compile_definitions(colibri
-		PUBLIC STATIC_BUILD
+		PUBLIC COL_STATIC_BUILD
+	)
+endif()
+if (USE_THREADS)
+	target_compile_definitions(colibri
+		PUBLIC COL_USE_THREADS
 	)
 endif()
 target_include_directories(colibri

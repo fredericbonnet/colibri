@@ -24,7 +24,9 @@
 /*! \cond IGNORE */
 static struct Win32GroupData * AllocGroupData(unsigned int model);
 static void             FreeGroupData(struct Win32GroupData *groupData);
+#ifdef COL_USE_THREADS
 static DWORD WINAPI     GcThreadProc(LPVOID lpParameter);
+#endif /* COL_USE_THREADS */
 static BOOL             Init(void);
 /*! \endcond *//* IGNORE */
 
@@ -79,6 +81,7 @@ DWORD tlsToken;
  */
 typedef struct Win32GroupData {
     GroupData data;             /*!< Generic #GroupData structure. */
+#ifdef COL_USE_THREADS
     struct Win32GroupData *next;/*!< Next active group in list. */
     CRITICAL_SECTION csRoots;   /*!< Critical section protecting root
                                      management. */
@@ -91,7 +94,10 @@ typedef struct Win32GroupData {
     int terminated;             /*!< Flag for thread group destruction. */
     int nbActive;               /*!< Active worker thread counter. */
     HANDLE threadGc;            /*!< GC thread. */
+#endif /* COL_USE_THREADS */
 } Win32GroupData;
+
+#ifdef COL_USE_THREADS
 
 /**
  * List of active groups in process.
@@ -108,6 +114,8 @@ static Win32GroupData *sharedGroups;
  * @see sharedGroups
  */
 static CRITICAL_SECTION csSharedGroups;
+
+#endif /* COL_USE_THREADS */
 
 /**
  * Allocate and initialize a thread group data structure.
@@ -130,6 +138,7 @@ AllocGroupData(
     groupData->data.model = model;
     GcInitGroup((GroupData *) groupData);
 
+#ifdef COL_USE_THREADS
     if (model != COL_SINGLE) {
         /*
          * Create synchronization objects.
@@ -149,6 +158,7 @@ AllocGroupData(
         groupData->threadGc = CreateThread(NULL, 0, GcThreadProc, groupData,
                 0, NULL);
     }
+#endif /* COL_USE_THREADS */
 
     return groupData;
 }
@@ -166,6 +176,7 @@ static void
 FreeGroupData(
     Win32GroupData *groupData)  /*!< Structure to free. */
 {
+#ifdef COL_USE_THREADS
     if (groupData->data.model != COL_SINGLE) {
         /*
          * Signal and wait for termination of GC thread.
@@ -186,6 +197,7 @@ FreeGroupData(
 
         DeleteCriticalSection(&groupData->csRoots);
     }
+#endif /* COL_USE_THREADS */
 
     GcCleanupGroup((GroupData *) groupData);
     free(groupData);
@@ -202,7 +214,7 @@ FreeGroupData(
 
 /** @beginprivate @cond PRIVATE */
 
-#ifdef STATIC_BUILD
+#ifdef COL_STATIC_BUILD
 /**
  * Ensure that per-process initialization only occurs once.
  *
@@ -210,7 +222,7 @@ FreeGroupData(
  * @see Init
  */
 static LONG once = 0;
-#endif /* STATIC_BUILD */
+#endif /* COL_STATIC_BUILD */
 
 /**
  * Enter the thread. If this is the first nested call, initialize thread data.
@@ -231,13 +243,13 @@ PlatEnter(
 {
     ThreadData *data;
     
-#ifdef STATIC_BUILD
+#ifdef COL_STATIC_BUILD
     /*
      * Ensures that the TLS key is created once.
      */
 
-    if (InterlockedIncrement(&once) == 1) Init();
-#endif /* STATIC_BUILD */
+    if (InterlockedCompareExchange(&once, 1, 0) == 0) Init();
+#endif /* COL_STATIC_BUILD */
 
     data = PlatGetThreadData();
     if (data) {
@@ -258,7 +270,9 @@ PlatEnter(
     GcInitThread(data);
     TlsSetValue(tlsToken, data);
 
+#ifdef COL_USE_THREADS
     if (model == COL_SINGLE || model == COL_ASYNC) {
+#endif /* COL_USE_THREADS */
         /*
          * Allocate dedicated group.
          */
@@ -266,6 +280,7 @@ PlatEnter(
         data->groupData = (GroupData *) AllocGroupData(model);
         data->groupData->first = data;
         data->next = data;
+#ifdef COL_USE_THREADS
     } else {
         /*
          * Try to find shared group with same model value.
@@ -302,6 +317,7 @@ PlatEnter(
         }
         LeaveCriticalSection(&csSharedGroups);
     }
+#endif /* COL_USE_THREADS */
 
     return 1;
 }
@@ -339,13 +355,16 @@ PlatLeave()
      * This is the last nested call, free structures.
      */
 
+#ifdef COL_USE_THREADS
     if (data->groupData->model == COL_SINGLE || data->groupData->model
             == COL_ASYNC) {
+#endif /* COL_USE_THREADS */
         /*
          * Free dedicated group as well.
          */
 
         FreeGroupData((Win32GroupData *) data->groupData);
+#ifdef COL_USE_THREADS
     } else {
         /*
          * Remove from shared group.
@@ -374,6 +393,7 @@ PlatLeave()
         }
         LeaveCriticalSection(&csSharedGroups);
     }
+#endif /* COL_USE_THREADS */
 
     GcCleanupThread(data);
     free(data);
@@ -381,6 +401,8 @@ PlatLeave()
 
     return 1;
 }
+
+#ifdef COL_USE_THREADS
 
 /**
  * Thread dedicated to the GC process. Activated when one of the worker threads
@@ -537,6 +559,8 @@ PlatLeaveProtectRoots(
     LeaveCriticalSection(&groupData->csRoots);
 }
 
+#endif /* COL_USE_THREADS */
+
 /** @endcond @endprivate */
 
 /* End of Process & Threads *//*!\}*/
@@ -678,7 +702,7 @@ PageProtectVectoredHandler(
 
 /** @beginprivate @cond PRIVATE */
 
-#ifndef STATIC_BUILD
+#ifndef COL_STATIC_BUILD
 /**
  * Windows DLL entry point.
  *
@@ -703,7 +727,7 @@ DllMain(
     }
     return TRUE;
 }
-#endif /* !STATIC_BUILD */
+#endif /* !COL_STATIC_BUILD */
 
 /**
  * Initialization routine. Called through DllMain().
@@ -727,6 +751,7 @@ Init()
     SYSTEM_INFO systemInfo;
 
     if ((tlsToken = TlsAlloc()) == TLS_OUT_OF_INDEXES) {
+        /* TODO: exception */
         return FALSE;
     }
 
@@ -737,8 +762,10 @@ Init()
 
     InitializeCriticalSection(&csRange);
 
+#ifdef COL_USE_THREADS
     sharedGroups = NULL;
     InitializeCriticalSection(&csSharedGroups);
+#endif /* COL_USE_THREADS */
 
     AddVectoredExceptionHandler(1, PageProtectVectoredHandler);
 

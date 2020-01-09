@@ -28,7 +28,9 @@
 /*! \cond IGNORE */
 static struct UnixGroupData * AllocGroupData(unsigned int model);
 static void             FreeGroupData(struct UnixGroupData *groupData);
+#ifdef COL_USE_THREADS
 static void *           GcThreadProc(void *arg);
+#endif /* COL_USE_THREADS */
 static void             Init(void);
 /*! \endcond *//* IGNORE */
 
@@ -83,6 +85,7 @@ pthread_key_t tsdKey;
  */
 typedef struct UnixGroupData {
     GroupData data;                 /*!< Generic #GroupData structure. */
+#ifdef COL_USE_THREADS
     struct UnixGroupData *next;     /*!< Next active group in list. */
     pthread_mutex_t mutexRoots;     /*!< Mutex protecting root management. */
 
@@ -94,7 +97,10 @@ typedef struct UnixGroupData {
     int terminated;                 /*!< Flag for thread group destruction. */
     int nbActive;                   /*!< Active worker thread counter. */
     pthread_t threadGc;             /*!< GC thread. */
+#endif /* COL_USE_THREADS */
 } UnixGroupData;
+
+#ifdef COL_USE_THREADS
 
 /**
  * List of active groups in process.
@@ -111,6 +117,8 @@ static UnixGroupData *sharedGroups;
  * @see sharedGroups
  */
 static pthread_mutex_t mutexSharedGroups = PTHREAD_MUTEX_INITIALIZER;
+
+#endif /* COL_USE_THREADS */
 
 /**
  * Allocate and initialize a thread group data structure.
@@ -133,6 +141,7 @@ AllocGroupData(
     groupData->data.model = model;
     GcInitGroup((GroupData *) groupData);
 
+#ifdef COL_USE_THREADS
     if (model != COL_SINGLE) {
         /*
          * Create synchronization objects.
@@ -151,6 +160,7 @@ AllocGroupData(
 
         pthread_create(&groupData->threadGc, NULL, GcThreadProc, groupData);
     }
+#endif /* COL_USE_THREADS */
 
     return groupData;
 }
@@ -168,6 +178,7 @@ static void
 FreeGroupData(
     UnixGroupData *groupData)   /*!< Structure to free. */
 {
+#ifdef COL_USE_THREADS
     if (groupData->data.model != COL_SINGLE) {
         /*
          * Signal and wait for termination of GC thread.
@@ -192,6 +203,7 @@ FreeGroupData(
 
         pthread_mutex_destroy(&groupData->mutexRoots);
     }
+#endif /* COL_USE_THREADS */
 
     GcCleanupGroup((GroupData *) groupData);
     free(groupData);
@@ -262,7 +274,9 @@ PlatEnter(
     GcInitThread(data);
     pthread_setspecific(tsdKey, data);
 
+#ifdef COL_USE_THREADS
     if (model == COL_SINGLE || model == COL_ASYNC) {
+#endif /* COL_USE_THREADS */
         /*
          * Allocate dedicated group.
          */
@@ -270,6 +284,7 @@ PlatEnter(
         data->groupData = (GroupData *) AllocGroupData(model);
         data->groupData->first = data;
         data->next = data;
+#ifdef COL_USE_THREADS
     } else {
         /*
          * Try to find shared group with same model value.
@@ -306,6 +321,7 @@ PlatEnter(
         }
         pthread_mutex_unlock(&mutexSharedGroups);
     }
+#endif /* COL_USE_THREADS */
 
     return 1;
 }
@@ -343,13 +359,16 @@ PlatLeave()
      * This is the last nested call, free structures.
      */
 
+#ifdef COL_USE_THREADS
     if (data->groupData->model == COL_SINGLE || data->groupData->model
             == COL_ASYNC) {
+#endif /* COL_USE_THREADS */
         /*
          * Free dedicated group as well.
          */
 
         FreeGroupData((UnixGroupData *) data->groupData);
+#ifdef COL_USE_THREADS
     } else {
         /*
          * Remove from shared group.
@@ -378,6 +397,7 @@ PlatLeave()
         }
         pthread_mutex_unlock(&mutexSharedGroups);
     }
+#endif /* COL_USE_THREADS */
 
     GcCleanupThread(data);
     free(data);
@@ -385,6 +405,8 @@ PlatLeave()
 
     return 1;
 }
+
+#ifdef COL_USE_THREADS
 
 /**
  * Thread dedicated to the GC process. Activated when one of the worker threads
@@ -537,6 +559,8 @@ PlatLeaveProtectRoots(
     pthread_mutex_unlock(&groupData->mutexRoots);
 }
 
+#endif /* COL_USE_THREADS */
+
 /** @endcond @endprivate */
 
 /* End of Process & Threads *//*!\}*/
@@ -684,13 +708,19 @@ static void
 Init()
 {
     struct sigaction sa;
+    
     if (pthread_key_create(&tsdKey, NULL)) {
         /* TODO: exception */
         return;
     }
+
     systemPageSize = sysconf(_SC_PAGESIZE);
     allocGranularity = systemPageSize * 16;
     shiftPage = LOG2(systemPageSize);
+
+#ifdef COL_USE_THREADS
+    sharedGroups = NULL;
+#endif /* COL_USE_THREADS */
 
     memset(&sa, 0, sizeof(sa));
     sa.sa_sigaction = PageProtectSigAction;

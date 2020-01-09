@@ -48,7 +48,7 @@ extern "C" {
  * Macros used to declare a function to be exported by a DLL. Used by Windows,
  * maps to no-op declarations on non-Windows systems. The default build on
  * windows is for a DLL, which causes the DLLIMPORT and DLLEXPORT macros to be
- * nonempty. To build a static library, the macro STATIC_BUILD should be
+ * nonempty. To build a static library, the macro COL_STATIC_BUILD should be
  * defined.
  *
  * @note
@@ -60,7 +60,7 @@ extern "C" {
 
 #if (defined(__WIN32__) && (defined(_MSC_VER) || (__BORLANDC__ >= 0x0550) || defined(__LCC__) || defined(__WATCOMC__) || (defined(__GNUC__) && defined(__declspec))))
 #   define HAVE_DECLSPEC 1
-#   ifdef STATIC_BUILD
+#   ifdef COL_STATIC_BUILD
 #       define DLLIMPORT
 #       define DLLEXPORT
 #       ifdef _DLL
@@ -100,7 +100,7 @@ extern "C" {
  */
 
 #undef COL_STORAGE_CLASS
-#ifdef STATIC_BUILD
+#ifdef COL_STATIC_BUILD
 #   define COL_STORAGE_CLASS
 #else
 #   ifdef BUILD_colibri
@@ -445,6 +445,8 @@ EXTERN const Col_Char2 *    Col_Utf16Prev(const Col_Char2 * data);
  */
 #define COL_SINGLE      0
 
+#ifdef COL_USE_THREADS
+
 /**
  * Strict appartment model with asynchronous GC. GC uses a dedicated thread
  * for asynchronous processing, the client thread cannot pause a running GC
@@ -468,6 +470,8 @@ EXTERN const Col_Char2 *    Col_Utf16Prev(const Col_Char2 * data);
  * @see Col_ResumeGC
  */
 #define COL_SHARED      2
+
+#endif /* COL_USE_THREADS */
 
 /* End of Threading Model Constants *//*!\}*/
 

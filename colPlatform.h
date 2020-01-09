@@ -47,8 +47,12 @@ Generic primitives needing platform-specific implementations.
  * @see PlatEnterProtectRoots
  * @see LeaveProtectRoots
  */
-#define EnterProtectRoots(data) \
-    if ((data)->model >= COL_SHARED) {PlatEnterProtectRoots(data);}
+#ifdef COL_USE_THREADS
+#   define EnterProtectRoots(data) \
+        if ((data)->model >= COL_SHARED) {PlatEnterProtectRoots(data);}
+#else
+#   define EnterProtectRoots(data) /* NOOP */
+#endif /* COL_USE_THREADS */
 
 /**
  * Leave protected section around root management structures.
@@ -58,8 +62,12 @@ Generic primitives needing platform-specific implementations.
  * @sideeffect
  *      When model is #COL_SHARED, calls PlatLeaveProtectRoots().
  */
-#define LeaveProtectRoots(data) \
-    if ((data)->model >= COL_SHARED) {PlatLeaveProtectRoots(data);}
+#ifdef COL_USE_THREADS
+#   define LeaveProtectRoots(data) \
+        if ((data)->model >= COL_SHARED) {PlatLeaveProtectRoots(data);}
+#else
+#   define LeaveProtectRoots(data) /* NOOP */
+#endif /* COL_USE_THREADS */
 
 /**
  * Synchronize calls to Col_PauseGC().
@@ -74,8 +82,12 @@ Generic primitives needing platform-specific implementations.
  * @see PlatSyncPauseGC
  * @see SyncResumeGC
  */
-#define SyncPauseGC(data) \
-    if ((data)->model != COL_SINGLE) {PlatSyncPauseGC(data);}
+#ifdef COL_USE_THREADS
+#   define SyncPauseGC(data) \
+        if ((data)->model != COL_SINGLE) {PlatSyncPauseGC(data);}
+#else
+#   define SyncPauseGC(data) /* NOOP */
+#endif /* COL_USE_THREADS */
 
 /**
  * Synchronize calls to Col_TryPauseGC().
@@ -93,8 +105,12 @@ Generic primitives needing platform-specific implementations.
  * @see PlatTrySyncPauseGC
  * @see SyncResumeGC
  */
-#define TrySyncPauseGC(data) \
-    ((data)->model == COL_SINGLE ? 1 : PlatTrySyncPauseGC(data))
+#ifdef COL_USE_THREADS
+#   define TrySyncPauseGC(data) \
+        ((data)->model == COL_SINGLE ? 1 : PlatTrySyncPauseGC(data))
+#else
+#   define TrySyncPauseGC(data) 1 /* NOOP */
+#endif /* COL_USE_THREADS */
 
 /**
  * Synchronize calls to Col_ResumeGC().
@@ -112,9 +128,14 @@ Generic primitives needing platform-specific implementations.
  * @see SyncPauseGC
  * @see TrySyncPauseGC
  */
-#define SyncResumeGC(data, performGc) \
-    if ((data)->model != COL_SINGLE) {PlatSyncResumeGC((data), (performGc));} \
-    else if (performGc) {PerformGC(data);}
+#ifdef COL_USE_THREADS
+#   define SyncResumeGC(data, performGc) \
+        if ((data)->model != COL_SINGLE) {PlatSyncResumeGC((data), (performGc));} \
+        else if (performGc) {PerformGC(data);}
+#else
+#   define SyncResumeGC(data, performGc) \
+        if (performGc) {PerformGC(data);}
+#endif /* COL_USE_THREADS */
 
 /*
  * Remaining declarations.
@@ -122,11 +143,13 @@ Generic primitives needing platform-specific implementations.
 
 int                     PlatEnter(unsigned int model);
 int                     PlatLeave(void);
+#ifdef COL_USE_THREADS
 void                    PlatEnterProtectRoots(GroupData *data);
 void                    PlatLeaveProtectRoots(GroupData *data);
 void                    PlatSyncPauseGC(GroupData *data);
 int                     PlatTrySyncPauseGC(GroupData *data);
 void                    PlatSyncResumeGC(GroupData *data, int schedule);
+#endif /* COL_USE_THREADS */
 
 /* End of Process & Threads *//*!\}*/
 
