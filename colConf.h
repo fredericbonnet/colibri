@@ -61,6 +61,10 @@
 #   define SIZE_BIT             64
 #endif
 
+#if defined(WASI)
+#   undef PAGE_SIZE
+#endif /* WASI */
+
 /* End of Machine-Dependent Constants *//*!\}*/
 
 /* End of System and Architecture *//*!\}*/

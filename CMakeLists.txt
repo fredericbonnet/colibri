@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
+set(WASI ON)
+
 project(colibri LANGUAGES C)
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
@@ -46,6 +48,19 @@ if (WIN32)
 		PRIVATE
 			platform/win32/colWin32Platform.c
 	)
+elseif (WASI)
+	target_sources(colibri
+		PRIVATE
+			platform/wasi/colWasiPlatform.c
+	)
+	target_compile_definitions(colibri
+		PUBLIC WASI
+	)
+	# FIXME
+	target_compile_definitions(colibri
+		PUBLIC 
+			HAVE_STDINT_H
+	)
 else()
 	target_sources(colibri
 		PRIVATE
@@ -88,8 +103,10 @@ if (PicoTest_FOUND)
 		RUNTIME DESTINATION bin/${CMAKE_BUILD_TYPE}
 	)
 
-	enable_testing()
-	picotest_discover_tests(test_colibri
-		TEST_LIST_OPTION "-l"
-	)
+	if (NOT WASI)
+		enable_testing()
+		picotest_discover_tests(test_colibri
+			TEST_LIST_OPTION "-l"
+		)
+	endif()
 endif()

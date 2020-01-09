@@ -17,6 +17,8 @@
 
 #if defined(__WIN32__)
 #   include "platform/win32/colWin32Platform.h"
+#elif defined(WASI)
+#   include "platform/wasi/colWasiPlatform.h"
 #else /* FIXME */
 #   include "platform/unix/colUnixPlatform.h"
 #endif

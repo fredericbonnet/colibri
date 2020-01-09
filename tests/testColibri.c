@@ -135,5 +135,5 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    exit(fail);
+    return fail;
 }
