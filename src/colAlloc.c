@@ -6,7 +6,7 @@
  * @beginprivate @cond PRIVATE
  */
 
-#include "include/colibri.h"
+#include "../include/colibri.h"
 #include "colInternal.h"
 #include "colPlatform.h"
 

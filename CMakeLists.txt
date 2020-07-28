@@ -29,27 +29,27 @@ target_include_directories(colibri
 )
 target_sources(colibri
 	PRIVATE
-		colibri.c
-		colAlloc.c
-		colGc.c
-		colRope.c
-		colStrBuf.c
-		colWord.c
-		colVector.c
-		colList.c
-		colMap.c
-		colHash.c
-		colTrie.c
+		src/colibri.c
+		src/colAlloc.c
+		src/colGc.c
+		src/colRope.c
+		src/colStrBuf.c
+		src/colWord.c
+		src/colVector.c
+		src/colList.c
+		src/colMap.c
+		src/colHash.c
+		src/colTrie.c
 )
 if (WIN32)
 	target_sources(colibri
 		PRIVATE
-			platform/win32/colWin32Platform.c
+			src/platform/win32/colWin32Platform.c
 	)
 else()
 	target_sources(colibri
 		PRIVATE
-			platform/unix/colUnixPlatform.c
+			src/platform/unix/colUnixPlatform.c
 	)
 	# FIXME
 	target_compile_definitions(colibri

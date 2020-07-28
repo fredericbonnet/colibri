@@ -1,39 +1,43 @@
 /**
- * @file colWin32Platform.c
+ * @file colUnixPlatform.c
  *
- * This file provides Win32 implementations of generic primitives needing
- * platform-specific implementations, as well as Win32-specific primitives.
+ * This file provides Unix implementations of generic primitives needing
+ * platform-specific implementations, as well as Unix-specific primitives.
  *
  * @see colPlatform.h
- * @see colWin32Platform.h
+ * @see colUnixPlatform.h
  *
  * @beginprivate @cond PRIVATE
  */
 
-#include "../../include/colibri.h"
+#include "../../../include/colibri.h"
 #include "../../colInternal.h"
 #include "../../colPlatform.h"
 
-#include <windows.h>
-#include <sys/types.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <signal.h>
 
 /*
  * Prototypes for functions used only in this file.
  */
 
 /*! \cond IGNORE */
-static struct Win32GroupData * AllocGroupData(unsigned int model);
-static void             FreeGroupData(struct Win32GroupData *groupData);
+static struct UnixGroupData * AllocGroupData(unsigned int model);
+static void             FreeGroupData(struct UnixGroupData *groupData);
 #ifdef COL_USE_THREADS
-static DWORD WINAPI     GcThreadProc(LPVOID lpParameter);
+static void *           GcThreadProc(void *arg);
 #endif /* COL_USE_THREADS */
-static BOOL             Init(void);
+static void             Init(void);
 /*! \endcond *//* IGNORE */
 
 
 /*
 ===========================================================================*//*!
-\internal \weakgroup arch_win32 System and Architecture (Win32-specific)
+\internal \weakgroup arch_unix System and Architecture (Unix-specific)
 \{*//*==========================================================================
 */
 
@@ -63,12 +67,12 @@ static const int MultiplyDeBruijnBitPosition2[32] =
 /** @beginprivate @cond PRIVATE */
 
 /**
- * Thread-local storage identifier. Used to get thread-specific data.
+ * Thread-speficic data identifier. Used to get thread-specific data.
  *
  * @see ThreadData
  * @see Init
  */
-DWORD tlsToken;
+pthread_key_t tsdKey;
 
 /**
  * Platform-specific group data.
@@ -79,41 +83,40 @@ DWORD tlsToken;
  * @see AllocGroupData
  * @see FreeGroupData
  */
-typedef struct Win32GroupData {
-    GroupData data;             /*!< Generic #GroupData structure. */
+typedef struct UnixGroupData {
+    GroupData data;                 /*!< Generic #GroupData structure. */
 #ifdef COL_USE_THREADS
-    struct Win32GroupData *next;/*!< Next active group in list. */
-    CRITICAL_SECTION csRoots;   /*!< Critical section protecting root
-                                     management. */
+    struct UnixGroupData *next;     /*!< Next active group in list. */
+    pthread_mutex_t mutexRoots;     /*!< Mutex protecting root management. */
 
-    CRITICAL_SECTION csGc;      /*!< Critical section protecting GC from worker
-                                     threads. */
-    HANDLE eventGcScheduled;    /*!< Triggers GC thread. */
-    HANDLE eventGcDone;         /*!< Barrier for worker threads. */
-    int scheduled;              /*!< Flag for when a GC is scheduled. */
-    int terminated;             /*!< Flag for thread group destruction. */
-    int nbActive;               /*!< Active worker thread counter. */
-    HANDLE threadGc;            /*!< GC thread. */
+    pthread_mutex_t mutexGc;        /*!< Mutex protecting GC from worker
+                                         threads. */
+    pthread_cond_t condGcScheduled; /*!< Triggers GC thread. */
+    pthread_cond_t condGcDone;      /*!< Barrier for worker threads. */
+    int scheduled;                  /*!< Flag for when a GC is scheduled. */
+    int terminated;                 /*!< Flag for thread group destruction. */
+    int nbActive;                   /*!< Active worker thread counter. */
+    pthread_t threadGc;             /*!< GC thread. */
 #endif /* COL_USE_THREADS */
-} Win32GroupData;
+} UnixGroupData;
 
 #ifdef COL_USE_THREADS
 
 /**
  * List of active groups in process.
  *
- * @see Win32GroupData
+ * @see UnixGroupData
  * @see AllocGroupData
  * @see FreeGroupData
  */
-static Win32GroupData *sharedGroups;
+static UnixGroupData *sharedGroups;
 
 /**
- * Critical section protecting #sharedGroups.
+ * Mutex protecting #sharedGroups.
  *
  * @see sharedGroups
  */
-static CRITICAL_SECTION csSharedGroups;
+static pthread_mutex_t mutexSharedGroups = PTHREAD_MUTEX_INITIALIZER;
 
 #endif /* COL_USE_THREADS */
 
@@ -126,15 +129,15 @@ static CRITICAL_SECTION csSharedGroups;
  *      Memory allocated and system objects created.
  *
  * @see @ref threading_models "Threading Model Constants"
- * @see Win32GroupData
+ * @see UnixGroupData
  * @see FreeGroupData
  */
-static Win32GroupData *
+static UnixGroupData *
 AllocGroupData(
     unsigned int model)     /*!< Threading model. */
 {
-    Win32GroupData *groupData = (Win32GroupData *) malloc(sizeof(Win32GroupData));
-    memset(groupData, 0, sizeof(Win32GroupData));
+    UnixGroupData *groupData = (UnixGroupData *) malloc(sizeof(UnixGroupData));
+    memset(groupData, 0, sizeof(UnixGroupData));
     groupData->data.model = model;
     GcInitGroup((GroupData *) groupData);
 
@@ -145,18 +148,17 @@ AllocGroupData(
          */
 
         //TODO error handling.
-        InitializeCriticalSection(&groupData->csRoots);
+        pthread_mutex_init(&groupData->mutexRoots, NULL);
 
-        InitializeCriticalSection(&groupData->csGc);
-        groupData->eventGcDone = CreateEvent(NULL, TRUE, TRUE, NULL);
-        groupData->eventGcScheduled = CreateEvent(NULL, FALSE, FALSE, NULL);
+        pthread_mutex_init(&groupData->mutexGc, NULL);
+        pthread_cond_init(&groupData->condGcDone, NULL);
+        pthread_cond_init(&groupData->condGcScheduled, NULL);
 
         /*
          * Create GC thread.
          */
 
-        groupData->threadGc = CreateThread(NULL, 0, GcThreadProc, groupData,
-                0, NULL);
+        pthread_create(&groupData->threadGc, NULL, GcThreadProc, groupData);
     }
 #endif /* COL_USE_THREADS */
 
@@ -169,12 +171,12 @@ AllocGroupData(
  * @sideeffect
  *      Memory freed and system objects deleted.
  *
- * @see Win32GroupData
+ * @see UnixGroupData
  * @see AllocGroupData
  */
 static void
 FreeGroupData(
-    Win32GroupData *groupData)  /*!< Structure to free. */
+    UnixGroupData *groupData)   /*!< Structure to free. */
 {
 #ifdef COL_USE_THREADS
     if (groupData->data.model != COL_SINGLE) {
@@ -184,18 +186,22 @@ FreeGroupData(
 
         //TODO error handling.
         groupData->terminated = 1;
-        SignalObjectAndWait(groupData->eventGcScheduled, groupData->threadGc,
-            INFINITE, FALSE);
+        pthread_mutex_lock(&groupData->mutexGc);
+        {
+            pthread_cond_signal(&groupData->condGcScheduled);
+        }
+        pthread_mutex_unlock(&groupData->mutexGc);
+        pthread_join(groupData->threadGc, NULL);
 
         /*
          * Destroy synchronization objects.
          */
 
-        CloseHandle(groupData->eventGcScheduled);
-        CloseHandle(groupData->eventGcDone);
-        DeleteCriticalSection(&groupData->csGc);
+        pthread_cond_destroy(&groupData->condGcScheduled);
+        pthread_cond_destroy(&groupData->condGcDone);
+        pthread_mutex_destroy(&groupData->mutexGc);
 
-        DeleteCriticalSection(&groupData->csRoots);
+        pthread_mutex_destroy(&groupData->mutexRoots);
     }
 #endif /* COL_USE_THREADS */
 
@@ -214,26 +220,24 @@ FreeGroupData(
 
 /** @beginprivate @cond PRIVATE */
 
-#ifdef COL_STATIC_BUILD
 /**
  * Ensure that per-process initialization only occurs once.
  *
  * @see PlatEnter
  * @see Init
  */
-static LONG once = 0;
-#endif /* COL_STATIC_BUILD */
+static pthread_once_t once = PTHREAD_ONCE_INIT;
 
 /**
  * Enter the thread. If this is the first nested call, initialize thread data.
  * If this is the first thread in its group, initialize group data as well.
  *
- * @retval <>0> if this is the first nested call.
+ * @retval <>0  if this is the first nested call.
  * @retval 0    otherwise.
  *
  * @see @ref threading_models "Threading Model Constants"
  * @see ThreadData
- * @see Win32GroupData
+ * @see UnixGroupData
  * @see PlatLeave
  * @see Col_Init
  */
@@ -242,14 +246,12 @@ PlatEnter(
     unsigned int model) /*!< Threading model. */
 {
     ThreadData *data;
-    
-#ifdef COL_STATIC_BUILD
+
     /*
-     * Ensures that the TLS key is created once.
+     * Ensures that the TSD key is created once.
      */
 
-    if (InterlockedCompareExchange(&once, 1, 0) == 0) Init();
-#endif /* COL_STATIC_BUILD */
+    pthread_once(&once, Init);
 
     data = PlatGetThreadData();
     if (data) {
@@ -264,11 +266,13 @@ PlatEnter(
      * Initialize thread data.
      */
 
-    data = (ThreadData *) malloc(sizeof(ThreadData));
+    data = (ThreadData *) malloc(sizeof(*data)
+            + sizeof(UNIX_PROTECT_ADDRESS_RANGES_RECURSE(data)));
     memset(data, 0, sizeof(*data));
     data->nestCount = 1;
+    UNIX_PROTECT_ADDRESS_RANGES_RECURSE(data) = 0;
     GcInitThread(data);
-    TlsSetValue(tlsToken, data);
+    pthread_setspecific(tsdKey, data);
 
 #ifdef COL_USE_THREADS
     if (model == COL_SINGLE || model == COL_ASYNC) {
@@ -286,9 +290,9 @@ PlatEnter(
          * Try to find shared group with same model value.
          */
 
-        EnterCriticalSection(&csSharedGroups);
+        pthread_mutex_lock(&mutexSharedGroups);
         {
-            Win32GroupData *groupData = sharedGroups;
+            UnixGroupData *groupData = sharedGroups;
             while (groupData && groupData->data.model != model) {
                 groupData = groupData->next;
             }
@@ -315,7 +319,7 @@ PlatEnter(
                 data->next = data;
             }
         }
-        LeaveCriticalSection(&csSharedGroups);
+        pthread_mutex_unlock(&mutexSharedGroups);
     }
 #endif /* COL_USE_THREADS */
 
@@ -330,7 +334,7 @@ PlatEnter(
  * @retval 0    otherwise.
  *
  * @see ThreadData
- * @see Win32GroupData
+ * @see UnixGroupData
  * @see PlatEnter
  * @see Col_Cleanup
  */
@@ -363,21 +367,21 @@ PlatLeave()
          * Free dedicated group as well.
          */
 
-        FreeGroupData((Win32GroupData *) data->groupData);
+        FreeGroupData((UnixGroupData *) data->groupData);
 #ifdef COL_USE_THREADS
     } else {
         /*
          * Remove from shared group.
          */
 
-        EnterCriticalSection(&csSharedGroups);
+        pthread_mutex_lock(&mutexSharedGroups);
         {
             if (data->next == data) {
                 /*
                  * Free group as well.
                  */
 
-                FreeGroupData((Win32GroupData *) data->groupData);
+                FreeGroupData((UnixGroupData *) data->groupData);
             } else {
                 /*
                  * Unlink.
@@ -391,13 +395,13 @@ PlatLeave()
                 data->groupData->first = prev;
             }
         }
-        LeaveCriticalSection(&csSharedGroups);
+        pthread_mutex_unlock(&mutexSharedGroups);
     }
 #endif /* COL_USE_THREADS */
 
     GcCleanupThread(data);
     free(data);
-    TlsSetValue(tlsToken, 0);
+    pthread_setspecific(tsdKey, 0);
 
     return 1;
 }
@@ -416,24 +420,24 @@ PlatLeave()
  * @see AllocGroupData
  * @see PerformGC
  */
-static DWORD WINAPI
+static void *
 GcThreadProc(
-    LPVOID lpParameter) /*!< #Win32GroupData. */
+    void *arg)  /*!< #UnixGroupData. */
 {
-    Win32GroupData *groupData = (Win32GroupData *) lpParameter;
+    UnixGroupData *groupData = (UnixGroupData *) arg;
     for (;;) {
-        WaitForSingleObject(groupData->eventGcScheduled, INFINITE);
-        EnterCriticalSection(&groupData->csGc);
+        pthread_mutex_lock(&groupData->mutexGc);
         {
+            pthread_cond_wait(&groupData->condGcScheduled, &groupData->mutexGc);
             if (groupData->scheduled) {
                 groupData->scheduled = 0;
                 PerformGC((GroupData *) groupData);
+                pthread_cond_broadcast(&groupData->condGcDone);
             }
-            SetEvent(groupData->eventGcDone);
         }
-        LeaveCriticalSection(&groupData->csGc);
+        pthread_mutex_unlock(&groupData->mutexGc);
         if (groupData->terminated) {
-            ExitThread(0);
+            pthread_exit(NULL);
         }
     }
 }
@@ -452,14 +456,15 @@ void
 PlatSyncPauseGC(
     GroupData *data)    /*!< Group-specific data. */
 {
-    Win32GroupData *groupData = (Win32GroupData *) data;
-    ASSERT(groupData->data.model != COL_SINGLE);
-    WaitForSingleObject(groupData->eventGcDone, INFINITE);
-    EnterCriticalSection(&groupData->csGc);
+    UnixGroupData *groupData = (UnixGroupData *) data;
+    pthread_mutex_lock(&groupData->mutexGc);
     {
+        if (groupData->scheduled) {
+            pthread_cond_wait(&groupData->condGcDone, &groupData->mutexGc);
+        }
         groupData->nbActive++;
     }
-    LeaveCriticalSection(&groupData->csGc);
+    pthread_mutex_unlock(&groupData->mutexGc);
 }
 
 /**
@@ -476,17 +481,16 @@ int
 PlatTrySyncPauseGC(
     GroupData *data)    /*!< Group-specific data. */
 {
-    Win32GroupData *groupData = (Win32GroupData *) data;
-    ASSERT(groupData->data.model != COL_SINGLE);
-    if (WaitForSingleObject(groupData->eventGcDone, 0)
-            != WAIT_OBJECT_0) {
+    UnixGroupData *groupData = (UnixGroupData *) data;
+    if (!pthread_mutex_trylock(&groupData->mutexGc)) {
         return 0;
-    }
-    EnterCriticalSection(&groupData->csGc);
-    {
+    } else {
+        if (groupData->scheduled) {
+            pthread_cond_wait(&groupData->condGcDone, &groupData->mutexGc);
+        }
         groupData->nbActive++;
     }
-    LeaveCriticalSection(&groupData->csGc);
+    pthread_mutex_unlock(&groupData->mutexGc);
     return 1;
 }
 
@@ -507,20 +511,18 @@ PlatSyncResumeGC(
     GroupData *data,    /*!< Group-specific data. */
     int performGc)      /*!< Whether to perform GC. */
 {
-    Win32GroupData *groupData = (Win32GroupData *) data;
-    ASSERT(groupData->data.model != COL_SINGLE);
-    EnterCriticalSection(&groupData->csGc);
+    UnixGroupData *groupData = (UnixGroupData *) data;
+    pthread_mutex_lock(&groupData->mutexGc);
     {
-        if (performGc && !groupData->scheduled) {
-            ResetEvent(groupData->eventGcDone);
+        if (performGc) {
             groupData->scheduled = 1;
         }
         --groupData->nbActive;
         if (!groupData->nbActive && groupData->scheduled) {
-            SetEvent(groupData->eventGcScheduled);
+            pthread_cond_signal(&groupData->condGcScheduled);
         }
     }
-    LeaveCriticalSection(&groupData->csGc);
+    pthread_mutex_unlock(&groupData->mutexGc);
 }
 
 /**
@@ -536,9 +538,8 @@ void
 PlatEnterProtectRoots(
     GroupData *data)    /*!< Group-specific data. */
 {
-    Win32GroupData *groupData = (Win32GroupData *) data;
-    ASSERT(groupData->data.model >= COL_SHARED);
-    EnterCriticalSection(&groupData->csRoots);
+    UnixGroupData *groupData = (UnixGroupData *) data;
+    pthread_mutex_lock(&groupData->mutexRoots);
 }
 
 /**
@@ -554,9 +555,8 @@ void
 PlatLeaveProtectRoots(
     GroupData *data)    /*!< Group-specific data. */
 {
-    Win32GroupData *groupData = (Win32GroupData *) data;
-    ASSERT(groupData->data.model >= COL_SHARED);
-    LeaveCriticalSection(&groupData->csRoots);
+    UnixGroupData *groupData = (UnixGroupData *) data;
+    pthread_mutex_unlock(&groupData->mutexRoots);
 }
 
 #endif /* COL_USE_THREADS */
@@ -573,7 +573,7 @@ PlatLeaveProtectRoots(
 /** @beginprivate @cond PRIVATE */
 
 /**
- * Critical section protecting address range management.
+ * Mutex protecting address range management.
  *
  * - #ranges:          Reserved address ranges for general purpose.
  * - #dedicatedRanges: Dedicated address ranges for large pages.
@@ -581,7 +581,7 @@ PlatLeaveProtectRoots(
  * @see PlatEnterProtectAddressRanges
  * @see PlatLeaveProtectAddressRanges
  */
-CRITICAL_SECTION csRange;
+pthread_mutex_t mutexRange = PTHREAD_MUTEX_INITIALIZER;
 
 /**
  * Reserve an address range.
@@ -593,8 +593,10 @@ PlatReserveRange(
     size_t size,    /*!< Number of pages to reserve. */
     int alloc)      /*!< Whether to allocate the range pages as well. */
 {
-    return VirtualAlloc(NULL, size << shiftPage,
-        MEM_RESERVE | (alloc ? MEM_COMMIT : 0), PAGE_READWRITE);
+    void *addr = mmap(NULL, size << shiftPage,
+            (alloc ? PROT_READ | PROT_WRITE : PROT_NONE),
+            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    return (addr == MAP_FAILED ? NULL : addr);
 }
 
 /**
@@ -608,7 +610,7 @@ PlatReleaseRange(
     void *base,     /*!< Base address of range to release. */
     size_t size)    /*!< Number of pages in range. */
 {
-    return VirtualFree(base, 0, MEM_RELEASE);
+    return !munmap(base, size << shiftPage);
 }
 
 /**
@@ -622,8 +624,7 @@ PlatAllocPages(
     void *addr,     /*!< Address of first page to allocate. */
     size_t number)  /*!< Number of pages to allocate. */
 {
-    return !!VirtualAlloc(addr, number << shiftPage, MEM_COMMIT,
-            PAGE_READWRITE);
+    return !mprotect(addr, number << shiftPage, PROT_READ | PROT_WRITE);
 }
 
 /**
@@ -637,7 +638,7 @@ PlatFreePages(
     void *addr,     /*!< Address of first page to free. */
     size_t number)  /*!< Number of pages to free. */
 {
-    return VirtualFree(addr, number << shiftPage, MEM_DECOMMIT);
+    return !mprotect(addr, number << shiftPage, PROT_NONE);
 }
 
 /**
@@ -652,43 +653,34 @@ PlatProtectPages(
     size_t number,  /*!< Number of pages to protect/unprotect. */
     int protect)    /*!< Whether to protect or unprotect pages. */
 {
-    DWORD old;
-    return VirtualProtect(addr, number << shiftPage,
-            (protect ? PAGE_READONLY : PAGE_READWRITE), &old);
+    return !mprotect(addr, number << shiftPage,
+            PROT_READ | (protect ? 0 : PROT_WRITE));
 }
 
 /**
- * Called upon exception.
- *
- * @retval EXCEPTION_CONTINUE_SEARCH        for unhandled exceptions, will pass
- *                                          exception to other handlers.
- * @retval EXCEPTION_CONTINUE_EXECUTION     for handled exceptions, will resume
- *                                          execution of calling code.
+ * Called upon memory protection signal (SIGSEGV).
  *
  * @see SysPageProtect
  */
-static LONG CALLBACK
-PageProtectVectoredHandler(
-    PEXCEPTION_POINTERS exceptionInfo)  /*!< Info about caught exception. */
+static void
+PageProtectSigAction(
+    int signo,          /*!< Signal number caught. */
+    siginfo_t *info,    /*!< Signal information. */
+    void *dummy)        /*!< Unused. */
 {
-    if (exceptionInfo->ExceptionRecord->ExceptionCode
-            != EXCEPTION_ACCESS_VIOLATION
-            || exceptionInfo->ExceptionRecord->ExceptionInformation[0] != 1) {
+    if (signo != SIGSEGV || info->si_code != SEGV_ACCERR) {
         /*
-         * Not a memory write exception.
+         * Not a memory protection signal.
          */
 
-        return EXCEPTION_CONTINUE_SEARCH;
+        return;
     }
 
     /*
      * Remove write protection and remember page for parent tracking.
      */
 
-    SysPageProtect(
-            (void *) exceptionInfo->ExceptionRecord->ExceptionInformation[1],
-            0);
-    return EXCEPTION_CONTINUE_EXECUTION;
+    SysPageProtect(info->si_addr, 0);
 }
 
 /** @endcond @endprivate */
@@ -702,79 +694,43 @@ PageProtectVectoredHandler(
 
 /** @beginprivate @cond PRIVATE */
 
-#ifndef COL_STATIC_BUILD
 /**
- * Windows DLL entry point.
- *
- * @return Always true.
- *
- * @see Init
- */
-BOOL APIENTRY
-DllMain(
-    HMODULE hModule,    /*!< A handle to the DLL module. */
-    DWORD dwReason,     /*!< The reason code that indicates why the DLL
-                             entry-point function is being called. */
-    LPVOID lpReserved)  /*!< Unused. */
-{
-    switch (dwReason) {
-        case DLL_PROCESS_ATTACH:
-            return Init();
-
-        case DLL_PROCESS_DETACH:
-            TlsFree(tlsToken);
-            break;
-    }
-    return TRUE;
-}
-#endif /* !COL_STATIC_BUILD */
-
-/**
- * Initialization routine. Called through DllMain().
- *
- * @return Always true.
+ * Initialization routine. Called through pthread_once().
  *
  * @sideeffect
- *      - Create thread-local storage key #tlsToken (freed upon
- *        DLL_PROCESS_DETACH in #DllMain).
- *      - Install memory protection exception handler
- *        PageProtectVectoredHandler()for parent tracking.
+ *      - Create thread-specific data key #tsdKey (never freed).
+ *      - Install memory protection signal handler PageProtectSigAction() for
+ *        parent tracking.
  *
- * @see DllMain
- * @see systemPageSize
- * @see allocGranularity
- * @see shiftPage
+ * @see PlatEnter
  */
-static BOOL
+static void
 Init()
 {
-    SYSTEM_INFO systemInfo;
-
-    if ((tlsToken = TlsAlloc()) == TLS_OUT_OF_INDEXES) {
+    struct sigaction sa;
+    
+    if (pthread_key_create(&tsdKey, NULL)) {
         /* TODO: exception */
-        return FALSE;
+        return;
     }
 
-    GetSystemInfo(&systemInfo);
-    systemPageSize = systemInfo.dwPageSize;
-    allocGranularity = systemInfo.dwAllocationGranularity;
+    systemPageSize = sysconf(_SC_PAGESIZE);
+    allocGranularity = systemPageSize * 16;
     shiftPage = LOG2(systemPageSize);
-
-    InitializeCriticalSection(&csRange);
 
 #ifdef COL_USE_THREADS
     sharedGroups = NULL;
-    InitializeCriticalSection(&csSharedGroups);
 #endif /* COL_USE_THREADS */
 
-    AddVectoredExceptionHandler(1, PageProtectVectoredHandler);
-
-    return TRUE;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_sigaction = PageProtectSigAction;
+    sa.sa_flags = SA_SIGINFO | SA_RESTART;
+    sigaction(SIGSEGV, &sa, NULL);
 }
 
 /** @endcond @endprivate */
 
 /* End of Initialization/Cleanup *//*!\}*/
 
-/* End of System and Architecture (Win32-specific) *//*!\}*/
+/* End of System and Architecture (Unix-specific) *//*!\}*/
 /*! @endcond @endprivate */
