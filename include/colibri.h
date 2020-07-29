@@ -562,9 +562,10 @@ typedef int (Col_ErrorProc) (Col_ErrorLevel level, Col_ErrorDomain domain,
  * Remaining declarations.
  */
 
-EXTERN void     Col_Error(Col_ErrorLevel level, Col_ErrorDomain domain,
-                    int code, ...);
-EXTERN void     Col_SetErrorProc(Col_ErrorProc *proc);
+EXTERN void             Col_Error(Col_ErrorLevel level, Col_ErrorDomain domain,
+                            int code, ...);
+EXTERN Col_ErrorProc *  Col_GetErrorProc();
+EXTERN Col_ErrorProc *  Col_SetErrorProc(Col_ErrorProc *proc);
 
 /* End of Generic Error Handling *//*!\}*/
 

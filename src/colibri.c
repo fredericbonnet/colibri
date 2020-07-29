@@ -505,15 +505,35 @@ Col_Error(
 }
 
 /**
+ * Get the thread's custom error proc.
+ *
+ * @return The current error proc (may be NULL).
+ * 
+ * @see Col_Error
+ * @see Col_SetErrorProc
+ */
+Col_ErrorProc *
+Col_GetErrorProc()
+{
+    return PlatGetThreadData()->errorProc;
+}
+
+/**
  * Set or reset the thread's custom error proc.
  *
+ * @return The old error proc (may be NULL).
+ * 
  * @see Col_Error
+ * @see Col_GetErrorProc
  */
-void
+Col_ErrorProc *
 Col_SetErrorProc(
     Col_ErrorProc *proc)    /*!< The new error proc (may be NULL). */
 {
-    PlatGetThreadData()->errorProc = proc;
+    ThreadData *data = PlatGetThreadData();
+    Col_ErrorProc *oldProc = data->errorProc;
+    data->errorProc = proc;
+    return oldProc;
 }
 
 /* End of Generic Error Handling */
