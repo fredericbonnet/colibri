@@ -69,6 +69,30 @@ install(EXPORT colibri-config DESTINATION cmake)
 
 # Colibri unit tests
 if (PicoTest_FOUND)
+	# TDD tests
+	add_executable(tdd_colibri)
+	target_sources(tdd_colibri
+		PRIVATE
+			tests/tdd/main.c
+			tests/tdd/json.c
+			tests/tdd/traverse.c
+			tests/tdd/hooks.c
+			tests/tdd/errors.c
+			tests/tdd/testStrings.c
+			tests/tdd/testWords.c
+			tests/tdd/testBasicWords.c
+			tests/tdd/testRopes.c
+	)
+	target_link_libraries(tdd_colibri
+		PRIVATE
+			colibri
+			PicoTest
+	)
+	install(TARGETS tdd_colibri EXPORT tdd_colibri
+		RUNTIME DESTINATION bin/${CMAKE_BUILD_TYPE}
+	)
+
+	# Historic tests
 	add_executable(test_colibri)
 	target_sources(test_colibri
 		PRIVATE

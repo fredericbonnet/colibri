@@ -4,7 +4,7 @@ Col_ErrorProc test_errorProc;
 
 /* Record the current PICOTEST_ABORT for the longjmp to work properly. */
 extern void (*ABORT_HANDLER) ();
-static void ABORT() {PICOTEST_ABORT();}
+static void ABORT() {PICOTEST_FAILURE("COLIBRI", "ERROR"); PICOTEST_ABORT();}
 
 /* Test failure log handler. */
 PicoTestFailureLoggerProc logFailure;
