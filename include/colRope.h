@@ -65,6 +65,7 @@ EXTERN Col_Word         Col_NormalizeRope(Col_Word rope,
 EXTERN Col_Char         Col_CharWordValue(Col_Word ch);
 EXTERN Col_StringFormat Col_StringWordFormat(Col_Word string);
 EXTERN size_t           Col_RopeLength(Col_Word rope);
+EXTERN unsigned char    Col_RopeDepth(Col_Word rope);
 EXTERN Col_Char         Col_RopeAt(Col_Word rope, size_t index);
 
 /* End of Rope Accessors *//*!\}*/

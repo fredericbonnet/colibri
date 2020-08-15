@@ -1466,6 +1466,26 @@ Col_RopeLength(
 }
 
 /**
+ * Get the depth of the rope.
+ *
+ * @return The rope depth.
+ */
+unsigned char
+Col_RopeDepth(
+    Col_Word rope)  /*!< Rope to get depth for. */
+{
+    /*
+     * Check preconditions.
+     */
+
+    /*! @typecheck{COL_ERROR_ROPE,rope} */
+    TYPECHECK_ROPE(rope) return 0;
+
+    WORD_UNWRAP(rope);
+    return GetDepth(rope);
+}
+
+/**
  * Get the character codepoint of a rope at a given position.
  *
  * @retval COL_CHAR_INVALID     if **index** past end of **rope**.
@@ -2201,19 +2221,17 @@ static unsigned char
 GetDepth(
     Col_Word rope)  /*!< Rope node to get depth from. */
 {
-    for (;;) {
-        switch (WORD_TYPE(rope)) {
-        case WORD_TYPE_SUBROPE:
-            return WORD_SUBROPE_DEPTH(rope);
+    switch (WORD_TYPE(rope)) {
+    case WORD_TYPE_SUBROPE:
+        return WORD_SUBROPE_DEPTH(rope);
 
-        case WORD_TYPE_CONCATROPE:
-            return WORD_CONCATROPE_DEPTH(rope);
+    case WORD_TYPE_CONCATROPE:
+        return WORD_CONCATROPE_DEPTH(rope);
 
-        /* WORD_TYPE_UNKNOWN */
+    /* WORD_TYPE_UNKNOWN */
 
-        default:
-            return 0;
-        }
+    default:
+        return 0;
     }
 }
 
