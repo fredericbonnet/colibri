@@ -525,7 +525,8 @@ PICOTEST_CASE(testSubropeOfConcatRopeArms, colibriFixture) {
 PICOTEST_SUITE(testConcatRopes, testConcatRopeWithEmptyIsIdentity,
                testConcatShortStringsIsNewString,
                testConcatFlatStringsIsNewRope,
-               testConcatAdjacentSubropesIsOriginalRope);
+               testConcatAdjacentSubropesIsOriginalRope,
+               testConcatRopeBalancing);
 // TODO complex concat scenarios
 PICOTEST_CASE(testConcatRopeWithEmptyIsIdentity, colibriFixture) {
     Col_Word rope = SMALL_STRING();
@@ -550,6 +551,173 @@ PICOTEST_CASE(testConcatAdjacentSubropesIsOriginalRope, colibriFixture) {
     Col_Word left = Col_Subrope(rope, 0, split - 1);
     Col_Word right = Col_Subrope(rope, split, SIZE_MAX);
     PICOTEST_ASSERT(Col_ConcatRopes(left, right) == rope);
+}
+
+PICOTEST_SUITE(testConcatRopeBalancing,
+               testConcatBalancedBranchesAreNotRebalanced,
+               testConcatInbalancedLeftOuterBranchesAreRotated,
+               testConcatInbalancedRightOuterBranchesAreRotated,
+               testConcatInbalancedLeftInnerBranchesAreSplit,
+               testConcatInbalancedRightInnerBranchesAreSplit,
+               testConcatInbalancedSubropeBranchesAreSplit);
+PICOTEST_CASE(testConcatBalancedBranchesAreNotRebalanced, colibriFixture) {
+    Col_Word leaf[8];
+    for (int i = 0; i < 8; i++) {
+        leaf[i] = FLAT_STRING();
+    }
+
+    Col_Word left1 = Col_ConcatRopes(leaf[0], leaf[1]);
+    Col_Word left2 = Col_ConcatRopes(leaf[2], leaf[3]);
+    PICOTEST_ASSERT(Col_RopeDepth(left1) == 1);
+    PICOTEST_ASSERT(Col_RopeDepth(left2) == 1);
+
+    Col_Word left = Col_ConcatRopes(left1, left2);
+    PICOTEST_ASSERT(Col_RopeDepth(left) == 2);
+    PICOTEST_ASSERT(Col_RopeDepth(Col_ConcatRopes(left1, leaf[0])) == 2);
+    PICOTEST_ASSERT(Col_RopeDepth(Col_ConcatRopes(leaf[0], left2)) == 2);
+    for (int i = 0; i < 4; i++) {
+        PICOTEST_ASSERT(Col_Subrope(left, FLAT_STRING_LEN * i,
+                                    FLAT_STRING_LEN * (i + 1) - 1) == leaf[i]);
+    }
+
+    Col_Word right1 = Col_ConcatRopes(leaf[4], leaf[5]);
+    Col_Word right2 = Col_ConcatRopes(leaf[6], leaf[7]);
+    PICOTEST_ASSERT(Col_RopeDepth(right1) == 1);
+    PICOTEST_ASSERT(Col_RopeDepth(right2) == 1);
+
+    Col_Word right = Col_ConcatRopes(right1, right2);
+    PICOTEST_ASSERT(Col_RopeDepth(right) == 2);
+    PICOTEST_ASSERT(Col_RopeDepth(Col_ConcatRopes(right1, leaf[0])) == 2);
+    PICOTEST_ASSERT(Col_RopeDepth(Col_ConcatRopes(leaf[0], right2)) == 2);
+    for (int i = 0; i < 4; i++) {
+        PICOTEST_ASSERT(Col_Subrope(right, FLAT_STRING_LEN * i,
+                                    FLAT_STRING_LEN * (i + 1) - 1) ==
+                        leaf[i + 4]);
+    }
+
+    Col_Word rope = Col_ConcatRopes(left, right);
+    PICOTEST_ASSERT(Col_RopeDepth(rope) == 3);
+    for (int i = 0; i < 8; i++) {
+        PICOTEST_ASSERT(Col_Subrope(rope, FLAT_STRING_LEN * i,
+                                    FLAT_STRING_LEN * (i + 1) - 1) == leaf[i]);
+    }
+}
+PICOTEST_CASE(testConcatInbalancedLeftOuterBranchesAreRotated, colibriFixture) {
+    Col_Word leaf[4];
+    for (int i = 0; i < 4; i++) {
+        leaf[i] = FLAT_STRING();
+    }
+
+    Col_Word left1 = Col_ConcatRopes(leaf[0], leaf[1]);
+    Col_Word left2 = leaf[2];
+    PICOTEST_ASSERT(Col_RopeDepth(left1) == 1);
+    PICOTEST_ASSERT(Col_RopeDepth(left2) == 0);
+
+    Col_Word left = Col_ConcatRopes(left1, left2);
+    PICOTEST_ASSERT(Col_RopeDepth(left) == 2);
+
+    Col_Word right = leaf[3];
+    PICOTEST_ASSERT(Col_RopeDepth(right) == 0);
+
+    Col_Word rope = Col_ConcatRopes(left, right);
+    PICOTEST_ASSERT(Col_RopeDepth(rope) == 2);
+    for (int i = 0; i < 4; i++) {
+        PICOTEST_ASSERT(Col_Subrope(rope, FLAT_STRING_LEN * i,
+                                    FLAT_STRING_LEN * (i + 1) - 1) == leaf[i]);
+    }
+}
+PICOTEST_CASE(testConcatInbalancedRightOuterBranchesAreRotated,
+              colibriFixture) {
+    Col_Word leaf[4];
+    for (int i = 0; i < 4; i++) {
+        leaf[i] = FLAT_STRING();
+    }
+
+    Col_Word left = leaf[0];
+    PICOTEST_ASSERT(Col_RopeDepth(left) == 0);
+
+    Col_Word right1 = leaf[1];
+    Col_Word right2 = Col_ConcatRopes(leaf[2], leaf[3]);
+    PICOTEST_ASSERT(Col_RopeDepth(right1) == 0);
+    PICOTEST_ASSERT(Col_RopeDepth(right2) == 1);
+
+    Col_Word right = Col_ConcatRopes(right1, right2);
+    PICOTEST_ASSERT(Col_RopeDepth(right) == 2);
+
+    Col_Word rope = Col_ConcatRopes(left, right);
+    PICOTEST_ASSERT(Col_RopeDepth(rope) == 2);
+    for (int i = 0; i < 4; i++) {
+        PICOTEST_ASSERT(Col_Subrope(rope, FLAT_STRING_LEN * i,
+                                    FLAT_STRING_LEN * (i + 1) - 1) == leaf[i]);
+    }
+}
+PICOTEST_CASE(testConcatInbalancedLeftInnerBranchesAreSplit, colibriFixture) {
+    Col_Word leaf[4];
+    for (int i = 0; i < 4; i++) {
+        leaf[i] = FLAT_STRING();
+    }
+
+    Col_Word left1 = leaf[0];
+    Col_Word left2 = Col_ConcatRopes(leaf[1], leaf[2]);
+    PICOTEST_ASSERT(Col_RopeDepth(left1) == 0);
+    PICOTEST_ASSERT(Col_RopeDepth(left2) == 1);
+
+    Col_Word left = Col_ConcatRopes(left1, left2);
+    PICOTEST_ASSERT(Col_RopeDepth(left) == 2);
+
+    Col_Word right = leaf[3];
+    PICOTEST_ASSERT(Col_RopeDepth(right) == 0);
+
+    Col_Word rope = Col_ConcatRopes(left, right);
+    PICOTEST_ASSERT(Col_RopeDepth(rope) == 2);
+    for (int i = 0; i < 4; i++) {
+        PICOTEST_ASSERT(Col_Subrope(rope, FLAT_STRING_LEN * i,
+                                    FLAT_STRING_LEN * (i + 1) - 1) == leaf[i]);
+    }
+}
+PICOTEST_CASE(testConcatInbalancedRightInnerBranchesAreSplit, colibriFixture) {
+    Col_Word leaf[4];
+    for (int i = 0; i < 4; i++) {
+        leaf[i] = FLAT_STRING();
+    }
+
+    Col_Word left = leaf[0];
+    PICOTEST_ASSERT(Col_RopeDepth(left) == 0);
+
+    Col_Word right1 = Col_ConcatRopes(leaf[1], leaf[2]);
+    Col_Word right2 = leaf[3];
+    PICOTEST_ASSERT(Col_RopeDepth(right1) == 1);
+    PICOTEST_ASSERT(Col_RopeDepth(right2) == 0);
+
+    Col_Word right = Col_ConcatRopes(right1, right2);
+    PICOTEST_ASSERT(Col_RopeDepth(right) == 2);
+
+    Col_Word rope = Col_ConcatRopes(left, right);
+    PICOTEST_ASSERT(Col_RopeDepth(rope) == 2);
+    for (int i = 0; i < 4; i++) {
+        PICOTEST_ASSERT(Col_Subrope(rope, FLAT_STRING_LEN * i,
+                                    FLAT_STRING_LEN * (i + 1) - 1) == leaf[i]);
+    }
+}
+PICOTEST_CASE(testConcatInbalancedSubropeBranchesAreSplit, colibriFixture) {
+    Col_Word leaf = FLAT_STRING();
+    Col_Word node1 = Col_ConcatRopes(leaf, leaf);
+    Col_Word node2 = Col_ConcatRopes(node1, node1);
+    PICOTEST_ASSERT(Col_RopeDepth(leaf) == 0);
+    PICOTEST_ASSERT(Col_RopeDepth(node1) == 1);
+    PICOTEST_ASSERT(Col_RopeDepth(node2) == 2);
+    PICOTEST_ASSERT(Col_Subrope(node2, Col_RopeLength(node1), SIZE_MAX) ==
+                    node1);
+    Col_Word subrope = Col_Subrope(node2, 1, SIZE_MAX);
+    PICOTEST_ASSERT(Col_RopeDepth(subrope) == 2);
+    PICOTEST_ASSERT(Col_Subrope(subrope, Col_RopeLength(node1) - 1, SIZE_MAX) ==
+                    node1);
+
+    Col_Word rope = Col_ConcatRopes(subrope, leaf);
+    PICOTEST_ASSERT(Col_Subrope(rope, 0, Col_RopeLength(subrope) - 1) !=
+                    subrope);
+    PICOTEST_ASSERT(Col_Subrope(rope, Col_RopeLength(node1) - 1, SIZE_MAX) !=
+                    node1);
 }
 
 PICOTEST_SUITE(testRopeTraversal, testTraverseRope);
