@@ -3616,7 +3616,9 @@ Col_TraverseRopeChunks(
 
         case COL_UTF8:
             chunk.byteLength = (const char *) Col_Utf8Addr(
-                    (const Col_Char1 *) chunk.data, max, info.max,
+                    (const Col_Char1 *) chunk.data, max, 
+                    WORD_UTFSTR_LENGTH(info.rope) 
+                    - (info.start - (reverse ? info.max-1 : 0)),
                     WORD_UTFSTR_BYTELENGTH(info.rope)
                     - ((const char *) chunk.data
                     - WORD_UTFSTR_DATA(info.rope)))
@@ -3625,7 +3627,9 @@ Col_TraverseRopeChunks(
 
         case COL_UTF16:
             chunk.byteLength = (const char *) Col_Utf16Addr(
-                    (const Col_Char2 *) chunk.data, max, info.max,
+                    (const Col_Char2 *) chunk.data, max, 
+                    WORD_UTFSTR_LENGTH(info.rope) 
+                    - (info.start - (reverse ? info.max-1 : 0)),
                     WORD_UTFSTR_BYTELENGTH(info.rope)
                     - ((const char *) chunk.data
                     - WORD_UTFSTR_DATA(info.rope)))

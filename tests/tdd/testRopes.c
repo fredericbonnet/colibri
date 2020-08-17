@@ -728,7 +728,7 @@ PICOTEST_SUITE(testTraverseRope, testTraverseProcMustNotBeNull,
                testTraverseCharacterWordHasOneChunk,
                testTraverseSmallStringHasOneChunk,
                testTraverseFlatStringHasOneChunk, testTraverseSubrope,
-               testTraverseConcatRope);
+               testTraverseConcatRope, testTraverseRange);
 
 #define CHUNK_SAMPLE_SIZE 10
 typedef struct RopeChunkInfo {
@@ -923,6 +923,85 @@ PICOTEST_CASE(testTraverseConcatStringsRightArmHaveOneChunk, colibriFixture) {
                     concatRopeData.infos[0].chunk.data);
     PICOTEST_ASSERT(rightData.infos[0].chunk.byteLength ==
                     concatRopeData.infos[0].chunk.byteLength);
+}
+
+PICOTEST_SUITE(testTraverseRange, testTraverseSingleCharacter);
+PICOTEST_SUITE(testTraverseSingleCharacter, testTraverseSingleCharacterUcs1,
+               testTraverseSingleCharacterUcs2, testTraverseSingleCharacterUcs4,
+               testTraverseSingleCharacterUtf8,
+               testTraverseSingleCharacterUtf16);
+static void checkTraverseCharacterUcs(Col_Word rope, Col_StringFormat format,
+                                      size_t index) {
+    DECLARE_CHUNKS_DATA(data, 1);
+    Col_Char c = Col_RopeAt(rope, index);
+    PICOTEST_ASSERT(Col_TraverseRopeChunks(rope, index, 1, 0, ropeChunkCounter,
+                                           &data, NULL) == 0);
+    PICOTEST_ASSERT(data.nbChunks == 1);
+    PICOTEST_ASSERT(data.infos[0].chunk.format == format);
+    PICOTEST_ASSERT(data.infos[0].chunk.byteLength == (size_t)format);
+    PICOTEST_ASSERT(COL_CHAR_GET(format, data.infos[0].chunk.data) == c);
+}
+PICOTEST_CASE(testTraverseSingleCharacterUcs1, colibriFixture) {
+    Col_Word rope = FLAT_STRING_UCS1();
+    checkTraverseCharacterUcs(rope, COL_UCS1, 0);
+    checkTraverseCharacterUcs(rope, COL_UCS1, FLAT_STRING_LEN / 2);
+    checkTraverseCharacterUcs(rope, COL_UCS1, FLAT_STRING_LEN - 1);
+}
+PICOTEST_CASE(testTraverseSingleCharacterUcs2, colibriFixture) {
+    Col_Word rope = FLAT_STRING_UCS2();
+    checkTraverseCharacterUcs(rope, COL_UCS2, 0);
+    checkTraverseCharacterUcs(rope, COL_UCS2, FLAT_STRING_LEN / 2);
+    checkTraverseCharacterUcs(rope, COL_UCS2, FLAT_STRING_LEN - 1);
+}
+PICOTEST_CASE(testTraverseSingleCharacterUcs4, colibriFixture) {
+    Col_Word rope = FLAT_STRING_UCS4();
+    checkTraverseCharacterUcs(rope, COL_UCS4, 0);
+    checkTraverseCharacterUcs(rope, COL_UCS4, FLAT_STRING_LEN / 2);
+    checkTraverseCharacterUcs(rope, COL_UCS4, FLAT_STRING_LEN - 1);
+}
+static void checkTraverseCharacterUtf8(Col_Word rope, size_t index,
+                                       Col_Char c) {
+    DECLARE_CHUNKS_DATA(data, 1);
+    PICOTEST_ASSERT(Col_RopeAt(rope, index) == c);
+    PICOTEST_ASSERT(Col_TraverseRopeChunks(rope, index, 1, 0, ropeChunkCounter,
+                                           &data, NULL) == 0);
+    PICOTEST_ASSERT(data.nbChunks == 1);
+    PICOTEST_ASSERT(data.infos[0].chunk.format == COL_UTF8);
+    PICOTEST_ASSERT(data.infos[0].chunk.byteLength ==
+                    COL_UTF8_WIDTH(c) * sizeof(Col_Char1));
+    PICOTEST_ASSERT(COL_CHAR_GET(COL_UTF8, data.infos[0].chunk.data) == c);
+    PICOTEST_ASSERT(Col_Utf8Get(data.infos[0].chunk.data) == c);
+}
+PICOTEST_CASE(testTraverseSingleCharacterUtf8, colibriFixture) {
+    Col_Word rope = FLAT_STRING_UTF8();
+    Col_Char first = Col_RopeAt(rope, 0);
+    checkTraverseCharacterUtf8(rope, 0, first);
+    checkTraverseCharacterUtf8(rope, FLAT_STRING_LEN / 2,
+                               first + FLAT_STRING_LEN / 2);
+    checkTraverseCharacterUtf8(rope, FLAT_STRING_LEN - 1,
+                               first + FLAT_STRING_LEN - 1);
+}
+static void checkTraverseCharacterUtf16(Col_Word rope, size_t index,
+                                        Col_Char c) {
+    DECLARE_CHUNKS_DATA(data, 1);
+    PICOTEST_ASSERT(Col_RopeAt(rope, index) == c);
+    PICOTEST_ASSERT(Col_TraverseRopeChunks(rope, index, 1, 0, ropeChunkCounter,
+                                           &data, NULL) == 0);
+    PICOTEST_ASSERT(data.nbChunks == 1);
+    PICOTEST_ASSERT(data.infos[0].chunk.format == COL_UTF16);
+    PICOTEST_ASSERT(data.infos[0].chunk.byteLength ==
+                    COL_UTF16_WIDTH(c) * sizeof(Col_Char2));
+    PICOTEST_ASSERT(COL_CHAR_GET(COL_UTF16, data.infos[0].chunk.data) == c);
+    PICOTEST_ASSERT(Col_Utf16Get(data.infos[0].chunk.data) == c);
+}
+PICOTEST_CASE(testTraverseSingleCharacterUtf16, colibriFixture) {
+    Col_Word rope = FLAT_STRING_UTF16();
+    Col_Char first = Col_RopeAt(rope, 0);
+    checkTraverseCharacterUtf16(rope, 0, first);
+    checkTraverseCharacterUtf16(rope, FLAT_STRING_LEN / 2,
+                                first + FLAT_STRING_LEN / 2);
+    checkTraverseCharacterUtf16(rope, FLAT_STRING_LEN - 1,
+                                first + FLAT_STRING_LEN - 1);
 }
 
 PICOTEST_SUITE(testRopeIteration, testRopeIteratorInitialize,
