@@ -415,9 +415,28 @@ PICOTEST_SUITE(testRopeOperations, testSubrope, testConcatRopes);
 
 #define SMALL_STRING_LEN ROPE_SMALL_LEN
 #define SMALL_STRING() NEW_ROPE_UCS1_SMALL()
-#define SHORT_STRING_LEN 16
-static Col_Word SHORT_STRING()
+#define SHORT_STRING_LEN 10
+#define SHORT_STRING() SHORT_STRING_UCS1()
+static Col_Word SHORT_STRING_UCS1()
     NEW_ROPE_UCS(Col_Char1, COL_UCS1, SHORT_STRING_LEN, 'a', 'a' + i);
+static Col_Word SHORT_STRING_UCS2()
+    NEW_ROPE_UCS(Col_Char2, COL_UCS2, SHORT_STRING_LEN, 'a', 'a' + i);
+static Col_Word SHORT_STRING_UCS4()
+    NEW_ROPE_UCS(Col_Char4, COL_UCS4, SHORT_STRING_LEN, 'a', 'a' + i);
+static Col_Word SHORT_STRING_UTF8()
+    NEW_ROPE_UTF8(SHORT_STRING_LEN, COL_CHAR1_MAX, COL_CHAR1_MAX + i);
+static Col_Word SHORT_STRING_UTF16()
+    NEW_ROPE_UTF16(SHORT_STRING_LEN, COL_CHAR1_MAX, COL_CHAR1_MAX + i);
+static Col_Word MEDIUM_STRING_UCS1()
+    NEW_ROPE_UCS(Col_Char1, COL_UCS1, 80, 'a', 'a' + i);
+static Col_Word MEDIUM_STRING_UCS2()
+    NEW_ROPE_UCS(Col_Char2, COL_UCS2, 40, 'a', 'a' + i);
+static Col_Word MEDIUM_STRING_UCS4()
+    NEW_ROPE_UCS(Col_Char4, COL_UCS4, 20, 'a', 'a' + i);
+static Col_Word MEDIUM_STRING_UTF8()
+    NEW_ROPE_UTF8(40, COL_CHAR1_MAX, COL_CHAR1_MAX + i);
+static Col_Word MEDIUM_STRING_UTF16()
+    NEW_ROPE_UTF16(40, COL_CHAR1_MAX, COL_CHAR1_MAX + i);
 #define FLAT_STRING_LEN 200
 #define FLAT_STRING() FLAT_STRING_UCS1()
 static Col_Word FLAT_STRING_UCS1()
@@ -442,9 +461,8 @@ PICOTEST_SUITE(testSubrope, testSubropeOfEmptyRopeIsEmpty,
                testSubropeOfOneCharacterRangeIsCharacterWord,
                testSubropeOfSmallStringIsSmallString,
                testSubropeOfShortStringIsNewString,
-               testSubropeOfFlatStringIsNewRope,
-               testSubropeOfShortRangeIsShortString,
-               testSubropeOfSubropeIsNewRope, testSubropeOfConcatRope);
+               testSubropeOfFlatStringIsNewRope, testSubropeOfSubropeIsNewRope,
+               testSubropeOfConcatRope);
 
 PICOTEST_CASE(testSubropeOfEmptyRopeIsEmpty, colibriFixture) {
     PICOTEST_ASSERT(Col_Subrope(Col_EmptyRope(), 0, 0) == Col_EmptyRope());
@@ -496,15 +514,6 @@ PICOTEST_CASE(testSubropeOfFlatStringIsNewRope, colibriFixture) {
     PICOTEST_ASSERT(subrope != Col_Subrope(rope, 1, SIZE_MAX));
     checkRope(subrope, FLAT_STRING_LEN - 1, 0);
 }
-PICOTEST_CASE(testSubropeOfShortRangeIsShortString, colibriFixture) {
-    Col_Word rope = Col_ConcatRopes(FLAT_STRING(), SMALL_STRING());
-
-    size_t first = FLAT_STRING_LEN - 10, last = FLAT_STRING_LEN + 1;
-    Col_Word subrope = Col_Subrope(rope, first, last);
-    checkRopeString(subrope, last - first + 1, COL_UCS1);
-    // TODO check other combinations of formats
-}
-
 PICOTEST_CASE(testSubropeOfSubropeIsNewRope, colibriFixture) {
     Col_Word rope = Col_Subrope(FLAT_STRING(), 1, SIZE_MAX);
 
@@ -513,7 +522,8 @@ PICOTEST_CASE(testSubropeOfSubropeIsNewRope, colibriFixture) {
     checkRope(subrope, FLAT_STRING_LEN - 2, 0);
 }
 
-PICOTEST_SUITE(testSubropeOfConcatRope, testSubropeOfConcatRopeArms);
+PICOTEST_SUITE(testSubropeOfConcatRope, testSubropeOfConcatRopeArms,
+               testShortSubropeOfConcatRope);
 PICOTEST_CASE(testSubropeOfConcatRopeArms, colibriFixture) {
     Col_Word left = FLAT_STRING(), right = SMALL_STRING();
     PICOTEST_ASSERT(left != right);
@@ -521,10 +531,70 @@ PICOTEST_CASE(testSubropeOfConcatRopeArms, colibriFixture) {
     PICOTEST_ASSERT(Col_Subrope(rope, 0, FLAT_STRING_LEN - 1) == left)
     PICOTEST_ASSERT(Col_Subrope(rope, FLAT_STRING_LEN, SIZE_MAX) == right)
 }
+PICOTEST_SUITE(testShortSubropeOfConcatRope, testMergeableSubropes,
+               testUnmergeableSubropes);
+PICOTEST_SUITE(testMergeableSubropes, testMergeableSubropesUniform,
+               testMergeableSubropesUpconvert);
+static void checkMergedSubrope(Col_Word left, Col_Word right, size_t delta,
+                               Col_StringFormat format) {
+    size_t leftLen = Col_RopeLength(left), rightLen = Col_RopeLength(right);
+    Col_Word rope = Col_ConcatRopes(left, right);
+    Col_Word subrope = Col_Subrope(rope, leftLen - delta, leftLen + delta);
+    checkRope(rope, leftLen + rightLen, 1);
+    checkRopeString(subrope, delta * 2 + 1, format);
+}
+PICOTEST_CASE(testMergeableSubropesUniform, colibriFixture) {
+    checkMergedSubrope(FLAT_STRING(), SMALL_STRING(), 2, COL_UCS1);
+    checkMergedSubrope(SMALL_STRING(), FLAT_STRING(), 2, COL_UCS1);
+    checkMergedSubrope(FLAT_STRING(), FLAT_STRING(), 2, COL_UCS1);
+    checkMergedSubrope(FLAT_STRING_UCS1(), FLAT_STRING_UCS1(), 10, COL_UCS1);
+    checkMergedSubrope(FLAT_STRING_UCS2(), FLAT_STRING_UCS2(), 10, COL_UCS2);
+    checkMergedSubrope(FLAT_STRING_UCS4(), FLAT_STRING_UCS4(), 10, COL_UCS4);
+    checkMergedSubrope(FLAT_STRING_UTF8(), FLAT_STRING_UTF8(), 10, COL_UTF8);
+    checkMergedSubrope(FLAT_STRING_UTF16(), FLAT_STRING_UTF16(), 10, COL_UTF16);
+}
+PICOTEST_CASE(testMergeableSubropesUpconvert, colibriFixture) {
+    checkMergedSubrope(FLAT_STRING_UCS1(), FLAT_STRING_UCS2(), 10, COL_UCS2);
+    checkMergedSubrope(FLAT_STRING_UCS1(), FLAT_STRING_UCS4(), 10, COL_UCS4);
+    checkMergedSubrope(FLAT_STRING_UCS2(), FLAT_STRING_UCS1(), 10, COL_UCS2);
+    checkMergedSubrope(FLAT_STRING_UCS2(), FLAT_STRING_UCS4(), 10, COL_UCS4);
+    checkMergedSubrope(FLAT_STRING_UCS4(), FLAT_STRING_UCS1(), 10, COL_UCS4);
+    checkMergedSubrope(FLAT_STRING_UCS4(), FLAT_STRING_UCS2(), 10, COL_UCS4);
+}
+PICOTEST_SUITE(testUnmergeableSubropes, testUnmergeableSubropesUniform,
+               testUnmergeableSubropesUpconvert,
+               testUnmergeableSubropesIncompatible);
+static void checkUnmergedSubrope(Col_Word left, Col_Word right, size_t delta) {
+    size_t leftLen = Col_RopeLength(left), rightLen = Col_RopeLength(right);
+    Col_Word rope = Col_ConcatRopes(left, right);
+    Col_Word subrope = Col_Subrope(rope, leftLen - delta, leftLen + delta);
+    checkRope(rope, leftLen + rightLen, 1);
+    checkRope(subrope, delta * 2 + 1, 1);
+}
+PICOTEST_CASE(testUnmergeableSubropesUniform, colibriFixture) {
+    checkUnmergedSubrope(FLAT_STRING_UCS2(), FLAT_STRING_UCS2(), 100 / 4);
+    checkUnmergedSubrope(FLAT_STRING_UCS4(), FLAT_STRING_UCS4(), 100 / 8);
+    checkUnmergedSubrope(FLAT_STRING_UTF8(), FLAT_STRING_UTF8(), 40);
+    checkUnmergedSubrope(FLAT_STRING_UTF16(), FLAT_STRING_UTF16(), 40);
+}
+PICOTEST_CASE(testUnmergeableSubropesUpconvert, colibriFixture) {
+    checkUnmergedSubrope(FLAT_STRING_UCS1(), FLAT_STRING_UCS2(), 100 / 3);
+    checkUnmergedSubrope(FLAT_STRING_UCS2(), FLAT_STRING_UCS1(), 100 / 3);
+    checkUnmergedSubrope(FLAT_STRING_UCS1(), FLAT_STRING_UCS4(), 100 / 5);
+    checkUnmergedSubrope(FLAT_STRING_UCS4(), FLAT_STRING_UCS1(), 100 / 5);
+    checkUnmergedSubrope(FLAT_STRING_UCS2(), FLAT_STRING_UCS4(), 100 / 6);
+    checkUnmergedSubrope(FLAT_STRING_UCS4(), FLAT_STRING_UCS2(), 100 / 6);
+}
+PICOTEST_CASE(testUnmergeableSubropesIncompatible, colibriFixture) {
+    checkUnmergedSubrope(FLAT_STRING_UTF8(), FLAT_STRING_UCS1(), 1);
+    checkUnmergedSubrope(FLAT_STRING_UTF16(), FLAT_STRING_UCS2(), 1);
+    checkUnmergedSubrope(FLAT_STRING_UCS4(), FLAT_STRING_UTF8(), 1);
+    checkUnmergedSubrope(FLAT_STRING_UCS1(), FLAT_STRING_UTF16(), 1);
+    checkUnmergedSubrope(FLAT_STRING_UTF8(), FLAT_STRING_UTF16(), 1);
+}
 
 PICOTEST_SUITE(testConcatRopes, testConcatRopeWithEmptyIsIdentity,
-               testConcatShortStringsIsNewString,
-               testConcatFlatStringsIsNewRope,
+               testConcatShortStrings, testConcatFlatStringsIsNewRope,
                testConcatAdjacentSubropesIsOriginalRope,
                testConcatRopeBalancing);
 // TODO complex concat scenarios
@@ -533,11 +603,66 @@ PICOTEST_CASE(testConcatRopeWithEmptyIsIdentity, colibriFixture) {
     PICOTEST_ASSERT(Col_ConcatRopes(rope, Col_EmptyRope()) == rope);
     PICOTEST_ASSERT(Col_ConcatRopes(Col_EmptyRope(), rope) == rope);
 }
-PICOTEST_CASE(testConcatShortStringsIsNewString, colibriFixture) {
-    Col_Word rope = SHORT_STRING();
-    Col_Word concatRope = Col_ConcatRopes(rope, rope);
-    PICOTEST_ASSERT(concatRope != Col_ConcatRopes(rope, rope));
-    checkRopeString(concatRope, SHORT_STRING_LEN * 2, COL_UCS1);
+PICOTEST_SUITE(testConcatShortStrings, testMergeableConcats,
+               testUnmergeableConcats);
+PICOTEST_SUITE(testMergeableConcats, testMergedConcatUniform,
+               testMergedConcatUpconvert);
+static void checkMergedConcatRope(Col_Word left, Col_Word right,
+                                  Col_StringFormat format) {
+    size_t leftLen = Col_RopeLength(left), rightLen = Col_RopeLength(right);
+    Col_Word rope = Col_ConcatRopes(left, right);
+    checkRopeString(rope, leftLen + rightLen, format);
+}
+PICOTEST_CASE(testMergedConcatUniform, colibriFixture) {
+    checkMergedConcatRope(SMALL_STRING(), SMALL_STRING(), COL_UCS1);
+    checkMergedConcatRope(SHORT_STRING(), SMALL_STRING(), COL_UCS1);
+    checkMergedConcatRope(SMALL_STRING(), SHORT_STRING(), COL_UCS1);
+    checkMergedConcatRope(SHORT_STRING(), SHORT_STRING(), COL_UCS1);
+    checkMergedConcatRope(SHORT_STRING_UCS1(), SHORT_STRING_UCS1(), COL_UCS1);
+    checkMergedConcatRope(SHORT_STRING_UCS2(), SHORT_STRING_UCS2(), COL_UCS2);
+    checkMergedConcatRope(SHORT_STRING_UCS4(), SHORT_STRING_UCS4(), COL_UCS4);
+    checkMergedConcatRope(SHORT_STRING_UTF8(), SHORT_STRING_UTF8(), COL_UTF8);
+    checkMergedConcatRope(SHORT_STRING_UTF16(), SHORT_STRING_UTF16(),
+                          COL_UTF16);
+}
+PICOTEST_CASE(testMergedConcatUpconvert, colibriFixture) {
+    checkMergedConcatRope(SHORT_STRING_UCS1(), SHORT_STRING_UCS2(), COL_UCS2);
+    checkMergedConcatRope(SHORT_STRING_UCS1(), SHORT_STRING_UCS4(), COL_UCS4);
+    checkMergedConcatRope(SHORT_STRING_UCS2(), SHORT_STRING_UCS1(), COL_UCS2);
+    checkMergedConcatRope(SHORT_STRING_UCS2(), SHORT_STRING_UCS4(), COL_UCS4);
+    checkMergedConcatRope(SHORT_STRING_UCS4(), SHORT_STRING_UCS1(), COL_UCS4);
+    checkMergedConcatRope(SHORT_STRING_UCS4(), SHORT_STRING_UCS2(), COL_UCS4);
+}
+
+PICOTEST_SUITE(testUnmergeableConcats, testUnmergeableConcatsUniform,
+               testUnmergeableConcatsUpconvert,
+               testUnmergeableConcatsIncompatible);
+static void checkUnmergedConcatRope(Col_Word left, Col_Word right,
+                                    size_t depth) {
+    size_t leftLen = Col_RopeLength(left), rightLen = Col_RopeLength(right);
+    Col_Word rope = Col_ConcatRopes(left, right);
+    checkRope(rope, leftLen + rightLen, depth);
+}
+PICOTEST_CASE(testUnmergeableConcatsUniform, colibriFixture) {
+    checkUnmergedConcatRope(SHORT_STRING_UCS2(), MEDIUM_STRING_UCS2(), 1);
+    checkUnmergedConcatRope(SHORT_STRING_UCS4(), MEDIUM_STRING_UCS4(), 1);
+    checkUnmergedConcatRope(SHORT_STRING_UTF8(), MEDIUM_STRING_UTF8(), 1);
+    checkUnmergedConcatRope(SHORT_STRING_UTF16(), MEDIUM_STRING_UTF16(), 1);
+}
+PICOTEST_CASE(testUnmergeableConcatsUpconvert, colibriFixture) {
+    checkUnmergedConcatRope(SHORT_STRING_UCS1(), MEDIUM_STRING_UCS2(), 1);
+    checkUnmergedConcatRope(SHORT_STRING_UCS2(), MEDIUM_STRING_UCS1(), 1);
+    checkUnmergedConcatRope(MEDIUM_STRING_UCS1(), MEDIUM_STRING_UCS4(), 1);
+    checkUnmergedConcatRope(SHORT_STRING_UCS4(), MEDIUM_STRING_UCS1(), 1);
+    checkUnmergedConcatRope(SHORT_STRING_UCS2(), MEDIUM_STRING_UCS4(), 1);
+    checkUnmergedConcatRope(SHORT_STRING_UCS4(), MEDIUM_STRING_UCS2(), 1);
+}
+PICOTEST_CASE(testUnmergeableConcatsIncompatible, colibriFixture) {
+    checkUnmergedConcatRope(SHORT_STRING_UTF8(), SHORT_STRING_UCS1(), 1);
+    checkUnmergedConcatRope(SHORT_STRING_UTF16(), SHORT_STRING_UCS2(), 1);
+    checkUnmergedConcatRope(SHORT_STRING_UCS4(), SHORT_STRING_UTF8(), 1);
+    checkUnmergedConcatRope(SHORT_STRING_UCS1(), SHORT_STRING_UTF16(), 1);
+    checkUnmergedConcatRope(SHORT_STRING_UTF8(), SHORT_STRING_UTF16(), 1);
 }
 PICOTEST_CASE(testConcatFlatStringsIsNewRope, colibriFixture) {
     Col_Word rope = FLAT_STRING();
@@ -1465,8 +1590,4 @@ PICOTEST_CASE(testRopeIterStringAt, colibriFixture) {
 
     Col_RopeIterForward(it, SIZE_MAX);
     PICOTEST_ASSERT(Col_RopeIterEnd(it));
-}
-
-PICOTEST_CASE(testDummy, colibriFixture) {
-    PICOTEST_ASSERT(!"TODO");
 }
