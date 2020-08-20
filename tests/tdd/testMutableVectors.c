@@ -8,8 +8,8 @@
 #include "failureFixture.h"
 
 /* Type checks */
-PICOTEST_CASE(typeCheckMVectorMaxLength, failureFixture) {
-    Col_MVectorMaxLength(WORD_NIL);
+PICOTEST_CASE(typeCheckMVectorCapacity, failureFixture) {
+    Col_MVectorCapacity(WORD_NIL);
 }
 PICOTEST_CASE(typeCheckMVectorElements, failureFixture) {
     Col_MVectorElements(WORD_NIL);
@@ -27,7 +27,7 @@ PICOTEST_CASE(valueCheckNewMVectorLength, failureFixture) {
 }
 PICOTEST_CASE(valueCheckMVectorSetLength, failureFixture) {
     Col_Word mvector = Col_NewMVector(0, 0, NULL);
-    Col_MVectorSetLength(mvector, Col_MVectorMaxLength(mvector) + 1);
+    Col_MVectorSetLength(mvector, Col_MVectorCapacity(mvector) + 1);
 }
 
 /* Error cases */
@@ -43,10 +43,10 @@ PICOTEST_CASE(errorNewMVectorOutOfMemory, failureFixture) {
 #include "colibriFixture.h"
 
 PICOTEST_SUITE(testMutableVectors, testMutableVectorTypeChecks, testNewMVector,
-               testMVectorMaxLength, testMVectorSetLength, testMVectorFreeze);
+               testMVectorCapacity, testMVectorSetLength, testMVectorFreeze);
 
 PICOTEST_CASE(testMutableVectorTypeChecks, colibriFixture) {
-    PICOTEST_ASSERT(typeCheckMVectorMaxLength(NULL) == 1);
+    PICOTEST_ASSERT(typeCheckMVectorCapacity(NULL) == 1);
     PICOTEST_ASSERT(typeCheckMVectorElements(NULL) == 1);
     PICOTEST_ASSERT(typeCheckMVectorSetLength(NULL) == 1);
     PICOTEST_ASSERT(typeCheckMVectorFreeze(NULL) == 1);
@@ -69,12 +69,12 @@ static void checkElements(size_t len, const Col_Word *elements1,
         PICOTEST_ASSERT(elements1[i] == (elements2 ? elements2[i] : WORD_NIL));
     }
 }
-static void checkMVector(Col_Word mvector, size_t max, size_t len,
+static void checkMVector(Col_Word mvector, size_t capacity, size_t len,
                          const Col_Word *words) {
     PICOTEST_ASSERT(Col_WordType(mvector) ==
                     (COL_MVECTOR | COL_VECTOR | COL_LIST))
     PICOTEST_ASSERT(Col_VectorLength(mvector) == len);
-    PICOTEST_ASSERT(Col_MVectorMaxLength(mvector) >= max);
+    PICOTEST_ASSERT(Col_MVectorCapacity(mvector) >= capacity);
     const Col_Word *elements = Col_VectorElements(mvector);
     PICOTEST_ASSERT(elements != NULL);
     PICOTEST_ASSERT(elements == Col_MVectorElements(mvector));
@@ -91,15 +91,15 @@ PICOTEST_CASE(testNewMVectorValues, colibriFixture) {
     checkMVector(mvector, len, len, elements);
 }
 
-PICOTEST_SUITE(testMVectorMaxLength, testMVectorMaxLengthShouldNotBeZero,
-               testMVectorMaxLengthShouldAdjustToLength);
-PICOTEST_CASE(testMVectorMaxLengthShouldNotBeZero, colibriFixture) {
+PICOTEST_SUITE(testMVectorCapacity, testMVectorCapacityShouldBeNonZero,
+               testMVectorCapacityShouldAdjustToLength);
+PICOTEST_CASE(testMVectorCapacityShouldBeNonZero, colibriFixture) {
     Col_Word mvector = Col_NewMVector(0, 0, NULL);
-    PICOTEST_ASSERT(Col_MVectorMaxLength(mvector) > 0);
+    PICOTEST_ASSERT(Col_MVectorCapacity(mvector) > 0);
 }
-PICOTEST_CASE(testMVectorMaxLengthShouldAdjustToLength, colibriFixture) {
+PICOTEST_CASE(testMVectorCapacityShouldAdjustToLength, colibriFixture) {
     Col_Word mvector = Col_NewMVector(0, 10, NULL);
-    PICOTEST_ASSERT(Col_MVectorMaxLength(mvector) >= 10);
+    PICOTEST_ASSERT(Col_MVectorCapacity(mvector) >= 10);
 }
 
 PICOTEST_SUITE(testMVectorSetLength, testMVectorSetLengthErrors,
@@ -107,8 +107,8 @@ PICOTEST_SUITE(testMVectorSetLength, testMVectorSetLengthErrors,
                testMVectorSetLengthIncreaseShouldInitializeNewElementsToNil,
                testMVectorSetLengthDecreaseShouldPreserveExistingElements);
 
-PICOTEST_SUITE(testMVectorSetLengthErrors, testMVectorSetLengthAboveMaxLength);
-PICOTEST_CASE(testMVectorSetLengthAboveMaxLength, colibriFixture) {
+PICOTEST_SUITE(testMVectorSetLengthErrors, testMVectorSetLengthAboveCapacity);
+PICOTEST_CASE(testMVectorSetLengthAboveCapacity, colibriFixture) {
     PICOTEST_ASSERT(valueCheckMVectorSetLength(NULL) == 1);
 }
 

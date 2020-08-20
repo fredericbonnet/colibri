@@ -87,7 +87,7 @@ immutable vectors.
  ***************************************************************************\{*/
 
 EXTERN size_t           Col_MaxMVectorLength(void);
-EXTERN Col_Word         Col_NewMVector(size_t maxLength, size_t length,
+EXTERN Col_Word         Col_NewMVector(size_t capacity, size_t length,
                             const Col_Word * elements);
 
 /* End of Mutable Vector Creation *//*!\}*/
@@ -97,7 +97,7 @@ EXTERN Col_Word         Col_NewMVector(size_t maxLength, size_t length,
  * \name Mutable Vector Accessors
  ***************************************************************************\{*/
 
-EXTERN size_t           Col_MVectorMaxLength(Col_Word mvector);
+EXTERN size_t           Col_MVectorCapacity(Col_Word mvector);
 EXTERN Col_Word *       Col_MVectorElements(Col_Word mvector);
 
 /* End of Mutable Vector Accessors *//*!\}*/
