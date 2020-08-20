@@ -6,4 +6,4 @@
 /*
  * Words
  */
-PICOTEST_SUITE(testWords, testBasicWords, testRopes);
+PICOTEST_SUITE(testWords, testBasicWords, testRopes, testVectors);

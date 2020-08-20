@@ -40,7 +40,7 @@
 size_t
 Col_MaxVectorLength()
 {
-    return VECTOR_MAX_LENGTH(SIZE_MAX);
+    return VECTOR_MAX_LENGTH(VECTOR_MAX_SIZE);
 }
 
 /**
@@ -62,7 +62,7 @@ Col_NewVector(
      */
 
     /*! @valuecheck{COL_ERROR_VECTORLENGTH,length < Col_MaxVectorLength()} */
-    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX))
+    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(VECTOR_MAX_SIZE))
             return WORD_NIL;
 
     if (length == 0) {
@@ -117,7 +117,7 @@ Col_NewVectorNV(
      */
 
     /*! @valuecheck{COL_ERROR_VECTORLENGTH,length < Col_MaxVectorLength()} */
-    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX))
+    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(VECTOR_MAX_SIZE))
             return WORD_NIL;
 
     if (length == 0) {
@@ -130,9 +130,6 @@ Col_NewVectorNV(
 
     /*
      * Create a new vector word.
-     *
-     * Note: no need to declare children as by construction they are older than
-     * the newly created vector.
      */
 
     vector = (Col_Word) AllocCells(VECTOR_SIZE(length));

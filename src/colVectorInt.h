@@ -84,7 +84,10 @@
  ***************************************************************************\{*/
 
 /** Byte size of vector header. */
-#define VECTOR_HEADER_SIZE              (sizeof(size_t)*2)
+#define VECTOR_HEADER_SIZE      (sizeof(size_t)*2)
+
+/** Maximum byte size taken by vectors. */
+#define VECTOR_MAX_SIZE         (SIZE_MAX-CELL_SIZE)
 
 /* End of Immutable Vector Constants *//*!\}*/
 
