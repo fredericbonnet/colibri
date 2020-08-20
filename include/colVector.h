@@ -34,10 +34,17 @@ accessible through a pointer value.
  * Variadic macro version of Col_NewVectorNV() that deduces its number
  * of arguments automatically.
  *
+ * @param first First word to add.
+ * @param ...   Next words to add.
+ * 
  * @see COL_ARGCOUNT
  */
-#define Col_NewVectorV(...) \
+#define Col_NewVectorV(first, ...) \
+    _Col_NewVectorV(_, first, ##__VA_ARGS__)
+/*! \cond IGNORE */
+#define _Col_NewVectorV(_, ...) \
     Col_NewVectorNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
+/*! \endcond *//* IGNORE */
 
 /*
  * Remaining declarations.

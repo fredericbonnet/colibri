@@ -240,12 +240,17 @@ EXTERN int              Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
  * Variadic macro version of Col_ConcatRopesNV() that deduces its number
  * of arguments automatically.
  *
- * @param ...   Variadic list of ropes to concatenate.
+ * @param first First rope to concatenate.
+ * @param ...   Next ropes to concatenate.
  *
  * @see COL_ARGCOUNT
  */
-#define Col_ConcatRopesV(...) \
+#define Col_ConcatRopesV(first, ...) \
+    _Col_ConcatRopesV(_,first, ##__VA_ARGS__)
+/*! \cond IGNORE */
+#define _Col_ConcatRopesV(_, ...) \
     Col_ConcatRopesNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
+/*! \endcond *//* IGNORE */
 
 /*
  * Remaining declarations.

@@ -73,12 +73,17 @@ EXTERN Col_Word         Col_ListAt(Col_Word list, size_t index);
  * Variadic macro version of Col_ConcatListsNV() that deduces its number
  * of arguments automatically.
  *
- * @param ...   Variadic list of lists to concatenate.
+ * @param first First list to concatenate.
+ * @param ...   Next lists to concatenate.
  *
  * @see COL_ARGCOUNT
  */
-#define Col_ConcatListsV(...) \
+#define Col_ConcatListsV(first, ...) \
+    _Col_ConcatListsV(_, first, ##__VA_ARGS__)
+/*! \cond IGNORE */
+#define _Col_ConcatListsV(_, ...) \
     Col_ConcatListsNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
+/*! \endcond *//* IGNORE */
 
 /*
  * Remaining declarations.
