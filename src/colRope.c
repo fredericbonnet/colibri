@@ -4148,6 +4148,14 @@ Col_RopeIterForward(
          * End of rope/string.
          */
 
+        it->chunk.first = SIZE_MAX; /* Invalidate traversal info. */
+        if (it->rope == WORD_NIL) {
+            /* 
+             * String iterator mode, save current index for backward interation
+             * from end (see Col_RopeIterBackward).
+             */
+            it->chunk.last = it->index;
+        }
         it->index = it->length;
         return;
     }
@@ -4228,6 +4236,18 @@ Col_RopeIterBackward(
             return;
         }
 
+        if (it->rope == WORD_NIL) {
+            /* 
+             * String iterator mode, restore previous position and move to the
+             * new one (see Col_RopeIterForward and below).
+             */
+            it->index = it->chunk.last;
+            it->chunk.first = 0;
+            it->chunk.last = it->length-1;
+            Col_RopeIterMoveTo(it, it->length-nb);
+            return;
+        }
+
         it->index = it->length-nb;
         return;
     } else if (it->index < nb) {
@@ -4235,6 +4255,14 @@ Col_RopeIterBackward(
          * Beginning of rope, set iterator at end.
          */
 
+        it->chunk.first = SIZE_MAX; /* Invalidate traversal info. */
+        if (it->rope == WORD_NIL) {
+            /* 
+             * String iterator mode, save current index for backward iteration
+             * from end (see above).
+             */
+            it->chunk.last = it->index;
+        }
         it->index = it->length;
         return;
     }

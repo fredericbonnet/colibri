@@ -1432,6 +1432,26 @@ static void checkRopeIterAt(Col_Word rope) {
                            ropeChunkGetChar, &c, NULL);
     Col_RopeIterLast(it, rope);
     PICOTEST_ASSERT(Col_RopeIterAt(it) == c);
+
+    Col_RopeIterNext(it);
+    PICOTEST_ASSERT(Col_RopeIterEnd(it));
+
+    Col_TraverseRopeChunks(rope, Col_RopeLength(rope) - 2, 1, 0,
+                           ropeChunkGetChar, &c, NULL);
+    Col_RopeIterBackward(it, 2);
+    PICOTEST_ASSERT(Col_RopeIterIndex(it) == Col_RopeLength(rope) - 2);
+    PICOTEST_ASSERT(!Col_RopeIterEnd(it));
+    PICOTEST_ASSERT(Col_RopeIterAt(it) == c);
+
+    Col_RopeIterForward(it, SIZE_MAX);
+    PICOTEST_ASSERT(Col_RopeIterEnd(it));
+
+    Col_TraverseRopeChunks(rope, Col_RopeLength(rope) - 1, 1, 0,
+                           ropeChunkGetChar, &c, NULL);
+    Col_RopeIterPrevious(it);
+    PICOTEST_ASSERT(Col_RopeIterIndex(it) == Col_RopeLength(rope) - 1);
+    PICOTEST_ASSERT(!Col_RopeIterEnd(it));
+    PICOTEST_ASSERT(Col_RopeIterAt(it) == c);
 }
 PICOTEST_CASE(testRopeIterAtSmallString, colibriFixture) {
     checkRopeIterAt(SMALL_STRING());
@@ -1697,8 +1717,8 @@ PICOTEST_CASE(testRopeIteratorEmptyRopeLast, colibriFixture) {
     checkRopeIterEmpty(it);
 }
 
-PICOTEST_SUITE(testRopeIteratorString, testRopeIterString,
-               testRopeIterStringAt);
+PICOTEST_SUITE(testRopeIteratorString, testRopeIterString, testRopeIterStringAt,
+               testRopeIterStringFromEnd);
 PICOTEST_CASE(testRopeIterString, colibriFixture) {
     DECLARE_ROPE_DATA_UCS(data, Col_Char1, FLAT_STRING_LEN, 'a', 'a' + i);
     Col_RopeIterator it;
@@ -1729,4 +1749,31 @@ PICOTEST_CASE(testRopeIterStringAt, colibriFixture) {
 
     Col_RopeIterForward(it, SIZE_MAX);
     PICOTEST_ASSERT(Col_RopeIterEnd(it));
+}
+PICOTEST_CASE(testRopeIterStringFromEnd, colibriFixture) {
+    DECLARE_ROPE_DATA_UCS(data, Col_Char1, FLAT_STRING_LEN, 'a', 'a' + i);
+    Col_RopeIterator it;
+
+    size_t index;
+
+    index = 0;
+    Col_RopeIterString(it, COL_UCS1, data, FLAT_STRING_LEN);
+    Col_RopeIterMoveTo(it, FLAT_STRING_LEN / 2);
+    Col_RopeIterForward(it, SIZE_MAX);
+    PICOTEST_ASSERT(Col_RopeIterEnd(it));
+
+    index = FLAT_STRING_LEN - 1;
+    Col_RopeIterPrevious(it);
+    PICOTEST_ASSERT(!Col_RopeIterEnd(it));
+    PICOTEST_ASSERT(Col_RopeIterIndex(it) == index);
+    PICOTEST_ASSERT(Col_RopeIterAt(it) == data[index]);
+
+    Col_RopeIterForward(it, SIZE_MAX);
+    PICOTEST_ASSERT(Col_RopeIterEnd(it));
+
+    index = FLAT_STRING_LEN / 2;
+    Col_RopeIterMoveTo(it, index);
+    PICOTEST_ASSERT(!Col_RopeIterEnd(it));
+    PICOTEST_ASSERT(Col_RopeIterIndex(it) == index);
+    PICOTEST_ASSERT(Col_RopeIterAt(it) == data[index]);
 }
