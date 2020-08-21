@@ -2,37 +2,56 @@
 #include <picotest.h>
 
 /*
- * Test failure cases (must be defined before test hooks)
+ * Failure test cases (must be defined before test hooks)
  */
 
 #include "failureFixture.h"
 
-/* Type checks */
-PICOTEST_CASE(typeCheckMVectorCapacity, failureFixture) {
-    Col_MVectorCapacity(WORD_NIL);
-}
-PICOTEST_CASE(typeCheckMVectorElements, failureFixture) {
-    Col_MVectorElements(WORD_NIL);
-}
-PICOTEST_CASE(typeCheckMVectorSetLength, failureFixture) {
-    Col_MVectorSetLength(WORD_NIL, 1);
-}
-PICOTEST_CASE(typeCheckMVectorFreeze, failureFixture) {
-    Col_MVectorFreeze(WORD_NIL);
-}
-
-/* Value checks */
-PICOTEST_CASE(valueCheckNewMVectorLength, failureFixture) {
+/* Col_NewMVector */
+PICOTEST_CASE(newMVector_valueCheck_length, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_VALUECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_VECTORLENGTH);
     Col_NewMVector(Col_MaxMVectorLength() + 1, 0, NULL);
 }
-PICOTEST_CASE(valueCheckMVectorSetLength, failureFixture) {
-    Col_Word mvector = Col_NewMVector(0, 0, NULL);
-    Col_MVectorSetLength(mvector, Col_MVectorCapacity(mvector) + 1);
+PICOTEST_CASE(newMVector_fatal_outOfMemory, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_FATAL, Col_GetErrorDomain(), COL_ERROR_MEMORY);
+    Col_NewMVector(Col_MaxMVectorLength(), 0, NULL);
+    PICOTEST_ASSERT(!"UNREACHABLE");
 }
 
-/* Error cases */
-PICOTEST_CASE(errorNewMVectorOutOfMemory, failureFixture) {
-    Col_NewMVector(Col_MaxMVectorLength(), 0, NULL);
+/* Col_MVectorCapacity */
+PICOTEST_CASE(mvectorCapacity_typeCheck, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_MVECTOR);
+    PICOTEST_ASSERT(Col_MVectorCapacity(WORD_NIL) == 0);
+}
+
+/* Col_MVectorElements */
+PICOTEST_CASE(mvectorElements_typeCheck, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_MVECTOR);
+    PICOTEST_ASSERT(Col_MVectorElements(WORD_NIL) == NULL);
+}
+
+/* Col_MVectorSetLength */
+PICOTEST_CASE(mvectorSetLength_typeCheck, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_MVECTOR);
+    Col_MVectorSetLength(WORD_NIL, 1);
+}
+PICOTEST_CASE(mvectorSetLength_valueCheck, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_VALUECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_VECTORLENGTH);
+    Col_Word mvector = Col_NewMVector(0, 0, NULL);
+    Col_MVectorSetLength(mvector, Col_MVectorCapacity(mvector) + 1);
+    PICOTEST_ASSERT(Col_VectorLength(mvector) == 0);
+}
+
+/* Col_MVectorFreeze */
+PICOTEST_CASE(mvectorFreeze_typeCheck, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_VECTOR);
+    Col_MVectorFreeze(WORD_NIL);
 }
 
 /*
@@ -46,10 +65,10 @@ PICOTEST_SUITE(testMutableVectors, testMutableVectorTypeChecks, testNewMVector,
                testMVectorCapacity, testMVectorSetLength, testMVectorFreeze);
 
 PICOTEST_CASE(testMutableVectorTypeChecks, colibriFixture) {
-    PICOTEST_ASSERT(typeCheckMVectorCapacity(NULL) == 1);
-    PICOTEST_ASSERT(typeCheckMVectorElements(NULL) == 1);
-    PICOTEST_ASSERT(typeCheckMVectorSetLength(NULL) == 1);
-    PICOTEST_ASSERT(typeCheckMVectorFreeze(NULL) == 1);
+    PICOTEST_VERIFY(mvectorCapacity_typeCheck(NULL) == 1);
+    PICOTEST_VERIFY(mvectorElements_typeCheck(NULL) == 1);
+    PICOTEST_VERIFY(mvectorSetLength_typeCheck(NULL) == 1);
+    PICOTEST_VERIFY(mvectorFreeze_typeCheck(NULL) == 1);
 }
 PICOTEST_SUITE(testNewMVector, testNewMVectorErrors, testNewMVectorNil,
                testNewMVectorValues);
@@ -57,10 +76,10 @@ PICOTEST_SUITE(testNewMVector, testNewMVectorErrors, testNewMVectorNil,
 PICOTEST_SUITE(testNewMVectorErrors, testNewMVectorTooLarge,
                testNewMVectorOutOfMemory);
 PICOTEST_CASE(testNewMVectorTooLarge, colibriFixture) {
-    PICOTEST_ASSERT(valueCheckNewMVectorLength(NULL) == 1);
+    PICOTEST_ASSERT(newMVector_valueCheck_length(NULL) == 1);
 }
 PICOTEST_CASE(testNewMVectorOutOfMemory, colibriFixture) {
-    PICOTEST_ASSERT(errorNewMVectorOutOfMemory(NULL) == 1);
+    PICOTEST_ASSERT(newMVector_fatal_outOfMemory(NULL) == 1);
 }
 
 static void checkElements(size_t len, const Col_Word *elements1,
@@ -109,7 +128,7 @@ PICOTEST_SUITE(testMVectorSetLength, testMVectorSetLengthErrors,
 
 PICOTEST_SUITE(testMVectorSetLengthErrors, testMVectorSetLengthAboveCapacity);
 PICOTEST_CASE(testMVectorSetLengthAboveCapacity, colibriFixture) {
-    PICOTEST_ASSERT(valueCheckMVectorSetLength(NULL) == 1);
+    PICOTEST_ASSERT(mvectorSetLength_valueCheck(NULL) == 1);
 }
 
 PICOTEST_CASE(testMVectorSetLengthIncreaseShouldPreserveExistingElements,

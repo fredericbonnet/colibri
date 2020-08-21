@@ -450,8 +450,6 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *
  * @retval WORD_NIL     if iterating over string (see Col_RopeIterString()).
  * @retval rope         if iterating over rope.
- *
- * @valuecheck{COL_ERROR_ROPEITER_END,it}
  */
 #define Col_RopeIterRope(it)    \
     ((it)->rope)
@@ -472,8 +470,6 @@ typedef ColRopeIterator Col_RopeIterator[1];
  * @param it    The #Col_RopeIterator to access.
  *
  * @return Current index.
- *
- * @valuecheck{COL_ERROR_ROPEITER_END,it}
  */
 #define Col_RopeIterIndex(it) \
     ((it)->index)
@@ -508,6 +504,9 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *
  * @see Col_RopeIterForward
  * @hideinitializer
+ *
+ * @typecheck{COL_ERROR_ROPEITER,it}
+ * @valuecheck{COL_ERROR_ROPEITER_END,it}
  */
 #define Col_RopeIterNext(it) \
     (  ((it)->index < (it)->chunk.first || (it)->index >= (it)->chunk.last) ? (Col_RopeIterForward((it), 1), 0) \
@@ -526,6 +525,8 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *
  * @see Col_RopeIterBackward
  * @hideinitializer
+ * 
+ * @typecheck{COL_ERROR_ROPEITER,it}
  */
 #define Col_RopeIterPrevious(it) \
     (  ((it)->index <= (it)->chunk.first || (it)->index > (it)->chunk.last) ? (Col_RopeIterBackward((it), 1), 0) \

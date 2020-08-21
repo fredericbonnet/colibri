@@ -2,27 +2,35 @@
 #include <picotest.h>
 
 /*
- * Test failure cases (must be defined before test hooks)
+ * Failure test cases (must be defined before test hooks)
  */
 
 #include "failureFixture.h"
 
-/* Type checks */
-PICOTEST_CASE(typeCheckVectorLength, failureFixture) {
-    Col_VectorLength(WORD_NIL);
+/* Col_NewVector */
+PICOTEST_CASE(newVector_valueCheck_length, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_VALUECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_VECTORLENGTH);
+    PICOTEST_ASSERT(Col_NewVector(Col_MaxVectorLength() + 1, NULL) == WORD_NIL);
 }
-PICOTEST_CASE(typeCheckVectorElements, failureFixture) {
-    Col_VectorElements(WORD_NIL);
-}
-
-/* Value checks */
-PICOTEST_CASE(valueCheckNewVectorLength, failureFixture) {
-    Col_NewVector(Col_MaxVectorLength() + 1, NULL);
-}
-
-/* Error cases */
-PICOTEST_CASE(errorNewVectorOutOfMemory, failureFixture) {
+PICOTEST_CASE(newVector_fatal_outOfMemory, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_FATAL, Col_GetErrorDomain(), COL_ERROR_MEMORY);
     Col_NewVector(Col_MaxVectorLength(), NULL);
+    PICOTEST_ASSERT(!"UNREACHABLE");
+}
+
+/* Col_VectorLength */
+PICOTEST_CASE(vectorLength_typeCheck, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_VECTOR);
+    PICOTEST_ASSERT(Col_VectorLength(WORD_NIL) == 0);
+}
+
+/* Col_VectorElements */
+PICOTEST_CASE(vectorElements_typeCheck, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_VECTOR);
+    PICOTEST_ASSERT(Col_VectorElements(WORD_NIL) == NULL);
 }
 
 /*
@@ -36,8 +44,8 @@ PICOTEST_SUITE(testVectors, testVectorTypeChecks, testNewVector, testNewVectorV,
                testEmptyVector);
 
 PICOTEST_CASE(testVectorTypeChecks, colibriFixture) {
-    PICOTEST_ASSERT(typeCheckVectorLength(NULL) == 1);
-    PICOTEST_ASSERT(typeCheckVectorElements(NULL) == 1);
+    PICOTEST_VERIFY(vectorLength_typeCheck(NULL) == 1);
+    PICOTEST_VERIFY(vectorElements_typeCheck(NULL) == 1);
 }
 PICOTEST_SUITE(testNewVector, testNewVectorErrors, testNewVectorNil,
                testNewVectorValues);
@@ -45,10 +53,10 @@ PICOTEST_SUITE(testNewVector, testNewVectorErrors, testNewVectorNil,
 PICOTEST_SUITE(testNewVectorErrors, testNewVectorTooLarge,
                testNewVectorOutOfMemory);
 PICOTEST_CASE(testNewVectorTooLarge, colibriFixture) {
-    PICOTEST_ASSERT(valueCheckNewVectorLength(NULL) == 1);
+    PICOTEST_ASSERT(newVector_valueCheck_length(NULL) == 1);
 }
 PICOTEST_CASE(testNewVectorOutOfMemory, colibriFixture) {
-    PICOTEST_ASSERT(errorNewVectorOutOfMemory(NULL) == 1);
+    PICOTEST_ASSERT(newVector_fatal_outOfMemory(NULL) == 1);
 }
 
 static void checkVector(Col_Word vector, size_t len, const Col_Word *words) {

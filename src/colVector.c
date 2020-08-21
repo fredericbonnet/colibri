@@ -427,7 +427,7 @@ Col_MVectorFreeze(
      * Check preconditions.
      */
 
-    /*! @typecheck{COL_ERROR_MVECTOR,mvector} */
+    /*! @typecheck{COL_ERROR_VECTOR,mvector} */
     TYPECHECK_VECTOR(mvector) return;
 
     for (;;) {

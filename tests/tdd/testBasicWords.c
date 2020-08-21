@@ -4,18 +4,29 @@
 #include <math.h> // For NaN
 
 /*
- * Test failure cases (must be defined before test hooks)
+ * Failure test cases (must be defined before test hooks)
  */
 
 #include "failureFixture.h"
-PICOTEST_CASE(doBooleanTypeCheck, failureFixture) {
-    Col_BoolWordValue(WORD_NIL);
+
+/* Col_BoolWordValue */
+PICOTEST_CASE(boolWordValue_typeCheck, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_BOOL);
+    PICOTEST_ASSERT(Col_BoolWordValue(WORD_NIL) == 0);
 }
-PICOTEST_CASE(doIntegerTypeCheck, failureFixture) {
-    Col_IntWordValue(WORD_NIL);
+
+/* Col_IntWordValue */
+PICOTEST_CASE(intWordValue_typeCheck, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(), COL_ERROR_INT);
+    PICOTEST_ASSERT(Col_IntWordValue(WORD_NIL) == 0);
 }
-PICOTEST_CASE(doFloatingPointTypeCheck, failureFixture) {
-    Col_FloatWordValue(WORD_NIL);
+
+/* Col_FloatWordValue */
+PICOTEST_CASE(floatWordValue_typeCheck, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_FLOAT);
+    PICOTEST_ASSERT(Col_FloatWordValue(WORD_NIL) == 0.0);
 }
 
 /*
@@ -39,7 +50,7 @@ PICOTEST_SUITE(testBooleanWords, testBooleanTypeCheck, testTrueWord,
                testFalseWord, testNewBoolWord, testBooleanWordsAreImmediate);
 
 PICOTEST_CASE(testBooleanTypeCheck, colibriFixture) {
-    PICOTEST_ASSERT(doBooleanTypeCheck(NULL) == 1);
+    PICOTEST_ASSERT(boolWordValue_typeCheck(NULL) == 1);
 }
 
 PICOTEST_CASE(testTrueWord, colibriFixture) {
@@ -79,7 +90,7 @@ PICOTEST_CASE(testBooleanWordsAreImmediate, colibriFixture) {
 PICOTEST_SUITE(testIntegerWords, testIntegerTypeCheck, testNewIntWord);
 
 PICOTEST_CASE(testIntegerTypeCheck, colibriFixture) {
-    PICOTEST_ASSERT(doIntegerTypeCheck(NULL) == 1);
+    PICOTEST_ASSERT(intWordValue_typeCheck(NULL) == 1);
 }
 
 PICOTEST_SUITE(testNewIntWord, testNewIntWordImmediate, testNewIntWordRegular);
@@ -121,7 +132,7 @@ PICOTEST_SUITE(testFloatingPointWords, testFloatingPointTypeCheck,
                testNewFloatWord);
 
 PICOTEST_CASE(testFloatingPointTypeCheck, colibriFixture) {
-    PICOTEST_ASSERT(doFloatingPointTypeCheck(NULL) == 1);
+    PICOTEST_ASSERT(floatWordValue_typeCheck(NULL) == 1);
 }
 
 PICOTEST_SUITE(testNewFloatWord, testNewFloatWordImmediate,

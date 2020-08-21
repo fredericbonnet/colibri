@@ -258,7 +258,7 @@ Col_BoolWordValue(
     Col_Word word)  /*!< Boolean word to get value for. */
 {
     /*! @typecheck{COL_ERROR_BOOL,word} */
-    TYPECHECK((Col_WordType(word) & COL_BOOL), COL_ERROR_BOOL, (word));
+    TYPECHECK((Col_WordType(word) & COL_BOOL), COL_ERROR_BOOL, (word)) return 0;
 
     WORD_UNWRAP(word);
 
