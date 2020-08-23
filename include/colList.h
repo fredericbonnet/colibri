@@ -206,15 +206,15 @@ typedef struct ColListIterator {
 
         /*! Current element information. */
         union {
-            /*! Address of current element in direct access mode. */
-            const Col_Word *direct;
-
             /*! Current element information in accessor mode. */
             struct {
                 Col_Word leaf;  /*!< First argument passed to **accessProc**. */
                 size_t index;   /*!< Second argument passed to
                                      **accessProc**. */
             } access;
+
+            /*! Address of current element in direct access mode. */
+            const Col_Word *direct;
         } current;
     } chunk;
 } ColListIterator;
@@ -246,7 +246,7 @@ typedef ColListIterator Col_ListIterator[1];
  * @see Col_ListIterNull
  * @hideinitializer
  */
-#define COL_LISTITER_NULL       {{WORD_NIL,0,0,{0,0,NULL,0,NULL}}}
+#define COL_LISTITER_NULL       {{WORD_NIL,0,0,{0,0,NULL,0,0}}}
 
 /**
  * Test whether iterator is null (e.g.\ it has been set to #COL_LISTITER_NULL

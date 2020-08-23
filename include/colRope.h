@@ -361,18 +361,18 @@ typedef struct ColRopeIterator {
 
         /*! Current element information. */
         union {
-            /*! Current element information in direct access mode.*/
-            struct {
-                Col_StringFormat format;    /*!< Format of current chunk. */
-                const void *address;        /*!< Address of current element. */
-            } direct;
-
             /*! Current element information in accessor mode. */
             struct {
                 Col_Word leaf;  /*!< First argument passed to **accessProc**. */
                 size_t index;   /*!< Second argument passed to
                                      **accessProc**. */
             } access;
+
+            /*! Current element information in direct access mode.*/
+            struct {
+                Col_StringFormat format;    /*!< Format of current chunk. */
+                const void *address;        /*!< Address of current element. */
+            } direct;
         } current;
     } chunk;
 } ColRopeIterator;
@@ -404,7 +404,7 @@ typedef ColRopeIterator Col_RopeIterator[1];
  * @see Col_RopeIterNull
  * @hideinitializer
  */
-#define COL_ROPEITER_NULL       {{WORD_NIL,0,0,{0,0,NULL,0,NULL}}}
+#define COL_ROPEITER_NULL       {{WORD_NIL,0,0,{0,0,NULL,0,0}}}
 
 /**
  * Test whether iterator is null (e.g.\ it has been set to #COL_ROPEITER_NULL
