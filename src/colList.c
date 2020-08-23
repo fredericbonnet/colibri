@@ -421,6 +421,26 @@ Col_ListLoopLength(
 }
 
 /**
+ * Get the depth of the list.
+ *
+ * @return The list depth.
+ */
+unsigned char
+Col_ListDepth(
+    Col_Word list)  /*!< List to get depth for. */
+{
+    /*
+     * Check preconditions.
+     */
+
+    /*! @typecheck{COL_ERROR_LIST,list} */
+    TYPECHECK_LIST(list) return 0;
+
+    WORD_UNWRAP(list);
+    return GetDepth(list);
+}
+
+/**
  * Get the element of a list at a given position.
  *
  * @retval nil      if **index** past end of **list**.

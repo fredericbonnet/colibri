@@ -56,6 +56,7 @@ EXTERN Col_Word         Col_NewList(size_t length,
 
 EXTERN size_t           Col_ListLength(Col_Word list);
 EXTERN size_t           Col_ListLoopLength(Col_Word list);
+EXTERN unsigned char    Col_ListDepth(Col_Word list);
 EXTERN Col_Word         Col_ListAt(Col_Word list, size_t index);
 
 /* End of Immutable List Accessors *//*!\}*/
