@@ -698,7 +698,7 @@ Col_Sublist(
         return WORD_LIST_EMPTY;
     }
 
-    if (listLength == loop) {
+    if (loop && listLength == loop) {
         /*
          * List is circular.
          */
@@ -2221,7 +2221,7 @@ ColListIterUpdateTraversalInfo(
      */
 
     /*! @valuecheck{COL_ERROR_LISTITER_END,it} */
-    VALUECHECK_LISTITER(it) return COL_CHAR_INVALID;
+    VALUECHECK_LISTITER(it) return WORD_NIL;
 
     ASSERT(it->length);
 
@@ -2591,6 +2591,14 @@ Col_ListIterForward(
              * End of list/array.
              */
 
+            it->chunk.first = SIZE_MAX; /* Invalidate traversal info. */
+            if (it->list == WORD_NIL) {
+                /* 
+                * Array iterator mode, save current index for backward interation
+                * from end (see Col_ListIterBackward).
+                */
+                it->chunk.last = it->index;
+            }
             it->index = it->length;
             return 0;
         }
@@ -2679,6 +2687,18 @@ Col_ListIterBackward(
             return;
         }
 
+        if (it->list == WORD_NIL) {
+            /* 
+             * Array iterator mode, restore previous position and move to the
+             * new one (see Col_ListIterForward and below).
+             */
+            it->index = it->chunk.last;
+            it->chunk.first = 0;
+            it->chunk.last = it->length-1;
+            Col_ListIterMoveTo(it, it->length-nb);
+            return;
+        }
+
         it->index = it->length-nb;
         return;
     } else if (it->index < nb) {
@@ -2686,6 +2706,14 @@ Col_ListIterBackward(
          * Beginning of list, set iterator at end.
          */
 
+        it->chunk.first = SIZE_MAX; /* Invalidate traversal info. */
+        if (it->list == WORD_NIL) {
+            /* 
+             * Array iterator mode, save current index for backward iteration
+             * from end (see above).
+             */
+            it->chunk.last = it->index;
+        }
         it->index = it->length;
         return;
     }

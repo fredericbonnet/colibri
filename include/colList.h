@@ -292,8 +292,6 @@ typedef ColListIterator Col_ListIterator[1];
  *
  * @retval WORD_NIL     if iterating over array (see Col_ListIterArray()).
  * @retval list         if iterating over list.
- *
- * @valuecheck{COL_ERROR_LISTITER_END,it}
  */
 #define Col_ListIterList(it) \
     ((it)->list)
@@ -314,8 +312,6 @@ typedef ColListIterator Col_ListIterator[1];
  * @param it    The #Col_ListIterator to access.
  *
  * @return Current index.
- *
- * @valuecheck{COL_ERROR_LISTITER_END,it}
  */
 #define Col_ListIterIndex(it) \
     ((it)->index)
@@ -353,6 +349,9 @@ typedef ColListIterator Col_ListIterator[1];
  *
  * @see Col_ListIterForward
  * @hideinitializer
+ *
+ * @typecheck{COL_ERROR_LISTITER,it}
+ * @valuecheck{COL_ERROR_LISTITER_END,it}
  */
 #define Col_ListIterNext(it) \
     (  ((it)->index < (it)->chunk.first || (it)->index >= (it)->chunk.last) ? Col_ListIterForward((it), 1) \
@@ -371,6 +370,8 @@ typedef ColListIterator Col_ListIterator[1];
  *
  * @see Col_ListIterBackward
  * @hideinitializer
+ *
+ * @typecheck{COL_ERROR_LISTITER,it}
  */
 #define Col_ListIterPrevious(it) \
     (  ((it)->index <= (it)->chunk.first || (it)->index > (it)->chunk.last) ? (Col_ListIterBackward((it), 1), 0) \

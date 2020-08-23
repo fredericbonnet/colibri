@@ -84,6 +84,7 @@ if (PicoTest_FOUND)
 			tests/tdd/testRopes.c
 			tests/tdd/testVectors.c
 			tests/tdd/testMutableVectors.c
+			tests/tdd/testLists.c
 	)
 	target_link_libraries(tdd_colibri
 		PRIVATE
