@@ -3356,6 +3356,9 @@ Col_TraverseRopeChunksN(
         TYPECHECK_ROPE(ropes[i]) return -1;
     }
 
+    /*! @valuecheck{COL_ERROR_GENERIC,proc == NULL} */
+    VALUECHECK(proc != NULL, COL_ERROR_GENERIC) return -1;
+
     info = (RopeChunkTraverseInfo *) alloca(sizeof(*info) * number);
     chunks = (Col_RopeChunk *) alloca(sizeof(*chunks) * number);
 
@@ -3539,6 +3542,9 @@ Col_TraverseRopeChunks(
 
     /*! @typecheck{COL_ERROR_ROPE,rope} */
     TYPECHECK_ROPE(rope) return -1;
+
+    /*! @valuecheck{COL_ERROR_GENERIC,proc == NULL} */
+    VALUECHECK(proc != NULL, COL_ERROR_GENERIC) return -1;
 
     WORD_UNWRAP(rope);
 
