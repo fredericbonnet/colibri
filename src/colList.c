@@ -1939,6 +1939,9 @@ Col_TraverseListChunksN(
         TYPECHECK_LIST(lists[i]) return -1;
     }
 
+    /*! @valuecheck{COL_ERROR_GENERIC,proc == NULL} */
+    VALUECHECK(proc != NULL, COL_ERROR_GENERIC) return -1;
+
     info = (ListChunkTraverseInfo *) alloca(sizeof(*info) * number);
     elements = (const Col_Word **) alloca(sizeof(*elements) * number);
 
@@ -2089,6 +2092,9 @@ Col_TraverseListChunks(
 
     /*! @typecheck{COL_ERROR_LIST,list} */
     TYPECHECK_LIST(list) return -1;
+
+    /*! @valuecheck{COL_ERROR_GENERIC,proc == NULL} */
+    VALUECHECK(proc != NULL, COL_ERROR_GENERIC) return -1;
 
     WORD_UNWRAP(list);
 

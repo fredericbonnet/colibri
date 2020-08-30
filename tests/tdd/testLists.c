@@ -80,12 +80,27 @@ PICOTEST_CASE(repeatList_valueCheck_length, failureFixture, context) {
     PICOTEST_ASSERT(Col_RepeatList(list, SIZE_MAX) == WORD_NIL);
 }
 
+/* Col_TraverseListChunksN */
+PICOTEST_CASE(traverseListChunksN_valueCheck_proc, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_VALUECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_GENERIC);
+    Col_Word lists[] = {Col_EmptyList()};
+    PICOTEST_ASSERT(Col_TraverseListChunksN(1, lists, 0, 0, NULL, NULL, NULL) ==
+                    -1);
+}
+
 /* Col_TraverseListChunks */
 PICOTEST_CASE(traverseListChunks_typeCheck, failureFixture, context) {
     EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
                    COL_ERROR_LIST);
     PICOTEST_ASSERT(
         Col_TraverseListChunks(WORD_NIL, 0, 0, 0, NULL, NULL, NULL) == -1);
+}
+PICOTEST_CASE(traverseListChunks_valueCheck_proc, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_VALUECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_GENERIC);
+    PICOTEST_ASSERT(Col_TraverseListChunks(Col_EmptyList(), 0, 0, 0, NULL, NULL,
+                                           NULL) == -1);
 }
 
 /* Col_ListIterBegin */
@@ -332,7 +347,7 @@ PICOTEST_SUITE(testListOperations, testSublist, testConcatLists,
                testRepeatList);
 // TODO repeat/insert/remove/replace
 
-// TODO compare original/sublist characters
+// TODO compare original/sublist elements
 PICOTEST_SUITE(testSublist, testSublistOfEmptyListIsEmpty,
                testSublistOfEmptyRangeIsEmpty,
                testSublistOfWholeRangeIsIdentity,
@@ -747,53 +762,81 @@ PICOTEST_CASE(testRepeatListMax, colibriFixture) {
     PICOTEST_ASSERT(Col_ListDepth(list) > 5);
 }
 
-PICOTEST_SUITE(testListTraversal, testTraverseList);
-// TODO reverse traversal and Col_TraverseListN
+PICOTEST_SUITE(testListTraversal, testListTraversalErrors,
+               testTraverseSingleList, testTraverseMultipleLists);
+// TODO reverse traversal
 
-PICOTEST_SUITE(testTraverseList, testTraverseListProcMustNotBeNull,
-               testTraverseEmptyListIsNoop, testTraverseFlatListHasOneChunk,
-               testTraverseSublist, testTraverseConcatList,
-               testTraverseListRange, testTraverseListBreak);
+PICOTEST_SUITE(testListTraversalErrors, testTraverseListProcMustNotBeNull);
+PICOTEST_CASE(testTraverseListProcMustNotBeNull, colibriFixture) {
+    PICOTEST_VERIFY(traverseListChunks_valueCheck_proc(NULL) == 1);
+    PICOTEST_VERIFY(traverseListChunksN_valueCheck_proc(NULL) == 1);
+}
+
+PICOTEST_SUITE(testTraverseSingleList, testTraverseEmptyListIsNoop,
+               testTraverseListPastEndIsNoop, testTraverseZeroElementIsNoop,
+               testTraverseFlatListHasOneChunk, testTraverseSublist,
+               testTraverseConcatList, testTraverseListRange,
+               testTraverseListBreak);
 // TODO void list
 
+#define MAX_CHUNKS 5
 #define CHUNK_SAMPLE_SIZE 10
 typedef struct ListChunkInfo {
     size_t length;
-    const Col_Word *chunk;
+    Col_Word *const chunks[MAX_CHUNKS];
     Col_Word sample[CHUNK_SAMPLE_SIZE];
 } ListChunkInfo;
 typedef struct ListChunkCounterData {
+    size_t number;
     size_t size;
     size_t nbChunks;
     ListChunkInfo *infos;
 } ListChunkCounterData;
-#define DECLARE_CHUNKS_DATA(name, size)                                        \
+#define DECLARE_CHUNKS_DATA(name, size) DECLARE_CHUNKS_DATA_N(name, 1, size)
+#define DECLARE_CHUNKS_DATA_N(name, number, size)                              \
     ListChunkInfo name##datas[size];                                           \
-    ListChunkCounterData name = {size, 0, name##datas};
+    ListChunkCounterData name = {number, size, 0, name##datas};
+#define CHUNK_INFO(name, index) (name##datas)[index]
 
 static int listChunkCounter(size_t index, size_t length, size_t number,
                             const Col_Word **chunks,
                             Col_ClientData clientData) {
     ListChunkCounterData *data = (ListChunkCounterData *)clientData;
-    PICOTEST_ASSERT(number == 1);
+    PICOTEST_ASSERT(number == data->number);
+    PICOTEST_ASSERT(number < MAX_CHUNKS);
     PICOTEST_ASSERT(data != NULL);
     PICOTEST_ASSERT(data->nbChunks < data->size);
 
     ListChunkInfo *info = data->infos + data->nbChunks++;
     info->length = length;
-    info->chunk = *chunks;
-    memcpy(info->sample, *chunks,
-           (length < CHUNK_SAMPLE_SIZE ? length : CHUNK_SAMPLE_SIZE) *
-               sizeof(Col_Word));
+    memcpy(info->chunks, chunks, sizeof(*chunks) * number);
+    if (chunks[0])
+        memcpy(info->sample, chunks[0],
+               (length < CHUNK_SAMPLE_SIZE ? length : CHUNK_SAMPLE_SIZE) *
+                   sizeof(Col_Word));
     return 0;
 }
 
 PICOTEST_CASE(testTraverseEmptyListIsNoop, colibriFixture) {
-    PICOTEST_ASSERT(Col_TraverseListChunks(Col_EmptyList(), 0, 0, 0, NULL, NULL,
+    DECLARE_CHUNKS_DATA(data, 1);
+    PICOTEST_ASSERT(Col_TraverseListChunks(Col_EmptyList(), 0, SIZE_MAX, 0,
+                                           listChunkCounter, &data,
                                            NULL) == -1);
+    PICOTEST_ASSERT(data.nbChunks == 0);
 }
-PICOTEST_CASE(testTraverseListProcMustNotBeNull, colibriFixture) {
-    // TODO VALUECHECK proc
+PICOTEST_CASE(testTraverseListPastEndIsNoop, colibriFixture) {
+    DECLARE_CHUNKS_DATA(data, 1);
+    PICOTEST_ASSERT(Col_TraverseListChunks(SMALL_LIST(), SMALL_LIST_LEN,
+                                           SIZE_MAX, 0, listChunkCounter, &data,
+                                           NULL) == -1);
+    PICOTEST_ASSERT(data.nbChunks == 0);
+}
+PICOTEST_CASE(testTraverseZeroElementIsNoop, colibriFixture) {
+    DECLARE_CHUNKS_DATA(data, 1);
+    PICOTEST_ASSERT(Col_TraverseListChunks(SMALL_LIST(), 0, 0, 0,
+                                           listChunkCounter, &data,
+                                           NULL) == -1);
+    PICOTEST_ASSERT(data.nbChunks == 0);
 }
 PICOTEST_CASE(testTraverseFlatListHasOneChunk, colibriFixture) {
     DECLARE_CHUNKS_DATA(data, 1);
@@ -801,7 +844,7 @@ PICOTEST_CASE(testTraverseFlatListHasOneChunk, colibriFixture) {
     PICOTEST_ASSERT(Col_TraverseListChunks(list, 0, SIZE_MAX, 0,
                                            listChunkCounter, &data, NULL) == 0);
     PICOTEST_ASSERT(data.nbChunks == 1);
-    PICOTEST_ASSERT(data.infos[0].length == FLAT_LIST_LEN);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 0).length == FLAT_LIST_LEN);
 }
 
 PICOTEST_SUITE(testTraverseSublist,
@@ -820,8 +863,10 @@ PICOTEST_CASE(testTraverseSublistOfFlatListHasOneOffsetChunk, colibriFixture) {
                                            NULL) == 0);
     PICOTEST_ASSERT(listData.nbChunks == 1);
     PICOTEST_ASSERT(sublistData.nbChunks == 1);
-    PICOTEST_ASSERT(listData.infos[0].length == sublistData.infos[0].length);
-    PICOTEST_ASSERT(listData.infos[0].chunk == sublistData.infos[0].chunk);
+    PICOTEST_ASSERT(CHUNK_INFO(listData, 0).length ==
+                    CHUNK_INFO(sublistData, 0).length);
+    PICOTEST_ASSERT(CHUNK_INFO(listData, 0).chunks[0] ==
+                    CHUNK_INFO(sublistData, 0).chunks[0]);
 }
 
 PICOTEST_SUITE(testTraverseConcatList, testTraverseConcatListsHaveTwoChunks,
@@ -845,11 +890,14 @@ PICOTEST_CASE(testTraverseConcatListsHaveTwoChunks, colibriFixture) {
     PICOTEST_ASSERT(leftData.nbChunks == 1);
     PICOTEST_ASSERT(rightData.nbChunks == 1);
     PICOTEST_ASSERT(concatListData.nbChunks == 2);
-    PICOTEST_ASSERT(leftData.infos[0].length == concatListData.infos[0].length);
-    PICOTEST_ASSERT(leftData.infos[0].chunk == concatListData.infos[0].chunk);
-    PICOTEST_ASSERT(rightData.infos[0].length ==
-                    concatListData.infos[1].length);
-    PICOTEST_ASSERT(rightData.infos[0].chunk == concatListData.infos[1].chunk);
+    PICOTEST_ASSERT(CHUNK_INFO(leftData, 0).length ==
+                    CHUNK_INFO(concatListData, 0).length);
+    PICOTEST_ASSERT(CHUNK_INFO(leftData, 0).chunks[0] ==
+                    CHUNK_INFO(concatListData, 0).chunks[0]);
+    PICOTEST_ASSERT(CHUNK_INFO(rightData, 0).length ==
+                    CHUNK_INFO(concatListData, 1).length);
+    PICOTEST_ASSERT(CHUNK_INFO(rightData, 0).chunks[0] ==
+                    CHUNK_INFO(concatListData, 1).chunks[0]);
 }
 PICOTEST_CASE(testTraverseConcatListsLeftArmHaveOneChunk, colibriFixture) {
     DECLARE_CHUNKS_DATA(leftData, 1);
@@ -862,8 +910,10 @@ PICOTEST_CASE(testTraverseConcatListsLeftArmHaveOneChunk, colibriFixture) {
                                            listChunkCounter, &concatListData,
                                            NULL) == 0);
     PICOTEST_ASSERT(concatListData.nbChunks == 1);
-    PICOTEST_ASSERT(leftData.infos[0].length == concatListData.infos[0].length);
-    PICOTEST_ASSERT(leftData.infos[0].chunk == concatListData.infos[0].chunk);
+    PICOTEST_ASSERT(CHUNK_INFO(leftData, 0).length ==
+                    CHUNK_INFO(concatListData, 0).length);
+    PICOTEST_ASSERT(CHUNK_INFO(leftData, 0).chunks[0] ==
+                    CHUNK_INFO(concatListData, 0).chunks[0]);
 }
 PICOTEST_CASE(testTraverseConcatListsRightArmHaveOneChunk, colibriFixture) {
     DECLARE_CHUNKS_DATA(rightData, 1);
@@ -876,9 +926,10 @@ PICOTEST_CASE(testTraverseConcatListsRightArmHaveOneChunk, colibriFixture) {
                                            listChunkCounter, &concatListData,
                                            NULL) == 0);
     PICOTEST_ASSERT(concatListData.nbChunks == 1);
-    PICOTEST_ASSERT(rightData.infos[0].length ==
-                    concatListData.infos[0].length);
-    PICOTEST_ASSERT(rightData.infos[0].chunk == concatListData.infos[0].chunk);
+    PICOTEST_ASSERT(CHUNK_INFO(rightData, 0).length ==
+                    CHUNK_INFO(concatListData, 0).length);
+    PICOTEST_ASSERT(CHUNK_INFO(rightData, 0).chunks[0] ==
+                    CHUNK_INFO(concatListData, 0).chunks[0]);
 }
 PICOTEST_CASE(testTraverseConcatSublistHasTwoChunks, colibriFixture) {
     DECLARE_CHUNKS_DATA(leftData, 1);
@@ -898,10 +949,14 @@ PICOTEST_CASE(testTraverseConcatSublistHasTwoChunks, colibriFixture) {
     PICOTEST_ASSERT(leftData.nbChunks == 1);
     PICOTEST_ASSERT(rightData.nbChunks == 1);
     PICOTEST_ASSERT(sublistData.nbChunks == 2);
-    PICOTEST_ASSERT(leftData.infos[0].length == sublistData.infos[0].length);
-    PICOTEST_ASSERT(leftData.infos[0].chunk == sublistData.infos[0].chunk);
-    PICOTEST_ASSERT(rightData.infos[0].length == sublistData.infos[1].length);
-    PICOTEST_ASSERT(rightData.infos[0].chunk == sublistData.infos[1].chunk);
+    PICOTEST_ASSERT(CHUNK_INFO(leftData, 0).length ==
+                    CHUNK_INFO(sublistData, 0).length);
+    PICOTEST_ASSERT(CHUNK_INFO(leftData, 0).chunks[0] ==
+                    CHUNK_INFO(sublistData, 0).chunks[0]);
+    PICOTEST_ASSERT(CHUNK_INFO(rightData, 0).length ==
+                    CHUNK_INFO(sublistData, 1).length);
+    PICOTEST_ASSERT(CHUNK_INFO(rightData, 0).chunks[0] ==
+                    CHUNK_INFO(sublistData, 1).chunks[0]);
 }
 
 PICOTEST_SUITE(testTraverseListRange, testTraverseSingleElement);
@@ -911,8 +966,8 @@ static void checkTraverseElement(Col_Word list, size_t index) {
     PICOTEST_ASSERT(Col_TraverseListChunks(list, index, 1, 0, listChunkCounter,
                                            &data, NULL) == 0);
     PICOTEST_ASSERT(data.nbChunks == 1);
-    PICOTEST_ASSERT(data.infos[0].length == 1);
-    PICOTEST_ASSERT(*(data.infos[0].chunk) == e);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 0).length == 1);
+    PICOTEST_ASSERT(*(CHUNK_INFO(data, 0).chunks[0]) == e);
 }
 PICOTEST_CASE(testTraverseSingleElement, colibriFixture) {
     Col_Word list = FLAT_LIST();
@@ -949,6 +1004,100 @@ PICOTEST_CASE(testTraverseListBreak, colibriFixture) {
     PICOTEST_ASSERT(Col_TraverseListChunks(list, 0, SIZE_MAX, 0, listChunkBreak,
                                            &breakData2, NULL) == 0);
     PICOTEST_ASSERT(breakData2.counter == 10);
+}
+
+PICOTEST_SUITE(testTraverseMultipleLists, testTraverseMultipleEmptyListsIsNoop,
+               testTraverseMultipleListsPastEndIsNoop,
+               testTraverseMultipleListsZeroElementIsNoop,
+               testTraverseEquallySizedLists, testTraverseVaryingSizedLists,
+               testTraverseMultipleListsBreak);
+PICOTEST_CASE(testTraverseMultipleEmptyListsIsNoop, colibriFixture) {
+    Col_Word lists[] = {Col_EmptyList(), Col_EmptyList(), Col_EmptyList()};
+    size_t nbLists = sizeof(lists) / sizeof(*lists);
+    DECLARE_CHUNKS_DATA_N(data, nbLists, 1);
+    PICOTEST_ASSERT(Col_TraverseListChunksN(nbLists, lists, 0, SIZE_MAX,
+                                            listChunkCounter, &data,
+                                            NULL) == -1);
+    PICOTEST_ASSERT(data.nbChunks == 0);
+}
+PICOTEST_CASE(testTraverseMultipleListsPastEndIsNoop, colibriFixture) {
+    Col_Word lists[] = {Col_EmptyList(), SMALL_LIST(), FLAT_LIST()};
+    size_t nbLists = sizeof(lists) / sizeof(*lists);
+    DECLARE_CHUNKS_DATA_N(data, nbLists, 1);
+    PICOTEST_ASSERT(Col_TraverseListChunksN(nbLists, lists, FLAT_LIST_LEN,
+                                            SIZE_MAX, listChunkCounter, &data,
+                                            NULL) == -1);
+    PICOTEST_ASSERT(data.nbChunks == 0);
+}
+PICOTEST_CASE(testTraverseMultipleListsZeroElementIsNoop, colibriFixture) {
+    Col_Word lists[] = {Col_EmptyList(), SMALL_LIST(), FLAT_LIST()};
+    size_t nbLists = sizeof(lists) / sizeof(*lists);
+    DECLARE_CHUNKS_DATA_N(data, nbLists, 1);
+    PICOTEST_ASSERT(Col_TraverseListChunksN(nbLists, lists, 0, 0,
+                                            listChunkCounter, &data,
+                                            NULL) == -1);
+    PICOTEST_ASSERT(data.nbChunks == 0);
+}
+PICOTEST_CASE(testTraverseEquallySizedLists, colibriFixture) {
+    Col_Word lists[] = {FLAT_LIST(), FLAT_LIST(), FLAT_LIST()};
+    size_t nbLists = sizeof(lists) / sizeof(*lists);
+    DECLARE_CHUNKS_DATA_N(data, nbLists, 1);
+    PICOTEST_ASSERT(Col_TraverseListChunksN(nbLists, lists, 0, SIZE_MAX,
+                                            listChunkCounter, &data,
+                                            NULL) == 0);
+    PICOTEST_ASSERT(data.nbChunks == 1);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 0).length == FLAT_LIST_LEN);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 0).chunks[0] != NULL);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 0).chunks[1] != NULL);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 0).chunks[2] != NULL);
+}
+PICOTEST_CASE(testTraverseVaryingSizedLists, colibriFixture) {
+    Col_Word lists[] = {SMALL_LIST(), FLAT_LIST(), VOID_LIST()};
+    size_t nbLists = sizeof(lists) / sizeof(*lists);
+    DECLARE_CHUNKS_DATA_N(data, nbLists, 3);
+    PICOTEST_ASSERT(Col_TraverseListChunksN(nbLists, lists, 0, SIZE_MAX,
+                                            listChunkCounter, &data,
+                                            NULL) == 0);
+    PICOTEST_ASSERT(data.nbChunks == 3);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 0).length == SMALL_LIST_LEN);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 0).chunks[0] != NULL);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 0).chunks[1] != NULL);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 0).chunks[2] == COL_LISTCHUNK_VOID);
+
+    PICOTEST_ASSERT(CHUNK_INFO(data, 1).length ==
+                    FLAT_LIST_LEN - SMALL_LIST_LEN);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 1).chunks[0] == NULL);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 0).chunks[1] != NULL);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 0).chunks[2] == COL_LISTCHUNK_VOID);
+
+    PICOTEST_ASSERT(CHUNK_INFO(data, 2).length ==
+                    VOID_LIST_LEN - FLAT_LIST_LEN);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 2).chunks[0] == NULL);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 2).chunks[1] == NULL);
+    PICOTEST_ASSERT(CHUNK_INFO(data, 0).chunks[2] == COL_LISTCHUNK_VOID);
+}
+PICOTEST_CASE(testTraverseMultipleListsBreak, colibriFixture) {
+    Col_Word lists[] = {Col_RepeatList(SMALL_LIST(), 10),
+                        Col_RepeatList(FLAT_LIST(), 10),
+                        Col_RepeatList(VOID_LIST(), 10)};
+    size_t nbLists = sizeof(lists) / sizeof(*lists);
+    DECLARE_CHUNKS_DATA_N(data, nbLists, 100);
+    PICOTEST_ASSERT(Col_TraverseListChunksN(nbLists, lists, 0, SIZE_MAX,
+                                            listChunkCounter, &data,
+                                            NULL) == 0);
+    PICOTEST_ASSERT(data.nbChunks == 16);
+
+    ListChunkBreakData breakData = {5, 0};
+    PICOTEST_ASSERT(Col_TraverseListChunksN(nbLists, lists, 0, SIZE_MAX,
+                                            listChunkBreak, &breakData,
+                                            NULL) == 5);
+    PICOTEST_ASSERT(breakData.counter == 5);
+
+    ListChunkBreakData breakData2 = {20, 0};
+    PICOTEST_ASSERT(Col_TraverseListChunksN(nbLists, lists, 0, SIZE_MAX,
+                                            listChunkBreak, &breakData2,
+                                            NULL) == 0);
+    PICOTEST_ASSERT(breakData2.counter == 16);
 }
 
 PICOTEST_SUITE(testListIteration, testListIteratorErrors,
