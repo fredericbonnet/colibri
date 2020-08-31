@@ -7,6 +7,14 @@
 
 #include "failureFixture.h"
 
+/* Col_NormalizeRope */
+PICOTEST_CASE(normalizeRope_typeCheck, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_ROPE);
+    PICOTEST_ASSERT(Col_NormalizeRope(WORD_NIL, COL_UCS, COL_CHAR_INVALID, 0) ==
+                    WORD_NIL);
+}
+
 /* Col_CharWordValue */
 PICOTEST_CASE(charWordValue_typeCheck, failureFixture, context) {
     EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
@@ -350,19 +358,24 @@ static Col_Word SHORT_STRING_UCS2()
 static Col_Word SHORT_STRING_UCS4()
     NEW_ROPE_UCS(Col_Char4, COL_UCS4, SHORT_STRING_LEN, 'a', 'a' + i);
 static Col_Word SHORT_STRING_UTF8()
-    NEW_ROPE_UTF8(SHORT_STRING_LEN, COL_CHAR1_MAX, COL_CHAR1_MAX + i);
+    NEW_ROPE_UTF8(SHORT_STRING_LEN, 'a', 'a' + i);
 static Col_Word SHORT_STRING_UTF16()
-    NEW_ROPE_UTF16(SHORT_STRING_LEN, COL_CHAR1_MAX, COL_CHAR1_MAX + i);
+    NEW_ROPE_UTF16(SHORT_STRING_LEN, 'a', 'a' + i);
+#define MEDIUM_STRING_UCS1_LEN 80
 static Col_Word MEDIUM_STRING_UCS1()
-    NEW_ROPE_UCS(Col_Char1, COL_UCS1, 80, 'a', 'a' + i);
+    NEW_ROPE_UCS(Col_Char1, COL_UCS1, MEDIUM_STRING_UCS1_LEN, 'a', 'a' + i);
+#define MEDIUM_STRING_UCS2_LEN 40
 static Col_Word MEDIUM_STRING_UCS2()
-    NEW_ROPE_UCS(Col_Char2, COL_UCS2, 40, 'a', 'a' + i);
+    NEW_ROPE_UCS(Col_Char2, COL_UCS2, MEDIUM_STRING_UCS2_LEN, 'a', 'a' + i);
+#define MEDIUM_STRING_UCS4_LEN 20
 static Col_Word MEDIUM_STRING_UCS4()
-    NEW_ROPE_UCS(Col_Char4, COL_UCS4, 20, 'a', 'a' + i);
+    NEW_ROPE_UCS(Col_Char4, COL_UCS4, MEDIUM_STRING_UCS4_LEN, 'a', 'a' + i);
+#define MEDIUM_STRING_UTF8_LEN 40
 static Col_Word MEDIUM_STRING_UTF8()
-    NEW_ROPE_UTF8(40, COL_CHAR1_MAX, COL_CHAR1_MAX + i);
+    NEW_ROPE_UTF8(MEDIUM_STRING_UTF8_LEN, COL_CHAR1_MAX, COL_CHAR1_MAX + i);
+#define MEDIUM_STRING_UTF16_LEN 20
 static Col_Word MEDIUM_STRING_UTF16()
-    NEW_ROPE_UTF16(40, COL_CHAR1_MAX, COL_CHAR1_MAX + i);
+    NEW_ROPE_UTF16(MEDIUM_STRING_UTF16_LEN, COL_CHAR2_MAX, COL_CHAR2_MAX + i);
 #define FLAT_STRING_LEN 200
 #define FLAT_STRING() FLAT_STRING_UCS1()
 static Col_Word FLAT_STRING_UCS1()
@@ -377,8 +390,8 @@ static Col_Word FLAT_STRING_UTF8()
     NEW_ROPE_UTF8(FLAT_STRING_LEN, COL_CHAR1_MAX, COL_CHAR1_MAX + i);
 static Col_Word FLAT_STRING_UTF16()
     NEW_ROPE_UTF16(FLAT_STRING_LEN, COL_CHAR1_MAX, COL_CHAR1_MAX + i);
-#define BIG_STRING_LEN ROPE_UCS_BIG_LEN
-#define BIG_STRING() NEW_ROPE_UCS1_BIG()
+#define BIG_STRING_UCS() NEW_ROPE_UCS1_BIG()
+#define BIG_STRING_UTF() NEW_ROPE_UTF8_BIG()
 
 /*
  * Ropes
@@ -393,6 +406,7 @@ PICOTEST_SUITE(testRopes, testRopeTypeChecks, testEmptyRope, testCharacterWords,
 // TODO rope search and comparison
 
 PICOTEST_CASE(testRopeTypeChecks, colibriFixture) {
+    PICOTEST_VERIFY(normalizeRope_typeCheck(NULL) == 1);
     PICOTEST_VERIFY(stringWordFormat_typeCheck(NULL) == 1);
     PICOTEST_VERIFY(ropeLength_typeCheck(NULL) == 1);
     PICOTEST_VERIFY(ropeDepth_typeCheck(NULL) == 1);
@@ -473,7 +487,8 @@ PICOTEST_CASE(testCharWordsAreImmediate, colibriFixture) {
 }
 
 /* Rope creation */
-PICOTEST_SUITE(testRopeCreation, testNewRope, testNewRopeFromString);
+PICOTEST_SUITE(testRopeCreation, testNewRope, testNewRopeFromString,
+               testNormalizeRope);
 PICOTEST_SUITE(testNewRope, testNewRopeEmpty, testNewRopeUcs1, testNewRopeUcs2,
                testNewRopeUcs4, testNewRopeUcs, testNewRopeUtf8,
                testNewRopeUtf16);
@@ -493,20 +508,22 @@ PICOTEST_SUITE(testNewRopeFromString, testNewRopeFromStringChar,
                testNewRopeFromStringSmall, testNewRopeFromStringFlat,
                testNewRopeFromStringBig);
 
+static void checkRopeEmpty(Col_Word rope) {
+    PICOTEST_ASSERT(rope == Col_EmptyRope());
+}
 PICOTEST_CASE(testNewRopeEmptyFromData, colibriFixture) {
-    PICOTEST_ASSERT(Col_NewRope(COL_UCS1, NULL, 0) == Col_EmptyRope());
-    PICOTEST_ASSERT(Col_NewRope(COL_UCS2, NULL, 0) == Col_EmptyRope());
-    PICOTEST_ASSERT(Col_NewRope(COL_UCS4, NULL, 0) == Col_EmptyRope());
-    PICOTEST_ASSERT(Col_NewRope(COL_UTF8, NULL, 0) == Col_EmptyRope());
-    PICOTEST_ASSERT(Col_NewRope(COL_UTF16, NULL, 0) == Col_EmptyRope());
-    PICOTEST_ASSERT(Col_NewRope(COL_UCS, NULL, 0) == Col_EmptyRope());
+    checkRopeEmpty(Col_NewRope(COL_UCS1, NULL, 0));
+    checkRopeEmpty(Col_NewRope(COL_UCS2, NULL, 0));
+    checkRopeEmpty(Col_NewRope(COL_UCS4, NULL, 0));
+    checkRopeEmpty(Col_NewRope(COL_UTF8, NULL, 0));
+    checkRopeEmpty(Col_NewRope(COL_UTF16, NULL, 0));
+    checkRopeEmpty(Col_NewRope(COL_UCS, NULL, 0));
 }
 PICOTEST_CASE(testNewRopeEmptyFromString, colibriFixture) {
-    PICOTEST_ASSERT(Col_NewRopeFromString("") == Col_EmptyRope());
+    checkRopeEmpty(Col_NewRopeFromString(""));
 }
 
 static void checkRopeChar(Col_Word rope, Col_Char c, Col_StringFormat format) {
-    PICOTEST_ASSERT(rope == Col_NewCharWord(c));
     PICOTEST_ASSERT(Col_WordType(rope) == (COL_CHAR | COL_STRING | COL_ROPE));
     PICOTEST_ASSERT(Col_StringWordFormat(rope) == format);
     PICOTEST_ASSERT(Col_RopeLength(rope) == 1);
@@ -656,20 +673,345 @@ PICOTEST_CASE(testNewRopeUtf8Big, colibriFixture) {
     PICOTEST_ASSERT(rope != NEW_ROPE_UTF8_BIG());
     PICOTEST_ASSERT(Col_WordType(rope) == COL_ROPE);
     PICOTEST_ASSERT(Col_RopeLength(rope) == ROPE_UTF_BIG_LEN);
-    PICOTEST_ASSERT(Col_RopeDepth(rope) >= 1);
+    PICOTEST_ASSERT(Col_RopeDepth(rope) > 1);
 }
 PICOTEST_CASE(testNewRopeUtf16Big, colibriFixture) {
     Col_Word rope = NEW_ROPE_UTF16_BIG();
     PICOTEST_ASSERT(rope != NEW_ROPE_UTF16_BIG());
     PICOTEST_ASSERT(Col_WordType(rope) == COL_ROPE);
     PICOTEST_ASSERT(Col_RopeLength(rope) == ROPE_UTF_BIG_LEN);
-    PICOTEST_ASSERT(Col_RopeDepth(rope) >= 1);
+    PICOTEST_ASSERT(Col_RopeDepth(rope) > 1);
 }
 
 PICOTEST_CASE(testNewRopeFromStringBig, colibriFixture) {
     Col_Word rope = NEW_ROPE_STRING_BIG();
     PICOTEST_ASSERT(rope != NEW_ROPE_STRING_BIG());
     checkRope(rope, ROPE_STRING_BIG_LEN, 1);
+}
+
+PICOTEST_SUITE(testNormalizeRope, testNormalizeRopeIdentity,
+               testNormalizeRopeToUcs, testNormalizeRopeToUtf,
+               testNormalizeSubropes, testNormalizeConcatRopes,
+               testNormalizeFlatten);
+
+PICOTEST_SUITE(testNormalizeRopeIdentity, testNormalizeEmptyRopeIdentity,
+               testNormalizeCharacterIdentity, testNormalizeSmallStringIdentity,
+               testNormalizeFlatStringIdentity, testNormalizeSubropesIdentity,
+               testNormalizeConcatRopesIdentity);
+static void checkNormalizeIdentity(Col_Word rope, Col_StringFormat format) {
+    PICOTEST_ASSERT(Col_NormalizeRope(rope, format, COL_CHAR_INVALID, 0) ==
+                    rope);
+}
+PICOTEST_CASE(testNormalizeEmptyRopeIdentity, colibriFixture) {
+    checkNormalizeIdentity(Col_EmptyRope(), COL_UCS);
+}
+PICOTEST_CASE(testNormalizeCharacterIdentity, colibriFixture) {
+    checkNormalizeIdentity(Col_NewCharWord(COL_CHAR1_MAX), COL_UCS1);
+    checkNormalizeIdentity(Col_NewCharWord(COL_CHAR1_MAX), COL_UCS);
+    checkNormalizeIdentity(Col_NewCharWord(COL_CHAR2_MAX), COL_UCS2);
+    checkNormalizeIdentity(Col_NewCharWord(COL_CHAR2_MAX), COL_UCS);
+    checkNormalizeIdentity(Col_NewCharWord(COL_CHAR_MAX), COL_UCS4);
+    checkNormalizeIdentity(Col_NewCharWord(COL_CHAR_MAX), COL_UCS);
+}
+PICOTEST_CASE(testNormalizeSmallStringIdentity, colibriFixture) {
+    checkNormalizeIdentity(
+        Col_NormalizeRope(SMALL_STRING(), COL_UCS1, COL_CHAR_INVALID, 0),
+        COL_UCS1);
+    checkNormalizeIdentity(
+        Col_NormalizeRope(SMALL_STRING(), COL_UCS, COL_CHAR_INVALID, 0),
+        COL_UCS1);
+}
+PICOTEST_CASE(testNormalizeFlatStringIdentity, colibriFixture) {
+    checkNormalizeIdentity(
+        Col_NormalizeRope(FLAT_STRING_UCS1(), COL_UCS1, COL_CHAR_INVALID, 0),
+        COL_UCS1);
+    checkNormalizeIdentity(
+        Col_NormalizeRope(FLAT_STRING_UCS2(), COL_UCS2, COL_CHAR_INVALID, 0),
+        COL_UCS2);
+    checkNormalizeIdentity(
+        Col_NormalizeRope(FLAT_STRING_UCS4(), COL_UCS4, COL_CHAR_INVALID, 0),
+        COL_UCS4);
+    checkNormalizeIdentity(
+        Col_NormalizeRope(FLAT_STRING_UCS1(), COL_UCS, COL_CHAR_INVALID, 0),
+        COL_UCS1);
+    checkNormalizeIdentity(
+        Col_NormalizeRope(FLAT_STRING_UCS2(), COL_UCS, COL_CHAR_INVALID, 0),
+        COL_UCS2);
+    checkNormalizeIdentity(
+        Col_NormalizeRope(FLAT_STRING_UCS4(), COL_UCS, COL_CHAR_INVALID, 0),
+        COL_UCS4);
+    checkNormalizeIdentity(
+        Col_NormalizeRope(FLAT_STRING_UTF8(), COL_UTF8, COL_CHAR_INVALID, 0),
+        COL_UTF8);
+    checkNormalizeIdentity(
+        Col_NormalizeRope(FLAT_STRING_UTF16(), COL_UTF16, COL_CHAR_INVALID, 0),
+        COL_UTF16);
+}
+
+PICOTEST_SUITE(testNormalizeSubropesIdentity,
+               testNormalizeSubropesOfFlatStringIdentity,
+               testNormalizeSubropesOfConcatRopeIdentity);
+PICOTEST_CASE(testNormalizeSubropesOfFlatStringIdentity, colibriFixture) {
+    checkNormalizeIdentity(Col_Subrope(FLAT_STRING_UCS1(), 1, SIZE_MAX),
+                           COL_UCS1);
+    checkNormalizeIdentity(Col_Subrope(FLAT_STRING_UCS2(), 1, SIZE_MAX),
+                           COL_UCS2);
+    checkNormalizeIdentity(Col_Subrope(FLAT_STRING_UCS4(), 1, SIZE_MAX),
+                           COL_UCS4);
+    checkNormalizeIdentity(Col_Subrope(FLAT_STRING_UCS1(), 1, SIZE_MAX),
+                           COL_UCS);
+    checkNormalizeIdentity(Col_Subrope(FLAT_STRING_UCS2(), 1, SIZE_MAX),
+                           COL_UCS);
+    checkNormalizeIdentity(Col_Subrope(FLAT_STRING_UCS4(), 1, SIZE_MAX),
+                           COL_UCS);
+    checkNormalizeIdentity(Col_Subrope(FLAT_STRING_UTF8(), 1, SIZE_MAX),
+                           COL_UTF8);
+    checkNormalizeIdentity(Col_Subrope(FLAT_STRING_UTF16(), 1, SIZE_MAX),
+                           COL_UTF16);
+}
+PICOTEST_CASE(testNormalizeSubropesOfConcatRopeIdentity, colibriFixture) {
+    checkNormalizeIdentity(
+        Col_Subrope(
+            Col_ConcatRopes(FLAT_STRING_UCS1(), Col_NewCharWord(COL_CHAR1_MAX)),
+            1, SIZE_MAX),
+        COL_UCS1);
+    checkNormalizeIdentity(
+        Col_Subrope(Col_ConcatRopes(FLAT_STRING_UCS1(), SMALL_STRING()), 1,
+                    SIZE_MAX),
+        COL_UCS1);
+    checkNormalizeIdentity(
+        Col_Subrope(Col_ConcatRopes(FLAT_STRING_UCS1(), SHORT_STRING_UCS1()), 1,
+                    SIZE_MAX),
+        COL_UCS1);
+    checkNormalizeIdentity(
+        Col_Subrope(
+            Col_ConcatRopes(FLAT_STRING_UCS2(), Col_NewCharWord(COL_CHAR2_MAX)),
+            1, SIZE_MAX),
+        COL_UCS2);
+    checkNormalizeIdentity(
+        Col_Subrope(Col_ConcatRopes(FLAT_STRING_UCS2(), SHORT_STRING_UCS2()), 1,
+                    SIZE_MAX),
+        COL_UCS2);
+    checkNormalizeIdentity(
+        Col_Subrope(
+            Col_ConcatRopes(FLAT_STRING_UCS4(), Col_NewCharWord(COL_CHAR_MAX)),
+            1, SIZE_MAX),
+        COL_UCS4);
+    checkNormalizeIdentity(
+        Col_Subrope(Col_ConcatRopes(FLAT_STRING_UCS4(), SHORT_STRING_UCS4()), 1,
+                    SIZE_MAX),
+        COL_UCS4);
+    checkNormalizeIdentity(
+        Col_Subrope(
+            Col_ConcatRopes(FLAT_STRING_UCS2(), Col_NewCharWord(COL_CHAR1_MAX)),
+            1, SIZE_MAX),
+        COL_UCS);
+    checkNormalizeIdentity(
+        Col_Subrope(Col_ConcatRopes(FLAT_STRING_UCS2(), SHORT_STRING_UCS4()), 1,
+                    SIZE_MAX),
+        COL_UCS);
+    checkNormalizeIdentity(
+        Col_Subrope(Col_ConcatRopes(FLAT_STRING_UTF8(), SHORT_STRING_UTF8()), 1,
+                    SIZE_MAX),
+        COL_UTF8);
+    checkNormalizeIdentity(
+        Col_Subrope(Col_ConcatRopes(FLAT_STRING_UTF16(), SHORT_STRING_UTF16()),
+                    1, SIZE_MAX),
+        COL_UTF16);
+}
+
+PICOTEST_CASE(testNormalizeConcatRopesIdentity, colibriFixture) {
+    checkNormalizeIdentity(
+        Col_ConcatRopes(FLAT_STRING_UCS1(), FLAT_STRING_UCS1()), COL_UCS1);
+    checkNormalizeIdentity(
+        Col_ConcatRopes(FLAT_STRING_UCS2(), FLAT_STRING_UCS2()), COL_UCS2);
+    checkNormalizeIdentity(
+        Col_ConcatRopes(FLAT_STRING_UCS4(), FLAT_STRING_UCS4()), COL_UCS4);
+    checkNormalizeIdentity(
+        Col_ConcatRopes(FLAT_STRING_UCS1(), FLAT_STRING_UCS2()), COL_UCS);
+    checkNormalizeIdentity(
+        Col_ConcatRopes(FLAT_STRING_UCS1(), FLAT_STRING_UCS4()), COL_UCS);
+    checkNormalizeIdentity(
+        Col_ConcatRopes(FLAT_STRING_UCS2(), FLAT_STRING_UCS4()), COL_UCS);
+    checkNormalizeIdentity(
+        Col_ConcatRopes(FLAT_STRING_UTF8(), FLAT_STRING_UTF8()), COL_UTF8);
+    checkNormalizeIdentity(
+        Col_ConcatRopes(FLAT_STRING_UTF16(), FLAT_STRING_UTF16()), COL_UTF16);
+}
+
+PICOTEST_SUITE(testNormalizeRopeToUcs, testNormalizeRopeToUcsUpconvert,
+               testNormalizeRopeToUcsDownconvert,
+               testNormalizeRopeToUcsAdaptive);
+
+PICOTEST_SUITE(testNormalizeRopeToUcsUpconvert,
+               testNormalizeCharacterToUcsUpconvert,
+
+               testNormalizeSmallStringToUcsUpconvert);
+PICOTEST_CASE(testNormalizeCharacterToUcsUpconvert, colibriFixture) {
+    checkRopeChar(
+        Col_NormalizeRope(Col_NewCharWord(COL_CHAR1_MAX), COL_UCS2, 0, 0),
+        COL_CHAR1_MAX, COL_UCS2);
+    checkRopeChar(
+        Col_NormalizeRope(Col_NewCharWord(COL_CHAR1_MAX), COL_UCS4, 0, 0),
+        COL_CHAR1_MAX, COL_UCS4);
+    checkRopeChar(
+        Col_NormalizeRope(Col_NewCharWord(COL_CHAR2_MAX), COL_UCS4, 0, 0),
+        COL_CHAR2_MAX, COL_UCS4);
+}
+PICOTEST_CASE(testNormalizeSmallStringToUcsUpconvert, colibriFixture) {
+    checkRopeString(
+        Col_NormalizeRope(SMALL_STRING(), COL_UCS2, COL_CHAR_INVALID, 0),
+        SMALL_STRING_LEN, COL_UCS2);
+    checkRopeString(
+        Col_NormalizeRope(SMALL_STRING(), COL_UCS4, COL_CHAR_INVALID, 0),
+        SMALL_STRING_LEN, COL_UCS4);
+}
+
+PICOTEST_SUITE(testNormalizeRopeToUcsDownconvert,
+               testNormalizeRopeToUcsDownconvertSmallString,
+               testNormalizeRopeToUcsDownconvertSkip,
+               testNormalizeRopeToUcsDownconvertReplace);
+PICOTEST_CASE(testNormalizeRopeToUcsDownconvertSmallString, colibriFixture) {
+    Col_Word small2 =
+        Col_NormalizeRope(SMALL_STRING(), COL_UCS2, COL_CHAR_INVALID, 0);
+    PICOTEST_ASSERT(Col_NormalizeRope(small2, COL_UCS1, COL_CHAR_INVALID, 0) ==
+                    SMALL_STRING());
+
+    Col_Word small4 =
+        Col_NormalizeRope(SMALL_STRING(), COL_UCS2, COL_CHAR_INVALID, 0);
+    PICOTEST_ASSERT(Col_NormalizeRope(small4, COL_UCS1, COL_CHAR_INVALID, 0) ==
+                    SMALL_STRING());
+}
+
+PICOTEST_SUITE(testNormalizeRopeToUcsDownconvertSkip,
+               testNormalizeCharacterToUcsDownconvertSkip,
+               testNormalizeFlatStringToUcsDownconvertSkip);
+PICOTEST_CASE(testNormalizeCharacterToUcsDownconvertSkip, colibriFixture) {
+    checkRopeEmpty(Col_NormalizeRope(Col_NewCharWord(COL_CHAR1_MAX + 1),
+                                     COL_UCS1, COL_CHAR_INVALID, 0));
+    checkRopeEmpty(Col_NormalizeRope(Col_NewCharWord(COL_CHAR1_MAX + 1),
+                                     COL_UCS1, COL_CHAR_MAX, 0));
+    checkRopeEmpty(Col_NormalizeRope(Col_NewCharWord(COL_CHAR2_MAX + 1),
+                                     COL_UCS2, COL_CHAR_INVALID, 0));
+    checkRopeEmpty(Col_NormalizeRope(Col_NewCharWord(COL_CHAR2_MAX + 1),
+                                     COL_UCS2, COL_CHAR_MAX, 0));
+}
+PICOTEST_CASE(testNormalizeFlatStringToUcsDownconvertSkip, colibriFixture) {
+    checkRopeChar(
+        Col_NormalizeRope(FLAT_STRING_UCS2(), COL_UCS1, COL_CHAR_INVALID, 1),
+        COL_CHAR1_MAX, COL_UCS1);
+    checkRopeEmpty(
+        Col_NormalizeRope(FLAT_STRING_UCS4(), COL_UCS1, COL_CHAR_INVALID, 1));
+    checkRopeChar(
+        Col_NormalizeRope(FLAT_STRING_UCS4(), COL_UCS2, COL_CHAR_INVALID, 1),
+        COL_CHAR2_MAX, COL_UCS2);
+}
+
+PICOTEST_SUITE(testNormalizeRopeToUcsDownconvertReplace,
+               testNormalizeCharacterToUcsDownconvertReplace,
+               testNormalizeFlatStringToUcsDownconvertReplace);
+PICOTEST_CASE(testNormalizeCharacterToUcsDownconvertReplace, colibriFixture) {
+    checkRopeChar(
+        Col_NormalizeRope(Col_NewCharWord(COL_CHAR1_MAX + 1), COL_UCS1, 0, 0),
+        0, COL_UCS1);
+    checkRopeChar(
+        Col_NormalizeRope(Col_NewCharWord(COL_CHAR2_MAX + 1), COL_UCS2, 0, 0),
+        0, COL_UCS2);
+}
+PICOTEST_CASE(testNormalizeFlatStringToUcsDownconvertReplace, colibriFixture) {
+    checkRopeString(Col_NormalizeRope(FLAT_STRING_UCS2(), COL_UCS1, 0, 1),
+                    FLAT_STRING_LEN, COL_UCS1);
+    checkRopeString(Col_NormalizeRope(FLAT_STRING_UCS4(), COL_UCS1, 0, 1),
+                    FLAT_STRING_LEN, COL_UCS1);
+    checkRopeString(Col_NormalizeRope(FLAT_STRING_UCS4(), COL_UCS2, 0, 1),
+                    FLAT_STRING_LEN, COL_UCS2);
+}
+
+PICOTEST_CASE(testNormalizeRopeToUcsAdaptive, colibriFixture) {
+    checkRopeString(Col_NormalizeRope(SHORT_STRING_UTF8(), COL_UCS, 0, 0),
+                    SHORT_STRING_LEN, COL_UCS1);
+    checkRopeString(Col_NormalizeRope(FLAT_STRING_UTF8(), COL_UCS, 0, 0),
+                    FLAT_STRING_LEN, COL_UCS2);
+    checkRopeString(Col_NormalizeRope(MEDIUM_STRING_UTF16(), COL_UCS, 0, 0),
+                    MEDIUM_STRING_UTF16_LEN, COL_UCS4);
+}
+
+PICOTEST_CASE(testNormalizeRopeToUtf, colibriFixture) {
+    checkRopeString(Col_NormalizeRope(FLAT_STRING_UCS1(), COL_UTF8, 0, 0),
+                    FLAT_STRING_LEN, COL_UTF8);
+    checkRopeString(Col_NormalizeRope(FLAT_STRING_UCS2(), COL_UTF8, 0, 0),
+                    FLAT_STRING_LEN, COL_UTF8);
+    checkRopeString(Col_NormalizeRope(FLAT_STRING_UCS4(), COL_UTF8, 0, 0),
+                    FLAT_STRING_LEN, COL_UTF8);
+    checkRopeString(Col_NormalizeRope(FLAT_STRING_UCS1(), COL_UTF16, 0, 0),
+                    FLAT_STRING_LEN, COL_UTF16);
+    checkRopeString(Col_NormalizeRope(FLAT_STRING_UCS2(), COL_UTF16, 0, 0),
+                    FLAT_STRING_LEN, COL_UTF16);
+    checkRopeString(Col_NormalizeRope(FLAT_STRING_UCS4(), COL_UTF16, 0, 0),
+                    FLAT_STRING_LEN, COL_UTF16);
+}
+
+PICOTEST_SUITE(testNormalizeSubropes,
+               testNormalizeSubropeOfFlatStringIsFlattened,
+               testNormalizeSubropeOfConcatRopeIsNotFlattened);
+PICOTEST_CASE(testNormalizeSubropeOfFlatStringIsFlattened, colibriFixture) {
+    Col_Word subrope = Col_Subrope(FLAT_STRING_UCS1(), 1, SIZE_MAX);
+    checkRope(subrope, FLAT_STRING_LEN - 1, 0);
+    checkRopeString(Col_NormalizeRope(subrope, COL_UCS2, COL_CHAR_INVALID, 0),
+                    FLAT_STRING_LEN - 1, COL_UCS2);
+}
+PICOTEST_CASE(testNormalizeSubropeOfConcatRopeIsNotFlattened, colibriFixture) {
+    Col_Word subrope = Col_Subrope(
+        Col_ConcatRopes(FLAT_STRING_UCS1(), SMALL_STRING()), 1, SIZE_MAX);
+    checkRope(subrope, FLAT_STRING_LEN + SMALL_STRING_LEN - 1, 1);
+    checkRope(Col_NormalizeRope(subrope, COL_UCS2, COL_CHAR_INVALID, 0),
+              FLAT_STRING_LEN + SMALL_STRING_LEN - 1, 1);
+}
+
+PICOTEST_SUITE(testNormalizeConcatRopes, testNormalizeConcatRopeDontFlatten,
+               testNormalizeConcatRopeFlatten);
+PICOTEST_CASE(testNormalizeConcatRopeDontFlatten, colibriFixture) {
+    Col_Word left = FLAT_STRING_UCS1(), right = SHORT_STRING_UCS2();
+    Col_Word concatRope = Col_ConcatRopes(left, right);
+    checkRope(concatRope, FLAT_STRING_LEN + SHORT_STRING_LEN, 1);
+    Col_Word normalizedRope =
+        Col_NormalizeRope(concatRope, COL_UCS2, COL_CHAR_INVALID, 0);
+    PICOTEST_ASSERT(concatRope != normalizedRope);
+    checkRope(normalizedRope, FLAT_STRING_LEN + SHORT_STRING_LEN, 1);
+    PICOTEST_ASSERT(Col_Subrope(concatRope, 0, FLAT_STRING_LEN - 1) == left);
+    PICOTEST_ASSERT(Col_Subrope(concatRope, FLAT_STRING_LEN, SIZE_MAX) ==
+                    right);
+    PICOTEST_ASSERT(Col_Subrope(normalizedRope, 0, FLAT_STRING_LEN - 1) !=
+                    left);
+    PICOTEST_ASSERT(Col_Subrope(normalizedRope, FLAT_STRING_LEN, SIZE_MAX) ==
+                    right);
+}
+PICOTEST_CASE(testNormalizeConcatRopeFlatten, colibriFixture) {
+    Col_Word left = FLAT_STRING_UCS1(), right = SHORT_STRING_UCS1();
+    Col_Word concatRope = Col_ConcatRopes(left, right);
+    checkRope(concatRope, FLAT_STRING_LEN + SHORT_STRING_LEN, 1);
+    Col_Word normalizedRope =
+        Col_NormalizeRope(concatRope, COL_UCS1, COL_CHAR_INVALID, 1);
+    PICOTEST_ASSERT(concatRope != normalizedRope);
+    checkRopeString(normalizedRope, FLAT_STRING_LEN + SHORT_STRING_LEN,
+                    COL_UCS1);
+}
+
+PICOTEST_SUITE(testNormalizeFlatten, testNormalizeFlattenMerge,
+               testNormalizeFlattenSplit);
+PICOTEST_CASE(testNormalizeFlattenMerge, colibriFixture) {
+    Col_Word rope = BIG_STRING_UTF();
+    PICOTEST_ASSERT(Col_RopeDepth(rope) > 1);
+    Col_Word normalized =
+        Col_NormalizeRope(rope, COL_UCS4, COL_CHAR_INVALID, 1);
+    PICOTEST_ASSERT(Col_RopeDepth(normalized) == 0);
+}
+PICOTEST_CASE(testNormalizeFlattenSplit, colibriFixture) {
+    Col_Word rope = BIG_STRING_UCS();
+    PICOTEST_ASSERT(Col_RopeDepth(rope) == 1);
+    Col_Word normalized =
+        Col_NormalizeRope(rope, COL_UTF8, COL_CHAR_INVALID, 1);
+    PICOTEST_ASSERT(Col_RopeDepth(normalized) > 1);
 }
 
 /* Rope operations */
@@ -689,16 +1031,15 @@ PICOTEST_SUITE(testSubrope, testSubropeOfEmptyRopeIsEmpty,
                testSubropeOfConcatRope);
 
 PICOTEST_CASE(testSubropeOfEmptyRopeIsEmpty, colibriFixture) {
-    PICOTEST_ASSERT(Col_Subrope(Col_EmptyRope(), 0, 0) == Col_EmptyRope());
+    checkRopeEmpty(Col_Subrope(Col_EmptyRope(), 0, 0));
 }
 PICOTEST_CASE(testSubropeOfEmptyRangeIsEmpty, colibriFixture) {
     Col_Word rope = SMALL_STRING();
-    PICOTEST_ASSERT(Col_Subrope(rope, 1, 0) == Col_EmptyRope());
-    PICOTEST_ASSERT(Col_Subrope(rope, 2, 1) == Col_EmptyRope());
-    PICOTEST_ASSERT(Col_Subrope(rope, SMALL_STRING_LEN, SMALL_STRING_LEN) ==
-                    Col_EmptyRope());
-    PICOTEST_ASSERT(Col_Subrope(rope, SIZE_MAX, 2) == Col_EmptyRope());
-    PICOTEST_ASSERT(Col_Subrope(rope, SIZE_MAX, SIZE_MAX) == Col_EmptyRope());
+    checkRopeEmpty(Col_Subrope(rope, 1, 0));
+    checkRopeEmpty(Col_Subrope(rope, 2, 1));
+    checkRopeEmpty(Col_Subrope(rope, SMALL_STRING_LEN, SMALL_STRING_LEN));
+    checkRopeEmpty(Col_Subrope(rope, SIZE_MAX, 2));
+    checkRopeEmpty(Col_Subrope(rope, SIZE_MAX, SIZE_MAX));
 }
 PICOTEST_CASE(testSubropeOfWholeRangeIsIdentity, colibriFixture) {
     Col_Word rope = SMALL_STRING();
@@ -877,7 +1218,7 @@ static void checkUnmergedConcatRope(Col_Word left, Col_Word right,
 PICOTEST_CASE(testConcatUnmergeableStringsUniform, colibriFixture) {
     checkUnmergedConcatRope(SHORT_STRING_UCS2(), MEDIUM_STRING_UCS2(), 1);
     checkUnmergedConcatRope(SHORT_STRING_UCS4(), MEDIUM_STRING_UCS4(), 1);
-    checkUnmergedConcatRope(SHORT_STRING_UTF8(), MEDIUM_STRING_UTF8(), 1);
+    checkUnmergedConcatRope(MEDIUM_STRING_UTF8(), MEDIUM_STRING_UTF8(), 1);
     checkUnmergedConcatRope(SHORT_STRING_UTF16(), MEDIUM_STRING_UTF16(), 1);
 }
 PICOTEST_CASE(testConcatUnmergeableStringsUpconvert, colibriFixture) {
@@ -1139,7 +1480,7 @@ PICOTEST_CASE(testRepeatRopeTooLarge, colibriFixture) {
 
 PICOTEST_CASE(testRepeatRopeZeroIsEmpty, colibriFixture) {
     Col_Word rope = FLAT_STRING();
-    PICOTEST_ASSERT(Col_RepeatRope(rope, 0) == Col_EmptyRope());
+    checkRopeEmpty(Col_RepeatRope(rope, 0));
 }
 PICOTEST_CASE(testRepeatRopeOnceIsIdentity, colibriFixture) {
     Col_Word rope = FLAT_STRING();
@@ -1163,8 +1504,7 @@ PICOTEST_CASE(testRepeatRopeRecurse, colibriFixture) {
     checkRope(Col_RepeatRope(rope, 65537), FLAT_STRING_LEN * 65537, 17);
 }
 PICOTEST_CASE(testRepeatEmptyRope, colibriFixture) {
-    PICOTEST_ASSERT(Col_RepeatRope(Col_EmptyRope(), SIZE_MAX) ==
-                    Col_EmptyRope());
+    checkRopeEmpty(Col_RepeatRope(Col_EmptyRope(), SIZE_MAX));
 }
 PICOTEST_CASE(testRepeatRopeMax, colibriFixture) {
     Col_Word rope = Col_RepeatRope(Col_NewCharWord('a'), SIZE_MAX);

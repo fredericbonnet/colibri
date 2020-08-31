@@ -996,7 +996,7 @@ Col_NormalizeRope(
                                  format whatever their structure. */
 {
     size_t length, byteLength;
-    Col_Word normalized;
+    Col_Word normalized = WORD_NIL;
     CopyDataInfo copyDataInfo;
     Col_RopeChunksTraverseProc *copyDataProc;
     Col_Char c;
@@ -1033,7 +1033,7 @@ Col_NormalizeRope(
         c = WORD_CHAR_CP(rope);
         switch (format) {
         case COL_UCS1:
-            if (c < COL_CHAR1_MAX) {
+            if (c <= COL_CHAR1_MAX) {
                 return WORD_CHAR_NEW(c, format);
             } else if (replace != COL_CHAR_INVALID) {
                 return WORD_CHAR_NEW(replace, format);
@@ -1042,7 +1042,7 @@ Col_NormalizeRope(
             }
 
         case COL_UCS2:
-            if (c < COL_CHAR2_MAX) {
+            if (c <= COL_CHAR2_MAX) {
                 return WORD_CHAR_NEW(c, format);
             } else if (replace != COL_CHAR_INVALID) {
                 return WORD_CHAR_NEW(replace, format);
@@ -1106,8 +1106,8 @@ Col_NormalizeRope(
         case COL_UCS1:
             if (length <= UCSSTR_MAX_LENGTH) {
                 /*
-                    * String fits into one multi-cell leaf rope.
-                    */
+                 * String fits into one multi-cell leaf rope.
+                 */
 
                 single = 1;
                 if (replace == COL_CHAR_INVALID) {
@@ -1126,8 +1126,8 @@ Col_NormalizeRope(
         case COL_UCS2:
             if (length <= UCSSTR_MAX_LENGTH) {
                 /*
-                    * String fits into one multi-cell leaf rope.
-                    */
+                 * String fits into one multi-cell leaf rope.
+                 */
 
                 single = 1;
                 if (replace == COL_CHAR_INVALID) {
@@ -1146,8 +1146,8 @@ Col_NormalizeRope(
         case COL_UCS4:
             if (length <= UCSSTR_MAX_LENGTH) {
                 /*
-                    * String fits into one multi-cell leaf rope.
-                    */
+                 * String fits into one multi-cell leaf rope.
+                 */
 
                 single = 1;
                 byteLength = length * CHAR_WIDTH(format);
@@ -1266,14 +1266,14 @@ Col_NormalizeRope(
         }
         Col_TraverseRopeChunks(rope, 0, SIZE_MAX, 0, copyDataProc,
                 &copyDataInfo, NULL);
-        if (length == 1 && !FORMAT_UTF(format)) {
+        if (normalized == WORD_NIL) {
             /*
              * Single character.
              */
 
-            return WORD_CHAR_NEW(c, format);
+            ASSERT(!FORMAT_UTF(format) && length == 1 && byteLength == length * format);
+            return Col_NewRope(format, (char *) &c, byteLength);
         }
-        ASSERT(copyDataInfo.data - (FORMAT_UTF(format) ? WORD_UTFSTR_DATA(normalized) : WORD_UCSSTR_DATA(normalized)) == byteLength);
         return normalized;
     }
 
@@ -1665,7 +1665,7 @@ SearchSubropeProc(
     ASSERT(number == 1);
 
     /*
-     * Search for character.
+     * Search for first character.
      */
 
     ASSERT(chunks->data);
@@ -2079,8 +2079,8 @@ MergeRopeChunksProc(
             if (info->byteLength + (length * CHAR_WIDTH(info->format))
                     > MAX_SHORT_LEAF_SIZE - UCSSTR_HEADER_SIZE) {
                 /*
-                    * Data won't fit.
-                    */
+                 * Data won't fit.
+                 */
 
                 return -1;
             }
