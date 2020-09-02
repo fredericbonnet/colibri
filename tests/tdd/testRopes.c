@@ -137,6 +137,39 @@ PICOTEST_CASE(repeatRope_valueCheck_length, failureFixture, context) {
     PICOTEST_ASSERT(Col_RepeatRope(rope, SIZE_MAX) == WORD_NIL);
 }
 
+/* Col_RopeInsert */
+PICOTEST_CASE(ropeInsert_typeCheck_into, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_ROPE);
+    PICOTEST_ASSERT(Col_RopeInsert(WORD_NIL, 0, Col_EmptyRope()) == WORD_NIL);
+}
+PICOTEST_CASE(ropeInsert_typeCheck_rope, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_ROPE);
+    PICOTEST_ASSERT(Col_RopeInsert(Col_EmptyRope(), 0, WORD_NIL) == WORD_NIL);
+}
+
+/* Col_RopeRemove */
+PICOTEST_CASE(ropeRemove_typeCheck, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_ROPE);
+    PICOTEST_ASSERT(Col_RopeRemove(WORD_NIL, 0, 0) == WORD_NIL);
+}
+
+/* Col_RopeReplace */
+PICOTEST_CASE(ropeReplace_typeCheck_rope, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_ROPE);
+    PICOTEST_ASSERT(Col_RopeReplace(WORD_NIL, 0, 0, Col_EmptyRope()) ==
+                    WORD_NIL);
+}
+PICOTEST_CASE(ropeReplace_typeCheck_with, failureFixture, context) {
+    EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
+                   COL_ERROR_ROPE);
+    PICOTEST_ASSERT(Col_RopeReplace(Col_EmptyRope(), 0, 0, WORD_NIL) ==
+                    WORD_NIL);
+}
+
 /* Col_TraverseRopeChunksN */
 PICOTEST_CASE(traverseRopeChunksN_valueCheck_proc, failureFixture, context) {
     EXPECT_FAILURE(context, COL_VALUECHECK, Col_GetErrorDomain(),
@@ -456,6 +489,11 @@ PICOTEST_CASE(testRopeTypeChecks, colibriFixture) {
     PICOTEST_VERIFY(concatRopes_typeCheck_left(NULL) == 1);
     PICOTEST_VERIFY(concatRopes_typeCheck_right(NULL) == 1);
     PICOTEST_VERIFY(repeatRope_typeCheck(NULL) == 1);
+    PICOTEST_VERIFY(ropeInsert_typeCheck_into(NULL) == 1);
+    PICOTEST_VERIFY(ropeInsert_typeCheck_rope(NULL) == 1);
+    PICOTEST_VERIFY(ropeRemove_typeCheck(NULL) == 1);
+    PICOTEST_VERIFY(ropeReplace_typeCheck_rope(NULL) == 1);
+    PICOTEST_VERIFY(ropeReplace_typeCheck_with(NULL) == 1);
     PICOTEST_VERIFY(traverseRopeChunks_typeCheck(NULL) == 1);
     PICOTEST_VERIFY(ropeIterBegin_typeCheck(NULL) == 1);
     PICOTEST_VERIFY(ropeIterFirst_typeCheck(NULL) == 1);
@@ -1058,8 +1096,7 @@ PICOTEST_CASE(testNormalizeFlattenSplit, colibriFixture) {
 /* Rope operations */
 PICOTEST_SUITE(testRopeOperations, testSubrope, testConcatRopes,
                testConcatRopesA, testConcatRopesNV, testConcatRopesV,
-               testRepeatRope);
-// TODO repeat/insert/remove/replace
+               testRepeatRope, testRopeInsert, testRopeRemove, testRopeReplace);
 
 // TODO compare original/subrope characters
 PICOTEST_SUITE(testSubrope, testSubropeOfEmptyRopeIsEmpty,
@@ -1551,6 +1588,91 @@ PICOTEST_CASE(testRepeatRopeMax, colibriFixture) {
     Col_Word rope = Col_RepeatRope(Col_NewCharWord('a'), SIZE_MAX);
     PICOTEST_ASSERT(Col_RopeLength(rope) == SIZE_MAX);
     PICOTEST_ASSERT(Col_RopeDepth(rope) > 17);
+}
+
+PICOTEST_SUITE(testRopeInsert, testRopeInsertEmptyIsIdentity,
+               testRopeInsertAtBeginningIsConcat, testRopeInsertPastEndIsConcat,
+               testRopeInsertMiddle);
+PICOTEST_CASE(testRopeInsertEmptyIsIdentity, colibriFixture) {
+    Col_Word rope = FLAT_STRING();
+    PICOTEST_ASSERT(Col_RopeInsert(rope, 0, Col_EmptyRope()) == rope);
+}
+PICOTEST_CASE(testRopeInsertAtBeginningIsConcat, colibriFixture) {
+    Col_Word into = FLAT_STRING(), rope = SHORT_STRING();
+    Col_Word result = Col_RopeInsert(into, 0, rope);
+    PICOTEST_ASSERT(Col_Subrope(result, 0, SHORT_STRING_LEN - 1) == rope);
+    PICOTEST_ASSERT(Col_Subrope(result, SHORT_STRING_LEN, SIZE_MAX) == into);
+}
+PICOTEST_CASE(testRopeInsertPastEndIsConcat, colibriFixture) {
+    Col_Word into = FLAT_STRING(), rope = SHORT_STRING();
+    Col_Word result = Col_RopeInsert(into, SIZE_MAX, rope);
+    PICOTEST_ASSERT(Col_Subrope(result, 0, FLAT_STRING_LEN - 1) == into);
+    PICOTEST_ASSERT(Col_Subrope(result, FLAT_STRING_LEN, SIZE_MAX) == rope);
+}
+PICOTEST_CASE(testRopeInsertMiddle, colibriFixture) {
+    Col_Word into = FLAT_STRING(), rope = SHORT_STRING();
+    size_t index = FLAT_STRING_LEN / 3;
+    Col_Word result = Col_RopeInsert(into, index, rope);
+    PICOTEST_ASSERT(Col_RopeSearchLast(result, rope) == index);
+}
+
+PICOTEST_SUITE(testRopeRemove, testRopeRemoveFromEmptyIsIdentity,
+               testRopeRemovePastEndIsIdentity,
+               testRopeRemoveInvalidRangeIsIdentity,
+               testRopeRemoveTrimIsSubrope, testRopeRemoveMiddle);
+PICOTEST_CASE(testRopeRemoveFromEmptyIsIdentity, colibriFixture) {
+    checkRopeEmpty(Col_RopeRemove(Col_EmptyRope(), 0, 0));
+}
+PICOTEST_CASE(testRopeRemovePastEndIsIdentity, colibriFixture) {
+    Col_Word rope = FLAT_STRING();
+    PICOTEST_ASSERT(Col_RopeRemove(rope, FLAT_STRING_LEN, SIZE_MAX) == rope);
+}
+PICOTEST_CASE(testRopeRemoveInvalidRangeIsIdentity, colibriFixture) {
+    Col_Word rope = FLAT_STRING();
+    PICOTEST_ASSERT(Col_RopeRemove(rope, 1, 0) == rope);
+}
+PICOTEST_CASE(testRopeRemoveTrimIsSubrope, colibriFixture) {
+    Col_Word rope = FLAT_STRING();
+    size_t index = FLAT_STRING_LEN / 3;
+
+    Col_Word trimBegin = Col_RopeRemove(rope, 0, index);
+    PICOTEST_ASSERT(Col_CompareRopes(trimBegin, Col_Subrope(rope, index + 1,
+                                                            SIZE_MAX)) == 0);
+
+    Col_Word trimEnd = Col_RopeRemove(rope, index + 1, SIZE_MAX);
+    PICOTEST_ASSERT(Col_CompareRopes(trimEnd, Col_Subrope(rope, 0, index)) ==
+                    0);
+
+    PICOTEST_ASSERT(
+        Col_CompareRopes(Col_ConcatRopes(trimEnd, trimBegin), rope) == 0);
+}
+PICOTEST_CASE(testRopeRemoveMiddle, colibriFixture) {
+    Col_Word rope = FLAT_STRING();
+    size_t first = FLAT_STRING_LEN / 3, last = FLAT_STRING_LEN / 2;
+    Col_Word result = Col_RopeRemove(rope, first, last);
+    PICOTEST_ASSERT(Col_CompareRopes(Col_Subrope(result, 0, first - 1),
+                                     Col_Subrope(rope, 0, first - 1)) == 0);
+    PICOTEST_ASSERT(Col_CompareRopes(Col_Subrope(result, first, SIZE_MAX),
+                                     Col_Subrope(rope, last + 1, SIZE_MAX)) ==
+                    0);
+}
+
+PICOTEST_SUITE(testRopeReplace, testRopeReplaceInvalidRangeIsIdentity,
+               testRopeReplaceOneChar);
+PICOTEST_CASE(testRopeReplaceInvalidRangeIsIdentity, colibriFixture) {
+    Col_Word rope = FLAT_STRING();
+    PICOTEST_ASSERT(Col_RopeReplace(rope, 1, 0, SMALL_STRING()) == rope);
+}
+PICOTEST_CASE(testRopeReplaceOneChar, colibriFixture) {
+    Col_Word rope = FLAT_STRING();
+    Col_Char index = FLAT_STRING_LEN / 3;
+    Col_Char c = Col_RopeAt(rope, index);
+    Col_Char c2 = COL_CHAR_MAX;
+    PICOTEST_ASSERT(c != c2);
+    Col_Word result = Col_RopeReplace(rope, index, index, Col_NewCharWord(c2));
+    checkRopeString(rope, FLAT_STRING_LEN, COL_UCS1);
+    checkRope(result, FLAT_STRING_LEN, 2);
+    PICOTEST_ASSERT(Col_RopeAt(result, index) == c2);
 }
 
 PICOTEST_SUITE(testRopeTraversal, testRopeTraversalErrors,
@@ -2718,8 +2840,8 @@ PICOTEST_CASE(testCompareRopesL, colibriFixture) {
     PICOTEST_ASSERT(c1 != c2);
     PICOTEST_ASSERT(c1 == Col_RopeAt(rope1, SHORT_STRING_LEN));
     PICOTEST_ASSERT(c2 == Col_RopeAt(rope2, SHORT_STRING_LEN));
-    PICOTEST_ASSERT(Col_CompareRopesL(rope2, rope1, 0,
-                                      SHORT_STRING_LEN, &pos, &c1, &c2) == 0);
+    PICOTEST_ASSERT(Col_CompareRopesL(rope2, rope1, 0, SHORT_STRING_LEN, &pos,
+                                      &c1, &c2) == 0);
     PICOTEST_ASSERT(Col_CompareRopesL(rope2, rope1, SHORT_STRING_LEN / 2,
                                       SHORT_STRING_LEN, &pos, &c1, &c2) == 1);
     PICOTEST_ASSERT(pos == SHORT_STRING_LEN);
