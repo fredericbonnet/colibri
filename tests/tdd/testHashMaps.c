@@ -318,21 +318,35 @@ PICOTEST_CASE(testStringHashMapSetEmpty, colibriFixture) {
     Col_Word key = Col_NewCharWord('a');
     PICOTEST_ASSERT(Col_HashMapSet(map, key, WORD_TRUE) == 1);
     PICOTEST_ASSERT(Col_MapSize(map) == 1);
+    Col_Word value = 0xdeadbeef;
+    PICOTEST_ASSERT(Col_HashMapGet(map, key, &value) == 1);
+    PICOTEST_ASSERT(value == WORD_TRUE);
 }
 PICOTEST_CASE(testStringHashMapSetCreated, colibriFixture) {
     Col_Word map = Col_NewStringHashMap(0);
     Col_Word key = Col_NewCharWord('a');
     Col_HashMapSet(map, key, WORD_TRUE);
     PICOTEST_ASSERT(Col_MapSize(map) == 1);
+
     PICOTEST_ASSERT(Col_HashMapSet(map, Col_NewCharWord('b'), WORD_FALSE) == 1);
     PICOTEST_ASSERT(Col_MapSize(map) == 2);
+    Col_Word value = 0xdeadbeef;
+    PICOTEST_ASSERT(Col_HashMapGet(map, key, &value) == 1);
+    PICOTEST_ASSERT(value == WORD_TRUE);
 }
 
 static void checkStringHashMapSetUpdated(Col_Word map, Col_Word key) {
     size_t size = Col_MapSize(map);
-    Col_HashMapSet(map, key, WORD_TRUE);
-    PICOTEST_ASSERT(Col_HashMapSet(map, key, WORD_FALSE) == 0);
+    Col_Word value = 0xdeadbeef;
+    PICOTEST_ASSERT(Col_HashMapGet(map, key, &value) == 1);
+    PICOTEST_ASSERT(value != 0xdeadbeef);
+
+    value = (value == WORD_FALSE ? WORD_TRUE : WORD_FALSE);
+    PICOTEST_ASSERT(Col_HashMapSet(map, key, value) == 0);
     PICOTEST_ASSERT(Col_MapSize(map) == size);
+    Col_Word value2 = 0xdeadbeef;
+    PICOTEST_ASSERT(Col_HashMapGet(map, key, &value2) == 1);
+    PICOTEST_ASSERT(value2 == value);
 }
 PICOTEST_CASE(testStringHashMapSetUpdated, colibriFixture) {
     checkStringHashMapSetUpdated(STRING_HASH_MAP(1), STRING_HASH_KEY(0));
@@ -533,14 +547,14 @@ PICOTEST_SUITE(testIntHashMapGet, testIntHashMapGetEmpty,
 PICOTEST_CASE(testIntHashMapGetEmpty, colibriFixture) {
     Col_Word map = Col_NewIntHashMap(0);
     PICOTEST_ASSERT(Col_MapSize(map) == 0);
-    int key = 1;
+    intptr_t key = 1;
     Col_Word value = 0xdeadbeef;
     PICOTEST_ASSERT(Col_IntHashMapGet(map, key, &value) == 0);
     PICOTEST_ASSERT(value == 0xdeadbeef);
 }
 PICOTEST_CASE(testIntHashMapGetFound, colibriFixture) {
     Col_Word map = Col_NewIntHashMap(0);
-    int key = 1;
+    intptr_t key = 1;
     Col_IntHashMapSet(map, key, WORD_TRUE);
     PICOTEST_ASSERT(Col_MapSize(map) == 1);
     Col_Word value = 0xdeadbeef;
@@ -549,7 +563,7 @@ PICOTEST_CASE(testIntHashMapGetFound, colibriFixture) {
 }
 PICOTEST_CASE(testIntHashMapGetNotFound, colibriFixture) {
     Col_Word map = Col_NewIntHashMap(0);
-    int key = 1;
+    intptr_t key = 1;
     Col_IntHashMapSet(map, key, WORD_TRUE);
     PICOTEST_ASSERT(Col_MapSize(map) == 1);
     Col_Word value = 0xdeadbeef;
@@ -564,24 +578,38 @@ PICOTEST_SUITE(testIntHashMapSet, testIntHashMapSetEmpty,
 PICOTEST_CASE(testIntHashMapSetEmpty, colibriFixture) {
     Col_Word map = Col_NewIntHashMap(0);
     PICOTEST_ASSERT(Col_MapSize(map) == 0);
-    int key = 1;
+    intptr_t key = 1;
     PICOTEST_ASSERT(Col_IntHashMapSet(map, key, WORD_TRUE) == 1);
     PICOTEST_ASSERT(Col_MapSize(map) == 1);
+    Col_Word value = 0xdeadbeef;
+    PICOTEST_ASSERT(Col_IntHashMapGet(map, key, &value) == 1);
+    PICOTEST_ASSERT(value == WORD_TRUE);
 }
 PICOTEST_CASE(testIntHashMapSetCreated, colibriFixture) {
     Col_Word map = Col_NewIntHashMap(0);
-    int key = 1;
+    intptr_t key = 1;
     Col_IntHashMapSet(map, key, WORD_TRUE);
     PICOTEST_ASSERT(Col_MapSize(map) == 1);
+
     PICOTEST_ASSERT(Col_IntHashMapSet(map, 2, WORD_FALSE) == 1);
     PICOTEST_ASSERT(Col_MapSize(map) == 2);
+    Col_Word value = 0xdeadbeef;
+    PICOTEST_ASSERT(Col_IntHashMapGet(map, key, &value) == 1);
+    PICOTEST_ASSERT(value == WORD_TRUE);
 }
 
 static void checkIntHashMapSetUpdated(Col_Word map, intptr_t key) {
     size_t size = Col_MapSize(map);
-    Col_IntHashMapSet(map, key, WORD_TRUE);
-    PICOTEST_ASSERT(Col_IntHashMapSet(map, key, WORD_FALSE) == 0);
+    Col_Word value = 0xdeadbeef;
+    PICOTEST_ASSERT(Col_IntHashMapGet(map, key, &value) == 1);
+    PICOTEST_ASSERT(value != 0xdeadbeef);
+
+    value = (value == WORD_FALSE ? WORD_TRUE : WORD_FALSE);
+    PICOTEST_ASSERT(Col_IntHashMapSet(map, key, value) == 0);
     PICOTEST_ASSERT(Col_MapSize(map) == size);
+    Col_Word value2 = 0xdeadbeef;
+    PICOTEST_ASSERT(Col_IntHashMapGet(map, key, &value2) == 1);
+    PICOTEST_ASSERT(value2 == value);
 }
 PICOTEST_CASE(testIntHashMapSetUpdated, colibriFixture) {
     checkIntHashMapSetUpdated(INT_HASH_MAP(1), INT_HASH_KEY(0));
@@ -648,7 +676,7 @@ PICOTEST_CASE(testIntHashMapSetUpdatedCopy, colibriFixture) {
 PICOTEST_CASE(testIntHashMapSetGrowBuckets, colibriFixture) {
     Col_Word map = Col_NewIntHashMap(0);
     for (int i = 0; i < 100; i++) {
-        int key = INT_HASH_KEY(i);
+        intptr_t key = INT_HASH_KEY(i);
         Col_Word value = INT_HASH_VALUE(i);
         PICOTEST_ASSERT(Col_MapSize(map) == i);
         PICOTEST_ASSERT(Col_IntHashMapSet(map, key, value) == 1);
@@ -658,7 +686,7 @@ PICOTEST_CASE(testIntHashMapSetGrowBuckets, colibriFixture) {
     }
     PICOTEST_ASSERT(Col_MapSize(map) == 100);
     for (int i = 0; i < 100; i++) {
-        int key = INT_HASH_KEY(i);
+        intptr_t key = INT_HASH_KEY(i);
         Col_Word value;
         PICOTEST_ASSERT(Col_IntHashMapGet(map, key, &value) == 1);
         PICOTEST_ASSERT(value == INT_HASH_VALUE(i));
@@ -667,7 +695,7 @@ PICOTEST_CASE(testIntHashMapSetGrowBuckets, colibriFixture) {
 PICOTEST_CASE(testIntHashMapSetCollisions, colibriFixture) {
     Col_Word map = Col_NewIntHashMap(0);
     for (int i = 0; i < 100; i++) {
-        int key = INT_HASH_KEY_COLLISION(i);
+        intptr_t key = INT_HASH_KEY_COLLISION(i);
         Col_Word value = INT_HASH_VALUE(i);
         PICOTEST_ASSERT(Col_MapSize(map) == i);
         PICOTEST_ASSERT(Col_IntHashMapSet(map, key, value) == 1);
@@ -677,7 +705,7 @@ PICOTEST_CASE(testIntHashMapSetCollisions, colibriFixture) {
     }
     PICOTEST_ASSERT(Col_MapSize(map) == 100);
     for (int i = 0; i < 100; i++) {
-        int key = INT_HASH_KEY_COLLISION(i);
+        intptr_t key = INT_HASH_KEY_COLLISION(i);
         Col_Word value;
         PICOTEST_ASSERT(Col_IntHashMapGet(map, key, &value) == 1);
         PICOTEST_ASSERT(value == INT_HASH_VALUE(i));
@@ -690,13 +718,13 @@ PICOTEST_SUITE(testIntHashMapUnset, testIntHashMapUnsetEmpty,
 PICOTEST_CASE(testIntHashMapUnsetEmpty, colibriFixture) {
     Col_Word map = Col_NewIntHashMap(0);
     PICOTEST_ASSERT(Col_MapSize(map) == 0);
-    int key = 1;
+    intptr_t key = 1;
     PICOTEST_ASSERT(Col_IntHashMapUnset(map, key) == 0);
     PICOTEST_ASSERT(Col_MapSize(map) == 0);
 }
 PICOTEST_CASE(testIntHashMapUnsetNotFound, colibriFixture) {
     Col_Word map = Col_NewIntHashMap(0);
-    int key = 1;
+    intptr_t key = 1;
     Col_IntHashMapSet(map, key, WORD_TRUE);
     PICOTEST_ASSERT(Col_MapSize(map) == 1);
     PICOTEST_ASSERT(Col_IntHashMapUnset(map, 2) == 0);
@@ -1215,6 +1243,7 @@ PICOTEST_CASE(testIntHashMapIterSetValueCopy, colibriFixture) {
                                     INT_HASH_VALUE(99));
 }
 
+PICOTEST_SUITE(testHashMapIteratorMove, testHashMapIterNext);
 static void checkHashMapIterTraverse(Col_Word map) {
     Col_MapIterator it;
     size_t i;
@@ -1223,7 +1252,7 @@ static void checkHashMapIterTraverse(Col_Word map) {
         ;
     PICOTEST_ASSERT(i == Col_MapSize(map));
 }
-PICOTEST_CASE(testHashMapIteratorMove, colibriFixture) {
+PICOTEST_CASE(testHashMapIterNext, colibriFixture) {
     checkHashMapIterTraverse(STRING_HASH_MAP(1));
     checkHashMapIterTraverse(STRING_HASH_MAP(10));
     checkHashMapIterTraverse(STRING_HASH_MAP(100));
