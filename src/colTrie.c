@@ -364,12 +364,21 @@ StringTrieMapFindNode(
     Col_Char mask, newMask;
     Col_Char cKey, cEntryKey;
 
+    grandParent = WORD_NIL;
+    parent = map;
+    left = WORD_NIL;
+    right = WORD_NIL;
+
     if (!WORD_TRIEMAP_ROOT(map)) {
         /*
          * Map is empty.
          */
 
         ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
+        if (grandParentPtr) *grandParentPtr = grandParent;
+        if (parentPtr) *parentPtr = parent;
+        if (leftPtr) *leftPtr = left;
+        if (rightPtr) *rightPtr = right;
         return WORD_NIL;
     }
 
@@ -378,10 +387,6 @@ StringTrieMapFindNode(
      */
 
     node = WORD_TRIEMAP_ROOT(map);
-    grandParent = WORD_NIL;
-    parent = map;
-    left = WORD_NIL;
-    right = WORD_NIL;
     Col_RopeIterFirst(itKey, key);
     while (node) {
         switch (WORD_TYPE(node)) {
@@ -571,12 +576,21 @@ IntTrieMapFindNode(
     intptr_t entryKey;
     intptr_t mask, newMask;
 
+    grandParent = WORD_NIL;
+    parent = map;
+    left = WORD_NIL;
+    right = WORD_NIL;
+
     if (!WORD_TRIEMAP_ROOT(map)) {
         /*
          * Map is empty.
          */
 
         ASSERT(WORD_TRIEMAP_SIZE(map) == 0);
+        if (grandParentPtr) *grandParentPtr = grandParent;
+        if (parentPtr) *parentPtr = parent;
+        if (leftPtr) *leftPtr = left;
+        if (rightPtr) *rightPtr = right;
         return WORD_NIL;
     }
 
@@ -585,10 +599,6 @@ IntTrieMapFindNode(
      */
 
     node = WORD_TRIEMAP_ROOT(map);
-    grandParent = WORD_NIL;
-    parent = map;
-    left = WORD_NIL;
-    right = WORD_NIL;
     while (node) {
         switch (WORD_TYPE(node)) {
         case WORD_TYPE_INTTRIENODE:
@@ -1263,9 +1273,9 @@ ConvertNodeToMutable(
 
             if (typeInfo->bitTestProc(map, prefix, WORD_TRIENODE_DIFF(existing),
                     WORD_TRIENODE_BIT(existing))) {
-                existing = WORD_TRIENODE_RIGHT(existing);
+                nodePtr = &WORD_TRIENODE_RIGHT(existing);
             } else {
-                existing = WORD_TRIENODE_LEFT(existing);
+                nodePtr = &WORD_TRIENODE_LEFT(existing);
             }
             continue;
 
@@ -1338,9 +1348,9 @@ ConvertStringNodeToMutable(
              */
 
             if (cKey != COL_CHAR_INVALID && (!mask || (cKey & mask))) {
-                existing = WORD_TRIENODE_RIGHT(existing);
+                nodePtr = &WORD_TRIENODE_RIGHT(existing);
             } else {
-                existing = WORD_TRIENODE_LEFT(existing);
+                nodePtr = &WORD_TRIENODE_LEFT(existing);
             }
             continue;
 
@@ -1403,9 +1413,9 @@ ConvertIntNodeToMutable(
              */
 
             if (mask ? (prefix & mask) : (prefix >= 0)) {
-                existing = WORD_TRIENODE_RIGHT(existing);
+                nodePtr = &WORD_TRIENODE_RIGHT(existing);
             } else {
-                existing = WORD_TRIENODE_LEFT(existing);
+                nodePtr = &WORD_TRIENODE_LEFT(existing);
             }
             continue;
 

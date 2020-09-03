@@ -108,7 +108,7 @@ PICOTEST_CASE(hashMapIterSetValue_typeCheck_map, failureFixture, context) {
     EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
                    COL_ERROR_HASHMAP);
     Col_MapIterator it = COL_MAPITER_NULL;
-    Col_MapIterMap(it) = WORD_TRUE; // TODO replace with trie iterator
+    Col_TrieMapIterFirst(it, Col_NewIntTrieMap());
     Col_HashMapIterSetValue(it, WORD_TRUE);
 }
 PICOTEST_CASE(hashMapIterSetValue_valueCheck, failureFixture, context) {
@@ -131,7 +131,7 @@ PICOTEST_CASE(hashMapIterNext_typeCheck_map, failureFixture, context) {
     EXPECT_FAILURE(context, COL_TYPECHECK, Col_GetErrorDomain(),
                    COL_ERROR_HASHMAP);
     Col_MapIterator it = COL_MAPITER_NULL;
-    Col_MapIterMap(it) = WORD_TRUE; // TODO replace with trie iterator
+    Col_TrieMapIterFirst(it, Col_NewIntTrieMap());
     Col_HashMapIterNext(it);
 }
 PICOTEST_CASE(hashMapIterNext_valueCheck, failureFixture, context) {
@@ -261,11 +261,13 @@ static void checkCopyHashMap(Col_Word map) {
     PICOTEST_ASSERT(Col_MapSize(copy3) == size);
 }
 PICOTEST_CASE(testCopyHashMap, colibriFixture) {
+    checkCopyHashMap(STRING_HASH_MAP(0));
     checkCopyHashMap(STRING_HASH_MAP(1));
     checkCopyHashMap(STRING_HASH_MAP(10));
     checkCopyHashMap(STRING_HASH_MAP(100));
     checkCopyHashMap(STRING_HASH_MAP_COLLISION(10));
     checkCopyHashMap(STRING_HASH_MAP_COLLISION(100));
+    checkCopyHashMap(INT_HASH_MAP(0));
     checkCopyHashMap(INT_HASH_MAP(1));
     checkCopyHashMap(INT_HASH_MAP(10));
     checkCopyHashMap(INT_HASH_MAP(100));
@@ -905,6 +907,7 @@ static void checkHashMapIterFindNotFound(Col_Word map, Col_Word key) {
     PICOTEST_ASSERT(Col_HashMapGet(map, key, &value) == 0);
 }
 PICOTEST_CASE(testHashMapIterFindNotFound, colibriFixture) {
+    checkHashMapIterFindNotFound(STRING_HASH_MAP(0), STRING_HASH_KEY(0));
     checkHashMapIterFindNotFound(STRING_HASH_MAP(1), STRING_HASH_KEY(1));
     checkHashMapIterFindNotFound(STRING_HASH_MAP(10), STRING_HASH_KEY(10));
     checkHashMapIterFindNotFound(STRING_HASH_MAP(100), STRING_HASH_KEY(100));
@@ -931,6 +934,7 @@ static void checkHashMapIterFindCreate(Col_Word map, Col_Word key) {
     PICOTEST_ASSERT(value == WORD_NIL);
 }
 PICOTEST_CASE(testHashMapIterFindCreate, colibriFixture) {
+    checkHashMapIterFindCreate(STRING_HASH_MAP(0), STRING_HASH_KEY(0));
     checkHashMapIterFindCreate(STRING_HASH_MAP(1), STRING_HASH_KEY(1));
     checkHashMapIterFindCreate(STRING_HASH_MAP(10), STRING_HASH_KEY(10));
     checkHashMapIterFindCreate(STRING_HASH_MAP(100), STRING_HASH_KEY(100));
@@ -1010,6 +1014,7 @@ static void checkIntHashMapIterFindNotFound(Col_Word map, intptr_t key) {
     PICOTEST_ASSERT(Col_IntHashMapGet(map, key, &value) == 0);
 }
 PICOTEST_CASE(testIntHashMapIterFindNotFound, colibriFixture) {
+    checkIntHashMapIterFindNotFound(INT_HASH_MAP(0), INT_HASH_KEY(0));
     checkIntHashMapIterFindNotFound(INT_HASH_MAP(1), INT_HASH_KEY(1));
     checkIntHashMapIterFindNotFound(INT_HASH_MAP(10), INT_HASH_KEY(10));
     checkIntHashMapIterFindNotFound(INT_HASH_MAP(100), INT_HASH_KEY(100));
@@ -1035,6 +1040,7 @@ static void checkIntHashMapIterFindCreate(Col_Word map, intptr_t key) {
     PICOTEST_ASSERT(value == WORD_NIL);
 }
 PICOTEST_CASE(testIntHashMapIterFindCreate, colibriFixture) {
+    checkIntHashMapIterFindCreate(INT_HASH_MAP(0), INT_HASH_KEY(0));
     checkIntHashMapIterFindCreate(INT_HASH_MAP(1), INT_HASH_KEY(1));
     checkIntHashMapIterFindCreate(INT_HASH_MAP(10), INT_HASH_KEY(10));
     checkIntHashMapIterFindCreate(INT_HASH_MAP(100), INT_HASH_KEY(100));
@@ -1253,9 +1259,11 @@ static void checkHashMapIterTraverse(Col_Word map) {
     PICOTEST_ASSERT(i == Col_MapSize(map));
 }
 PICOTEST_CASE(testHashMapIterNext, colibriFixture) {
+    checkHashMapIterTraverse(STRING_HASH_MAP(0));
     checkHashMapIterTraverse(STRING_HASH_MAP(1));
     checkHashMapIterTraverse(STRING_HASH_MAP(10));
     checkHashMapIterTraverse(STRING_HASH_MAP(100));
+    checkHashMapIterTraverse(INT_HASH_MAP(0));
     checkHashMapIterTraverse(INT_HASH_MAP(1));
     checkHashMapIterTraverse(INT_HASH_MAP(10));
     checkHashMapIterTraverse(INT_HASH_MAP(100));

@@ -86,6 +86,7 @@ if (PicoTest_FOUND)
 			tests/tdd/testMutableVectors.c
 			tests/tdd/testLists.c
 			tests/tdd/testHashMaps.c
+			tests/tdd/testTrieMaps.c
 	)
 	target_link_libraries(tdd_colibri
 		PRIVATE
