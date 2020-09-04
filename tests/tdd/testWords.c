@@ -7,4 +7,5 @@
  * Words
  */
 PICOTEST_SUITE(testWords, testBasicWords, testRopes, testVectors,
-               testMutableVectors, testLists, testHashMaps, testTrieMaps);
+               testMutableVectors, testLists, testMaps, testHashMaps,
+               testTrieMaps);
