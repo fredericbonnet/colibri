@@ -65,30 +65,30 @@ Col_MaxStringBufferLength(
  * Create a new string buffer word.
  *
  * @note
- *      The actual maximum length will be rounded up to fit an even number of
- *      cells, and won't exceed the maximum value given by
+ *      The actual capacity will be rounded up to fit an even number of cells, 
+ *      and won't exceed the maximum value given by
  *      [Col_MaxStringBufferLength(format)](@ref Col_MaxStringBufferLength).
  *
  * @return The new word.
  */
 Col_Word
 Col_NewStringBuffer(
-    size_t maxLength,           /*!< Maximum length of string buffer. If zero,
+    size_t capacity,            /*!< Maximum length of string buffer. If zero,
                                      use a default value. */
     Col_StringFormat format)    /*!< String format. */
 {
     Col_Word strbuf;            /* Resulting word in the general case. */
     size_t size;                /* Number of allocated cells storing a minimum
-                                 * of maxLength elements. */
+                                 * of **capacity** elements. */
 
     /*
      * Create a new string buffer word.
      */
 
-    if (maxLength == 0) {
+    if (capacity == 0) {
         size = STRBUF_DEFAULT_SIZE;
     } else {
-        size = STRBUF_SIZE(maxLength * CHAR_WIDTH(format));
+        size = STRBUF_SIZE(capacity * CHAR_WIDTH(format));
         if (size > STRBUF_MAX_SIZE) size = STRBUF_MAX_SIZE;
     }
     strbuf = (Col_Word) AllocCells(size);
@@ -128,15 +128,15 @@ Col_StringBufferFormat(
 }
 
 /**
- * Get the maximum length of the string buffer.
+ * Get the capacity = maximum length of the string buffer.
  *
- * @return The string buffer maximum length.
+ * @return The string buffer capacity.
  *
  * @see Col_NewStringBuffer
  */
 size_t
-Col_StringBufferMaxLength(
-    Col_Word strbuf)    /*!< String buffer to get maximum length for. */
+Col_StringBufferCapacity(
+    Col_Word strbuf)    /*!< String buffer to get capacity for. */
 {
     /*
      * Check preconditions.
@@ -532,7 +532,7 @@ void *
 Col_StringBufferReserve(
     Col_Word strbuf,    /*!< String buffer to reserve into. */
     size_t length)      /*!< Number of characters to reserve. Must be <=
-                             [Col_StringBufferMaxLength(strbuf)](@ref Col_StringBufferMaxLength).
+                             [Col_StringBufferCapacity(strbuf)](@ref Col_StringBufferCapacity).
                          */
 {
     Col_StringFormat format;
