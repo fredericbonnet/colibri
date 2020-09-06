@@ -6,6 +6,6 @@
 /*
  * Words
  */
-PICOTEST_SUITE(testWords, testBasicWords, testRopes, testVectors,
-               testMutableVectors, testLists, testMaps, testHashMaps,
-               testTrieMaps);
+PICOTEST_SUITE(testWords, testBasicWords, testRopes, testStringBuffers,
+               testVectors, testMutableVectors, testLists, testMaps,
+               testHashMaps, testTrieMaps);

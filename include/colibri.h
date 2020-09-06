@@ -618,6 +618,7 @@ typedef enum Col_ErrorCode {
     COL_ERROR_MAPITER,              /*!< Invalid map iterator. */
     COL_ERROR_MAPITER_END,          /*!< Map iterator at end. */
     COL_ERROR_STRBUF,               /*!< Not a string buffer. */
+    COL_ERROR_STRBUF_FORMAT,        /*!< String format not supported. */
 } Col_ErrorCode;
 
 /*

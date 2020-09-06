@@ -82,6 +82,7 @@ if (PicoTest_FOUND)
 			tests/tdd/testWords.c
 			tests/tdd/testBasicWords.c
 			tests/tdd/testRopes.c
+			tests/tdd/testStringBuffers.c
 			tests/tdd/testVectors.c
 			tests/tdd/testMutableVectors.c
 			tests/tdd/testLists.c

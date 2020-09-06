@@ -430,6 +430,7 @@ const char * const ColibriDomain[] = {
     "Map iterator %x is not valid",             /* COL_ERROR_MAPITER (iterator) */
     "Map iterator %x is at end",                /* COL_ERROR_MAPITER_END (iterator) */
     "%x is not a string buffer",                /* COL_ERROR_STRBUF (word) */
+    "String format %d is not supported",        /* COL_ERROR_STRBUF_FORMAT (format) */
 };
 
 /** @endcond @endprivate */

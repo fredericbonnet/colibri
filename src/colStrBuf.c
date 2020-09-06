@@ -82,12 +82,21 @@ Col_NewStringBuffer(
                                  * of **capacity** elements. */
 
     /*
+     * Check preconditions.
+     */
+    
+    /*! @valuecheck{COL_ERROR_STRBUF_FORMAT,format} */
+    VALUECHECK_STRBUF_FORMAT(format) return WORD_NIL;
+
+    /*
      * Create a new string buffer word.
      */
 
     if (capacity == 0) {
         size = STRBUF_DEFAULT_SIZE;
     } else {
+        size_t max = Col_MaxStringBufferLength(format);
+        if (capacity > max) capacity = max;
         size = STRBUF_SIZE(capacity * CHAR_WIDTH(format));
         if (size > STRBUF_MAX_SIZE) size = STRBUF_MAX_SIZE;
     }
@@ -307,15 +316,8 @@ Col_StringBufferAppendChar(
         width = (c <= COL_CHAR2_MAX) ? 1 : 0;
         break;
 
-    case COL_UTF8:
-        width = COL_UTF8_WIDTH(c);
-        break;
-
-    case COL_UTF16:
-        width = COL_UTF16_WIDTH(c);
-        break;
-
     default:
+        /* No-loss formats */
         width = 1;
     }
     if (width == 0) {
@@ -353,16 +355,6 @@ Col_StringBufferAppendChar(
     case COL_UCS2:
         ((Col_Char2 *) WORD_STRBUF_BUFFER(strbuf))[WORD_STRBUF_LENGTH(strbuf)]
                 = c;
-        break;
-
-    case COL_UTF8:
-        Col_Utf8Set(((Col_Char1 *) WORD_STRBUF_BUFFER(strbuf))
-                + WORD_STRBUF_LENGTH(strbuf), c);
-        break;
-
-    case COL_UTF16:
-        Col_Utf16Set(((Col_Char2 *) WORD_STRBUF_BUFFER(strbuf))
-                + WORD_STRBUF_LENGTH(strbuf), c);
         break;
 
     default:
@@ -547,6 +539,14 @@ Col_StringBufferReserve(
     TYPECHECK_STRBUF(strbuf) return NULL;
 
     WORD_UNWRAP(strbuf);
+
+    if (length == 0) {
+        /*
+        * No-op.
+        */
+
+        return NULL;
+    }
 
     format = (Col_StringFormat) WORD_STRBUF_FORMAT(strbuf);
     maxLength = STRBUF_MAX_LENGTH(WORD_STRBUF_SIZE(strbuf) * CELL_SIZE,
@@ -746,34 +746,6 @@ Col_StringBufferFreeze(
                         WORD_STRBUF_BUFFER(strbuf),
                         length * CHAR_WIDTH(format));
             }
-            return strbuf;
-        }
-        break;
-
-    case COL_UTF8:
-    case COL_UTF16:
-        if (length * CHAR_WIDTH(format) <= UTFSTR_MAX_BYTELENGTH) {
-            /*
-             * Convert word in-place.
-             */
-
-            const char *begin = (const char *) WORD_STRBUF_BUFFER(strbuf),
-                    *p;
-            size_t charLength;
-            for (p=begin, charLength=0; p < begin+length; charLength++) {
-                switch (format) {
-                case COL_UTF8:  p = (const char *) Col_Utf8Next ((const Col_Char1 *) p); break;
-                case COL_UTF16: p = (const char *) Col_Utf16Next((const Col_Char2 *) p); break;
-                }
-            }
-            WORD_UTFSTR_INIT(strbuf, COL_UTF8, charLength,
-                    length * CHAR_WIDTH(format));
-            if (pinned) {
-                WORD_SET_PINNED(strbuf);
-            }
-            memcpy((void *) WORD_UTFSTR_DATA(strbuf),
-                    WORD_STRBUF_BUFFER(strbuf),
-                    length * CHAR_WIDTH(format));
             return strbuf;
         }
         break;

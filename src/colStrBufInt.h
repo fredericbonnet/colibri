@@ -29,15 +29,17 @@
       as iterator ranges). When adding single or multiple characters, they are
       appended to an internal buffer stored within the word, up to its maximum
       capacity. When the buffer is full, a rope is appended, or the
-      accumulated value is retrieved, the buffer content is appended to the
+      accumulated value is retrieved, then the buffer content is appended to the
       accumulated rope so far and the buffer is cleared before performing the
       operation.
 
-    - String buffers have a buffer length set at creation time. This plus the
-      format determines the byte size of the buffer and thus number of cells
-      the word takes. So we store this cell size and deduce the actual buffer
-      length from the word size in cells minus the header, divided by the
-      character width of the used format.
+    - String buffers have a capacity set at creation time, which is the 
+      guaranteed number of characters the buffer can store. This plus the format
+      determines the maximum byte size of the buffer and thus the number of 
+      cells the word takes.
+      
+    - Characters are stored in fixed-width arrays. For this reason, 
+      variable-width formats are not supported.
 
     @param Format   Preferred format for string building.
     @param Size     Number of allocated cells.
@@ -244,6 +246,17 @@
  */
 #define TYPECHECK_STRBUF(word) \
     TYPECHECK((Col_WordType(word) & COL_STRBUF), COL_ERROR_STRBUF, (word))
+
+/**
+ * Value checking macro for string buffers, ensures that format is supported.
+ *
+ * @param format        Checked format.
+ *
+ * @valuecheck{COL_ERROR_STRBUF_FORMAT,format is not supported}
+ * @hideinitializer
+ */
+#define VALUECHECK_STRBUF_FORMAT(format) \
+    VALUECHECK((!FORMAT_UTF(format)), COL_ERROR_STRBUF_FORMAT, (format))
 
 /* End of String Buffer Exceptions *//*!\}*/
 
