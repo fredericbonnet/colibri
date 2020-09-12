@@ -708,14 +708,32 @@ Col_Sublist(
         ASSERT(WORD_TYPE(list) == WORD_TYPE_CIRCLIST);
 
         /*
-         * Sublist of loop repetition.
+         * Adjust indices.
          */
 
         offset = first % loop;
         last -= first - offset;
         first = offset;
-        return Col_Sublist(Col_RepeatList(WORD_CIRCLIST_CORE(list),
-                last/loop + 1), first, last);
+
+        if (last < loop) {
+            /*
+             * Sublist of core loop.
+             */
+
+            return Col_Sublist(WORD_CIRCLIST_CORE(list), first, last);
+        } else {
+            /*
+             * Sublist crosses core loop boundary.
+             */
+
+            size_t repeat = last/loop - 1;
+            last -= (repeat + 1) * loop;
+            return Col_ConcatListsV(
+                Col_Sublist(WORD_CIRCLIST_CORE(list), first, loop - 1),
+                Col_RepeatList(WORD_CIRCLIST_CORE(list), repeat),
+                Col_Sublist(WORD_CIRCLIST_CORE(list), 0, last)
+            );
+        }
    } else if (loop) {
         /*
          * List is cyclic.
@@ -1169,7 +1187,7 @@ Col_ConcatListsA(
     l1 = Col_ConcatListsA(half, lists);
     if (Col_ListLoopLength(l1)) {
         /*
-         * Skip remaining args.
+         * First half is cyclic, skip second half.
          */
 
         return l1;
@@ -1463,13 +1481,21 @@ Col_ListRemove(
          * List is circular.
          */
 
+        Col_Word core;
+        
+        WORD_UNWRAP(list);
+        ASSERT(WORD_TYPE(list) == WORD_TYPE_CIRCLIST);
+        core = WORD_CIRCLIST_CORE(list);
+
         if (first == 0) {
             /*
-             * Remove beginning.
+             * Rotate loop.
              */
 
             last %= loop;
-            return Col_ConcatLists(Col_Sublist(list, last+1, length-1), list);
+            return Col_CircularList(Col_ConcatLists(
+                Col_Sublist(core, last+1, length-1),
+                Col_Sublist(core, 0, last)));
         } else {
             /*
              * Remove middle of loop.
@@ -1484,17 +1510,15 @@ Col_ListRemove(
                  * Keep inner part of loop and use beginning as head.
                  */
 
-                return Col_ConcatLists(Col_Sublist(list, 0, last),
-                        Col_CircularList(Col_Sublist(list, last+1, first-1)));
+                return Col_ConcatLists(
+                    Col_Sublist(core, 0, last),
+                    Col_CircularList(Col_Sublist(core, last+1, first-1)));
             } else {
                 /*
                  * Remove inner part of loop.
                  */
 
-                WORD_UNWRAP(list);
-                ASSERT(WORD_TYPE(list) == WORD_TYPE_CIRCLIST);
-                return Col_CircularList(Col_ListRemove(WORD_CIRCLIST_CORE(list),
-                        first, last));
+                return Col_CircularList(Col_ListRemove(core, first, last));
             }
         }
     } else if (loop) {
@@ -1503,7 +1527,8 @@ Col_ListRemove(
          */
 
         WORD_UNWRAP(list);
-        ASSERT(WORD_TYPE(list) == WORD_TYPE_CONCATLIST || WORD_TYPE(list) == WORD_TYPE_MCONCATLIST);
+        ASSERT(WORD_TYPE(list) == WORD_TYPE_CONCATLIST 
+                || WORD_TYPE(list) == WORD_TYPE_MCONCATLIST);
         ASSERT(WORD_TYPE(WORD_CONCATLIST_RIGHT(list)) == WORD_TYPE_CIRCLIST);
 
         if (last < length-loop) {
@@ -4199,11 +4224,15 @@ Col_MListRemove(
 
         if (first == 0) {
             /*
-             * Remove beginning.
+             * Rotate loop.
              */
 
             last %= loop;
-            Col_MListInsert(mlist, 0, Col_Sublist(root, last+1, length-1));
+            root = WORD_CIRCLIST_CORE(root);
+            root = NewMConcatList(
+                Col_Sublist(root, last+1, length-1),
+                Col_Sublist(root, 0, last));
+            WORD_WRAP_SOURCE(mlist) = WORD_CIRCLIST_NEW(root);
         } else {
             /*
              * Remove middle of loop.
