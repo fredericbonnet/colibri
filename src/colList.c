@@ -2794,7 +2794,8 @@ Col_NewMList()
 /**
  * Create an immutable list from a mutable list. If an immutable list is
  * given, it is simply returned. If a mutable list is given, its content
- * is frozen and shared with the new one.
+ * is frozen and shared with the new one. If a non-empty mutable vector is 
+ * given, it is frozen.
  *
  * @return Immutable copy of the mutable list.
  */
@@ -2959,7 +2960,7 @@ Col_MListSetLength(
 
     listLength = Col_ListLength(mlist);
     listLoop = Col_ListLoopLength(mlist);
-    if (listLoop == listLength) {
+    if (listLoop && listLoop == listLength) {
         /*
          * List is circular.
          */
@@ -3161,6 +3162,17 @@ start:
          */
 
         UpdateMConcatNode(*nodePtr);
+        return;
+        }
+
+    case WORD_TYPE_CIRCLIST: {
+        /*
+         * Recurse on core.
+         */
+
+        Col_Word core = WORD_CIRCLIST_CORE(*nodePtr);
+        MListSetAt(&core, index, element);
+        *nodePtr = WORD_CIRCLIST_NEW(core);
         return;
         }
 
@@ -3497,9 +3509,9 @@ UpdateMConcatNode(
                     ASSERT(WORD_CONCATLIST_DEPTH(left2) >= 1);
 
                     left21 = WORD_CONCATLIST_LEFT(left2);
-                    left21Depth = GetDepth(left21);
                     left22 = WORD_CONCATLIST_RIGHT(left2);
                     left22Depth = GetDepth(left22);
+                    left21Depth = GetDepth(left21);
 
                     /*
                      * Update left node.
@@ -3513,7 +3525,7 @@ UpdateMConcatNode(
                             left1, left21);
 
                     /*
-                     * Update right node.
+                     * Turn left2 into right node.
                      */
 
                     leftLength = Col_ListLength(left22);
@@ -3522,16 +3534,7 @@ UpdateMConcatNode(
                     WORD_MCONCATLIST_INIT(left2, rightDepth,
                         leftLength+Col_ListLength(right), leftLength, left22,
                         right);
-
-                    /*
-                     * Update node.
-                     */
-
-                    leftLength = WORD_CONCATLIST_LENGTH(left);
-                    WORD_MCONCATLIST_INIT(node,
-                            (leftDepth>rightDepth?leftDepth:rightDepth) + 1,
-                            leftLength+WORD_CONCATLIST_LENGTH(left2),
-                            leftLength, left, left2);
+                    right = left2;
                 } else {
                     /*
                      * Left1 is deeper or at the same level, rotate to right.
@@ -3540,28 +3543,26 @@ UpdateMConcatNode(
                     unsigned char left2Depth;
 
                     ASSERT(left1Depth >= 1);
-                    left2Depth = GetDepth(left2);
-                    rightDepth = (left2Depth>rightDepth?left2Depth:rightDepth)
-                            + 1;
 
                     /*
-                     * Update right node.
+                     * Turn left into right node.
                      */
 
                     leftLength = Col_ListLength(left2);
+                    left2Depth = GetDepth(left2);
+                    rightDepth = (left2Depth>rightDepth?left2Depth:rightDepth)
+                            + 1;
                     WORD_MCONCATLIST_INIT(left, rightDepth,
                             leftLength+Col_ListLength(right), leftLength, left2,
                             right);
+                    right = left;
 
                     /*
-                     * Update node.
+                     * Turn left1 into left node.
                      */
 
-                    leftLength = Col_ListLength(left1);
-                    WORD_MCONCATLIST_INIT(node,
-                            (left1Depth>rightDepth?left1Depth:rightDepth) + 1,
-                            leftLength+WORD_CONCATLIST_LENGTH(left), leftLength,
-                            left1, left);
+                    left = left1;
+                    leftDepth = left1Depth;
                 }
             } else if (leftDepth+1 < rightDepth) {
                 /*
@@ -3600,7 +3601,7 @@ UpdateMConcatNode(
                     right12Depth = GetDepth(right12);
 
                     /*
-                     * Update left node.
+                     * Turn right1 into left node.
                      */
 
                     leftLength = Col_ListLength(left);
@@ -3609,6 +3610,7 @@ UpdateMConcatNode(
                     WORD_MCONCATLIST_INIT(right1, leftDepth,
                             leftLength+Col_ListLength(right11), leftLength,
                             left, right11);
+                    left = right1;
 
                     /*
                      * Update right node.
@@ -3620,16 +3622,6 @@ UpdateMConcatNode(
                     WORD_MCONCATLIST_INIT(right, rightDepth,
                             leftLength+Col_ListLength(right2), leftLength,
                             right12, right2);
-
-                    /*
-                     * Update node.
-                     */
-
-                    leftLength = WORD_CONCATLIST_LENGTH(right1);
-                    WORD_MCONCATLIST_INIT(node,
-                            (leftDepth>rightDepth?leftDepth:rightDepth) + 1,
-                            leftLength+WORD_CONCATLIST_LENGTH(right),
-                            leftLength, right1, right);
                 } else {
                     /*
                      * Right2 is deeper or at the same level, rotate to left.
@@ -3638,28 +3630,26 @@ UpdateMConcatNode(
                     unsigned char right1Depth;
 
                     ASSERT(right2Depth >= 1);
-                    right1Depth = GetDepth(right1);
-                    leftDepth = (leftDepth>right1Depth?leftDepth:right1Depth)
-                            + 1;
 
                     /*
-                     * Update left node.
+                     * Turn right into left node.
                      */
 
                     leftLength = Col_ListLength(left);
+                    right1Depth = GetDepth(right1);
+                    leftDepth = (leftDepth>right1Depth?leftDepth:right1Depth)
+                            + 1;
                     WORD_MCONCATLIST_INIT(right, rightDepth,
                             leftLength+Col_ListLength(right1), leftLength, left,
                             right1);
+                    left = right;
 
                     /*
-                     * Update node.
+                     * Turn right2 into right node.
                      */
 
-                    leftLength = WORD_CONCATLIST_LENGTH(right);
-                    WORD_MCONCATLIST_INIT(node,
-                            (leftDepth>right2Depth?leftDepth:right2Depth) + 1,
-                            leftLength+Col_ListLength(right2), leftLength, right,
-                            right2);
+                    right = right2;
+                    rightDepth = right2Depth;
                 }
             } else {
                 /*
@@ -3668,6 +3658,15 @@ UpdateMConcatNode(
 
                 break;
             }
+
+            /*
+             * Update node.
+             */
+
+            leftLength = Col_ListLength(left);
+            WORD_MCONCATLIST_INIT(node,
+                    (leftDepth>rightDepth?leftDepth:rightDepth) + 1,
+                    leftLength+Col_ListLength(right), leftLength, left, right);
         }
     }
 
@@ -3764,7 +3763,7 @@ Col_MListInsert(
         list = Col_CopyMList(list);
         if (WORD_TYPE(list) == WORD_TYPE_CONCATLIST) {
             /*
-             * Append head to destination first.
+             * Inserted list is circular, append head to destination first.
              */
 
             Col_MListInsert(into, index, WORD_CONCATLIST_LEFT(list));
@@ -3895,7 +3894,7 @@ MListInsert(
          * Replace content.
          */
 
-        *nodePtr = Col_CopyMList(list);;
+        *nodePtr = Col_CopyMList(list);
         return;
     }
 
@@ -4056,6 +4055,7 @@ start:
          * Build a mutable concat node with current node and list to insert.
          */
 
+        list = Col_CopyMList(list);
         if (index == 0) {
             /*
              * Insert before.
@@ -4070,6 +4070,7 @@ start:
             ASSERT(index >= length);
             *nodePtr = NewMConcatList(*nodePtr, list);
         }
+        UpdateMConcatNode(*nodePtr);
         return;
     }
 }
@@ -4215,7 +4216,7 @@ Col_MListRemove(
 
     length = Col_ListLength(mlist);
     loop = Col_ListLoopLength(mlist);
-    if (length == loop) {
+    if (loop && length == loop) {
         /*
          * List is circular.
          */
