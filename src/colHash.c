@@ -333,7 +333,7 @@ GrowHashMap(
 
                 hash = hashProc(map, key);
             } else {
-            /*
+                /*
                  * Get actual hash by combining entry hash and index.
                  */
 
@@ -345,8 +345,8 @@ GrowHashMap(
             switch (WORD_TYPE(entry)) {
                 case WORD_TYPE_HASHENTRY:
                     if (!WORD_HASHENTRY_NEXT(entry) && !newBuckets[newIndex]) {
-                    /*
-                     * Share immutable entry in new bucket.
+                        /*
+                         * Share immutable entry in new bucket.
                          */
 
                         newBuckets[newIndex] = entry;
@@ -354,16 +354,16 @@ GrowHashMap(
                         break;
                     }
 
-                /*
-                 * Convert to mutable first.
+                    /*
+                     * Convert to mutable first.
                      */
 
                     entry = ConvertEntryToMutable(entry, &entry);
                     /* continued. */
 
                 case WORD_TYPE_MHASHENTRY:
-                /*
-                 * Move entry at head of new bucket.
+                    /*
+                     * Move entry at head of new bucket.
                      */
 
                     next = WORD_HASHENTRY_NEXT(entry);
@@ -818,6 +818,8 @@ AllocBuckets(
          * See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
          */
 
+        size_t max = Col_MaxMVectorLength() / 2;
+        if (capacity > max) capacity = max;
         capacity--;
         capacity |= capacity >> 1;
         capacity |= capacity >> 2;
@@ -1033,7 +1035,8 @@ Col_HashMapGet(
     entry = HashMapFindEntry(map, hashProc, compareKeysProc, key, 0, NULL,
             NULL);
     if (entry) {
-        ASSERT(WORD_TYPE(entry) == WORD_TYPE_MHASHENTRY);
+        ASSERT(WORD_TYPE(entry) == WORD_TYPE_HASHENTRY
+                || WORD_TYPE(entry) == WORD_TYPE_MHASHENTRY);
         *valuePtr = WORD_MAPENTRY_VALUE(entry);
         return 1;
     } else {
@@ -1069,7 +1072,8 @@ Col_IntHashMapGet(
 
     entry = IntHashMapFindEntry(map, key, 0, NULL, NULL);
     if (entry) {
-        ASSERT(WORD_TYPE(entry) == WORD_TYPE_MINTHASHENTRY);
+        ASSERT(WORD_TYPE(entry) == WORD_TYPE_INTHASHENTRY
+                || WORD_TYPE(entry) == WORD_TYPE_MINTHASHENTRY);
         *valuePtr = WORD_MAPENTRY_VALUE(entry);
         return 1;
     } else {
@@ -1337,7 +1341,7 @@ Col_IntHashMapUnset(
 
                 GET_BUCKETS(map, 1, nbBuckets, buckets);
                 prev = ConvertIntEntryToMutable(prev, &buckets[index]);
-                ASSERT(WORD_TYPE(prev) == WORD_TYPE_MHASHENTRY);
+                ASSERT(WORD_TYPE(prev) == WORD_TYPE_MINTHASHENTRY);
                 /* continued. */
 
             case WORD_TYPE_MINTHASHENTRY:

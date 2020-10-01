@@ -40,7 +40,7 @@
 size_t
 Col_MaxVectorLength()
 {
-    return VECTOR_MAX_LENGTH(SIZE_MAX);
+    return VECTOR_MAX_LENGTH(VECTOR_MAX_SIZE);
 }
 
 /**
@@ -62,7 +62,7 @@ Col_NewVector(
      */
 
     /*! @valuecheck{COL_ERROR_VECTORLENGTH,length < Col_MaxVectorLength()} */
-    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX))
+    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(VECTOR_MAX_SIZE))
             return WORD_NIL;
 
     if (length == 0) {
@@ -117,7 +117,7 @@ Col_NewVectorNV(
      */
 
     /*! @valuecheck{COL_ERROR_VECTORLENGTH,length < Col_MaxVectorLength()} */
-    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(SIZE_MAX))
+    VALUECHECK_VECTORLENGTH(length, VECTOR_MAX_LENGTH(VECTOR_MAX_SIZE))
             return WORD_NIL;
 
     if (length == 0) {
@@ -130,9 +130,6 @@ Col_NewVectorNV(
 
     /*
      * Create a new vector word.
-     *
-     * Note: no need to declare children as by construction they are older than
-     * the newly created vector.
      */
 
     vector = (Col_Word) AllocCells(VECTOR_SIZE(length));
@@ -250,7 +247,7 @@ Col_VectorElements(
 /**
  * Get the maximum length of a mutable vector word.
  *
- * @return The max vector length.
+ * @return The max mutable vector length.
  */
 size_t
 Col_MaxMVectorLength()
@@ -263,14 +260,13 @@ Col_MaxMVectorLength()
  * given elements.
  *
  * @note
- *      The actual maximum length will be rounded up to fit an even
- *      number of cells.
+ *      The actual capacity will be rounded up to fit allocated cells.
  *
  * @return The new word.
  */
 Col_Word
 Col_NewMVector(
-    size_t maxLength,           /*!< Maximum length of mutable vector. */
+    size_t capacity,            /*!< Maximum length of mutable vector. */
     size_t length,              /*!< Length of below array. */
     const Col_Word * elements)  /*!< Array of words to populate vector with, or
                                      NULL. In the latter case, elements are
@@ -278,29 +274,29 @@ Col_NewMVector(
 {
     Col_Word mvector;           /* Resulting word in the general case. */
     size_t size;                /* Number of allocated cells storing a minimum
-                                 * of maxLength elements. */
+                                 * of **capacity** elements. */
 
     /*
-     * Normalize max length.
+     * Normalize capacity.
      */
 
-    if (maxLength < length) {
-        maxLength = length;
+    if (capacity < length) {
+        capacity = length;
     }
 
     /*
      * Check preconditions.
      */
 
-    /*! @valuecheck{COL_ERROR_VECTORLENGTH,maxLength < Col_MaxMVectorLength()} */
-    VALUECHECK_VECTORLENGTH(maxLength,
+    /*! @valuecheck{COL_ERROR_VECTORLENGTH,capacity < Col_MaxMVectorLength()} */
+    VALUECHECK_VECTORLENGTH(capacity,
             VECTOR_MAX_LENGTH(MVECTOR_MAX_SIZE * CELL_SIZE)) return WORD_NIL;
 
     /*
      * Create a new mutable vector word.
      */
 
-    size = VECTOR_SIZE(maxLength);
+    size = VECTOR_SIZE(capacity);
     mvector = (Col_Word) AllocCells(size);
     WORD_MVECTOR_INIT(mvector, size, length);
     if (length > 0) {
@@ -332,15 +328,15 @@ Col_NewMVector(
  ******************************************************************************/
 
 /**
- * Get the maximum length of the mutable vector.
+ * Get the capacity = maximum length of the mutable vector.
  *
- * @return The mutable vector maximum length.
+ * @return The mutable vector capacity.
  *
  * @see Col_NewMVector
  */
 size_t
-Col_MVectorMaxLength(
-    Col_Word mvector)   /*!< Mutable vector to get maximum length for. */
+Col_MVectorCapacity(
+    Col_Word mvector)   /*!< Mutable vector to get capacity for. */
 {
     /*
      * Check preconditions.
@@ -390,10 +386,10 @@ Col_MVectorElements(
 void
 Col_MVectorSetLength(
     Col_Word mvector,   /*!< Mutable vector to resize. */
-    size_t length)      /*!< New length. Must not exceed max length set at
+    size_t length)      /*!< New length. Must not exceed capacity set at
                              creation time. */
 {
-    size_t maxLength, oldLength;
+    size_t capacity, oldLength;
 
     /*
      * Check preconditions.
@@ -404,9 +400,9 @@ Col_MVectorSetLength(
 
     WORD_UNWRAP(mvector);
 
-    /*! @valuecheck{COL_ERROR_VECTORLENGTH,length < [Col_MVectorMaxLength(mvector)](@ref Col_MVectorMaxLength).} */
-    maxLength = VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(mvector) * CELL_SIZE);
-    VALUECHECK_VECTORLENGTH(length, maxLength) return;
+    /*! @valuecheck{COL_ERROR_VECTORLENGTH,length < [Col_MVectorCapacity(mvector)](@ref Col_MVectorCapacity).} */
+    capacity = VECTOR_MAX_LENGTH(WORD_MVECTOR_SIZE(mvector) * CELL_SIZE);
+    VALUECHECK_VECTORLENGTH(length, capacity) return;
 
     oldLength = WORD_VECTOR_LENGTH(mvector);
     if (length > oldLength) {
@@ -431,7 +427,7 @@ Col_MVectorFreeze(
      * Check preconditions.
      */
 
-    /*! @typecheck{COL_ERROR_MVECTOR,mvector} */
+    /*! @typecheck{COL_ERROR_VECTOR,mvector} */
     TYPECHECK_VECTOR(mvector) return;
 
     for (;;) {

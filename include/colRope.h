@@ -65,6 +65,7 @@ EXTERN Col_Word         Col_NormalizeRope(Col_Word rope,
 EXTERN Col_Char         Col_CharWordValue(Col_Word ch);
 EXTERN Col_StringFormat Col_StringWordFormat(Col_Word string);
 EXTERN size_t           Col_RopeLength(Col_Word rope);
+EXTERN unsigned char    Col_RopeDepth(Col_Word rope);
 EXTERN Col_Char         Col_RopeAt(Col_Word rope, size_t index);
 
 /* End of Rope Accessors *//*!\}*/
@@ -239,12 +240,17 @@ EXTERN int              Col_CompareRopesL(Col_Word rope1, Col_Word rope2,
  * Variadic macro version of Col_ConcatRopesNV() that deduces its number
  * of arguments automatically.
  *
- * @param ...   Variadic list of ropes to concatenate.
+ * @param first First rope to concatenate.
+ * @param ...   Next ropes to concatenate.
  *
  * @see COL_ARGCOUNT
  */
-#define Col_ConcatRopesV(...) \
+#define Col_ConcatRopesV(first, ...) \
+    _Col_ConcatRopesV(_,first, ##__VA_ARGS__)
+/*! \cond IGNORE */
+#define _Col_ConcatRopesV(_, ...) \
     Col_ConcatRopesNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
+/*! \endcond *//* IGNORE */
 
 /*
  * Remaining declarations.
@@ -355,18 +361,18 @@ typedef struct ColRopeIterator {
 
         /*! Current element information. */
         union {
-            /*! Current element information in direct access mode.*/
-            struct {
-                Col_StringFormat format;    /*!< Format of current chunk. */
-                const void *address;        /*!< Address of current element. */
-            } direct;
-
             /*! Current element information in accessor mode. */
             struct {
                 Col_Word leaf;  /*!< First argument passed to **accessProc**. */
                 size_t index;   /*!< Second argument passed to
                                      **accessProc**. */
             } access;
+
+            /*! Current element information in direct access mode.*/
+            struct {
+                Col_StringFormat format;    /*!< Format of current chunk. */
+                const void *address;        /*!< Address of current element. */
+            } direct;
         } current;
     } chunk;
 } ColRopeIterator;
@@ -398,7 +404,7 @@ typedef ColRopeIterator Col_RopeIterator[1];
  * @see Col_RopeIterNull
  * @hideinitializer
  */
-#define COL_ROPEITER_NULL       {{WORD_NIL,0,0,{0,0,NULL,0,NULL}}}
+#define COL_ROPEITER_NULL       {{WORD_NIL,0,0,{0,0,NULL,0,0}}}
 
 /**
  * Test whether iterator is null (e.g.\ it has been set to #COL_ROPEITER_NULL
@@ -444,8 +450,6 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *
  * @retval WORD_NIL     if iterating over string (see Col_RopeIterString()).
  * @retval rope         if iterating over rope.
- *
- * @valuecheck{COL_ERROR_ROPEITER_END,it}
  */
 #define Col_RopeIterRope(it)    \
     ((it)->rope)
@@ -466,8 +470,6 @@ typedef ColRopeIterator Col_RopeIterator[1];
  * @param it    The #Col_RopeIterator to access.
  *
  * @return Current index.
- *
- * @valuecheck{COL_ERROR_ROPEITER_END,it}
  */
 #define Col_RopeIterIndex(it) \
     ((it)->index)
@@ -502,6 +504,9 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *
  * @see Col_RopeIterForward
  * @hideinitializer
+ *
+ * @typecheck{COL_ERROR_ROPEITER,it}
+ * @valuecheck{COL_ERROR_ROPEITER_END,it}
  */
 #define Col_RopeIterNext(it) \
     (  ((it)->index < (it)->chunk.first || (it)->index >= (it)->chunk.last) ? (Col_RopeIterForward((it), 1), 0) \
@@ -520,6 +525,8 @@ typedef ColRopeIterator Col_RopeIterator[1];
  *
  * @see Col_RopeIterBackward
  * @hideinitializer
+ * 
+ * @typecheck{COL_ERROR_ROPEITER,it}
  */
 #define Col_RopeIterPrevious(it) \
     (  ((it)->index <= (it)->chunk.first || (it)->index > (it)->chunk.last) ? (Col_RopeIterBackward((it), 1), 0) \

@@ -34,10 +34,17 @@ accessible through a pointer value.
  * Variadic macro version of Col_NewVectorNV() that deduces its number
  * of arguments automatically.
  *
+ * @param first First word to add.
+ * @param ...   Next words to add.
+ * 
  * @see COL_ARGCOUNT
  */
-#define Col_NewVectorV(...) \
+#define Col_NewVectorV(first, ...) \
+    _Col_NewVectorV(_, first, ##__VA_ARGS__)
+/*! \cond IGNORE */
+#define _Col_NewVectorV(_, ...) \
     Col_NewVectorNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
+/*! \endcond *//* IGNORE */
 
 /*
  * Remaining declarations.
@@ -80,7 +87,7 @@ immutable vectors.
  ***************************************************************************\{*/
 
 EXTERN size_t           Col_MaxMVectorLength(void);
-EXTERN Col_Word         Col_NewMVector(size_t maxLength, size_t length,
+EXTERN Col_Word         Col_NewMVector(size_t capacity, size_t length,
                             const Col_Word * elements);
 
 /* End of Mutable Vector Creation *//*!\}*/
@@ -90,7 +97,7 @@ EXTERN Col_Word         Col_NewMVector(size_t maxLength, size_t length,
  * \name Mutable Vector Accessors
  ***************************************************************************\{*/
 
-EXTERN size_t           Col_MVectorMaxLength(Col_Word mvector);
+EXTERN size_t           Col_MVectorCapacity(Col_Word mvector);
 EXTERN Col_Word *       Col_MVectorElements(Col_Word mvector);
 
 /* End of Mutable Vector Accessors *//*!\}*/

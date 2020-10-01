@@ -31,7 +31,7 @@
  ***************************************************************************\{*/
 
 EXTERN size_t           Col_MaxStringBufferLength(Col_StringFormat format);
-EXTERN Col_Word         Col_NewStringBuffer(size_t maxLength,
+EXTERN Col_Word         Col_NewStringBuffer(size_t capacity,
                             Col_StringFormat format);
 
 /* End of String Buffer Creation *//*!\}*/
@@ -42,7 +42,7 @@ EXTERN Col_Word         Col_NewStringBuffer(size_t maxLength,
  ***************************************************************************\{*/
 
 EXTERN Col_StringFormat Col_StringBufferFormat(Col_Word strbuf);
-EXTERN size_t           Col_StringBufferMaxLength(Col_Word strbuf);
+EXTERN size_t           Col_StringBufferCapacity(Col_Word strbuf);
 EXTERN size_t           Col_StringBufferLength(Col_Word strbuf);
 EXTERN Col_Word         Col_StringBufferValue(Col_Word strbuf);
 

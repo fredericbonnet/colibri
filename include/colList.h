@@ -56,6 +56,7 @@ EXTERN Col_Word         Col_NewList(size_t length,
 
 EXTERN size_t           Col_ListLength(Col_Word list);
 EXTERN size_t           Col_ListLoopLength(Col_Word list);
+EXTERN unsigned char    Col_ListDepth(Col_Word list);
 EXTERN Col_Word         Col_ListAt(Col_Word list, size_t index);
 
 /* End of Immutable List Accessors *//*!\}*/
@@ -73,12 +74,17 @@ EXTERN Col_Word         Col_ListAt(Col_Word list, size_t index);
  * Variadic macro version of Col_ConcatListsNV() that deduces its number
  * of arguments automatically.
  *
- * @param ...   Variadic list of lists to concatenate.
+ * @param first First list to concatenate.
+ * @param ...   Next lists to concatenate.
  *
  * @see COL_ARGCOUNT
  */
-#define Col_ConcatListsV(...) \
+#define Col_ConcatListsV(first, ...) \
+    _Col_ConcatListsV(_, first, ##__VA_ARGS__)
+/*! \cond IGNORE */
+#define _Col_ConcatListsV(_, ...) \
     Col_ConcatListsNV(COL_ARGCOUNT(__VA_ARGS__),__VA_ARGS__)
+/*! \endcond *//* IGNORE */
 
 /*
  * Remaining declarations.
@@ -200,15 +206,15 @@ typedef struct ColListIterator {
 
         /*! Current element information. */
         union {
-            /*! Address of current element in direct access mode. */
-            const Col_Word *direct;
-
             /*! Current element information in accessor mode. */
             struct {
                 Col_Word leaf;  /*!< First argument passed to **accessProc**. */
                 size_t index;   /*!< Second argument passed to
                                      **accessProc**. */
             } access;
+
+            /*! Address of current element in direct access mode. */
+            const Col_Word *direct;
         } current;
     } chunk;
 } ColListIterator;
@@ -240,7 +246,7 @@ typedef ColListIterator Col_ListIterator[1];
  * @see Col_ListIterNull
  * @hideinitializer
  */
-#define COL_LISTITER_NULL       {{WORD_NIL,0,0,{0,0,NULL,0,NULL}}}
+#define COL_LISTITER_NULL       {{WORD_NIL,0,0,{0,0,NULL,0,0}}}
 
 /**
  * Test whether iterator is null (e.g.\ it has been set to #COL_LISTITER_NULL
@@ -286,8 +292,6 @@ typedef ColListIterator Col_ListIterator[1];
  *
  * @retval WORD_NIL     if iterating over array (see Col_ListIterArray()).
  * @retval list         if iterating over list.
- *
- * @valuecheck{COL_ERROR_LISTITER_END,it}
  */
 #define Col_ListIterList(it) \
     ((it)->list)
@@ -308,8 +312,6 @@ typedef ColListIterator Col_ListIterator[1];
  * @param it    The #Col_ListIterator to access.
  *
  * @return Current index.
- *
- * @valuecheck{COL_ERROR_LISTITER_END,it}
  */
 #define Col_ListIterIndex(it) \
     ((it)->index)
@@ -347,6 +349,9 @@ typedef ColListIterator Col_ListIterator[1];
  *
  * @see Col_ListIterForward
  * @hideinitializer
+ *
+ * @typecheck{COL_ERROR_LISTITER,it}
+ * @valuecheck{COL_ERROR_LISTITER_END,it}
  */
 #define Col_ListIterNext(it) \
     (  ((it)->index < (it)->chunk.first || (it)->index >= (it)->chunk.last) ? Col_ListIterForward((it), 1) \
@@ -365,6 +370,8 @@ typedef ColListIterator Col_ListIterator[1];
  *
  * @see Col_ListIterBackward
  * @hideinitializer
+ *
+ * @typecheck{COL_ERROR_LISTITER,it}
  */
 #define Col_ListIterPrevious(it) \
     (  ((it)->index <= (it)->chunk.first || (it)->index > (it)->chunk.last) ? (Col_ListIterBackward((it), 1), 0) \

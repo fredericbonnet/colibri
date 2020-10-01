@@ -1022,7 +1022,7 @@ PoolAllocPages(
          * Allocate enough physical pages for the given number of logical pages.
          */
 
-        div_t d = div((int) number, (int) nbPagesPerSysPage);
+        lldiv_t d = lldiv(number, nbPagesPerSysPage);
         nbSysPages = d.quot + (d.rem?1:0);
         if (nbSysPages >= LARGE_PAGE_SIZE) {
             /*
@@ -1227,14 +1227,14 @@ PoolAllocCells(
          * cells in the last page.
          */
 
-        div_t d;
+        lldiv_t d;
         size_t nbPages, nbFirst, first;
 
         /*
          * Allocate needed pages.
          */
 
-        d = div((int) number-AVAILABLE_CELLS, CELLS_PER_PAGE);
+        d = lldiv(number-AVAILABLE_CELLS, CELLS_PER_PAGE);
         nbPages = 1 + d.quot + (d.rem?1:0);
         PoolAllocPages(pool, nbPages);
         if (!pool->lastPage) {

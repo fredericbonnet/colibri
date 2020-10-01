@@ -404,7 +404,7 @@ const char * const ColibriDomain[] = {
     "Length %u times %u exceeds the maximum"
         " allowed value %u",                    /* COL_ERROR_ROPELENGTH_REPEAT (length, count, maxLength) */
     "Rope iterator %x is not valid",            /* COL_ERROR_ROPEITER (iterator) */
-    "Rope iterator %x is at end"                /* COL_ERROR_ROPEITER_END (iterator) */
+    "Rope iterator %x is at end",               /* COL_ERROR_ROPEITER_END (iterator) */
     "%x is not a vector",                       /* COL_ERROR_VECTOR (word) */
     "%x is not a mutable vector",               /* COL_ERROR_MVECTOR (word) */
     "Vector length %u exceeds maximum value"
@@ -417,7 +417,7 @@ const char * const ColibriDomain[] = {
     "Length %u times %u exceeds the maximum"
         " allowed value %u",                    /* COL_ERROR_LISTLENGTH_REPEAT (length, count, maxLength) */
     "List iterator %x is not valid",            /* COL_ERROR_LISTITER (iterator) */
-    "List iterator %x is at end"                /* COL_ERROR_LISTITER_END (iterator) */
+    "List iterator %x is at end",               /* COL_ERROR_LISTITER_END (iterator) */
     "%x is not a map",                          /* COL_ERROR_MAP (word) */
     "%x is not a string or custom map",         /* COL_ERROR_WORDMAP (word) */
     "%x is not an integer map",                 /* COL_ERROR_INTMAP (word) */
@@ -430,6 +430,7 @@ const char * const ColibriDomain[] = {
     "Map iterator %x is not valid",             /* COL_ERROR_MAPITER (iterator) */
     "Map iterator %x is at end",                /* COL_ERROR_MAPITER_END (iterator) */
     "%x is not a string buffer",                /* COL_ERROR_STRBUF (word) */
+    "String format %d is not supported",        /* COL_ERROR_STRBUF_FORMAT (format) */
 };
 
 /** @endcond @endprivate */
