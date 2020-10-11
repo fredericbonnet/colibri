@@ -60,7 +60,14 @@ PICOTEST_FIXTURE_TEARDOWN(failureFixture) {
 }
 
 /* Utility to set expected failure info in test case context */
+#ifdef _DEBUG
+#define EXPECT_FAILURE _EXPECT_FAILURE
+#else
 #define EXPECT_FAILURE(context, _level, _domain, _code)                        \
+    PICOTEST_ASSERT(_level != COL_TYPECHECK);                                  \
+    _EXPECT_FAILURE(context, _level, _domain, _code)
+#endif
+#define _EXPECT_FAILURE(context, _level, _domain, _code)                       \
     (context)->expectedFailure.level = (_level);                               \
     (context)->expectedFailure.domain = (_domain);                             \
     (context)->expectedFailure.code = (_code);

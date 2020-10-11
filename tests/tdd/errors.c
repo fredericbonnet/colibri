@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #include <colibri.h>
 #include <picotest.h>
 
