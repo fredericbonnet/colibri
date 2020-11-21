@@ -1,0 +1,9 @@
+:root {
+  --cover-heading-color: ;
+  --theme-hue: 190;
+  --link-color: var(--theme-color);
+  --copycode-background: var(--theme-color);
+}
+a {
+  font-weight: 600;
+}

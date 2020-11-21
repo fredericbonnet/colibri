@@ -1,0 +1,31 @@
+{
+  "name": "colibri",
+  "version": "0.15.0",
+  "description": "Colibri is a fast and lightweight garbage-collected datatype library written in C",
+  "author": "Frédéric Bonnet <fredericbonnet@free.fr>",
+  "license": "BSD-3-Clause",
+  "scripts": {
+    "docs": "npm-run-all --serial docs:*",
+    "docs:doxygen": "doxygen Doxyfile_public",
+    "docs:seaborg": "seaborg -c seaborg-config.json docs/public/xml docs/reference",
+    "docs:copy": "copyfiles README.md docs",
+    "docs-internal": "npm-run-all --serial docs-internal:*",
+    "docs-internal:doxygen": "doxygen Doxyfile_internal",
+    "docs-internal:seaborg": "seaborg -c seaborg-config.internal.json docs/internal/xml docs/internals",
+    "docsify": "docsify serve ./docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fredericbonnet/colibri.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fredericbonnet/colibri/issues"
+  },
+  "homepage": "https://fredericbonnet.github.io/colibri",
+  "devDependencies": {
+    "@seaborg/cli": "^0.5.0",
+    "copyfiles": "^2.4.0",
+    "docsify": "^4.11.6",
+    "npm-run-all": "^4.1.5"
+  }
+}

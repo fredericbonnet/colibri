@@ -1,4 +1,4 @@
-# Doxyfile 1.8.6
+# Doxyfile 1.8.20
 
 @INCLUDE = Doxyfile_common
 
@@ -7,7 +7,7 @@
 # entered, it will be relative to the location where doxygen was started. If
 # left blank the current directory will be used.
 
-OUTPUT_DIRECTORY       = doc/internal
+OUTPUT_DIRECTORY       = docs/internal
 
 # If the EXTRACT_PRIVATE tag is set to YES all private members of a class will
 # be included in the documentation.
@@ -36,13 +36,6 @@ ENABLED_SECTIONS       = PRIVATE
 # The default value is: NO.
 
 SOURCE_BROWSER         = YES
-
-# Setting the STRIP_CODE_COMMENTS tag to YES will instruct doxygen to hide any
-# special comment blocks from generated source code fragments. Normal C, C++ and
-# Fortran comments will always remain visible.
-# The default value is: YES.
-
-STRIP_CODE_COMMENTS    = NO
 
 # If the REFERENCED_BY_RELATION tag is set to YES then for each documented
 # function all documented functions referencing it will be listed.

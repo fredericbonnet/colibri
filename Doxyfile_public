@@ -1,4 +1,4 @@
-# Doxyfile 1.8.6
+# Doxyfile 1.8.20
 
 @INCLUDE = Doxyfile_common
 
@@ -7,7 +7,7 @@
 # entered, it will be relative to the location where doxygen was started. If
 # left blank the current directory will be used.
 
-OUTPUT_DIRECTORY       = doc/public
+OUTPUT_DIRECTORY       = docs/public
 
 # If the HIDE_UNDOC_MEMBERS tag is set to YES, doxygen will hide all
 # undocumented members inside documented classes or files. If set to NO these
@@ -49,13 +49,6 @@ SHOW_USED_FILES        = NO
 # The default value is: YES.
 
 SHOW_FILES             = NO
-
-# Setting the STRIP_CODE_COMMENTS tag to YES will instruct doxygen to hide any
-# special comment blocks from generated source code fragments. Normal C, C++ and
-# Fortran comments will always remain visible.
-# The default value is: YES.
-
-STRIP_CODE_COMMENTS    = NO
 
 # If the VERBATIM_HEADERS tag is set the YES then doxygen will generate a
 # verbatim copy of the header file for each class for which an include is

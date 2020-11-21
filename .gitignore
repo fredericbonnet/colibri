@@ -1,2 +1,5 @@
 .vscode
 build
+node_modules
+docs/internal
+docs/public
