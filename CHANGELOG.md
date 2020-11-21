@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2020-11-21
+
 ### Added
 
 - CMake support for build.
@@ -248,7 +250,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cell and page allocator.
 - Garbage collector.
 
-[unreleased]: https://github.com/fredericbonnet/colibri/compare/v0.14...HEAD
+[unreleased]: https://github.com/fredericbonnet/colibri/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/fredericbonnet/colibri/compare/v0.14...v0.15.0
 [0.14]: https://github.com/fredericbonnet/colibri/compare/v0.13...v0.14
 [0.13]: https://github.com/fredericbonnet/colibri/compare/v0.12...v0.13
 [0.12]: https://github.com/fredericbonnet/colibri/compare/v0.11...v0.12
