@@ -66,7 +66,7 @@ PICOTEST_CASE(testImmediateInts, testImmediateWords) {
     // Immediate ints.
     word = Col_NewIntWord(0x12345678);
     ASSERT(Col_IntWordValue(word) == 0x12345678);
-    ASSERT(word & 1);
+    ASSERT(word & !1);
     ASSERT(Col_WordType(word) & COL_INT);
     ASSERT(Col_IntWordValue(word) == 0x12345678);
 

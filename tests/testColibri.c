@@ -123,6 +123,15 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    char *env = getenv("FOO");
+    printf("FOO=%s\n", env);
+
+    char *ndh = getenv("_NO_DEBUG_HEAP");
+    printf("_NO_DEBUG_HEAP=%s\n", ndh);
+
+    char *path = getenv("PATH");
+    printf("PATH=%s\n", path);
+
     if (argc <= 1) {
         /* Execute all tests. */
         fail = testColibri(NULL);

@@ -255,6 +255,242 @@ methods ([clang] or [Emscripten])
 
 ## Build & install
 
+```graphdown
+++ +-+ +------+  +--+---+    +------+    +------+
+|| | | |      |  |      |----|      +----|      |
+|| | | |      |  +      |----|      |----+      |
+|| | | |      +  |      |----|      +----|      |
+++ +-+ +------+  +----+-+    +------+    +------+
+                                                    .>
+                       1 1 1 1 1 1                 /         \
+   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5             -+-    .>  <.  '>  <'
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+    >   |  ^ ^ ^                 +     +
+0 |0|P|   FLAGS   |  {          } | <- < ->+  | |    | |    ^ ^ ^   ^     ^
+  +-+-+-----------+  { PAYLOAD  } +<---    |         v v v   \|/   /     /|\
+1 |                  {          } |<- ->|    +< >+    -+-     v   v     v v v
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+           <->             +   +
+
+    ^ ^ ^     ^   \  |  /   \|/     ^^^ |||  ^^^ ^^^ \\\   ///
+   /  |  \   /|\   v v v     v      ||| vvv ///   \\\ vvv vvv
+
+
+    + + +     +                     +++      +++ +++
+    ^ ^ ^     ^   \  |  /   \|/     ^^^ |||  ^^^ ^^^ \\\   ///
+   /  |  \   /|\   v v v     v      ||| vvv ///   \\\ vvv vvv
+                   + + +     +          +++           +++ +++
+
+
+dgfdgdfgfddsfdfg  a-> dgdfgfd <--- fdfg dg f  --> dfdsf -> dgfdgf
+a-> b
+a-->b
+sdfdsg rd-> fg
+
+
+  >+  >+<  +<  | |
+               v v   v v
+ ->+ ->+<- +<- + + + + + +
+                 ^ ^   ^ ^
+                 | |
+
+                                                   |
+o--o    *--o     /  /   *  o  o o o o   * * * *    *
+o--*    *--*    v  v   ^  ^   | | | |   | | | |   ^^^
+o-->    *-->   *  o   /  /    o * v '   o * v '  / | \
+o---    *---
+                              ^ ^ ^ ^   . . . .
+|  |   *  o  \  \   *  o      | | | |   | | | |
+v  v   ^  ^   v  v   ^  ^     o * v '   o * v '
+*  o   |  |    *  o   \  \
+
+ o o o o   * * * *      o o o o   * * * *
+  \ \ \ \   \ \ \ \    / / / /   / / / /
+   o * v \   o * v \  o * v /   o * v /
+
+ ^ ^ ^ ^   \ \ \ \      ^ ^ ^ ^   / / / /
+  \ \ \ \   \ \ \ \    / / / /   / / / /
+   o * v \   o * v \  o * v /   o * v /
+
+
+<--o   <--*   <-->   <---   ---o   ---*
+
+--->   ----   *<--   o<--   -->o   -->*
+
+```
+
+```mermaid
+graph RL
+6["src/colWord.c"]
+click 6 "col_word_8c.md#col_word_8c"
+
+2["src/colGc.c"]
+click 2 "col_gc_8c.md#col_gc_8c"
+
+4["src/colList.c"]
+click 4 "col_list_8c.md#col_list_8c"
+
+3["src/colHash.c"]
+click 3 "col_hash_8c.md#col_hash_8c"
+
+5["src/colVector.c"]
+click 5 "col_vector_8c.md#col_vector_8c"
+
+1["src/colVectorInt.h"]
+click 1 "col_vector_int_8h.md#col_vector_int_8h"
+2 --> 1
+3 --> 1
+4 --> 1
+5 --> 1
+6 --> 1
+
+```
+
+```dot
+digraph {
+    fontname="Helvetica";
+    node [fontname="Helvetica" fontsize=10 shape="box" style="rounded" height=0 width=0];
+    edge [dir="back" arrowtail="odiamond"];
+
+    subgraph cluster_before {
+        label="Before rotation";
+
+        concat_before               [label="concat(left,right)\n= (left1 + left2) + right"];
+            left_before             [label="left\n= left1 + left2" style="rounded,filled" fillcolor="grey75"];
+                left1_before        [label="left1" URL="col_vector_int_8h.md#col_vector_int_8h"];
+                    left11_before   [label="?" style="solid,bold"];
+                    left12_before   [label="?" style="solid,bold"];
+                left2_before        [label="left2" style="solid,bold"];
+            right_before            [label="right" style="solid,bold"];
+
+        concat_before -> left_before;
+            left_before -> left1_before;
+                left1_before -> left11_before;
+                left1_before -> left12_before;
+            left_before -> left2_before;
+        concat_before -> right_before;
+
+        subgraph {
+            edge [dir="forward" arrowhead="open"];
+            rank = same; left11_before; left12_before, left2_before; right_before;
+            left11_before -> left12_before;
+            left12_before -> left2_before;
+            left2_before -> right_before;
+        }
+    }
+    subgraph cluster_after {
+        label="After rotation";
+
+        concat_after                [label="concat(left,right)\n= left1 + (left2 + right)"];
+            left1_after             [label="left1"];
+                left11_after        [label="?" style="solid,bold"];
+                left12_after        [label="?" style="solid,bold"];
+            concat2_after           [label="left2 + right" style="rounded,filled" fillcolor="grey75"];
+                left2_after         [label="left2" style="solid,bold"];
+                right_after         [label="right" style="solid,bold"];
+
+        concat_after -> left1_after;
+            left1_after -> left11_after;
+            left1_after -> left12_after;
+        concat_after -> concat2_after;
+            concat2_after -> left2_after;
+            concat2_after -> right_after;
+
+        subgraph {
+            edge [dir="forward" arrowhead="open"];
+            rank = same; left11_after; left12_after, left2_after; right_after;
+            left11_after -> left12_after;
+            left12_after -> left2_after;
+            left2_after -> right_after;
+        }
+    }
+}
+```
+
+```dot
+    digraph {
+        node [fontname="Lucida Console,Courier" fontsize=14];
+        first_cell [shape=none, label=<
+            <table border="0" cellborder="1" cellspacing="0">
+            <tr><td border="0"></td>
+                <td sides="B" width="20" align="left">0</td><td sides="B" width="20" align="right">3</td>
+                <td sides="B" width="20" align="left">4</td><td sides="B" width="20" align="right">7</td>
+                <td sides="B" width="120" align="left">8</td><td sides="B" width="120" align="right">n</td>
+            </tr>
+            <tr><td sides="R">0</td>
+                <td href="@ref PAGE_GENERATION" title="PAGE_GENERATION" colspan="2">Gen</td>
+                <td href="@ref PAGE_FLAGS" title="PAGE_FLAGS" colspan="2">Flags</td>
+                <td href="@ref PAGE_NEXT" title="PAGE_NEXT" colspan="2">Next</td>
+            </tr>
+            <tr><td sides="R">1</td>
+                <td href="@ref PAGE_GROUPDATA" title="PAGE_GROUPDATA" colspan="6">Group Data</td>
+            </tr>
+            <tr><td sides="R">2</td>
+                <td href="@ref PAGE_BITMASK" title="PAGE_BITMASK" colspan="6" rowspan="2">Bitmask</td>
+            </tr>
+            <tr><td sides="R">3</td></tr>
+            </table>
+        >]
+    }
+```
+
+```graphdown
+           0     3 4     7 8                                             n
+          +-------+-------+-----------------------------------------------+
+        0 |  Gen  | Flags |                     Next                      |
+          +-------+-------+-----------------------------------------------+
+        1 |                           Group Data                          |
+          +---------------------------------------------------------------+
+        2 |                                                               |
+          +                            Bitmask                            +
+        3 |                                                               |
+          +---------------------------------------------------------------+
+
+           0                                                             n
+          +---------------------------------------------------------------+
+        0 |                           Type info                           |
+          +---------------------------------------------------------------+
+        1 |                            Synonym                            |
+          +---------------------------------------------------------------+
+        2 |                             Size                              |
+          +---------------------------------------------------------------+
+        3 |                            Buckets                            |
+          +---------------------------------------------------------------+
+          :                                                               :
+          :                        Static buckets                         :
+        N |                                                               |
+          +---------------------------------------------------------------+
+```
+
+```graphdown
+    Before rotation:
+            .--------------------------------.
+           ({concat = (left1 + left2) + right})
+            '-+----+-------------------------'
+             /      \
+          .-+--.   +-+---+
+         | left |  |right|
+          '+--+'   +-----+
+          /    \
+      +--+--+ +-+---+
+      |left1| |left2|
+      ++---++ +-----+
+      /     \
+     ?       ?
+
+
+    After rotation:
+           .--------------------------------.
+          ({concat = left1 + (left2 + right)})
+           '-+----+-------------------------'
+            /      \
+      +----++      .+-----.
+      |left1|     ( concat )
+      +-----+      '+----+'
+      /     \      /      \
+     ?       ?  +-+---+ +--+--+
+                |left2| |right|
+                +-----+ +-----+
+```
+
 The build process depends on [CMake]. You also have to install a toolchain for
 your platform if needed.
 

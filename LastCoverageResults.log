@@ -1,0 +1,27 @@
+[2022-01-20 21:37:03] [info] Start Program:
+Path:"build/x64/Debug/tdd_colibri"
+Arguments:tdd 
+Working directory: not set.
+Modules: Selected: * Excluded: 
+Sources: Selected: *colibri Excluded: 
+Log Level: Normal
+Cover Children: 0
+Aggregate by file: 1
+Continue after C++ exception: 0
+Optimized build support: 0
+Export: html tests/tdd/coverage cobertura covtdd.xml 
+Input coverage: 
+Unified diff: 
+Excluded line regular expressions: 
+Substitute pdb source paths: 
+
+[2022-01-20 21:37:03] [info] Module: C:\Users\frede\Documents\colibri\build\x64\Debug\tdd_colibri.exe is selected because it matches selected pattern: *
+[2022-01-20 21:37:04] [info] Module: C:\Windows\System32\ntdll.dll is selected because it matches selected pattern: *
+[2022-01-20 21:37:04] [info] Module: C:\Windows\System32\kernel32.dll is selected because it matches selected pattern: *
+[2022-01-20 21:37:04] [info] Module: C:\Windows\System32\KernelBase.dll is selected because it matches selected pattern: *
+[2022-01-20 21:37:04] [info] Module: C:\Users\frede\Documents\colibri\build\x64\Debug\colibri64d.dll is selected because it matches selected pattern: *
+[2022-01-20 21:37:04] [info] Module: C:\Windows\System32\vcruntime140d.dll is selected because it matches selected pattern: *
+[2022-01-20 21:37:04] [info] Module: C:\Windows\System32\ucrtbased.dll is selected because it matches selected pattern: *
+[2022-01-20 21:37:09] [info] Module: C:\Windows\System32\kernel.appcore.dll is selected because it matches selected pattern: *
+[2022-01-20 21:37:09] [info] Module: C:\Windows\System32\msvcrt.dll is selected because it matches selected pattern: *
+[2022-01-20 21:37:09] [info] Module: C:\Windows\System32\rpcrt4.dll is selected because it matches selected pattern: *

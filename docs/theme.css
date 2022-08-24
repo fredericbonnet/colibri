@@ -7,3 +7,10 @@
 a {
   font-weight: 600;
 }
+
+.dot text[font-size="10.00"] {
+  font-size: 10px;
+}
+.dot text[font-size="14.00"] {
+  font-size: 14px;
+}

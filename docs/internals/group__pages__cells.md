@@ -21,6 +21,7 @@ Each page has reserved cells that store information about the page. The remainin
 On all architectures, the first cell is reserved and is formatted as follows:
 
 
+```dot
     digraph {
         node [fontname="Lucida Console,Courier" fontsize=14];
         first_cell [shape=none, label=<
@@ -31,7 +32,7 @@ On all architectures, the first cell is reserved and is formatted as follows:
                 <td sides="B" width="120" align="left">8</td><td sides="B" width="120" align="right">n</td>
             </tr>
             <tr><td sides="R">0</td>
-                <td href="@ref PAGE_GENERATION" title="PAGE_GENERATION" colspan="2">Gen</td>
+                <td href="group__pages__cells.md#macro-page_generation" title="PAGE_GENERATION" colspan="2">Gen</td>
                 <td href="@ref PAGE_FLAGS" title="PAGE_FLAGS" colspan="2">Flags</td>
                 <td href="@ref PAGE_NEXT" title="PAGE_NEXT" colspan="2">Next</td>
             </tr>
@@ -45,6 +46,7 @@ On all architectures, the first cell is reserved and is formatted as follows:
             </table>
         >]
     }
+```
 
 ## Page and Cell Types & Constants
 
@@ -278,7 +280,7 @@ Set next page in pool.
 
 
 <a id="group__pages__cells_1gaa7215b15e159db56ed2bc30d66488fd8"></a>
-### Macro PAGE\_GENERATION
+### Macro PAGE_GENERATION
 
 ![][public]
 

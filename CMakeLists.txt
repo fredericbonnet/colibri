@@ -125,3 +125,19 @@ if (PicoTest_FOUND)
 		TEST_LIST_OPTION "-l"
 	)
 endif()
+
+
+# add_test(NAME foo 
+# 	COMMAND C:/Users/frede/Documets/colibri/build/x64/Debug/test_colibri.exe testImmediateInts
+# 	CONFIGURATIONS Debug
+# )
+# set_tests_properties( foo PROPERTIES 
+# 	WORKING_DIRECTORY C:/Users/frede/Documents/colibri/build/x64
+# 	ENVIRONMENT "TEST_FILE=C:/Users/frede/Documents/colibri/tests/testImmediateWords.c;TEST_LINE=63;FOO=bar;BAZ=fred"
+# )
+
+add_test( foo C:/Users/frede/Documents/colibri/build/x64/Debug/test_colibri.exe testImmediateInts)
+set_tests_properties( foo PROPERTIES 
+	WORKING_DIRECTORY C:/Users/frede/Documents/colibri/build/x64
+	ENVIRONMENT "TEST_FILE=C:/Users/frede/Documents/colibri/tests/testImmediateWords.c;TEST_LINE=63;FOO=bar;BAZ=fred"
+)

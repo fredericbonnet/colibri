@@ -1,4 +1,4 @@
-var mermaidId = 0;
+let mermaidId = 0;
 mermaid.initialize({
   startOnLoad: false,
   securityLevel: "loose",
@@ -22,6 +22,11 @@ function renderMermaid(code, link) {
 
   return div.outerHTML;
 }
+
+function renderGraphdown(code) {
+  return graphdown.renderGraphdown(code, { style: true, minWidth: 80 });
+}
+
 window.$docsify = {
   repo: "https://github.com/fredericbonnet/colibri",
   themeColor: "#2C6FE0",
@@ -36,8 +41,12 @@ window.$docsify = {
           if (lang === "mermaid") {
             return renderMermaid(code, this.origin.link);
           }
+          if (lang === "graphdown") {
+            return renderGraphdown(code);
+          }
         } catch (e) {
           /* ignore */
+          console.error(e);
         }
         return this.origin.code.apply(this, arguments);
       },

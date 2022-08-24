@@ -14,6 +14,183 @@ Immutable lists are constant, arbitrary-sized, linear collections of words.
 !> **Warning** \
 Mutable vectors, when used in place of immutable lists, may be potentially frozen in the process. To avoid that, they should be properly duplicated to an immutable vector beforehand.
 
+
+
+
+
+
+
+#### List Tree Balancing
+
+
+
+
+Large lists are built by concatenating several sublists, forming a balanced binary tree. A balanced tree is one where the depth of the left and right arms do not differ by more than one level.
+
+
+
+
+
+List trees are self-balanced by construction: when two lists are concatenated, if their respective depths differ by more than 1, then the tree is recursively rebalanced by splitting and merging subarms. There are four major cases, two if we consider symmetry:
+
+
+
+
+
+
+* Deepest subtree is an outer branch (i.e. the left resp. right child of the left resp. right arm). In this case the tree is rotated: the opposite child is moved and concatenated with the opposite arm. For example, with left being deepest:
+
+
+
+
+
+
+
+
+    digraph {
+        fontname="Helvetica";
+        node [fontname="Helvetica" fontsize=10 shape="box" style="rounded" height=0 width=0];
+        edge [dir="back" arrowtail="odiamond"];
+
+        subgraph cluster_before {
+            label="Before rotation";
+
+            concat_before               [label="concat(left,right)\n= (left1 + left2) + right"];
+                left_before             [label="left\n= left1 + left2" style="rounded,filled" fillcolor="grey75"];
+                    left1_before        [label="left1"];
+                        left11_before   [label="?" style="solid,bold"];
+                        left12_before   [label="?" style="solid,bold"];
+                    left2_before        [label="left2" style="solid,bold"];
+                right_before            [label="right" style="solid,bold"];
+
+            concat_before -> left_before;
+                left_before -> left1_before;
+                    left1_before -> left11_before;
+                    left1_before -> left12_before;
+                left_before -> left2_before;
+            concat_before -> right_before;
+
+            subgraph {
+                edge [dir="forward" arrowhead="open"];
+                rank = same; left11_before; left12_before, left2_before; right_before;
+                left11_before -> left12_before;
+                left12_before -> left2_before;
+                left2_before -> right_before;
+            }
+        }
+        subgraph cluster_after {
+            label="After rotation";
+
+            concat_after                [label="concat(left,right)\n= left1 + (left2 + right)"];
+                left1_after             [label="left1"];
+                    left11_after        [label="?" style="solid,bold"];
+                    left12_after        [label="?" style="solid,bold"];
+                concat2_after           [label="left2 + right" style="rounded,filled" fillcolor="grey75"];
+                    left2_after         [label="left2" style="solid,bold"];
+                    right_after         [label="right" style="solid,bold"];
+
+            concat_after -> left1_after;
+                left1_after -> left11_after;
+                left1_after -> left12_after;
+            concat_after -> concat2_after;
+                concat2_after -> left2_after;
+                concat2_after -> right_after;
+
+            subgraph {
+                edge [dir="forward" arrowhead="open"];
+                rank = same; left11_after; left12_after, left2_after; right_after;
+                left11_after -> left12_after;
+                left12_after -> left2_after;
+                left2_after -> right_after;
+            }
+        }
+    }
+  
+
+
+
+
+
+
+
+* Deepest subtree is an inner branch (i.e. the right resp. left child of the left resp. right arm). In this case the subtree is split between both arms. For example, with left being deepest:
+
+
+
+
+
+
+
+
+    digraph {
+        fontname="Helvetica";
+        node [fontname="Helvetica" fontsize=10 shape="box" style="rounded" height=0 width=0];
+        edge [dir="back" arrowtail="odiamond"];
+
+        subgraph cluster_before {
+            label="Before splitting";
+
+            concat_before               [label="concat(left,right)\n= (left1 + (left21+left22)) + right"];
+                left_before             [label="left\n= left1 + (left21+left22)" style="rounded,filled" fillcolor="grey75"];
+                    left1_before        [label="left1" style="solid,bold"];
+                    left2_before        [label="left2\n= left21+left22" style="rounded,filled" fillcolor="grey75"];
+                        left21_before   [label="left21" style="solid,bold"];
+                        left22_before   [label="left22" style="solid,bold"];
+                right_before            [label="right" style="solid,bold"];
+
+            concat_before -> left_before;
+                left_before -> left1_before;
+                left_before -> left2_before;
+                    left2_before -> left21_before;
+                    left2_before -> left22_before;
+            concat_before -> right_before;
+
+            subgraph {
+                edge [dir="forward" arrowhead="open"];
+                rank = same; left1_before; left21_before, left22_before; right_before;
+                left1_before -> left21_before;
+                left21_before -> left22_before;
+                left22_before -> right_before;
+            }
+        }
+        subgraph cluster_after {
+            label="After splitting";
+
+            concat_after                [label="concat(left,right)\n=  (left1 + left21) + (left22 + right)"];
+                concat2_after           [label="left1 + left21" style="rounded,filled" fillcolor="grey75"];
+                    left1_after         [label="left1" style="solid,bold"];
+                    left21_after        [label="left21" style="solid,bold"];
+                concat3_after           [label="left22 + right" style="rounded,filled" fillcolor="grey75"];
+                    left22_after        [label="left22" style="solid,bold"];
+                    right_after         [label="right" style="solid,bold"];
+
+            concat_after -> concat2_after;
+                concat2_after -> left1_after;
+                concat2_after -> left21_after;
+            concat_after -> concat3_after;
+                concat3_after -> left22_after;
+                concat3_after -> right_after;
+
+            subgraph {
+                edge [dir="forward" arrowhead="open"];
+                rank = same; left1_after; left21_after, left22_after; right_after;
+                left1_after -> left21_after;
+                left21_after -> left22_after;
+                left22_after -> right_after;
+            }
+        }
+    }
+  
+
+
+
+
+
+
+
+
+**See also**: [Col\_ConcatLists](col_list_8h.md#group__list__words_1ga73c0f71ee367af68bbad4a4738dfac3b)
+
 ## Submodules
 
 * [Custom Lists](group__customlist__words.md#group__customlist__words)

@@ -82,6 +82,74 @@ On all architectures the single-cell layout is as follows:
             </table>
         >]
     }
+    
+
+
+
+
+
+
+#### Root Trie Leaves
+
+
+
+
+
+**Requirements**:
+
+
+* Root trie leaves must know the root's source word.
+
+* Root trie leaves must know the root's reference count. Once it drops to zero the root is removed, however the source may survive if it is referenced elsewhere.
+
+
+**Parameters**:
+
+* **Generation**: Generation of the source page. Storing it here saves a pointer dereference.
+* **Refcount**: Reference count.
+* **Source**: Preserved word.
+
+
+**Cell Layout**:
+
+On all architectures the single-cell layout is as follows:
+
+
+    digraph {
+        node [fontname="Lucida Console,Courier" fontsize=14];
+        root_leaf [shape=none, label=<
+            <table border="0" cellborder="1" cellspacing="0">
+            <tr><td border="0"></td>
+                <td sides="B" width="160" align="left">0</td><td sides="B" width="160" align="right">31</td>
+                <td sides="B" align="right">n</td>
+            </tr>
+            <tr><td sides="R">0</td>
+                <td href="@ref ROOT_LEAF_GENERATION" title="ROOT_LEAF_GENERATION" colspan="2">Generation</td>
+                <td bgcolor="grey75"> Unused (n &gt; 32) </td>
+            </tr>
+            <tr><td sides="R">1</td>
+                <td href="@ref ROOT_PARENT" title="ROOT_PARENT" colspan="3">Parent</td>
+            </tr>
+            <tr><td sides="R">2</td>
+                <td href="@ref ROOT_LEAF_REFCOUNT" title="ROOT_LEAF_REFCOUNT" colspan="3">Refcount</td>
+            </tr>
+            <tr><td sides="R">3</td>
+                <td href="@ref ROOT_LEAF_SOURCE" title="ROOT_LEAF_SOURCE" colspan="3">Source</td>
+            </tr>
+            </table>
+        >]
+    }
+    
+
+
+
+
+
+
+
+
+
+**See also**: [Col\_WordPreserve](col_word_8h.md#group__words_1gab55f452e6b0856f7bd7b34e04fae2aa2), [Col\_WordRelease](col_word_8h.md#group__words_1gad93112f81ce6511d6d0ece0db4d38598)
 
 ## Root Trie Creation
 

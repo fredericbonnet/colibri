@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="viz.js"></script>
+</head>
+<body>
+    <div id="container"></div>
+    <script>
+let graph = `
+digraph {
+	a -> b
+	a -> c
+	b -> d
+	c -> d
+}
+`;
+
+    let dotId = 0;
+    function renderGraphviz(code, engine) {
+      // Generate Graphviz SVG into container
+      const div = document.createElement("div");
+      div.className = "dot";
+
+      const worker = new Worker("viz.render.js");
+      worker.onmessage = (e)=> {
+        div.innerHTML = e.data.result;
+        worker.terminate();
+      };
+      worker.onerror =  error => {
+        console.error(e);
+        worker.terminate();
+        throw error;
+      };
+
+      const params = {
+        src: code,
+        id: new Date().toJSON(),
+        options: {
+          files: [],
+          format: "svg",
+          engine
+        },
+      };
+      worker.postMessage(params);
+
+      // div.innerHTML = mermaid.render("dot-svg-" + dotId++, code);
+
+      // Convert SVG links to docsify format
+      // const div2 = document.createElement("div");
+      // div.querySelectorAll("a.clickable").forEach((a) => {
+      //   div2.innerHTML = link(a.getAttribute("href"));
+      //   a.setAttribute("href", div2.firstChild.getAttribute("href"));
+      // });
+
+      return div.outerHTML;
+    }
+    function renderGraph() {
+      const worker = new Worker("viz.render.js");
+      worker.onmessage = (e)=> {
+        if (typeof e.data.error !== "undefined") {
+          var event = new CustomEvent("error", {"detail": new Error(e.data.error.message)});
+          worker.dispatchEvent(event);
+          return
+        }
+        console.log("done");
+        container.innerHTML = e.data.result;
+        worker.terminate();
+      };
+      worker.onerror =  error => {
+        console.error(e);
+        worker.terminate();
+        throw error;
+      };
+
+      console.log("rendering...");
+      var params = {
+        "src": graph,
+        "id": new Date().toJSON(),
+        "options": {
+          "files": [],
+          "format": "svg",
+          "engine": "dot"
+        },
+      };
+      worker.postMessage(params);
+    }
+
+    </script>
+</body>
+</html>
