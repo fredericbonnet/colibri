@@ -5,6 +5,8 @@ project(colibri LANGUAGES C)
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 option(USE_THREADS "Build with thread support" ON)
 
+include(${CMAKE_BINARY_DIR}/conan_paths.cmake)
+
 find_package(PicoTest)
 
 # Colibri library
