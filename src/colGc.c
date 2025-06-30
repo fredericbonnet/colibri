@@ -34,7 +34,7 @@
 
 #include <memory.h>
 #include <limits.h>
-#include <malloc.h>
+#include <stdlib.h>
 
 /*
  * Prototypes for functions used only in this file.

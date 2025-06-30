@@ -316,15 +316,15 @@ PICOTEST_CASE(ropeIterPrevious_typeCheck, failureFixture, context) {
 #include "ropeUtils.h"
 
 /* Rope creation */
-static Col_Word NEW_ROPE_UCS1_CHAR(c)
+static Col_Word NEW_ROPE_UCS1_CHAR(Col_Char c)
     NEW_ROPE_UCS(Col_Char1, COL_UCS1, 1, c, c);
-static Col_Word NEW_ROPE_UCS2_CHAR(c)
+static Col_Word NEW_ROPE_UCS2_CHAR(Col_Char c)
     NEW_ROPE_UCS(Col_Char2, COL_UCS2, 1, c, c);
-static Col_Word NEW_ROPE_UCS4_CHAR(c)
+static Col_Word NEW_ROPE_UCS4_CHAR(Col_Char c)
     NEW_ROPE_UCS(Col_Char4, COL_UCS4, 1, c, c);
-static Col_Word NEW_ROPE_UCS_CHAR(c) NEW_ROPE_UCS(Col_Char, COL_UCS, 1, c, c);
+static Col_Word NEW_ROPE_UCS_CHAR(Col_Char c) NEW_ROPE_UCS(Col_Char, COL_UCS, 1, c, c);
 
-static Col_Word NEW_ROPE_STRING_CHAR(c) NEW_ROPE_STRING(1, c, c);
+static Col_Word NEW_ROPE_STRING_CHAR(Col_Char c) NEW_ROPE_STRING(1, c, c);
 
 #define ROPE_SMALL_LEN (sizeof(Col_Word) - 1)
 static Col_Word NEW_ROPE_UCS1_SMALL()

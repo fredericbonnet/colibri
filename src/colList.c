@@ -27,7 +27,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-#include <malloc.h> /* For alloca */
+#ifndef alloca
+#   ifdef _MSC_VER
+#       include <malloc.h>
+#   else
+#       include <alloca.h>
+#   endif
+#endif
 
 /*
  * Prototypes for functions used only in this file.
