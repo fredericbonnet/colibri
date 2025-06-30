@@ -124,4 +124,8 @@ if (PicoTest_FOUND)
 	picotest_discover_tests(test_colibri
 		TEST_LIST_OPTION "-l"
 	)
+	picotest_discover_tests(tdd_colibri
+		TEST_PREFIX "tdd/"
+		TEST_LIST_OPTION "-l"
+	)
 endif()
