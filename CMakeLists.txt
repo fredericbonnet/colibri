@@ -94,7 +94,7 @@ if (PicoTest_FOUND)
 	target_link_libraries(tdd_colibri
 		PRIVATE
 			colibri
-			PicoTest
+			PicoTest::PicoTest
 	)
 	install(TARGETS tdd_colibri EXPORT tdd_colibri
 		RUNTIME DESTINATION bin/${CMAKE_BUILD_TYPE}
@@ -114,7 +114,7 @@ if (PicoTest_FOUND)
 	target_link_libraries(test_colibri
 		PRIVATE
 			colibri
-			PicoTest
+			PicoTest::PicoTest
 	)
 	install(TARGETS test_colibri EXPORT test_colibri
 		RUNTIME DESTINATION bin/${CMAKE_BUILD_TYPE}
