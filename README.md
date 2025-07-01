@@ -315,7 +315,7 @@ detects the PicoTest package. The simplest way to do so is to give CMake the
 path to PicoTest when generating the build system, like so:
 
 ```sh
-cmake -S . -B build -DCMAKE_MODULE_PATH=</path/to/picotest>
+cmake -S . -B build -DCMAKE_PREFIX_PATH=</path/to/picotest>
 ```
 
 To run the test suite, simply run `ctest` from within the `build` directory.
