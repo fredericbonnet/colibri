@@ -5,6 +5,14 @@ project(colibri LANGUAGES C)
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 option(USE_THREADS "Build with thread support" ON)
 
+# Include Conan-generated files if they exist
+if(EXISTS "${CMAKE_BINARY_DIR}/conan_toolchain.cmake")
+    include("${CMAKE_BINARY_DIR}/conan_toolchain.cmake")
+endif()
+
+# Set CMAKE_PREFIX_PATH to include the build directory for find_package
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_BINARY_DIR}")
+
 find_package(PicoTest)
 
 # Colibri library

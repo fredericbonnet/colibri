@@ -1,0 +1,6 @@
+[requires]
+picotest/1.4.2
+
+[generators]
+CMakeDeps
+CMakeToolchain 

@@ -308,11 +308,75 @@ cmake --build build --config release
 
 This should build the binaries in the `build` directory.
 
+### Using Conan (Recommended)
+
+Colibri can also be built using [Conan] for dependency management. This is the recommended approach as it automatically handles PicoTest installation and configuration.
+
+#### Prerequisites
+
+1. Install Conan:
+   ```sh
+   pip install conan
+   ```
+
+2. Add the Conan remote for PicoTest (if not already added):
+   ```sh
+   conan remote add picotest https://api.bintray.com/conan/fredericbonnet/picotest
+   ```
+
+#### Building with Conan
+
+**On Unix/Linux/macOS:**
+```sh
+# Use the provided build script
+./build_with_conan.sh
+
+# Or manually (recommended approach):
+mkdir build
+conan install . --output-folder=build --build=missing
+cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+```
+
+**On Windows:**
+```bat
+# Use the provided build script
+build_with_conan.bat
+
+# Or manually (recommended approach):
+mkdir build
+conan install . --output-folder=build --build=missing
+cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+```
+
+The Conan approach automatically:
+- Downloads and installs PicoTest from the Conan repository
+- Configures CMake to find PicoTest correctly
+- Enables the test suite without manual path configuration
+- Keeps the project root clean by placing all generated files in the build directory
+
 ## Tests
 
-Colibri requires [PicoTest] for testing. The test suite is enabled when CMake
-detects the PicoTest package. The simplest way to do so is to give CMake the
-path to PicoTest when generating the build system, like so:
+Colibri requires [PicoTest] for testing. The test suite is automatically enabled when using the Conan build approach (recommended).
+
+### Running Tests with Conan
+
+When building with Conan, tests are automatically discovered and configured:
+
+```sh
+# Build with tests enabled
+./build_with_conan.sh  # Unix/Linux/macOS
+# or
+build_with_conan.bat   # Windows
+
+# Run tests
+cd build && ctest
+```
+
+### Manual Test Setup
+
+If you prefer manual setup, you can enable tests by giving CMake the path to PicoTest:
 
 ```sh
 cmake -S . -B build -DCMAKE_PREFIX_PATH=</path/to/picotest>
@@ -358,6 +422,7 @@ npm run docsify
 [picotest]: https://github.com/fredericbonnet/picotest
 [chocolatey]: https://chocolatey.org
 [cmake]: https://cmake.org
+[conan]: https://conan.io
 [webassembly]: https://webassembly.org
 [clang]: https://clang.llvm.org
 [emscripten]: https://emscripten.org/
