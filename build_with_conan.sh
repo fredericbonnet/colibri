@@ -10,11 +10,11 @@ mkdir -p build
 
 # Install dependencies with Conan (output to build directory)
 echo "Installing dependencies with Conan..."
-conan install . --output-folder=build --build=missing
+conan install . --build=missing
 
 # Configure with CMake using the Conan toolchain file
 echo "Configuring with CMake..."
-cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release
+cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=generators/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release
 
 # Build
 echo "Building..."

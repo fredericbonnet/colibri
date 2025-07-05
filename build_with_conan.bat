@@ -7,11 +7,13 @@ if not exist build mkdir build
 
 REM Install dependencies with Conan (output to build directory)
 echo Installing dependencies with Conan...
-conan install . --output-folder=build --build=missing
+@REM conan install . --output-folder=build --build=missing
+conan install . --build=missing
 
 REM Configure with CMake using the Conan toolchain file
 echo Configuring with CMake...
-cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release
+@REM cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release
+cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=generators/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release
 
 REM Build
 echo Building...
