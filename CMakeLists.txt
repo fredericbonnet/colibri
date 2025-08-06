@@ -5,6 +5,7 @@ project(colibri LANGUAGES C)
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 option(USE_THREADS "Build with thread support" ON)
 
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../picotest")
 find_package(PicoTest)
 
 # Colibri library
@@ -68,7 +69,7 @@ install(EXPORT colibri-config DESTINATION cmake)
 
 
 # Colibri unit tests
-if (PicoTest_FOUND)
+if (TARGET PicoTest::PicoTest)
 	# TDD tests
 	add_executable(tdd_colibri)
 	target_sources(tdd_colibri
@@ -122,10 +123,11 @@ if (PicoTest_FOUND)
 
 	enable_testing()
 	picotest_discover_tests(test_colibri
+		TEST_PREFIX "test_colibri/"
 		TEST_LIST_OPTION "-l"
 	)
 	picotest_discover_tests(tdd_colibri
-		TEST_PREFIX "tdd/"
+		TEST_PREFIX "tdd_colibri/"
 		TEST_LIST_OPTION "-l"
 	)
 endif()
